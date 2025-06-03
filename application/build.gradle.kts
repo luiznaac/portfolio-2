@@ -11,6 +11,5 @@ dependencies {
     implementation(project(":persistence"))
     implementation(project(":usecase"))
 
-    implementation("org.springframework.boot:spring-boot-starter-webflux:3.5.0")
-    implementation("ch.qos.logback:logback-classic:1.5.18")
+    implementation(libs.spring.webflux)
 }
