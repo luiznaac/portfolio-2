@@ -24,7 +24,6 @@ class HealthUseCase {
     suspend fun healthCheck(request: ServerRequest): ServerResponse {
         return ServerResponse.ok().bodyValueAndAwait(HealthResponse(true, Instant.now()))
     }
-
 }
 
 private data class HealthResponse(
