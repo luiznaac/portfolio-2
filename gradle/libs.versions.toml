@@ -27,6 +27,9 @@ spring-context = { module="org.springframework:spring-context", version.ref="spr
 jackson-kotlin = { module="com.fasterxml.jackson.module:jackson-module-kotlin", version.ref="jackson" }
 jackson-jsr310 = { module="com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref="jackson" }
 
+reactor-netty = { module="io.projectreactor.netty:reactor-netty-http", version="1.2.6" }
+reactor-extensions = { module="io.projectreactor.kotlin:reactor-kotlin-extensions", version="1.2.3" }
+
 # Test dependencies
 kotest-assertions-core = { module="io.kotest:kotest-assertions-core", version.ref="kotest" }
 kotest-extensions-spring = { module="io.kotest.extensions:kotest-extensions-spring", version="1.1.2" }
