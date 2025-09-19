@@ -2,8 +2,6 @@ dependencies {
     implementation(project(":usecase"))
 
     implementation(libs.bundles.dependencies)
-    implementation(libs.kotlinx.coroutines.reactor)
-    implementation(libs.kotlinx.coroutines.reactive)
 
     implementation(libs.ktor.core)
     implementation(libs.ktor.netty)

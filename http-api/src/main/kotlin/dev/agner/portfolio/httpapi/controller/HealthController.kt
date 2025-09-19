@@ -1,9 +1,12 @@
 package dev.agner.portfolio.httpapi.controller
 
+import dev.agner.portfolio.usecase.health.GetAppHealthStatus
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.route
 import org.springframework.stereotype.Component
 import java.time.Instant
 
@@ -13,20 +16,29 @@ class HealthController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        post ("/health") {
-            val pingPongMessage = call.receive<HealthRequest>()
-            val healthStatuses = healthHandler.healthCheck(pingPongMessage.pingPong)
+        route("/health") {
+            get {
+                call.respond(HttpStatusCode.OK, mapOf("is_healthy" to true))
+            }
 
-            call.respond(HttpStatusCode.OK, healthStatuses)
+            post {
+                val pingPongMessage = call.receive<HealthRequest>()
+                val healthStatuses = healthHandler.healthCheck(pingPongMessage.pingPong)
+
+                call.respond(HttpStatusCode.OK, healthStatuses)
+            }
         }
     }
 }
 
 @Component
-class HealthHandler {
+class HealthHandler(
+    private val appHealth: GetAppHealthStatus,
+) {
 
     suspend fun healthCheck(message: String) = setOf(
-        HealthResponse(serviceName = "ping-pong", description = message, isHealthy = true, timestamp = Instant.now()),
+        HealthResponse("ping-pong", message, true, Instant.now()),
+        HealthResponse("app", "calls itself", appHealth.getHealthStatus().isHealthy, Instant.now()),
     )
 }
 

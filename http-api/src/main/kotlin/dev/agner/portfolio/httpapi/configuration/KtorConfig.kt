@@ -5,7 +5,6 @@ import dev.agner.portfolio.httpapi.controller.ControllerTemplate
 import dev.agner.portfolio.usecase.extensions.logger
 import io.ktor.http.ContentType
 import io.ktor.serialization.jackson.JacksonConverter
-import io.ktor.serialization.jackson.jackson
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty

@@ -17,6 +17,7 @@ dependencies {
     implementation(project(":http-api"))
     implementation(project(":persistence"))
     implementation(project(":usecase"))
+    implementation(project(":gateway"))
 
     implementation(libs.spring.context)
 }
