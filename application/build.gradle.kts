@@ -4,6 +4,13 @@ plugins {
 
 application {
     mainClass.set("dev.agner.portfolio.application.BootKt")
+    applicationDefaultJvmArgs = listOf(
+        "-server",
+        "-XX:+UseNUMA",
+        "-XX:+UseG1GC",
+        "-XX:+UseStringDeduplication",
+        "-Duser.timezone=Etc/UTC"
+    )
 }
 
 dependencies {
@@ -11,5 +18,5 @@ dependencies {
     implementation(project(":persistence"))
     implementation(project(":usecase"))
 
-    implementation(libs.spring.webflux)
+    implementation(libs.spring.context)
 }
