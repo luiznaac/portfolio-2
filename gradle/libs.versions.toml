@@ -1,7 +1,7 @@
 [versions]
 
 kotlinx-coroutines-version="1.10.2"
-springframework = "6.2.7"
+springframework = "6.2.11"
 kotest = "5.5.5"
 jackson = "2.19.0"
 ktor = "3.2.3"

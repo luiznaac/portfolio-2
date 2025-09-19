@@ -7,6 +7,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Component
 import java.time.Instant
 
@@ -36,10 +40,12 @@ class HealthHandler(
     private val appHealth: GetAppHealthStatus,
 ) {
 
-    suspend fun healthCheck(message: String) = setOf(
-        HealthResponse("ping-pong", message, true, Instant.now()),
-        HealthResponse("app", "calls itself", appHealth.getHealthStatus().isHealthy, Instant.now()),
-    )
+    suspend fun healthCheck(message: String) = withContext(Dispatchers.IO) {
+        setOf(
+            async { HealthResponse("ping-pong", message, true, Instant.now()) },
+            async { HealthResponse("app", "calls itself", appHealth.getHealthStatus().isHealthy, Instant.now()) },
+        ).awaitAll()
+    }
 }
 
 data class HealthResponse(
