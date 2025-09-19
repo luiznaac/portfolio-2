@@ -1,32 +1,42 @@
 package dev.agner.portfolio.httpapi.controller
 
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
+import io.ktor.server.routing.post
 import org.springframework.stereotype.Component
-import org.springframework.web.reactive.function.server.ServerRequest
-import org.springframework.web.reactive.function.server.ServerResponse
-import org.springframework.web.reactive.function.server.bodyValueAndAwait
-import org.springframework.web.reactive.function.server.coRouter
 import java.time.Instant
 
-@Configuration
-class HealthController {
+@Component
+class HealthController(
+    private val healthHandler: HealthHandler,
+) : ControllerTemplate {
 
-    @Bean
-    fun healthRoute(healthUseCase: HealthUseCase) = coRouter {
-        GET("/health", healthUseCase::healthCheck)
+    override fun routes(): RouteDefinition = {
+        post ("/health") {
+            val pingPongMessage = call.receive<HealthRequest>()
+            val healthStatuses = healthHandler.healthCheck(pingPongMessage.pingPong)
+
+            call.respond(HttpStatusCode.OK, healthStatuses)
+        }
     }
 }
 
 @Component
-class HealthUseCase {
+class HealthHandler {
 
-    suspend fun healthCheck(request: ServerRequest): ServerResponse {
-        return ServerResponse.ok().bodyValueAndAwait(HealthResponse(true, Instant.now()))
-    }
+    suspend fun healthCheck(message: String) = setOf(
+        HealthResponse(serviceName = "ping-pong", description = message, isHealthy = true, timestamp = Instant.now()),
+    )
 }
 
-private data class HealthResponse(
+data class HealthResponse(
+    val serviceName: String,
+    val description: String? = null,
     val isHealthy: Boolean,
     val timestamp: Instant,
+)
+
+data class HealthRequest(
+    val pingPong: String,
 )
