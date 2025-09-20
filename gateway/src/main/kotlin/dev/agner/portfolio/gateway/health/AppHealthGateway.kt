@@ -1,6 +1,5 @@
 package dev.agner.portfolio.gateway.health
 
-import dev.agner.portfolio.usecase.health.HealthData
 import dev.agner.portfolio.usecase.health.HealthGateway
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -12,7 +11,10 @@ class AppHealthGateway(
     private val client: HttpClient,
 ) : HealthGateway {
 
-    override suspend fun getHealthStatus(): HealthData = client
-        .get("http://localhost:8080/health")
-        .body()
+    override suspend fun isHealthy() = client
+        .get("http://localhost:8080/health/internal")
+        .body<HealthData>()
+        .isHealthy
 }
+
+private data class HealthData(val isHealthy: Boolean)
