@@ -2,7 +2,7 @@ package dev.agner.portfolio.httpapi.configuration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.controller.ControllerTemplate
-import dev.agner.portfolio.usecase.extensions.logger
+import dev.agner.portfolio.usecase.extension.logger
 import io.ktor.http.ContentType
 import io.ktor.serialization.jackson.JacksonConverter
 import io.ktor.server.application.install
