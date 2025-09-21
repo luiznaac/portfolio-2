@@ -11,6 +11,7 @@ exposed = "1.0.0-rc-1"
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
 kotlinx-coroutines-jdk8 = { module="org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref="kotlinx-coroutines-version" }
 kotlinx-coroutines-core = { module="org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm", version.ref="kotlinx-coroutines-version" }
+kotlinx-datetime = { module="org.jetbrains.kotlinx:kotlinx-datetime", version="0.7.1" }
 
 ktor-netty = { module="io.ktor:ktor-server-netty", version.ref = "ktor"}
 ktor-core = { module="io.ktor:ktor-server-core", version.ref = "ktor"}
@@ -53,6 +54,7 @@ dependencies = [
     "kotlinx-coroutines-core",
     "kotlinx-coroutines-jdk8",
     "spring-context",
+    "kotlinx-datetime",
 ]
 
 kotlin-coroutine = [

@@ -9,4 +9,5 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.jackson)
+    implementation("io.ktor:ktor-client-logging:3.2.3")
 }
