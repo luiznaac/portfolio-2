@@ -1,6 +1,6 @@
 package dev.agner.portfolio.gateway.index
 
-import dev.agner.portfolio.usecase.index.gateway.IIndexGateway
+import dev.agner.portfolio.usecase.index.gateway.IIndexValueGateway
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.TheirIndexValue
 import io.ktor.client.HttpClient
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service
 @Service
 class BacenGateway(
     private val client: HttpClient,
-) : IIndexGateway {
+) : IIndexValueGateway {
 
     override suspend fun getIndexValuesForDateRange(indexId: IndexId, from: LocalDate, to: LocalDate) =
         client.get("https://api.bcb.gov.br") {
