@@ -5,7 +5,9 @@ import dev.agner.portfolio.usecase.bond.model.BondCreation
 
 interface IBondRepository {
 
-    suspend fun fetchAllBonds(): Set<Bond>
+    suspend fun fetchAll(): Set<Bond>
+
+    suspend fun fetchById(bondId: Int): Bond?
 
     suspend fun save(creation: BondCreation): Bond
 }

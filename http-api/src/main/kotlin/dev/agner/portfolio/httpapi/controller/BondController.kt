@@ -18,7 +18,7 @@ class BondController(
     override fun routes(): RouteDefinition = {
         route("/bonds") {
             get {
-                call.respond(HttpStatusCode.OK, service.fetchAllBonds())
+                call.respond(HttpStatusCode.OK, service.fetchAll())
             }
 
             post("/fixed") {

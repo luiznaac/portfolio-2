@@ -17,8 +17,12 @@ class BondRepository(
     private val clock: Clock,
 ) : IBondRepository {
 
-    override suspend fun fetchAllBonds() = transaction {
+    override suspend fun fetchAll() = transaction {
         BondEntity.all().mapToSet { it.toModel() }
+    }
+
+    override suspend fun fetchById(bondId: Int) = transaction {
+        BondEntity.findById(bondId)?.toModel()
     }
 
     override suspend fun save(creation: BondCreation) = transaction {
@@ -26,6 +30,7 @@ class BondRepository(
             name = creation.name
             rateType = creation.resolveType()
             value = creation.value.toBigDecimal()
+            // TODO(): create cache for index entity ref
             indexId = if (creation is FloatingRateBondCreation) IndexEntity.findById(creation.indexId.name) else null
             createdAt = LocalDateTime.now(clock)
         }.toModel()

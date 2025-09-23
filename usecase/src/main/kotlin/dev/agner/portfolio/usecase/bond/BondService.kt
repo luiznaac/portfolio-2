@@ -19,5 +19,9 @@ class BondService(
         FloatingRateBondCreation(name, value, indexId)
             .run { bondRepository.save(this) }
 
-    suspend fun fetchAllBonds() = bondRepository.fetchAllBonds()
+    suspend fun fetchAll() = bondRepository.fetchAll()
+
+    // TODO(): Implement custom exception handling
+    suspend fun fetchById(bondId: Int) = bondRepository.fetchById(bondId)
+        ?: throw NoSuchElementException("Bond with id $bondId not found")
 }

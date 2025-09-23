@@ -1,0 +1,31 @@
+package dev.agner.portfolio.persistence.bond
+
+import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
+import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
+import dev.agner.portfolio.usecase.extension.mapToSet
+import dev.agner.portfolio.usecase.extension.now
+import kotlinx.datetime.LocalDateTime
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.springframework.stereotype.Component
+import java.time.Clock
+
+@Component
+class BondOrderRepository(
+    private val clock: Clock,
+) : IBondOrderRepository {
+
+    override suspend fun fetchAll() = transaction {
+        BondOrderEntity.all().mapToSet { it.toModel() }
+    }
+
+    override suspend fun save(creation: BondOrderCreation) = transaction {
+        BondOrderEntity.new {
+            // TODO(): create cache for bond entity ref
+            bondId = BondEntity.findById(creation.bondId)!!
+            type = creation.type.name
+            date = creation.date
+            amount = creation.amount.toBigDecimal()
+            createdAt = LocalDateTime.now(clock)
+        }.toModel()
+    }
+}

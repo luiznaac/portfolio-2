@@ -2,7 +2,7 @@ USE portfolio;
 
 CREATE TABLE `index` (
     id VARCHAR(10) PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 CREATE TABLE index_value (
@@ -10,7 +10,7 @@ CREATE TABLE index_value (
     index_id VARCHAR(10) NOT NULL,
     date DATE NOT NULL,
     value DECIMAL(12, 8) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (index_id) REFERENCES `index`(id),
     UNIQUE (index_id, date)
@@ -22,9 +22,20 @@ CREATE TABLE bond (
     rate_type VARCHAR(10) NOT NULL,
     value DECIMAL(8, 4) NOT NULL,
     index_id VARCHAR(10),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (index_id) REFERENCES `index`(id)
+);
+
+CREATE TABLE bond_oder (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bond_id INT NOT NULL,
+    type VARCHAR(10) NOT NULL,
+    date DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (bond_id) REFERENCES bond(id)
 );
 
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());

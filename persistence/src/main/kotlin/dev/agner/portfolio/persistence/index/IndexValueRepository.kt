@@ -37,7 +37,7 @@ class IndexValueRepository(
          *        service it might contain duplicated dates. This is a simple way to avoid dealing with that for now.
          *        In a real world scenario, we would probably want to correctly generate the date range without
          *        duplicates, considering the indexes that are daily vs monthly.
-        **/
+         **/
         IndexValueTable.batchInsert(indexValues, ignore = true) { (date, value) ->
             this[IndexValueTable.indexId] = indexId.name
             this[IndexValueTable.date] = date
