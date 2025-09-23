@@ -18,7 +18,7 @@ class IndexValueController(
         route("/indexes/{index_id}/values") {
             get {
                 val indexId = IndexId.valueOf(call.pathParameters["index_id"]!!.uppercase())
-                call.respond(HttpStatusCode.OK, service.fetchAllIndexValuesBy(indexId))
+                call.respond(HttpStatusCode.OK, service.fetchAllBy(indexId))
             }
 
             post("/hydrate") {

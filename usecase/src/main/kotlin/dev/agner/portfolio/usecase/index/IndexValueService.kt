@@ -24,7 +24,9 @@ class IndexValueService(
     private val gateway: IIndexValueGateway,
     private val clock: Clock,
 ) {
-    suspend fun fetchAllIndexValuesBy(indexId: IndexId) = repository.fetchAllBy(indexId)
+    suspend fun fetchAllBy(indexId: IndexId) = repository.fetchAllBy(indexId)
+
+    suspend fun fetchAllBy(indexId: IndexId, from: LocalDate) = repository.fetchAllBy(indexId, from)
 
     suspend fun hydrateIndexValues(indexId: IndexId) =
         buildDates(indexId)

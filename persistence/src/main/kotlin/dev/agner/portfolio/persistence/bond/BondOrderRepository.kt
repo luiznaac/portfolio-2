@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.extension.mapToSet
 import dev.agner.portfolio.usecase.extension.now
 import kotlinx.datetime.LocalDateTime
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -18,10 +19,14 @@ class BondOrderRepository(
         BondOrderEntity.all().mapToSet { it.toModel() }
     }
 
+    override suspend fun fetchByBondId(bondId: Int) = transaction {
+        BondOrderEntity.find { BondOrderTable.bondId eq bondId }.map { it.toModel() }
+    }
+
     override suspend fun save(creation: BondOrderCreation) = transaction {
         BondOrderEntity.new {
             // TODO(): create cache for bond entity ref
-            bondId = BondEntity.findById(creation.bondId)!!
+            bond = BondEntity.findById(creation.bondId)!!
             type = creation.type.name
             date = creation.date
             amount = creation.amount.toBigDecimal()

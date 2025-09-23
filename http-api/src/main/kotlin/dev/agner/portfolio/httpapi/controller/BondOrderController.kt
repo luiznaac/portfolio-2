@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
+import dev.agner.portfolio.usecase.bond.BondOrderYieldService
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component
 @Component
 class BondOrderController(
     private val service: BondOrderService,
+    private val yieldService: BondOrderYieldService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -29,6 +31,13 @@ class BondOrderController(
 
             get {
                 call.respond(service.fetchAll())
+            }
+
+            post("/{bond_order_id}/consolidate") {
+                val bondOrderId = call.parameters["bond_order_id"]!!.toInt()
+
+                yieldService.consolidateBy(bondOrderId)
+                call.respond(HttpStatusCode.NoContent)
             }
         }
     }

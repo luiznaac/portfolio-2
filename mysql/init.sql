@@ -38,6 +38,17 @@ CREATE TABLE bond_oder (
     FOREIGN KEY (bond_id) REFERENCES bond(id)
 );
 
+CREATE TABLE bond_oder_yield (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bond_order_id INT NOT NULL,
+    date DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (bond_order_id) REFERENCES bond_oder(id),
+    UNIQUE (bond_order_id, date)
+);
+
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('IPCA', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('SELIC', NOW());

@@ -5,9 +5,11 @@ import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import dev.agner.portfolio.usecase.index.model.IndexValueCreation
 import dev.agner.portfolio.usecase.index.repository.IIndexValueRepository
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Service
@@ -21,6 +23,14 @@ class IndexValueRepository(
 
     override suspend fun fetchAllBy(indexId: IndexId): List<IndexValue> = transaction {
         IndexValueEntity.find { IndexValueTable.indexId eq indexId.name }.map { it.toIndexValue() }
+    }
+
+    override suspend fun fetchAllBy(indexId: IndexId, from: LocalDate): List<IndexValue> = transaction {
+        IndexValueEntity.find {
+            IndexValueTable.indexId eq indexId.name
+            // TODO(): create index for (indexId, date)
+            IndexValueTable.date greaterEq from
+        }.map { it.toIndexValue() }
     }
 
     override suspend fun fetchLastBy(indexId: IndexId) = transaction {

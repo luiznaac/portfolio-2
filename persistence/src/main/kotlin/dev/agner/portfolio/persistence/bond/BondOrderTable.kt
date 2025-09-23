@@ -22,7 +22,7 @@ object BondOrderTable : IntIdTable("bond_oder") {
 class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BondOrderEntity>(BondOrderTable)
 
-    var bondId by BondEntity referencedOn BondOrderTable.bondId
+    var bond by BondEntity referencedOn BondOrderTable.bondId
     var type by BondOrderTable.type
     var date by BondOrderTable.date
     var amount by BondOrderTable.amount
@@ -30,7 +30,7 @@ class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
 
     fun toModel() = BondOrder(
         id = id.value,
-        bondId = bondId.id.value,
+        bond = bond.toModel(),
         type = BondOrderType.valueOf(type),
         date = date,
         amount = amount.toDouble(),

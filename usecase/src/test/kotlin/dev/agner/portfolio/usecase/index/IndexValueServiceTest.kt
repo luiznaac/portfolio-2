@@ -29,7 +29,7 @@ class IndexValueServiceTest : StringSpec({
         val indexValues = listOf(IndexValue(date = LocalDate.parse("2025-01-03"), value = 12.5))
         coEvery { repository.fetchAllBy(any()) } returns indexValues
 
-        val result = service.fetchAllIndexValuesBy(CDI)
+        val result = service.fetchAllBy(CDI)
 
         result shouldBe indexValues
 

@@ -7,5 +7,7 @@ interface IBondOrderRepository {
 
     suspend fun fetchAll(): Set<BondOrder>
 
+    suspend fun fetchByBondId(bondId: Int): List<BondOrder>
+
     suspend fun save(creation: BondOrderCreation): BondOrder
 }
