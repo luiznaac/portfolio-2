@@ -7,6 +7,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.path
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.format
@@ -28,8 +29,13 @@ class BacenGateway(
                 parameter("dataFinal", to.format(format))
             }
         }
-            .body<List<BacenIndexValue>>()
-            .map { it.toDomain() }
+            .run {
+                when (status) {
+                    HttpStatusCode.OK -> body<List<BacenIndexValue>>().map { it.toDomain() }
+                    HttpStatusCode.NotFound -> emptyList()
+                    else -> error("Error fetching index values from Bacen: $status")
+                }
+            }
 }
 
 private fun IndexId.getBacenCode() = when (this) {

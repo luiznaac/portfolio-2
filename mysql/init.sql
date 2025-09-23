@@ -12,7 +12,8 @@ CREATE TABLE index_value (
     value DECIMAL(12, 8) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (index_id) REFERENCES `index`(id)
+    FOREIGN KEY (index_id) REFERENCES `index`(id),
+    UNIQUE (index_id, date)
 );
 
 CREATE TABLE bond (

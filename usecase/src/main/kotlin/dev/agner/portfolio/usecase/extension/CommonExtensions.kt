@@ -2,14 +2,18 @@ package dev.agner.portfolio.usecase.extension
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import kotlin.time.Clock
+import java.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlin.time.toKotlinInstant
 
 inline fun <reified T> T.logger(): Logger = LoggerFactory.getLogger(T::class.java)
 
@@ -20,6 +24,10 @@ suspend fun <T, R> Iterable<T>.mapAsync(transform: suspend (T) -> R) = coroutine
 }
 
 @OptIn(ExperimentalTime::class)
-fun LocalDateTime.Companion.now() = Clock.System.now().toLocalDateTime(TimeZone.UTC)
+fun LocalDateTime.Companion.now(clock: Clock) = clock.instant().toKotlinInstant().toLocalDateTime(TimeZone.UTC)
 
-fun LocalDate.Companion.now() = LocalDateTime.now().date
+fun LocalDate.Companion.today(clock: Clock) = LocalDateTime.now(clock).date
+
+fun LocalDate.Companion.yesterday(clock: Clock) = LocalDate.today(clock).minus(1, DateTimeUnit.DAY)
+
+fun LocalDate.nextDay() = plus(1, DateTimeUnit.DAY)

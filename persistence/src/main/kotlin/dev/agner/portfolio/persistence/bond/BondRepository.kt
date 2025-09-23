@@ -10,9 +10,12 @@ import dev.agner.portfolio.usecase.extension.now
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
+import java.time.Clock
 
 @Component
-class BondRepository : IBondRepository {
+class BondRepository(
+    private val clock: Clock,
+) : IBondRepository {
 
     override suspend fun fetchAllBonds() = transaction {
         BondEntity.all().mapToSet { it.toModel() }
@@ -24,7 +27,7 @@ class BondRepository : IBondRepository {
             rateType = creation.resolveType()
             value = creation.value.toBigDecimal()
             indexId = if (creation is FloatingRateBondCreation) IndexEntity.findById(creation.indexId.name) else null
-            createdAt = LocalDateTime.now()
+            createdAt = LocalDateTime.now(clock)
         }.toModel()
     }
 }

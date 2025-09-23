@@ -23,7 +23,7 @@ class IndexValueController(
 
             post("/hydrate") {
                 val indexId = IndexId.valueOf(call.pathParameters["index_id"]!!.uppercase())
-                call.respond(HttpStatusCode.OK, service.hydrateIndexValues(indexId))
+                call.respond(HttpStatusCode.OK, mapOf("count" to service.hydrateIndexValues(indexId)))
             }
         }
     }
