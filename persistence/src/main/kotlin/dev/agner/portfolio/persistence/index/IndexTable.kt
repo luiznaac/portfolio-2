@@ -2,7 +2,6 @@ package dev.agner.portfolio.persistence.index
 
 import dev.agner.portfolio.usecase.index.model.Index
 import dev.agner.portfolio.usecase.index.model.IndexId
-import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IdTable
 import org.jetbrains.exposed.v1.dao.Entity
@@ -12,7 +11,7 @@ import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 object IndexTable : IdTable<String>("index") {
-    override val id: Column<EntityID<String>> = varchar("id", 10).entityId()
+    override val id = varchar("id", 10).entityId()
     val createdAt = timestamp("created_at")
 
     override val primaryKey = PrimaryKey(id)

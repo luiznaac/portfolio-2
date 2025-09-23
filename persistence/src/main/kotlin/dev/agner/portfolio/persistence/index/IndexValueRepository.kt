@@ -20,7 +20,7 @@ class IndexValueRepository : IIndexValueRepository {
     }
 
     @OptIn(ExperimentalTime::class)
-    override suspend fun persistIndexValues(indexId: IndexId, indexValues: List<IndexValue>): Unit = transaction {
+    override suspend fun saveAll(indexId: IndexId, indexValues: List<IndexValue>): Unit = transaction {
         IndexValueTable.batchInsert(indexValues) { (date, value) ->
             this[IndexValueTable.indexId] = indexId.name
             this[IndexValueTable.date] = date

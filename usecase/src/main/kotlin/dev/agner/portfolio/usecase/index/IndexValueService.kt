@@ -26,7 +26,7 @@ class IndexValueService(
             .onEach { log.info("Fetching values for {} from {} to {}", indexId, it.first, it.second) }
             .map { gateway.getIndexValuesForDateRange(indexId, it.first, it.second) }
             .map { it.map { idx -> idx.toIndexValue() } }
-            .onEach { repository.persistIndexValues(indexId, it) }
+            .onEach { repository.saveAll(indexId, it) }
 
     private fun buildDates(): List<Pair<LocalDate, LocalDate>> {
         var startDate = "2018-01-01".run(LocalDate::parse) // TODO(): define start date by checking last stored date

@@ -7,5 +7,5 @@ interface IIndexValueRepository {
 
     suspend fun fetchAllIndexValuesBy(indexId: IndexId): Set<IndexValue>
 
-    suspend fun persistIndexValues(indexId: IndexId, indexValues: List<IndexValue>)
+    suspend fun saveAll(indexId: IndexId, indexValues: List<IndexValue>)
 }

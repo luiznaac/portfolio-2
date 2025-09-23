@@ -11,7 +11,7 @@ import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 object IndexValueTable : IntIdTable("index_value") {
-    val indexId = varchar("index_id", 10).references(IndexTable.id)
+    val indexId = reference("index_id", IndexTable.id)
     val date = date("date")
     val value = decimal("value", 12, 8)
     val createdAt = datetime("created_at")
