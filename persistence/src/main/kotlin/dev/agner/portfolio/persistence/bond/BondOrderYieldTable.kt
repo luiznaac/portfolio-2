@@ -1,6 +1,6 @@
 package dev.agner.portfolio.persistence.bond
 
-import dev.agner.portfolio.usecase.bond.model.BondOrderYield
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
@@ -25,7 +25,7 @@ class BondOrderYieldEntity(id: EntityID<Int>) : IntEntity(id) {
     var amount by BondOrderYieldTable.amount
     var createdAt by BondOrderYieldTable.createdAt
 
-    fun toModel() = BondOrderYield(
+    fun toModel() = BondOrderStatement(
         id = id.value,
         bondOrderId = bondOrderId.id.value,
         date = date,
