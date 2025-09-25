@@ -1,7 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
-import dev.agner.portfolio.usecase.bond.BondOrderStatementService
+import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidator
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -15,11 +15,11 @@ import org.springframework.stereotype.Component
 @Component
 class BondOrderController(
     private val service: BondOrderService,
-    private val yieldService: BondOrderStatementService,
+    private val yieldService: BondConsolidator,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/orders/bonds") {
+        route("/bonds/orders") {
             post {
                 val payload = call.receive<BondOrderCreationRequest>()
 

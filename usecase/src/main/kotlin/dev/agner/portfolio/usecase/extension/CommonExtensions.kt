@@ -23,6 +23,17 @@ suspend fun <T, R> Iterable<T>.mapAsync(transform: suspend (T) -> R) = coroutine
     map { async { transform(it) } }
 }
 
+inline fun <T, S, R> Iterable<T>.runningFoldWithData(initialData: S, operation: (data: S, T) -> Pair<S, R>): List<R> {
+    val result = ArrayList<R>()
+    var data = initialData
+    for (element in this) {
+        val opResult = operation(data, element)
+        data = opResult.first
+        result.add(opResult.second)
+    }
+    return result
+}
+
 @OptIn(ExperimentalTime::class)
 fun LocalDateTime.Companion.now(clock: Clock) = clock.instant().toKotlinInstant().toLocalDateTime(TimeZone.UTC)
 
