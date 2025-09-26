@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component
 
 @Component
 class IndexController(
-    private val indexService: IndexService,
+    private val service: IndexService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
         route("/indexes") {
             get {
-                call.respond(HttpStatusCode.OK, indexService.fetchAllIndexes())
+                call.respond(HttpStatusCode.OK, service.fetchAllIndexes())
             }
         }
     }

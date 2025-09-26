@@ -2,7 +2,54 @@ USE portfolio;
 
 CREATE TABLE `index` (
     id VARCHAR(10) PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE index_value (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    index_id VARCHAR(10) NOT NULL,
+    date DATE NOT NULL,
+    value DECIMAL(12, 8) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (index_id) REFERENCES `index`(id),
+    UNIQUE (index_id, date)
+);
+
+CREATE TABLE bond (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    rate_type VARCHAR(10) NOT NULL,
+    value DECIMAL(8, 4) NOT NULL,
+    index_id VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (index_id) REFERENCES `index`(id)
+);
+
+CREATE TABLE bond_order (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bond_id INT NOT NULL,
+    type VARCHAR(10) NOT NULL,
+    date DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (bond_id) REFERENCES bond(id)
+);
+
+CREATE TABLE bond_order_statement (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    buy_order_id INT NOT NULL,
+    sell_order_id INT,
+    type VARCHAR(20) NOT NULL,
+    date DATE NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (buy_order_id) REFERENCES bond_order(id),
+    FOREIGN KEY (sell_order_id) REFERENCES bond_order(id),
+    UNIQUE (buy_order_id, type, date)
 );
 
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());

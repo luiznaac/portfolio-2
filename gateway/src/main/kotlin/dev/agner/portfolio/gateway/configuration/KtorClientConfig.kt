@@ -18,5 +18,7 @@ class KtorClientConfig(
         install(ContentNegotiation) {
             register(ContentType.Application.Json, JacksonConverter(mapper))
         }
+
+//        install(Logging)
     }
 }

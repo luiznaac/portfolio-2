@@ -62,12 +62,15 @@ subprojects {
 			languageVersion = JavaLanguageVersion.of(21)
 		}
 	}
+
+	tasks.withType<Test> {
+		useJUnitPlatform()
+		testLogging {
+			events("passed", "skipped", "failed")
+		}
+	}
 }
 
 repositories {
 	mavenCentral()
-}
-
-tasks.withType<Test> {
-	useJUnitPlatform()
 }
