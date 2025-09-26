@@ -23,7 +23,7 @@ suspend fun <T, R> Iterable<T>.mapAsync(transform: suspend (T) -> R) = coroutine
     map { async { transform(it) } }
 }
 
-inline fun <T, S, R> Iterable<T>.runningFoldWithData(initialData: S, operation: (data: S, T) -> Pair<S, R>): List<R> {
+inline fun <T, S, R> Iterable<T>.mapWithData(initialData: S, operation: (data: S, T) -> Pair<S, R>): List<R> {
     val result = ArrayList<R>()
     var data = initialData
     for (element in this) {

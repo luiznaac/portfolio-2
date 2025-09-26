@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
+import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidationContext.SellOrderContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.PrincipalRedeem
@@ -15,7 +16,7 @@ import dev.agner.portfolio.usecase.bond.model.FixedRateBond
 import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
 import dev.agner.portfolio.usecase.extension.nextDay
-import dev.agner.portfolio.usecase.extension.runningFoldWithData
+import dev.agner.portfolio.usecase.extension.mapWithData
 import dev.agner.portfolio.usecase.index.IndexValueService
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import kotlinx.datetime.LocalDate
@@ -29,45 +30,61 @@ class BondConsolidator(
     private val calculator: BondCalculator,
 ) {
 
-    // TODO(): Handle SELL orders
     // TODO(): Handle FixedRateBonds
     // TODO(): In the future, we'll need to handle multiple users, so this should take a userId as well
     suspend fun consolidateBy(bondId: Int) {
         // TODO(): [1] Return a consolidation position so it's not necessary anymore to do calculations on BondOrder.initData
         val orders = bondOrderService.fetchByBondId(bondId).sortedBy { it.date }
-        val sellOrders = orders.filter { it.type == BondOrderType.SELL }.associateBy { it.date }
+        // TODO(): Remover sells que ja foram previamente consolidadas
+        val sellOrders = orders.filter { it.type == BondOrderType.SELL }.map { SellOrderContext(it.id, it.date, it.amount) }
 
         orders
             .filter { it.type == BondOrderType.BUY }
-            .onEach { order ->
+            .mapWithData(sellOrders) { sells, order ->
                 val startingDate = order.resolveCalculationStartingDate()
                 val yieldPercentages = order.bond.buildYieldPercentages(startingDate)
                     .associate { p -> p.date to p.percentage }
 
-                yieldPercentages
-                    .keys.sorted() // TODO(): Calculate dates programmatically - doing this now because we must get holidays right
-                    .runningFoldWithData(order.initData(startingDate)) { data, date ->
-                        // TODO(): Remove calculated SELL so it does not appear in the next BUY order iteration
-                        val sellOrder = sellOrders[date]
-                        val result = calculator.calculate(
-                            data.toConsolidationContext(
-                                yieldPercentage = yieldPercentages[date]!!,
-                                sellAmount = sellOrder?.amount ?: 0.0,
-                            )
-                        )
+                val calc = calculateBondo(yieldPercentages, order, startingDate, sells)
 
-                        result.toIntermediateData() to result.statements.map {
-                            it.buildCreation(order.id, date, sellOrder?.id)
-                        }
-                    }
-                    .flatten()
-                    // TODO(): Move chunk logic to repository
-                    .chunked(100)
-                    .onEach { repository.saveAll(it) }
+                calc.ctx.sellOrders to calc.statements
             }
+            .flatten()
+            .chunked(100)
+            .onEach { repository.saveAll(it) }
     }
 
-    private fun BondCalculationResult.toIntermediateData() = IntermediateData(principal, yield)
+    private suspend fun calculateBondo(
+        yieldPercentages: Map<LocalDate, Double>,
+        order: BondOrder,
+        startingDate: LocalDate,
+        sells: List<SellOrderContext>
+    ): IntermediateData = yieldPercentages
+        .keys.sorted() // TODO(): Calculate dates programmatically - doing this now because we must get holidays right
+        // TODO(): Passar direto toda a info necess'aria, contexto ja construido
+        .fold(order.initData(startingDate, sells)) { acc, date ->
+            // TODO(): Remove calculated SELL so it does not appear in the next BUY order iteration
+            val sellOrder = acc.ctx.sellOrders.find { it.date == date }
+            val result = calculator.calculate(
+                BondCalculationContext(
+                    acc.ctx.principal,
+                    acc.ctx.yieldAmount,
+                    yieldPercentages[date]!!,
+                    sellOrder?.amount ?: 0.0
+                )
+            )
+
+            acc.updateWith(result, date)
+                .run {
+                    if (sellOrder != null) {
+                        val newSells = ctx.sellOrders - sellOrder
+                        copy(ctx = ctx.copy(sellOrders = newSells))
+                    } else this
+                }
+        }
+
+    private fun IntermediateData.updateWith(result: BondCalculationResult, date: LocalDate) =
+        copy(ctx = ctx.copy(principal = result.principal, yieldAmount = result.yield), statements = statements + result.statements.map { it.buildCreation(ctx.bondOrderId, date, 0) })
 
     private suspend fun BondOrder.resolveCalculationStartingDate() =
         repository.fetchLastByBondOrderId(id)?.date?.nextDay() ?: date
@@ -79,12 +96,17 @@ class BondConsolidator(
         else -> throw IllegalStateException("Unknown bond type: ${this::class.simpleName}")
     }
 
-    private suspend fun BondOrder.initData(startingAt: LocalDate): IntermediateData {
+    private suspend fun BondOrder.initData(startingAt: LocalDate, sells: List<SellOrderContext>): IntermediateData {
         // TODO: Remove (refer to [1])
         val consolidatedValues = repository.sumUpConsolidatedValues(id, startingAt)
         return IntermediateData(
-            amount - consolidatedValues.first,
-            consolidatedValues.second,
+            BondConsolidationContext(
+                id,
+                amount - consolidatedValues.first,
+                consolidatedValues.second,
+                sells,
+            ),
+        emptyList(),
         )
     }
 
@@ -97,11 +119,21 @@ class BondConsolidator(
 }
 
 private data class IntermediateData(
+    val ctx: BondConsolidationContext,
+    val statements: List<BondOrderStatementCreation>,
+)
+
+data class BondConsolidationContext(
+    val bondOrderId: Int,
     val principal: Double,
     val yieldAmount: Double,
+    val sellOrders: List<SellOrderContext> = emptyList(),
 ) {
-    fun toConsolidationContext(yieldPercentage: Double, sellAmount: Double) =
-        BondCalculationContext(principal, yieldAmount, yieldPercentage, sellAmount)
+    data class SellOrderContext(
+        val id: Int,
+        val date: LocalDate,
+        val amount: Double,
+    )
 }
 
 private data class YieldPercentage(

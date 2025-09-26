@@ -103,10 +103,10 @@ class BondConsolidatorTest : StringSpec({
 
         service.consolidateBy(bondId)
 
-        coVerify { bondOrderService.fetchByBondId(bondId) }
-        coVerify { repository.fetchLastByBondOrderId(1) }
-        coVerify { indexValueService.fetchAllBy(indexId, calculationStartDate.nextDay()) }
-        coVerify {
+        coVerify(exactly = 1) { bondOrderService.fetchByBondId(bondId) }
+        coVerify(exactly = 1) { repository.fetchLastByBondOrderId(1) }
+        coVerify(exactly = 1) { indexValueService.fetchAllBy(indexId, calculationStartDate.nextDay()) }
+        coVerify(exactly = 1) {
             repository.saveAll(
                 listOf(
                     BondOrderStatementCreation.Yield(
@@ -118,7 +118,7 @@ class BondConsolidatorTest : StringSpec({
                         bondOrderId = 1,
                         date = LocalDate.parse("2024-01-16"),
                         amount = 33.0,
-                        sellBondOrderId = 5,
+                        sellBondOrderId = 0,
                     ),
                     BondOrderStatementCreation.Yield(
                         bondOrderId = 1,
@@ -129,7 +129,7 @@ class BondConsolidatorTest : StringSpec({
                         bondOrderId = 1,
                         date = LocalDate.parse("2024-01-17"),
                         amount = 22.0,
-                        sellBondOrderId = 7,
+                        sellBondOrderId = 0,
                     ),
                 )
             )
