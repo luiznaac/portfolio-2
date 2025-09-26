@@ -1,166 +1,313 @@
+
 package dev.agner.portfolio.usecase.bond.consolidation
 
-import dev.agner.portfolio.usecase.bond.BondOrderService
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
-import dev.agner.portfolio.usecase.bond.model.BondOrder
-import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
-import dev.agner.portfolio.usecase.bond.model.BondOrderType
-import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
-import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
-import dev.agner.portfolio.usecase.extension.nextDay
-import dev.agner.portfolio.usecase.index.IndexValueService
-import dev.agner.portfolio.usecase.index.model.IndexId
-import dev.agner.portfolio.usecase.index.model.IndexValue
 import io.kotest.core.spec.style.StringSpec
-import io.mockk.Runs
+import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.just
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 
 class BondConsolidatorTest : StringSpec({
 
-    val repository = mockk<IBondOrderStatementRepository>()
-    val bondOrderService = mockk<BondOrderService>()
-    val indexValueService = mockk<IndexValueService>()
     val calculator = mockk<BondCalculator>()
+    val service = BondConsolidator(calculator)
 
-    val service = BondConsolidator(repository, bondOrderService, indexValueService, calculator)
+    beforeEach { clearAllMocks() }
 
-    beforeEach {
-        clearAllMocks()
-    }
+    "should process bond consolidation with yield and redemptions correctly" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-16")
+        val date2 = LocalDate.parse("2024-01-17")
 
-    "should process floating rate bond orders correctly" {
-        val bondId = 1
-        val indexId = IndexId.CDI
-        val orderDate = LocalDate.parse("2024-01-01")
-        val calculationStartDate = LocalDate.parse("2024-01-15")
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 5.0,
-            indexId = indexId
-        )
-        val bondOrder = BondOrder(
-            id = 1,
-            bond = floatingRateBond,
-            type = BondOrderType.BUY,
-            date = orderDate,
-            amount = 10000.0
-        )
-        val sellOrder1 = BondOrder(
-            id = 5,
-            bond = floatingRateBond,
-            type = BondOrderType.SELL,
-            date = LocalDate.parse("2024-01-16"),
-            amount = 500.0
-        )
-        val sellOrder2 = BondOrder(
-            id = 7,
-            bond = floatingRateBond,
-            type = BondOrderType.SELL,
-            date = LocalDate.parse("2024-01-17"),
-            amount = 500.0
-        )
-        val indexValues = listOf(
-            IndexValue(date = LocalDate.parse("2024-01-16"), value = 100.0),
-            IndexValue(date = LocalDate.parse("2024-01-17"), value = 101.0),
-        )
-
-        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(bondOrder, sellOrder1, sellOrder2)
-        coEvery { repository.fetchLastByBondOrderId(any()) } returns BondOrderStatement(
-            id = 1,
-            bondOrderId = 1,
-            date = calculationStartDate,
-            amount = 0.0,
-        )
-        coEvery { indexValueService.fetchAllBy(indexId, calculationStartDate.nextDay()) } returns indexValues
-        coEvery { repository.sumUpConsolidatedValues(any(), any()) } returns (0.0 to 0.0)
-        coEvery { calculator.calculate(any()) } returnsMany listOf(
-            BondCalculationResult.Ok(
-                principal = 10000.0,
-                yield = 500.0,
-                statements = listOf(
-                    BondCalculationRecord.Yield(100.0),
-                    BondCalculationRecord.PrincipalRedeem(33.0),
-                )
+        val consolidationContext = BondConsolidationContext(
+            bondOrderId = bondOrderId,
+            principal = 10000.0,
+            yieldAmount = 0.0,
+            yieldPercentages = mapOf(
+                date1 to BondConsolidationContext.YieldPercentageContext(0.5),
+                date2 to BondConsolidationContext.YieldPercentageContext(0.6)
             ),
-            BondCalculationResult.Ok(
-                principal = 10000.0,
-                yield = 800.0,
-                statements = listOf(
-                    BondCalculationRecord.Yield(300.0),
-                    BondCalculationRecord.YieldRedeem(22.0),
-                )
+            sellOrders = mapOf(
+                date1 to BondConsolidationContext.SellOrderContext(5, 500.0),
+                date2 to BondConsolidationContext.SellOrderContext(7, 500.0)
             )
         )
-        coEvery { repository.saveAll(any()) } just Runs
 
-        service.consolidateBy(bondId)
-
-        coVerify(exactly = 1) { bondOrderService.fetchByBondId(bondId) }
-        coVerify(exactly = 1) { repository.fetchLastByBondOrderId(1) }
-        coVerify(exactly = 1) { indexValueService.fetchAllBy(indexId, calculationStartDate.nextDay()) }
-        coVerify(exactly = 1) {
-            repository.saveAll(
-                listOf(
-                    BondOrderStatementCreation.Yield(
-                        bondOrderId = 1,
-                        date = LocalDate.parse("2024-01-16"),
-                        amount = 100.0
-                    ),
-                    BondOrderStatementCreation.PrincipalRedeem(
-                        bondOrderId = 1,
-                        date = LocalDate.parse("2024-01-16"),
-                        amount = 33.0,
-                        sellBondOrderId = 0,
-                    ),
-                    BondOrderStatementCreation.Yield(
-                        bondOrderId = 1,
-                        date = LocalDate.parse("2024-01-17"),
-                        amount = 300.0
-                    ),
-                    BondOrderStatementCreation.YieldRedeem(
-                        bondOrderId = 1,
-                        date = LocalDate.parse("2024-01-17"),
-                        amount = 22.0,
-                        sellBondOrderId = 0,
-                    ),
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 10000.0,
+                    startingYield = 0.0,
+                    yieldPercentage = 0.5,
+                    sellAmount = 500.0,
                 )
             )
-        }
+        } returns BondCalculationResult.Ok(
+            principal = 9500.0,
+            yield = 100.0,
+            statements = listOf(
+                BondCalculationRecord.Yield(100.0),
+                BondCalculationRecord.PrincipalRedeem(500.0)
+            )
+        )
+
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 9500.0,
+                    startingYield = 100.0,
+                    yieldPercentage = 0.6,
+                    sellAmount = 500.0
+                )
+            )
+        } returns BondCalculationResult.Ok(
+            principal = 9000.0,
+            yield = 160.0,
+            statements = listOf(
+                BondCalculationRecord.Yield(60.0),
+                BondCalculationRecord.YieldRedeem(100.0),
+                BondCalculationRecord.PrincipalRedeem(400.0)
+            )
+        )
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.remainingSells shouldBe emptyMap()
+        result.statements shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, date1, 100.0),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 500.0, 5),
+            BondOrderStatementCreation.Yield(bondOrderId, date2, 60.0),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, 100.0, 7),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, 400.0, 7)
+        )
+
+        coVerify(exactly = 2) { calculator.calculate(any()) }
     }
 
-    "should use order date when no previous yield exists" {
-        val bondId = 1
-        val indexId = IndexId.CDI
-        val orderDate = LocalDate.parse("2024-01-10")
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 5.0,
-            indexId = indexId
-        )
-        val bondOrder = BondOrder(
-            id = 100,
-            bond = floatingRateBond,
-            type = BondOrderType.BUY,
-            date = orderDate,
-            amount = 10000.0
+    "should handle remaining redemption when sell amount is larger than available" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-16")
+
+        val consolidationContext = BondConsolidationContext(
+            bondOrderId = bondOrderId,
+            principal = 1000.0,
+            yieldAmount = 0.0,
+            yieldPercentages = mapOf(
+                date1 to BondConsolidationContext.YieldPercentageContext(0.5)
+            ),
+            sellOrders = mapOf(
+                date1 to BondConsolidationContext.SellOrderContext(5, 1500.0)
+            )
         )
 
-        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(bondOrder)
-        coEvery { repository.fetchLastByBondOrderId(100) } returns null
-        coEvery { repository.sumUpConsolidatedValues(100, orderDate) } returns (0.0 to 0.0)
-        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 1000.0,
+                    startingYield = 0.0,
+                    yieldPercentage = 0.5,
+                    sellAmount = 1500.0
+                )
+            )
+        } returns BondCalculationResult.RemainingRedemption(
+            principal = 0.0,
+            yield = 5.0,
+            statements = listOf(
+                BondCalculationRecord.Yield(5.0),
+                BondCalculationRecord.PrincipalRedeem(1000.0)
+            ),
+            remainingRedemptionAmount = 500.0
+        )
 
-        service.consolidateBy(bondId)
+        val result = service.calculateBondo(consolidationContext)
 
-        coVerify { indexValueService.fetchAllBy(indexId, orderDate) }
+        result.remainingSells shouldBe mapOf(
+            date1 to BondConsolidationContext.SellOrderContext(5, 500.0)
+        )
+        result.statements shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, date1, 5.0),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 1000.0, 5)
+        )
+
+        coVerify(exactly = 1) { calculator.calculate(any()) }
+    }
+
+    "should process multiple dates in sorted order" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-20")
+        val date2 = LocalDate.parse("2024-01-15") // Earlier date but added later
+        val date3 = LocalDate.parse("2024-01-25")
+
+        val consolidationContext = BondConsolidationContext(
+            bondOrderId = bondOrderId,
+            principal = 10000.0,
+            yieldAmount = 0.0,
+            yieldPercentages = mapOf(
+                date1 to BondConsolidationContext.YieldPercentageContext(0.5),
+                date2 to BondConsolidationContext.YieldPercentageContext(0.4),
+                date3 to BondConsolidationContext.YieldPercentageContext(0.6)
+            )
+        )
+
+        // Mock responses for each calculation in chronological order
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 10000.0,
+                    startingYield = 0.0,
+                    yieldPercentage = 0.4, // date2 comes first
+                    sellAmount = 0.0
+                )
+            )
+        } returns BondCalculationResult.Ok(
+            principal = 10000.0,
+            yield = 40.0,
+            statements = listOf(BondCalculationRecord.Yield(40.0))
+        )
+
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 10000.0,
+                    startingYield = 40.0,
+                    yieldPercentage = 0.5, // date1 comes second
+                    sellAmount = 0.0
+                )
+            )
+        } returns BondCalculationResult.Ok(
+            principal = 10000.0,
+            yield = 90.0,
+            statements = listOf(BondCalculationRecord.Yield(50.0))
+        )
+
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 10000.0,
+                    startingYield = 90.0,
+                    yieldPercentage = 0.6, // date3 comes third
+                    sellAmount = 0.0
+                )
+            )
+        } returns BondCalculationResult.Ok(
+            principal = 10000.0,
+            yield = 150.0,
+            statements = listOf(BondCalculationRecord.Yield(60.0))
+        )
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.statements shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, date2, 40.0),
+            BondOrderStatementCreation.Yield(bondOrderId, date1, 50.0),
+            BondOrderStatementCreation.Yield(bondOrderId, date3, 60.0)
+        )
+
+        coVerify(exactly = 3) { calculator.calculate(any()) }
+    }
+
+    "should handle empty yield percentages" {
+        val consolidationContext = BondConsolidationContext(
+            bondOrderId = 1,
+            principal = 10000.0,
+            yieldAmount = 0.0,
+            yieldPercentages = emptyMap()
+        )
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.remainingSells shouldBe emptyMap()
+        result.statements shouldBe emptyList()
+
+        coVerify(exactly = 0) { calculator.calculate(any()) }
+    }
+
+    "should stop processing when principal and yield amount reach zero" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-16")
+        val date2 = LocalDate.parse("2024-01-17")
+        val date3 = LocalDate.parse("2024-01-18") // This date should not be processed
+
+        val consolidationContext = BondConsolidationContext(
+            bondOrderId = bondOrderId,
+            principal = 1000.0,
+            yieldAmount = 500.0,
+            yieldPercentages = mapOf(
+                date1 to BondConsolidationContext.YieldPercentageContext(0.5),
+                date2 to BondConsolidationContext.YieldPercentageContext(0.6),
+                date3 to BondConsolidationContext.YieldPercentageContext(0.7) // Should not be processed
+            ),
+            sellOrders = mapOf(
+                date1 to BondConsolidationContext.SellOrderContext(5, 800.0),
+                date2 to BondConsolidationContext.SellOrderContext(6, 900.0)
+            )
+        )
+
+        // First calculation: reduces principal and yield but doesn't reach zero
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 1000.0,
+                    startingYield = 500.0,
+                    yieldPercentage = 0.5,
+                    sellAmount = 800.0
+                )
+            )
+        } returns BondCalculationResult.Ok(
+            principal = 200.0,
+            yield = 300.0,
+            statements = listOf(
+                BondCalculationRecord.Yield(50.0),
+                BondCalculationRecord.YieldRedeem(250.0),
+                BondCalculationRecord.PrincipalRedeem(500.0)
+            )
+        )
+
+        // Second calculation: reduces both principal and yield to zero
+        coEvery {
+            calculator.calculate(
+                BondCalculationContext(
+                    principal = 200.0,
+                    startingYield = 300.0,
+                    yieldPercentage = 0.6,
+                    sellAmount = 900.0
+                )
+            )
+        } returns BondCalculationResult.RemainingRedemption(
+            principal = 0.0,
+            yield = 0.0, // Both reach zero - should stop processing here
+            statements = listOf(
+                BondCalculationRecord.Yield(20.0),
+                BondCalculationRecord.YieldRedeem(320.0),
+                BondCalculationRecord.PrincipalRedeem(200.0)
+            ),
+            remainingRedemptionAmount = 200.0,
+        )
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.statements shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, date1, 50.0),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date1, 250.0, 5),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 500.0, 5),
+            BondOrderStatementCreation.Yield(bondOrderId, date2, 20.0),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, 320.0, 6),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, 200.0, 6)
+        )
+
+        // The remaining sell orders should include the unprocessed date2 sell order
+        result.remainingSells shouldBe mapOf(
+            date2 to BondConsolidationContext.SellOrderContext(6, 200.0)
+        )
+
+        // Should only call calculator twice (date1 and date2), not for date3
+        coVerify(exactly = 2) { calculator.calculate(any()) }
     }
 })

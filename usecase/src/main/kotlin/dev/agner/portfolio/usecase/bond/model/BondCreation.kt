@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.bond.model
 
 import dev.agner.portfolio.usecase.index.model.IndexId
 
+// TODO(): Make it sealed
 interface BondCreation {
     val name: String
     val value: Double

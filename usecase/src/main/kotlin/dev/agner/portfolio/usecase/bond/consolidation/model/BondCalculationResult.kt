@@ -10,6 +10,13 @@ sealed class BondCalculationResult(
         override val yield: Double,
         override val statements: List<BondCalculationRecord>
     ) : BondCalculationResult(principal, yield, statements)
+
+    data class RemainingRedemption(
+        override val principal: Double,
+        override val yield: Double,
+        override val statements: List<BondCalculationRecord>,
+        val remainingRedemptionAmount: Double,
+    ) : BondCalculationResult(principal, yield, statements)
 }
 
 sealed class BondCalculationRecord(

@@ -23,15 +23,13 @@ suspend fun <T, R> Iterable<T>.mapAsync(transform: suspend (T) -> R) = coroutine
     map { async { transform(it) } }
 }
 
-inline fun <T, S, R> Iterable<T>.mapWithData(initialData: S, operation: (data: S, T) -> Pair<S, R>): List<R> {
-    val result = ArrayList<R>()
-    var data = initialData
+inline fun <T, R> Iterable<T>.foldUntil(initial: R, condition: R.() -> Boolean, operation: (acc: R, T) -> R): R {
+    var accumulator = initial
     for (element in this) {
-        val opResult = operation(data, element)
-        data = opResult.first
-        result.add(opResult.second)
+        accumulator = operation(accumulator, element)
+        if (condition(accumulator)) break
     }
-    return result
+    return accumulator
 }
 
 @OptIn(ExperimentalTime::class)
