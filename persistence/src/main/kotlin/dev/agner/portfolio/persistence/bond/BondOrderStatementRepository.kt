@@ -23,14 +23,14 @@ class BondOrderStatementRepository(
     }
 
     override suspend fun fetchLastByBondOrderId(bondOrderId: Int) = transaction {
-        BondOrderStatementEntity.find { BondOrderStatementTable.bondOrderId eq bondOrderId }
+        BondOrderStatementEntity.find { BondOrderStatementTable.buyOrderId eq bondOrderId }
             .orderBy(BondOrderStatementTable.date to SortOrder.DESC)
             .limit(1)
             .firstOrNull()
             ?.toModel()
     }
 
-    override suspend fun sumUpConsolidatedValues(bondOrderId: Int, date: LocalDate) = transaction {
+    override suspend fun sumUpConsolidatedValues(buyOrderId: Int, date: LocalDate) = transaction {
         exec(
             """
                 SELECT 
@@ -42,8 +42,8 @@ class BondOrderStatementRepository(
                         END
                     ) AS yield_result,
                     SUM(IF(type = 'PRINCIPAL_REDEEM', amount, 0)) AS principal_redeemed
-                FROM bond_oder_statement
-                WHERE bond_order_id = $bondOrderId AND date < '$date';
+                FROM bond_order_statement
+                WHERE buy_order_id = $buyOrderId AND date < '$date';
             """.trimIndent()
         ) {
             if (it.next()) {
@@ -56,13 +56,20 @@ class BondOrderStatementRepository(
 
     override suspend fun saveAll(creations: List<BondOrderStatementCreation>): Unit = transaction {
         BondOrderStatementTable.batchInsert(creations) {
-            this[BondOrderStatementTable.bondOrderId] = it.bondOrderId
+            this[BondOrderStatementTable.buyOrderId] = it.buyOrderId
+            this[BondOrderStatementTable.sellOrderId] = it.resolveSellOrderId()
             this[BondOrderStatementTable.type] = it.resolveType()
             this[BondOrderStatementTable.date] = it.date
             this[BondOrderStatementTable.amount] = it.amount.toBigDecimal()
             this[BondOrderStatementTable.createdAt] = LocalDateTime.now(clock)
         }
     }
+}
+
+private fun BondOrderStatementCreation.resolveSellOrderId() = when (this) {
+    is BondOrderStatementCreation.Yield -> null
+    is BondOrderStatementCreation.YieldRedeem -> sellOrderId
+    is BondOrderStatementCreation.PrincipalRedeem -> sellOrderId
 }
 
 private fun BondOrderStatementCreation.resolveType() = when (this) {

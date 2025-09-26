@@ -10,8 +10,9 @@ import org.jetbrains.exposed.v1.datetime.datetime
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
-object BondOrderStatementTable : IntIdTable("bond_oder_statement") {
-    val bondOrderId = reference("bond_order_id", BondOrderTable.id)
+object BondOrderStatementTable : IntIdTable("bond_order_statement") {
+    val buyOrderId = reference("buy_order_id", BondOrderTable.id)
+    val sellOrderId = reference("sell_order_id", BondOrderTable.id).nullable()
     val type = varchar("type", 20)
     val date = date("date")
     val amount = decimal("amount", 12, 2)
@@ -21,7 +22,8 @@ object BondOrderStatementTable : IntIdTable("bond_oder_statement") {
 class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BondOrderStatementEntity>(BondOrderStatementTable)
 
-    var bondOrderId by BondOrderEntity referencedOn BondOrderStatementTable.bondOrderId
+    var buyOrderId by BondOrderEntity referencedOn BondOrderStatementTable.buyOrderId
+    var sellOrderId by BondOrderEntity optionalReferencedOn BondOrderStatementTable.sellOrderId
     var type by BondOrderStatementTable.type
     var date by BondOrderStatementTable.date
     var amount by BondOrderStatementTable.amount
@@ -29,7 +31,7 @@ class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
 
     fun toModel() = BondOrderStatement(
         id = id.value,
-        bondOrderId = bondOrderId.id.value,
+        buyOrderId = buyOrderId.id.value,
         date = date,
         amount = amount.toDouble(),
     )

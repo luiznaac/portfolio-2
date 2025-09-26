@@ -33,6 +33,7 @@ class BondOrderController(
                 call.respond(service.fetchAll())
             }
 
+            // TODO(): Fix param, it should be bond_id
             post("/{bond_order_id}/consolidate") {
                 val bondOrderId = call.parameters["bond_order_id"]!!.toInt()
 

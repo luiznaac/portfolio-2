@@ -67,7 +67,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         val lastStatement = BondOrderStatement(
             id = 1,
-            bondOrderId = 1,
+            buyOrderId = 1,
             date = lastStatementDate,
             amount = 0.0
         )
