@@ -10,6 +10,10 @@ interface IBondOrderStatementRepository {
 
     suspend fun fetchLastByBondOrderId(bondOrderId: Int): BondOrderStatement?
 
+    suspend fun fetchAlreadyConsolidatedSellIdsByOrderId(bondId: Int): Set<Int>
+
+    suspend fun fetchAlreadyRedeemedBuyIdsByOrderId(bondId: Int): Set<Int>
+
     suspend fun sumUpConsolidatedValues(buyOrderId: Int, date: LocalDate): Pair<Double, Double>
 
     suspend fun saveAll(creations: List<BondOrderStatementCreation>)

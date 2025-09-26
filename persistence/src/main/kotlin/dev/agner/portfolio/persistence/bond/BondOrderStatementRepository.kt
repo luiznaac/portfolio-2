@@ -54,6 +54,53 @@ class BondOrderStatementRepository(
         }!!
     }
 
+    override suspend fun fetchAlreadyRedeemedBuyIdsByOrderId(bondId: Int) = transaction {
+        exec(
+            """
+                SELECT 
+                    bo.id, 
+                    bo.amount + SUM(IF(sell_order_id IS NULL, bos.amount, -bos.amount)) AS buy_remainder
+                FROM bond_order bo
+                LEFT JOIN bond_order_statement bos ON bo.id = bos.buy_order_id
+                WHERE bo.bond_id = 2
+                AND bo.type = 'BUY'
+                GROUP BY bo.id
+                HAVING buy_remainder <= 0.01;
+            """.trimIndent()
+        ) {
+            val ids = mutableSetOf<Int>()
+
+            while (it.next()) {
+                ids.add(it.getInt("id"))
+            }
+
+            ids
+        }!!
+    }
+
+    override suspend fun fetchAlreadyConsolidatedSellIdsByOrderId(bondId: Int) = transaction {
+        exec(
+            """
+                SELECT
+                    bo.id,
+                    bo.amount - COALESCE(SUM(bos.amount), 0) AS sell_remain
+                FROM bond_order bo
+                LEFT JOIN bond_order_statement bos on bo.id = bos.sell_order_id
+                WHERE bond_id = $bondId AND bo.type = 'SELL'
+                GROUP BY bo.id
+                HAVING sell_remain <= 0.01;
+            """.trimIndent()
+        ) {
+            val ids = mutableSetOf<Int>()
+
+            while (it.next()) {
+                ids.add(it.getInt("id"))
+            }
+
+            ids
+        }!!
+    }
+
     override suspend fun saveAll(creations: List<BondOrderStatementCreation>): Unit = transaction {
         BondOrderStatementTable.batchInsert(creations) {
             this[BondOrderStatementTable.buyOrderId] = it.buyOrderId

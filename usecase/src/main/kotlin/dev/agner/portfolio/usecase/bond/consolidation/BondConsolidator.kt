@@ -23,7 +23,7 @@ class BondConsolidator(
             .keys.sorted() // TODO(): Calculate dates programmatically - doing this now because we must get holidays right
             .foldUntil(
                 IntermediateData(consolidationContext),
-                { ctx.principal + ctx.yieldAmount <= 0.001 }
+                { ctx.principal + ctx.yieldAmount <= 0.01 }
             ) { acc, date ->
                 val result = calculator.calculate(
                     BondCalculationContext(

@@ -27,11 +27,15 @@ class BondConsolidationOrchestrator(
     // TODO(): Handle FixedRateBonds
     // TODO(): In the future, we'll need to handle multiple users, so this should take a userId as well
     suspend fun consolidateBy(bondId: Int) {
-        // TODO(): [1] Return a consolidation position so it's not necessary anymore to do calculations on BondOrder.initData
-        val orders = bondOrderService.fetchByBondId(bondId).sortedBy { it.date }
-        // TODO(): Remover sells que ja foram previamente consolidadas
+        // TODO(): Refactor to hit the DB less often
+        val alreadyRedeemedBuys = repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId)
+        val orders = bondOrderService.fetchByBondId(bondId)
+            .filterNot { alreadyRedeemedBuys.contains(it.id) }
+            .sortedBy { it.date }
+        val alreadyConsolidatedSells = repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId)
         val sellOrders = orders
             .filter { it.type == BondOrderType.SELL }
+            .filterNot { alreadyConsolidatedSells.contains(it.id) }
             .associate {
                 it.date to SellOrderContext(it.id, it.amount)
             }
