@@ -4,13 +4,14 @@ data class BondCalculationContext(
     val actualData: ActualData,
     val processingData: ProcessingData,
 ) {
-    constructor(principal: Double, startingYield: Double, yieldPercentage: Double) : this(
+    constructor(principal: Double, startingYield: Double, yieldPercentage: Double, sellAmount: Double) : this(
         ActualData(
             principal = principal,
             yieldAmount = startingYield,
         ),
         ProcessingData(
             yieldPercentage = yieldPercentage,
+            redeemedAmount = sellAmount,
         ),
     )
 
@@ -21,5 +22,6 @@ data class BondCalculationContext(
 
     data class ProcessingData(
         val yieldPercentage: Double,
+        val redeemedAmount: Double,
     )
 }

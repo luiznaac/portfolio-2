@@ -16,4 +16,6 @@ sealed class BondCalculationRecord(
     open val amount: Double,
 ) {
     data class Yield(override val amount: Double) : BondCalculationRecord(amount)
+    data class PrincipalRedeem(override val amount: Double) : BondCalculationRecord(amount)
+    data class YieldRedeem(override val amount: Double) : BondCalculationRecord(amount)
 }

@@ -11,7 +11,7 @@ import org.jetbrains.exposed.v1.datetime.datetime
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
-object BondOrderTable : IntIdTable("bond_oder") {
+object BondOrderTable : IntIdTable("bond_oder") { // TODO(): Fix table name
     val bondId = reference("bond_id", BondTable.id)
     val type = varchar("type", 10)
     val date = date("date")

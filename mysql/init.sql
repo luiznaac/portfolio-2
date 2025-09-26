@@ -38,15 +38,16 @@ CREATE TABLE bond_oder (
     FOREIGN KEY (bond_id) REFERENCES bond(id)
 );
 
-CREATE TABLE bond_oder_yield (
+CREATE TABLE bond_oder_statement (
     id INT AUTO_INCREMENT PRIMARY KEY,
     bond_order_id INT NOT NULL,
+    type VARCHAR(20) NOT NULL,
     date DATE NOT NULL,
     amount DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (bond_order_id) REFERENCES bond_oder(id),
-    UNIQUE (bond_order_id, date)
+    UNIQUE (bond_order_id, type, date)
 );
 
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());

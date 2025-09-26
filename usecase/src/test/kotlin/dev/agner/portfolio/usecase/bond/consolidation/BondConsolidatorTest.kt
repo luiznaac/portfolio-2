@@ -8,7 +8,8 @@ import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
-import dev.agner.portfolio.usecase.bond.repository.IBondOrderYieldRepository
+import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
+import dev.agner.portfolio.usecase.extension.nextDay
 import dev.agner.portfolio.usecase.index.IndexValueService
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.IndexValue
@@ -20,11 +21,10 @@ import io.mockk.coVerify
 import io.mockk.just
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.plus
 
 class BondConsolidatorTest : StringSpec({
 
-    val repository = mockk<IBondOrderYieldRepository>()
+    val repository = mockk<IBondOrderStatementRepository>()
     val bondOrderService = mockk<BondOrderService>()
     val indexValueService = mockk<IndexValueService>()
     val calculator = mockk<BondCalculator>()
@@ -53,30 +53,50 @@ class BondConsolidatorTest : StringSpec({
             date = orderDate,
             amount = 10000.0
         )
+        val sellOrder1 = BondOrder(
+            id = 5,
+            bond = floatingRateBond,
+            type = BondOrderType.SELL,
+            date = LocalDate.parse("2024-01-16"),
+            amount = 500.0
+        )
+        val sellOrder2 = BondOrder(
+            id = 7,
+            bond = floatingRateBond,
+            type = BondOrderType.SELL,
+            date = LocalDate.parse("2024-01-17"),
+            amount = 500.0
+        )
         val indexValues = listOf(
             IndexValue(date = LocalDate.parse("2024-01-16"), value = 100.0),
             IndexValue(date = LocalDate.parse("2024-01-17"), value = 101.0),
         )
 
-        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(bondOrder)
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(bondOrder, sellOrder1, sellOrder2)
         coEvery { repository.fetchLastByBondOrderId(any()) } returns BondOrderStatement(
             id = 1,
             bondOrderId = 1,
             date = calculationStartDate,
             amount = 0.0,
         )
-        coEvery { indexValueService.fetchAllBy(indexId, calculationStartDate) } returns indexValues
-        coEvery { repository.sumYieldUntil(any(), any()) } returns 0.0
+        coEvery { indexValueService.fetchAllBy(indexId, calculationStartDate.nextDay()) } returns indexValues
+        coEvery { repository.sumUpConsolidatedValues(any(), any()) } returns (0.0 to 0.0)
         coEvery { calculator.calculate(any()) } returnsMany listOf(
             BondCalculationResult.Ok(
                 principal = 10000.0,
                 yield = 500.0,
-                statements = listOf(BondCalculationRecord.Yield(100.0))
+                statements = listOf(
+                    BondCalculationRecord.Yield(100.0),
+                    BondCalculationRecord.PrincipalRedeem(33.0),
+                )
             ),
             BondCalculationResult.Ok(
                 principal = 10000.0,
                 yield = 800.0,
-                statements = listOf(BondCalculationRecord.Yield(300.0))
+                statements = listOf(
+                    BondCalculationRecord.Yield(300.0),
+                    BondCalculationRecord.YieldRedeem(22.0),
+                )
             )
         )
         coEvery { repository.saveAll(any()) } just Runs
@@ -85,12 +105,32 @@ class BondConsolidatorTest : StringSpec({
 
         coVerify { bondOrderService.fetchByBondId(bondId) }
         coVerify { repository.fetchLastByBondOrderId(1) }
-        coVerify { indexValueService.fetchAllBy(indexId, calculationStartDate) }
+        coVerify { indexValueService.fetchAllBy(indexId, calculationStartDate.nextDay()) }
         coVerify {
             repository.saveAll(
                 listOf(
-                    BondOrderStatementCreation(bondOrderId = 1, date = LocalDate.parse("2024-01-16"), amount = 100.0),
-                    BondOrderStatementCreation(bondOrderId = 1, date = LocalDate.parse("2024-01-17"), amount = 300.0),
+                    BondOrderStatementCreation.Yield(
+                        bondOrderId = 1,
+                        date = LocalDate.parse("2024-01-16"),
+                        amount = 100.0
+                    ),
+                    BondOrderStatementCreation.PrincipalRedeem(
+                        bondOrderId = 1,
+                        date = LocalDate.parse("2024-01-16"),
+                        amount = 33.0,
+                        sellBondOrderId = 5,
+                    ),
+                    BondOrderStatementCreation.Yield(
+                        bondOrderId = 1,
+                        date = LocalDate.parse("2024-01-17"),
+                        amount = 300.0
+                    ),
+                    BondOrderStatementCreation.YieldRedeem(
+                        bondOrderId = 1,
+                        date = LocalDate.parse("2024-01-17"),
+                        amount = 22.0,
+                        sellBondOrderId = 7,
+                    ),
                 )
             )
         }
@@ -116,7 +156,7 @@ class BondConsolidatorTest : StringSpec({
 
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(bondOrder)
         coEvery { repository.fetchLastByBondOrderId(100) } returns null
-        coEvery { repository.sumYieldUntil(100, orderDate) } returns 0.0
+        coEvery { repository.sumUpConsolidatedValues(100, orderDate) } returns (0.0 to 0.0)
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
 
         service.consolidateBy(bondId)

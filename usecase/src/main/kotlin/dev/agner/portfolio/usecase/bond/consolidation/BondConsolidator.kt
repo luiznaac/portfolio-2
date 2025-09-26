@@ -2,6 +2,10 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.PrincipalRedeem
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.Yield
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.YieldRedeem
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.model.Bond
 import dev.agner.portfolio.usecase.bond.model.BondOrder
@@ -9,7 +13,8 @@ import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.model.FixedRateBond
 import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
-import dev.agner.portfolio.usecase.bond.repository.IBondOrderYieldRepository
+import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
+import dev.agner.portfolio.usecase.extension.nextDay
 import dev.agner.portfolio.usecase.extension.runningFoldWithData
 import dev.agner.portfolio.usecase.index.IndexValueService
 import dev.agner.portfolio.usecase.index.model.IndexValue
@@ -18,7 +23,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class BondConsolidator(
-    private val repository: IBondOrderYieldRepository, // TODO(): Create service and use that instead
+    private val repository: IBondOrderStatementRepository, // TODO(): Create service and use that instead
     private val bondOrderService: BondOrderService,
     private val indexValueService: IndexValueService,
     private val calculator: BondCalculator,
@@ -28,7 +33,9 @@ class BondConsolidator(
     // TODO(): Handle FixedRateBonds
     // TODO(): In the future, we'll need to handle multiple users, so this should take a userId as well
     suspend fun consolidateBy(bondId: Int) {
+        // TODO(): [1] Return a consolidation position so it's not necessary anymore to do calculations on BondOrder.initData
         val orders = bondOrderService.fetchByBondId(bondId).sortedBy { it.date }
+        val sellOrders = orders.filter { it.type == BondOrderType.SELL }.associateBy { it.date }
 
         orders
             .filter { it.type == BondOrderType.BUY }
@@ -40,10 +47,17 @@ class BondConsolidator(
                 yieldPercentages
                     .keys.sorted() // TODO(): Calculate dates programmatically - doing this now because we must get holidays right
                     .runningFoldWithData(order.initData(startingDate)) { data, date ->
-                        val result = calculator.calculate(data.toConsolidationContext(yieldPercentages[date]!!))
+                        // TODO(): Remove calculated SELL so it does not appear in the next BUY order iteration
+                        val sellOrder = sellOrders[date]
+                        val result = calculator.calculate(
+                            data.toConsolidationContext(
+                                yieldPercentage = yieldPercentages[date]!!,
+                                sellAmount = sellOrder?.amount ?: 0.0,
+                            )
+                        )
 
                         result.toIntermediateData() to result.statements.map {
-                            BondOrderStatementCreation(order.id, date, it.amount)
+                            it.buildCreation(order.id, date, sellOrder?.id)
                         }
                     }
                     .flatten()
@@ -56,7 +70,7 @@ class BondConsolidator(
     private fun BondCalculationResult.toIntermediateData() = IntermediateData(principal, yield)
 
     private suspend fun BondOrder.resolveCalculationStartingDate() =
-        repository.fetchLastByBondOrderId(id)?.date ?: date
+        repository.fetchLastByBondOrderId(id)?.date?.nextDay() ?: date
 
     // TODO(): Extract to separate service
     private suspend fun Bond.buildYieldPercentages(startingAt: LocalDate) = when (this) {
@@ -65,20 +79,29 @@ class BondConsolidator(
         else -> throw IllegalStateException("Unknown bond type: ${this::class.simpleName}")
     }
 
-    private suspend fun BondOrder.initData(startingAt: LocalDate) =
-        IntermediateData(
-            amount,
-            repository.sumYieldUntil(id, startingAt) ?: 0.0,
+    private suspend fun BondOrder.initData(startingAt: LocalDate): IntermediateData {
+        // TODO: Remove (refer to [1])
+        val consolidatedValues = repository.sumUpConsolidatedValues(id, startingAt)
+        return IntermediateData(
+            amount - consolidatedValues.first,
+            consolidatedValues.second,
         )
-
-    private data class IntermediateData(
-        val principal: Double,
-        val yieldAmount: Double,
-    ) {
-        fun toConsolidationContext(
-            yieldPercentage: Double
-        ) = BondCalculationContext(principal, yieldAmount, yieldPercentage)
     }
+
+    private fun BondCalculationRecord.buildCreation(bondOrderId: Int, date: LocalDate, sellOrderId: Int?) =
+        when (this) {
+            is Yield -> BondOrderStatementCreation.Yield(bondOrderId, date, amount)
+            is YieldRedeem -> BondOrderStatementCreation.YieldRedeem(bondOrderId, date, amount, sellOrderId!!)
+            is PrincipalRedeem -> BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date, amount, sellOrderId!!)
+        }
+}
+
+private data class IntermediateData(
+    val principal: Double,
+    val yieldAmount: Double,
+) {
+    fun toConsolidationContext(yieldPercentage: Double, sellAmount: Double) =
+        BondCalculationContext(principal, yieldAmount, yieldPercentage, sellAmount)
 }
 
 private data class YieldPercentage(
