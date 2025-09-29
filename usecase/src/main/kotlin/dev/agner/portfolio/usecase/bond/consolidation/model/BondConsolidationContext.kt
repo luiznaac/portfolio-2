@@ -5,6 +5,7 @@ import kotlinx.datetime.LocalDate
 
 data class BondConsolidationContext(
     val bondOrderId: Int,
+    val contributionDate: LocalDate,
     val principal: Double,
     val yieldAmount: Double,
     val yieldPercentages: Map<LocalDate, YieldPercentageContext>,

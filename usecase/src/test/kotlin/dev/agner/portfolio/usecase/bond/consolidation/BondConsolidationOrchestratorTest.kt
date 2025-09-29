@@ -2,16 +2,18 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
-import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
+import dev.agner.portfolio.usecase.bondConsolidationContext
 import dev.agner.portfolio.usecase.extension.nextDay
+import dev.agner.portfolio.usecase.floatingRateBond
 import dev.agner.portfolio.usecase.index.IndexValueService
-import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import io.kotest.core.spec.style.StringSpec
 import io.mockk.Runs
@@ -36,18 +38,12 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should consolidate floating rate bond orders with buy and sell orders" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-16")
         val lastStatementDate = LocalDate.parse("2024-01-15")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 5.0,
-            indexId = indexId
-        )
 
         val buyOrder = BondOrder(
             id = 1,
@@ -103,13 +99,14 @@ class BondConsolidationOrchestratorTest : StringSpec({
             consolidator.calculateBondo(
                 BondConsolidationContext(
                     bondOrderId = 1,
+                    contributionDate = orderDate,
                     principal = 9500.0,
                     yieldAmount = 25.0,
                     yieldPercentages = mapOf(
-                        sellDate to BondConsolidationContext.YieldPercentageContext(5.0, indexValues[0])
+                        sellDate to YieldPercentageContext(floatingRateBond.value, indexValues[0])
                     ),
                     sellOrders = mapOf(
-                        sellDate to BondConsolidationContext.SellOrderContext(2, 1000.0)
+                        sellDate to SellOrderContext(2, 1000.0)
                     )
                 )
             )
@@ -118,16 +115,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should use order date when no previous statement exists" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-10")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 3.0,
-            indexId = indexId
-        )
 
         val buyOrder = BondOrder(
             id = 100,
@@ -160,6 +151,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             consolidator.calculateBondo(
                 BondConsolidationContext(
                     bondOrderId = 100,
+                    contributionDate = orderDate,
                     principal = 5000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = emptyMap(),
@@ -170,18 +162,12 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should process multiple buy orders in chronological order" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val date1 = LocalDate.parse("2024-01-10")
         val date2 = LocalDate.parse("2024-01-20")
         val sellDate = LocalDate.parse("2024-01-25")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 4.0,
-            indexId = indexId
-        )
 
         val buyOrder1 = BondOrder(
             id = 1,
@@ -242,27 +228,29 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         coVerify(exactly = 1) {
             consolidator.calculateBondo(
-                BondConsolidationContext(
+                bondConsolidationContext(
                     bondOrderId = 2,
+                    contributionDate = date1,
                     principal = 5000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = indexValues.associate {
-                        it.date to BondConsolidationContext.YieldPercentageContext(floatingRateBond.value, it)
+                        it.date to YieldPercentageContext(floatingRateBond.value, it)
                     },
                     sellOrders = mapOf(
-                        sellDate to BondConsolidationContext.SellOrderContext(3, 2000.0),
+                        sellDate to SellOrderContext(3, 2000.0),
                     ),
                 )
             )
         }
         coVerify(exactly = 1) {
             consolidator.calculateBondo(
-                BondConsolidationContext(
+                bondConsolidationContext(
                     bondOrderId = 1,
+                    contributionDate = date2,
                     principal = 8000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = indexValues.associate {
-                        it.date to BondConsolidationContext.YieldPercentageContext(floatingRateBond.value, it)
+                        it.date to YieldPercentageContext(floatingRateBond.value, it)
                     },
                     sellOrders = emptyMap(),
                 )
@@ -274,18 +262,12 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should filter out buy orders and only process sell orders for mapping" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate1 = LocalDate.parse("2024-01-15")
         val sellDate2 = LocalDate.parse("2024-01-20")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 3.5,
-            indexId = indexId
-        )
 
         val buyOrder = BondOrder(
             id = 1,
@@ -331,12 +313,13 @@ class BondConsolidationOrchestratorTest : StringSpec({
             consolidator.calculateBondo(
                 BondConsolidationContext(
                     bondOrderId = 1,
+                    contributionDate = orderDate,
                     principal = 10000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = emptyMap(),
                     sellOrders = mapOf(
-                        sellDate1 to BondConsolidationContext.SellOrderContext(2, 1500.0),
-                        sellDate2 to BondConsolidationContext.SellOrderContext(3, 2500.0)
+                        sellDate1 to SellOrderContext(2, 1500.0),
+                        sellDate2 to SellOrderContext(3, 2500.0)
                     )
                 )
             )
@@ -344,16 +327,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should filter out already redeemed buy orders from consolidation" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 4.0,
-            indexId = indexId
-        )
 
         val buyOrder1 = BondOrder(
             id = 1,
@@ -399,6 +376,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             consolidator.calculateBondo(
                 BondConsolidationContext(
                     bondOrderId = 2,
+                    contributionDate = orderDate,
                     principal = 8000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = emptyMap(),
@@ -409,18 +387,12 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should filter out already consolidated sell orders from sell order mapping" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate1 = LocalDate.parse("2024-01-15")
         val sellDate2 = LocalDate.parse("2024-01-20")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 3.5,
-            indexId = indexId
-        )
 
         val buyOrder = BondOrder(
             id = 1,
@@ -474,12 +446,13 @@ class BondConsolidationOrchestratorTest : StringSpec({
             consolidator.calculateBondo(
                 BondConsolidationContext(
                     bondOrderId = 1,
+                    contributionDate = orderDate,
                     principal = 10000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = emptyMap(),
                     sellOrders = mapOf(
                         // Only sell order 3 should be present, sell order 2 is filtered out
-                        sellDate2 to BondConsolidationContext.SellOrderContext(3, 2500.0)
+                        sellDate2 to SellOrderContext(3, 2500.0)
                     )
                 )
             )
@@ -487,17 +460,11 @@ class BondConsolidationOrchestratorTest : StringSpec({
     }
 
     "should handle scenario with both redeemed buys and consolidated sells filtered out" {
-        val bondId = 1
-        val indexId = IndexId.CDI
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-15")
-
-        val floatingRateBond = FloatingRateBond(
-            id = bondId,
-            name = "Test Bond",
-            value = 4.5,
-            indexId = indexId
-        )
 
         val buyOrder1 = BondOrder(
             id = 1,
@@ -566,11 +533,12 @@ class BondConsolidationOrchestratorTest : StringSpec({
             consolidator.calculateBondo(
                 BondConsolidationContext(
                     bondOrderId = 2,
+                    contributionDate = orderDate,
                     principal = 7000.0,
                     yieldAmount = 0.0,
                     yieldPercentages = emptyMap(),
                     sellOrders = mapOf(
-                        sellDate to BondConsolidationContext.SellOrderContext(4, 2000.0)
+                        sellDate to SellOrderContext(4, 2000.0)
                     )
                 )
             )

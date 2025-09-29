@@ -1,8 +1,8 @@
 package dev.agner.portfolio.usecase.bond.consolidation
 
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
+import dev.agner.portfolio.usecase.bondCalculationContext
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.shouldBe
@@ -17,7 +17,7 @@ class BondCalculatorTest : StringSpec({
         val principal = 1000.0
         val startingYield = 0.0
         val yieldPercentage = 5.0
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, 0.0)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
         val expectedYieldedAmount = (principal + startingYield) * yieldPercentage / 100
 
         val result = calculator.calculate(context)
@@ -34,7 +34,7 @@ class BondCalculatorTest : StringSpec({
         val principal = 2000.0
         val startingYield = 150.0
         val yieldPercentage = 3.5
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, 0.0)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
         val expectedYieldedAmount = (principal + startingYield) * yieldPercentage / 100
 
         val result = calculator.calculate(context)
@@ -51,7 +51,7 @@ class BondCalculatorTest : StringSpec({
         val principal = 5000.0
         val startingYield = 200.0
         val yieldPercentage = 0.0
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, 0.0)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
 
         val result = calculator.calculate(context)
 
@@ -66,7 +66,7 @@ class BondCalculatorTest : StringSpec({
         val principal = 1000.0
         val startingYield = 100.0
         val yieldPercentage = -2.0
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, 0.0)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
         val expectedYieldedAmount = (principal + startingYield) * yieldPercentage / 100
 
         val result = calculator.calculate(context)
@@ -84,7 +84,7 @@ class BondCalculatorTest : StringSpec({
         val startingYield = 1000.0
         val yieldPercentage = 0.0
         val redemptionAmount = 500.0
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
 
         val result = calculator.calculate(context)
 
@@ -105,7 +105,7 @@ class BondCalculatorTest : StringSpec({
         val startingYield = 500.0
         val yieldPercentage = 2.0
         val redemptionAmount = 600.0
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
 
         val totalBeforeRedemption = principal + startingYield + ((principal + startingYield) * yieldPercentage / 100)
         val principalProportion = principal / totalBeforeRedemption
@@ -132,7 +132,7 @@ class BondCalculatorTest : StringSpec({
         val yieldedAmount = (principal + startingYield) * yieldPercentage / 100
         val totalAmount = principal + startingYield + yieldedAmount
         val redemptionAmount = totalAmount
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
 
         val result = calculator.calculate(context)
 
@@ -155,7 +155,7 @@ class BondCalculatorTest : StringSpec({
         val yieldedAmount = (principal + startingYield) * yieldPercentage / 100
         val totalAmount = principal + startingYield + yieldedAmount
         val redemptionAmount = totalAmount + 500.0 // Exceeds total by 500
-        val context = BondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
 
         val result = calculator.calculate(context)
 

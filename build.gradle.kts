@@ -28,6 +28,7 @@ subprojects {
 
 	apply(plugin = "kotlin")
 	apply(plugin = "kotlin-spring")
+	apply(plugin = "java-test-fixtures")
 	apply(plugin = "io.gitlab.arturbosch.detekt")
 
 	dependencies {

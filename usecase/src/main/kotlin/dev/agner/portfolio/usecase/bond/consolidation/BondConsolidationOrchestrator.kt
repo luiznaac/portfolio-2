@@ -48,6 +48,7 @@ class BondConsolidationOrchestrator(
                 val startingValues = repository.sumUpConsolidatedValues(order.id, startingDate)
                 val ctx = BondConsolidationContext(
                     bondOrderId = order.id,
+                    contributionDate = order.date,
                     principal = order.amount - startingValues.first,
                     yieldAmount = startingValues.second,
                     yieldPercentages = yieldPercentages,

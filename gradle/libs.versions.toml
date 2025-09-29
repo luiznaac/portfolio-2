@@ -63,4 +63,5 @@ testDependencies = [
     "kotest-property-jvm",
     "kotlinx-coroutines-test",
     "spring-test",
+    "kotlinx-datetime",
 ]

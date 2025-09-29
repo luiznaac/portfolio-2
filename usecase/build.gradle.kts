@@ -7,4 +7,6 @@ dependencies {
     implementation(libs.kotlin.reflect)
 
     testImplementation(libs.bundles.testDependencies)
+
+    testFixturesImplementation(libs.bundles.testDependencies)
 }

@@ -1,10 +1,11 @@
 package dev.agner.portfolio.usecase.tax
 
+import dev.agner.portfolio.usecase.iofIncidence
+import dev.agner.portfolio.usecase.rendaIncidence
 import dev.agner.portfolio.usecase.tax.incidence.TaxIncidenceCalculator
-import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.collections.shouldContainOnly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.mockk.every
 import io.mockk.mockk
@@ -35,8 +36,8 @@ class TaxServiceTest : StringSpec({
         val calculator3 = mockk<TaxIncidenceCalculator>()
         val contributionDate = LocalDate.parse("2023-01-01")
 
-        val expectedTax1 = TaxIncidence.IOF(96.0)
-        val expectedTax3 = TaxIncidence.Renda(22.5)
+        val expectedTax1 = iofIncidence()
+        val expectedTax3 = rendaIncidence()
 
         every { calculator1.isApplicable(contributionDate) } returns true
         every { calculator2.isApplicable(contributionDate) } returns false
@@ -49,7 +50,7 @@ class TaxServiceTest : StringSpec({
         val result = taxService.getTaxIncidencesBy(contributionDate)
 
         result shouldHaveSize 2
-        result shouldContainExactlyInAnyOrder listOf(expectedTax1, expectedTax3)
+        result shouldContainOnly setOf(expectedTax1, expectedTax3)
 
         verify(exactly = 1) { calculator1.isApplicable(contributionDate) }
         verify(exactly = 1) { calculator2.isApplicable(contributionDate) }

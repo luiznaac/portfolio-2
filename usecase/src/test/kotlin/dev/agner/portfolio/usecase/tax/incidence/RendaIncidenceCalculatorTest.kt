@@ -74,7 +74,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
     }
 
     "should calculate 15.0% for investments over 720 days" {
-        val contributionDate = LocalDate.parse("2022-01-04") // 721 days ago
+        val contributionDate = LocalDate.parse("2021-12-24") // 721 days ago
         val result = calculator.resolve(contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()

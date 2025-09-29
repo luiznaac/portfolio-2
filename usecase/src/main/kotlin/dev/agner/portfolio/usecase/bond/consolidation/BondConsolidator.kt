@@ -10,12 +10,14 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.extension.foldUntil
+import dev.agner.portfolio.usecase.tax.TaxService
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 
 @Service
 class BondConsolidator(
     private val calculator: BondCalculator,
+    private val taxService: TaxService,
 ) {
 
     suspend fun calculateBondo(consolidationContext: BondConsolidationContext): BondConsolidationResult =
@@ -30,7 +32,8 @@ class BondConsolidator(
                         acc.ctx.principal,
                         acc.ctx.yieldAmount,
                         acc.ctx.yieldPercentages[date]!!.percentage,
-                        acc.ctx.sellOrders[date]?.amount ?: 0.0
+                        acc.ctx.sellOrders[date]?.amount ?: 0.0,
+                        taxService.getTaxIncidencesBy(date),
                     )
                 )
 

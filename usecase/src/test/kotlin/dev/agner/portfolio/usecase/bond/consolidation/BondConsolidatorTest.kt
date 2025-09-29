@@ -1,11 +1,13 @@
 
 package dev.agner.portfolio.usecase.bond.consolidation
 
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
+import dev.agner.portfolio.usecase.bondCalculationContext
+import dev.agner.portfolio.usecase.bondConsolidationContext
+import dev.agner.portfolio.usecase.tax.TaxService
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -17,7 +19,8 @@ import kotlinx.datetime.LocalDate
 class BondConsolidatorTest : StringSpec({
 
     val calculator = mockk<BondCalculator>()
-    val service = BondConsolidator(calculator)
+    val taxService = mockk<TaxService>(relaxed = true)
+    val service = BondConsolidator(calculator, taxService)
 
     beforeEach { clearAllMocks() }
 
@@ -26,7 +29,7 @@ class BondConsolidatorTest : StringSpec({
         val date1 = LocalDate.parse("2024-01-16")
         val date2 = LocalDate.parse("2024-01-17")
 
-        val consolidationContext = BondConsolidationContext(
+        val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
             principal = 10000.0,
             yieldAmount = 0.0,
@@ -42,7 +45,7 @@ class BondConsolidatorTest : StringSpec({
 
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 10000.0,
                     startingYield = 0.0,
                     yieldPercentage = 0.5,
@@ -60,7 +63,7 @@ class BondConsolidatorTest : StringSpec({
 
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 9500.0,
                     startingYield = 100.0,
                     yieldPercentage = 0.6,
@@ -95,7 +98,7 @@ class BondConsolidatorTest : StringSpec({
         val bondOrderId = 1
         val date1 = LocalDate.parse("2024-01-16")
 
-        val consolidationContext = BondConsolidationContext(
+        val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
             principal = 1000.0,
             yieldAmount = 0.0,
@@ -109,7 +112,7 @@ class BondConsolidatorTest : StringSpec({
 
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 1000.0,
                     startingYield = 0.0,
                     yieldPercentage = 0.5,
@@ -145,7 +148,7 @@ class BondConsolidatorTest : StringSpec({
         val date2 = LocalDate.parse("2024-01-15") // Earlier date but added later
         val date3 = LocalDate.parse("2024-01-25")
 
-        val consolidationContext = BondConsolidationContext(
+        val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
             principal = 10000.0,
             yieldAmount = 0.0,
@@ -159,7 +162,7 @@ class BondConsolidatorTest : StringSpec({
         // Mock responses for each calculation in chronological order
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 10000.0,
                     startingYield = 0.0,
                     yieldPercentage = 0.4, // date2 comes first
@@ -174,7 +177,7 @@ class BondConsolidatorTest : StringSpec({
 
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 10000.0,
                     startingYield = 40.0,
                     yieldPercentage = 0.5, // date1 comes second
@@ -189,7 +192,7 @@ class BondConsolidatorTest : StringSpec({
 
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 10000.0,
                     startingYield = 90.0,
                     yieldPercentage = 0.6, // date3 comes third
@@ -214,7 +217,7 @@ class BondConsolidatorTest : StringSpec({
     }
 
     "should handle empty yield percentages" {
-        val consolidationContext = BondConsolidationContext(
+        val consolidationContext = bondConsolidationContext(
             bondOrderId = 1,
             principal = 10000.0,
             yieldAmount = 0.0,
@@ -235,7 +238,7 @@ class BondConsolidatorTest : StringSpec({
         val date2 = LocalDate.parse("2024-01-17")
         val date3 = LocalDate.parse("2024-01-18") // This date should not be processed
 
-        val consolidationContext = BondConsolidationContext(
+        val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
             principal = 1000.0,
             yieldAmount = 500.0,
@@ -253,7 +256,7 @@ class BondConsolidatorTest : StringSpec({
         // First calculation: reduces principal and yield but doesn't reach zero
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 1000.0,
                     startingYield = 500.0,
                     yieldPercentage = 0.5,
@@ -273,7 +276,7 @@ class BondConsolidatorTest : StringSpec({
         // Second calculation: reduces both principal and yield to zero
         coEvery {
             calculator.calculate(
-                BondCalculationContext(
+                bondCalculationContext(
                     principal = 200.0,
                     startingYield = 300.0,
                     yieldPercentage = 0.6,
