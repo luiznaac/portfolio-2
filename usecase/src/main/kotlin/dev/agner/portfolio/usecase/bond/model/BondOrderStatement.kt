@@ -33,4 +33,12 @@ sealed class BondOrderStatementCreation(
         override val amount: Double,
         val sellOrderId: Int,
     ) : BondOrderStatementCreation(buyOrderId, date, amount)
+
+    data class TaxIncidence(
+        override val buyOrderId: Int,
+        override val date: LocalDate,
+        override val amount: Double,
+        val sellOrderId: Int,
+        val taxType: String,
+    ) : BondOrderStatementCreation(buyOrderId, date, amount)
 }

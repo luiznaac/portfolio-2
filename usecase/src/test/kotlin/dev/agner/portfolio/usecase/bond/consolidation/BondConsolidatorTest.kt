@@ -7,12 +7,15 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bondCalculationContext
 import dev.agner.portfolio.usecase.bondConsolidationContext
+import dev.agner.portfolio.usecase.iofIncidence
+import dev.agner.portfolio.usecase.rendaIncidence
 import dev.agner.portfolio.usecase.tax.TaxService
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 
@@ -43,6 +46,9 @@ class BondConsolidatorTest : StringSpec({
             )
         )
 
+        val taxes1 = setOf(iofIncidence(), rendaIncidence())
+        val taxes2 = setOf(iofIncidence(), rendaIncidence())
+
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
@@ -50,6 +56,7 @@ class BondConsolidatorTest : StringSpec({
                     startingYield = 0.0,
                     yieldPercentage = 0.5,
                     sellAmount = 500.0,
+                    taxes = taxes1,
                 )
             )
         } returns BondCalculationResult.Ok(
@@ -67,7 +74,8 @@ class BondConsolidatorTest : StringSpec({
                     principal = 9500.0,
                     startingYield = 100.0,
                     yieldPercentage = 0.6,
-                    sellAmount = 500.0
+                    sellAmount = 500.0,
+                    taxes = taxes2,
                 )
             )
         } returns BondCalculationResult.Ok(
@@ -79,6 +87,9 @@ class BondConsolidatorTest : StringSpec({
                 BondCalculationRecord.PrincipalRedeem(400.0)
             )
         )
+
+        every { taxService.getTaxIncidencesBy(consolidationContext.contributionDate) } returnsMany
+            listOf(taxes1, taxes2)
 
         val result = service.calculateBondo(consolidationContext)
 

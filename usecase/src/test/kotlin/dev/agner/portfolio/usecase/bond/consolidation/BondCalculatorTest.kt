@@ -3,6 +3,7 @@ package dev.agner.portfolio.usecase.bond.consolidation
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bondCalculationContext
+import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.shouldBe
@@ -170,6 +171,28 @@ class BondCalculatorTest : StringSpec({
         result.statements.find { it is BondCalculationRecord.YieldRedeem }.also {
             it!!.amount.shouldBeEqualToWithDelta(startingYield + yieldedAmount, 0.001)
         }
+    }
+
+    "should handle taxes" {
+        val principal = 0.0
+        val startingYield = 100.0
+        val yieldPercentage = 0.0
+        val taxes = setOf(TaxIncidence.Renda(25.0), TaxIncidence.IOF(90.0))
+        val redemptionAmount = 7.5
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
+
+        val result = calculator.calculate(context)
+
+        result.shouldBeInstanceOf<BondCalculationResult.Ok>()
+        result.principal shouldBe 0.0
+        result.yield.shouldBeEqualToWithDelta(0.0, 0.01)
+
+        result.statements.find {
+            it is BondCalculationRecord.TaxRedeem && it.taxType == "IOF"
+        }!!.amount.shouldBeEqualToWithDelta(67.5, 0.01)
+        result.statements.find {
+            it is BondCalculationRecord.TaxRedeem && it.taxType == "RENDA"
+        }!!.amount.shouldBeEqualToWithDelta(25.0, 0.01)
     }
 })
 

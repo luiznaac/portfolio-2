@@ -38,6 +38,7 @@ class BondOrderStatementRepository(
                         CASE
                             WHEN type = 'YIELD' THEN amount
                             WHEN type = 'YIELD_REDEEM' then -amount
+                            WHEN type LIKE '%_TAX' then -amount
                             ELSE 0
                         END
                     ) AS yield_result,
@@ -62,7 +63,7 @@ class BondOrderStatementRepository(
                     bo.amount + SUM(IF(sell_order_id IS NULL, bos.amount, -bos.amount)) AS buy_remainder
                 FROM bond_order bo
                 LEFT JOIN bond_order_statement bos ON bo.id = bos.buy_order_id
-                WHERE bo.bond_id = 2
+                WHERE bo.bond_id = $bondId
                 AND bo.type = 'BUY'
                 GROUP BY bo.id
                 HAVING buy_remainder <= 0.01;
@@ -117,10 +118,12 @@ private fun BondOrderStatementCreation.resolveSellOrderId() = when (this) {
     is BondOrderStatementCreation.Yield -> null
     is BondOrderStatementCreation.YieldRedeem -> sellOrderId
     is BondOrderStatementCreation.PrincipalRedeem -> sellOrderId
+    is BondOrderStatementCreation.TaxIncidence -> sellOrderId
 }
 
 private fun BondOrderStatementCreation.resolveType() = when (this) {
     is BondOrderStatementCreation.Yield -> "YIELD"
     is BondOrderStatementCreation.YieldRedeem -> "YIELD_REDEEM"
     is BondOrderStatementCreation.PrincipalRedeem -> "PRINCIPAL_REDEEM"
+    is BondOrderStatementCreation.TaxIncidence -> "${taxType}_TAX"
 }

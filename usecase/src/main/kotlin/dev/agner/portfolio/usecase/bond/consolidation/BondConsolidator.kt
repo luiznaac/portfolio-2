@@ -3,12 +3,14 @@ package dev.agner.portfolio.usecase.bond.consolidation
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.PrincipalRedeem
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.TaxRedeem
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.Yield
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.YieldRedeem
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxIncidence
 import dev.agner.portfolio.usecase.extension.foldUntil
 import dev.agner.portfolio.usecase.tax.TaxService
 import kotlinx.datetime.LocalDate
@@ -33,7 +35,7 @@ class BondConsolidator(
                         acc.ctx.yieldAmount,
                         acc.ctx.yieldPercentages[date]!!.percentage,
                         acc.ctx.sellOrders[date]?.amount ?: 0.0,
-                        taxService.getTaxIncidencesBy(date),
+                        taxService.getTaxIncidencesBy(acc.ctx.contributionDate),
                     )
                 )
 
@@ -74,6 +76,10 @@ class BondConsolidator(
             }
             is PrincipalRedeem -> {
                 BondOrderStatementCreation.PrincipalRedeem(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id)
+            }
+            // TODO(): write tests
+            is TaxRedeem -> {
+                TaxIncidence(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id, taxType)
             }
         }
 
