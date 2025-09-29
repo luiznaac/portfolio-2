@@ -147,6 +147,30 @@ class BondCalculatorTest : StringSpec({
             it!!.amount.shouldBeEqualToWithDelta(startingYield + yieldedAmount, 0.001)
         }
     }
+
+    "should return RemainingRedemption when redemption amount exceeds total bond value" {
+        val principal = 1000.0
+        val startingYield = 200.0
+        val yieldPercentage = 5.0
+        val yieldedAmount = (principal + startingYield) * yieldPercentage / 100
+        val totalAmount = principal + startingYield + yieldedAmount
+        val redemptionAmount = totalAmount + 500.0 // Exceeds total by 500
+        val context = BondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+
+        val result = calculator.calculate(context)
+
+        result.shouldBeInstanceOf<BondCalculationResult.RemainingRedemption>()
+        result.principal shouldBe 0.0
+        result.yield shouldBe 0.0
+        result.remainingRedemptionAmount shouldBe 500.0
+        result.statements.size shouldBe 3
+        result.statements.find { it is BondCalculationRecord.PrincipalRedeem }.also {
+            it!!.amount shouldBe principal
+        }
+        result.statements.find { it is BondCalculationRecord.YieldRedeem }.also {
+            it!!.amount.shouldBeEqualToWithDelta(startingYield + yieldedAmount, 0.001)
+        }
+    }
 })
 
 private fun Double.shouldBeEqualToWithDelta(other: Double, delta: Double) = abs(this - other) shouldBeLessThan delta
