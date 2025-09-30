@@ -25,7 +25,7 @@ object JsonMapper {
         .registerKotlinModule()
         .registerModule(JavaTimeModule())
         .registerModule(kotlinxLocalDateModule)
-        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+        .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
         .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
