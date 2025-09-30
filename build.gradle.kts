@@ -101,11 +101,11 @@ tasks.register<JacocoReport>("codeCoverageReport") {
 	dependsOn(subprojects.map { it.tasks.named("jacocoTestReport") })
 
 	executionData.setFrom(subprojects.map {
-		fileTree("${it.buildDir}/jacoco").include("**/*.exec")
+		fileTree("${it.layout.buildDirectory}/jacoco").include("**/*.exec")
 	})
 
 	classDirectories.setFrom(subprojects.map {
-		fileTree("${it.buildDir}/classes/kotlin/main")
+		fileTree("${it.layout.buildDirectory}/classes/kotlin/main")
 	})
 
 	sourceDirectories.setFrom(subprojects.map {
@@ -126,4 +126,3 @@ tasks.register("testCoverageReport") {
 	dependsOn(subprojects.map { it.tasks.named("test") })
 	finalizedBy("codeCoverageReport")
 }
-
