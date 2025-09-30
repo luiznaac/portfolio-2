@@ -15,7 +15,6 @@ class BondOrderService(
     suspend fun fetchByBondId(bondId: Int) = bondOrderRepository.fetchByBondId(bondId)
 
     suspend fun create(bondId: Int, type: BondOrderType, date: LocalDate, amount: Double) =
-        // TODO(): validate if bond exists - implement this with the cache when ready
         BondOrderCreation(bondId, type, date, amount)
             .run { bondOrderRepository.save(this) }
 }

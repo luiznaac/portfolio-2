@@ -64,7 +64,8 @@ class BondConsolidatorTest : StringSpec({
             yield = 100.0,
             statements = listOf(
                 BondCalculationRecord.Yield(100.0),
-                BondCalculationRecord.PrincipalRedeem(500.0)
+                BondCalculationRecord.PrincipalRedeem(500.0),
+                BondCalculationRecord.TaxRedeem(12.0, "SOME_TAX"),
             )
         )
 
@@ -84,7 +85,8 @@ class BondConsolidatorTest : StringSpec({
             statements = listOf(
                 BondCalculationRecord.Yield(60.0),
                 BondCalculationRecord.YieldRedeem(100.0),
-                BondCalculationRecord.PrincipalRedeem(400.0)
+                BondCalculationRecord.PrincipalRedeem(400.0),
+                BondCalculationRecord.TaxRedeem(23.0, "SOME_TAX_2"),
             )
         )
 
@@ -97,9 +99,11 @@ class BondConsolidatorTest : StringSpec({
         result.statements shouldBe listOf(
             BondOrderStatementCreation.Yield(bondOrderId, date1, 100.0),
             BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 500.0, 5),
+            BondOrderStatementCreation.TaxIncidence(bondOrderId, date1, 12.0, 5, "SOME_TAX"),
             BondOrderStatementCreation.Yield(bondOrderId, date2, 60.0),
             BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, 100.0, 7),
-            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, 400.0, 7)
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, 400.0, 7),
+            BondOrderStatementCreation.TaxIncidence(bondOrderId, date2, 23.0, 7, "SOME_TAX_2"),
         )
 
         coVerify(exactly = 2) { calculator.calculate(any()) }

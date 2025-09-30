@@ -2,8 +2,8 @@ package dev.agner.portfolio.persistence.bond
 
 import dev.agner.portfolio.persistence.index.IndexEntity
 import dev.agner.portfolio.persistence.index.IndexTable
-import dev.agner.portfolio.usecase.bond.model.FixedRateBond
-import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
+import dev.agner.portfolio.usecase.bond.model.Bond.FixedRateBond
+import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.index.model.IndexId
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable

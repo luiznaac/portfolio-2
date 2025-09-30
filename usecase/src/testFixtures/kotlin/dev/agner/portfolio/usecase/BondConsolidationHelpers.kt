@@ -2,7 +2,7 @@ package dev.agner.portfolio.usecase
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
-import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
+import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import kotlinx.datetime.LocalDate
 

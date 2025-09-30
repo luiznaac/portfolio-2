@@ -25,7 +25,6 @@ class BondOrderRepository(
 
     override suspend fun save(creation: BondOrderCreation) = transaction {
         BondOrderEntity.new {
-            // TODO(): create cache for bond entity ref
             bond = BondEntity.findById(creation.bondId)!!
             type = creation.type.name
             date = creation.date

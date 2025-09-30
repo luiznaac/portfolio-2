@@ -24,7 +24,7 @@ class BondConsolidator(
 
     suspend fun calculateBondo(consolidationContext: BondConsolidationContext): BondConsolidationResult =
         consolidationContext.yieldPercentages
-            .keys.sorted() // TODO(): Calculate dates programmatically - doing this now because we must get holidays right
+            .keys.sorted()
             .foldUntil(
                 IntermediateData(consolidationContext),
                 { ctx.principal + ctx.yieldAmount <= 0.01 }
@@ -77,7 +77,6 @@ class BondConsolidator(
             is PrincipalRedeem -> {
                 BondOrderStatementCreation.PrincipalRedeem(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id)
             }
-            // TODO(): write tests
             is TaxRedeem -> {
                 TaxIncidence(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id, taxType)
             }

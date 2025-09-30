@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.BondService
+import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidationOrchestrator
 import dev.agner.portfolio.usecase.index.model.IndexId
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component
 @Component
 class BondController(
     private val service: BondService,
+    private val consolidationOrchestrator: BondConsolidationOrchestrator,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -37,6 +39,13 @@ class BondController(
                     HttpStatusCode.Created,
                     service.createFloatingRateBond(payload.name, payload.value, payload.indexId),
                 )
+            }
+
+            post("/{bond_id}/consolidate") {
+                val bondOrderId = call.parameters["bond_id"]!!.toInt()
+
+                consolidationOrchestrator.consolidateBy(bondOrderId)
+                call.respond(HttpStatusCode.NoContent)
             }
         }
     }
