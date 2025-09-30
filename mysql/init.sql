@@ -35,7 +35,9 @@ CREATE TABLE bond_order (
     amount DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
-    FOREIGN KEY (bond_id) REFERENCES bond(id)
+    FOREIGN KEY (bond_id) REFERENCES bond(id),
+
+    INDEX (bond_id, type)
 );
 
 CREATE TABLE bond_order_statement (
@@ -49,7 +51,9 @@ CREATE TABLE bond_order_statement (
 
     FOREIGN KEY (buy_order_id) REFERENCES bond_order(id),
     FOREIGN KEY (sell_order_id) REFERENCES bond_order(id),
-    UNIQUE (buy_order_id, type, date)
+    UNIQUE (buy_order_id, type, date),
+
+    INDEX (buy_order_id, date)
 );
 
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());

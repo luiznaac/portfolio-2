@@ -25,7 +25,6 @@ class BondConsolidationOrchestrator(
 ) {
 
     // TODO(): Handle FixedRateBonds
-    // TODO(): In the future, we'll need to handle multiple users, so this should take a userId as well
     suspend fun consolidateBy(bondId: Int) {
         // TODO(): Refactor to hit the DB less often
         val alreadyRedeemedBuys = repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId)

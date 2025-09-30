@@ -28,7 +28,6 @@ class IndexValueRepository(
     override suspend fun fetchAllBy(indexId: IndexId, from: LocalDate): List<IndexValue> = transaction {
         IndexValueEntity.find {
             IndexValueTable.indexId eq indexId.name
-            // TODO(): create index for (indexId, date)
             IndexValueTable.date greaterEq from
         }.map { it.toIndexValue() }
     }
