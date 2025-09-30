@@ -24,7 +24,6 @@ class BondConsolidator(
 
     suspend fun calculateBondo(consolidationContext: BondConsolidationContext): BondConsolidationResult =
         consolidationContext.yieldPercentages
-            // TODO(): Calculate dates programmatically - generate all days and modify underlying code to handle days without events
             .keys.sorted()
             .foldUntil(
                 IntermediateData(consolidationContext),

@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class DatabaseConfig {
 
-    // TODO(): Make configurable by properties or environment variables
     @Bean
     fun databaseConnection() = Database.connect(
         url = "jdbc:mysql://localhost:3306/portfolio",

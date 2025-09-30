@@ -18,15 +18,13 @@ import org.springframework.stereotype.Service
 
 @Service
 class BondConsolidationOrchestrator(
-    private val repository: IBondOrderStatementRepository, // TODO(): Create service and use that instead
+    private val repository: IBondOrderStatementRepository,
     private val bondOrderService: BondOrderService,
     private val indexValueService: IndexValueService,
     private val consolidator: BondConsolidator,
 ) {
 
-    // TODO(): Handle FixedRateBonds
     suspend fun consolidateBy(bondId: Int) {
-        // TODO(): Refactor to hit the DB less often
         val alreadyRedeemedBuys = repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId)
         val orders = bondOrderService.fetchByBondId(bondId)
             .filterNot { alreadyRedeemedBuys.contains(it.id) }
@@ -60,9 +58,6 @@ class BondConsolidationOrchestrator(
                     remainingSells = calc.remainingSells,
                     statements = acc.statements + calc.statements,
                 )
-            }
-            .also {
-                // TODO(): validate there's no sell remaining
             }
             .statements
             .chunked(100)
