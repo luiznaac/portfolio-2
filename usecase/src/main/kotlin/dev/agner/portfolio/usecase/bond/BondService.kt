@@ -20,8 +20,4 @@ class BondService(
             .run { bondRepository.save(this) }
 
     suspend fun fetchAll() = bondRepository.fetchAll()
-
-    // TODO(): Implement custom exception handling
-    suspend fun fetchById(bondId: Int) = bondRepository.fetchById(bondId)
-        ?: throw NoSuchElementException("Bond with id $bondId not found")
 }
