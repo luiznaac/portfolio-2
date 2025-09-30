@@ -4,7 +4,7 @@ import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import kotlinx.datetime.LocalDate
 
 interface TaxIncidenceCalculator {
-    fun isApplicable(contributionDate: LocalDate): Boolean
+    fun isApplicable(consolidatingDate: LocalDate, contributionDate: LocalDate): Boolean
 
-    fun resolve(contributionDate: LocalDate): TaxIncidence
+    fun resolve(consolidatingDate: LocalDate, contributionDate: LocalDate): TaxIncidence
 }

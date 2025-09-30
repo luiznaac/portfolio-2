@@ -35,7 +35,7 @@ class BondConsolidator(
                         acc.ctx.yieldAmount,
                         acc.ctx.yieldPercentages[date]!!.percentage,
                         acc.ctx.sellOrders[date]?.amount ?: 0.0,
-                        taxService.getTaxIncidencesBy(acc.ctx.contributionDate),
+                        taxService.getTaxIncidencesBy(date, acc.ctx.contributionDate),
                     )
                 )
 

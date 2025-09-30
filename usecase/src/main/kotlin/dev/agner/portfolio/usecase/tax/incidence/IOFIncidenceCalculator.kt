@@ -1,22 +1,18 @@
 package dev.agner.portfolio.usecase.tax.incidence
 
-import dev.agner.portfolio.usecase.extension.today
 import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.daysUntil
 import org.springframework.stereotype.Component
-import java.time.Clock
 
 @Component
-class IOFIncidenceCalculator(
-    private val clock: Clock,
-) : TaxIncidenceCalculator {
+class IOFIncidenceCalculator : TaxIncidenceCalculator {
 
-    override fun isApplicable(contributionDate: LocalDate) =
-        contributionDate.daysUntil(LocalDate.today(clock)) < 30
+    override fun isApplicable(consolidatingDate: LocalDate, contributionDate: LocalDate) =
+        contributionDate.daysUntil(consolidatingDate) in 1..29
 
-    override fun resolve(contributionDate: LocalDate): TaxIncidence {
-        val daysOfApplication = contributionDate.daysUntil(LocalDate.today(clock))
+    override fun resolve(consolidatingDate: LocalDate, contributionDate: LocalDate): TaxIncidence {
+        val daysOfApplication = contributionDate.daysUntil(consolidatingDate)
         val iofRate = calculateIOFRate(daysOfApplication)
         return TaxIncidence.IOF(iofRate)
     }

@@ -88,8 +88,8 @@ class BondConsolidatorTest : StringSpec({
             )
         )
 
-        every { taxService.getTaxIncidencesBy(consolidationContext.contributionDate) } returnsMany
-            listOf(taxes1, taxes2)
+        every { taxService.getTaxIncidencesBy(date1, consolidationContext.contributionDate) } returns taxes1
+        every { taxService.getTaxIncidencesBy(date2, consolidationContext.contributionDate) } returns taxes2
 
         val result = service.calculateBondo(consolidationContext)
 

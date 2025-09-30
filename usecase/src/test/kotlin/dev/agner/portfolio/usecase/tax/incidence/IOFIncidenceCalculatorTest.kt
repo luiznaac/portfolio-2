@@ -8,19 +8,16 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
+import kotlinx.datetime.plus
 
 class IOFIncidenceCalculatorTest : StringSpec({
 
-    val fixedInstant = Instant.parse("2023-12-15T10:00:00Z")
-    val fixedClock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
-    val calculator = IOFIncidenceCalculator(fixedClock)
+    val calculator = IOFIncidenceCalculator()
 
     "should not be applicable when contribution date is exactly 30 days ago" {
-        val contributionDate = LocalDate.parse("2023-11-15") // 30 days ago
-        calculator.isApplicable(contributionDate) shouldBe false
+        val consolidatingDate = LocalDate.parse("2023-11-15")
+        val contributionDate = consolidatingDate.plus(30, DateTimeUnit.DAY)
+        calculator.isApplicable(consolidatingDate, contributionDate) shouldBe false
     }
 
     "should calculate correct IOF rates for all valid days" {
@@ -34,21 +31,23 @@ class IOFIncidenceCalculatorTest : StringSpec({
         )
 
         expectedRates.forEach { (day, expectedRate) ->
-            val contributionDate = LocalDate.parse("2023-12-15").minus(day, DateTimeUnit.DAY)
-            val result = calculator.resolve(contributionDate)
+            val consolidatingDate = LocalDate.parse("2023-12-15")
+            val contributionDate = consolidatingDate.minus(day, DateTimeUnit.DAY)
+            val result = calculator.resolve(consolidatingDate, contributionDate)
 
-            calculator.isApplicable(contributionDate) shouldBe true
+            calculator.isApplicable(consolidatingDate, contributionDate) shouldBe true
             result.shouldBeInstanceOf<TaxIncidence.IOF>()
             result.rate shouldBe expectedRate
         }
     }
 
     "should throw IllegalArgumentException for invalid days (30 or more)" {
-        val contributionDate = LocalDate.parse("2023-11-15") // 30 days ago
-        calculator.isApplicable(contributionDate) shouldBe false
+        val consolidatingDate = LocalDate.parse("2023-12-15")
+        val contributionDate = consolidatingDate.minus(30, DateTimeUnit.DAY)
+        calculator.isApplicable(consolidatingDate, contributionDate) shouldBe false
 
         shouldThrow<IllegalArgumentException> {
-            calculator.resolve(contributionDate)
+            calculator.resolve(consolidatingDate, contributionDate)
         }
     }
 })
