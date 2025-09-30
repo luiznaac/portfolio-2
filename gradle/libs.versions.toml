@@ -2,15 +2,16 @@
 
 kotlinx-coroutines-version="1.10.2"
 springframework = "6.2.11"
-kotest = "5.5.5"
+kotest = "6.0.3"
 jackson = "2.19.0"
 ktor = "3.2.3"
 exposed = "1.0.0-rc-1"
 
 [libraries]
-kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version = "2.2.20" }
 kotlinx-coroutines-jdk8 = { module="org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref="kotlinx-coroutines-version" }
 kotlinx-coroutines-core = { module="org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm", version.ref="kotlinx-coroutines-version" }
+kotlinx-datetime = { module="org.jetbrains.kotlinx:kotlinx-datetime", version="0.7.1" }
 
 ktor-netty = { module="io.ktor:ktor-server-netty", version.ref = "ktor"}
 ktor-core = { module="io.ktor:ktor-server-core", version.ref = "ktor"}
@@ -37,15 +38,13 @@ jackson-jsr310 = { module="com.fasterxml.jackson.datatype:jackson-datatype-jsr31
 
 # Test dependencies
 kotest-assertions-core = { module="io.kotest:kotest-assertions-core", version.ref="kotest" }
-kotest-extensions-spring = { module="io.kotest.extensions:kotest-extensions-spring", version="1.1.2" }
+kotest-extensions-spring = { module="io.kotest:kotest-extensions-spring", version.ref="kotest" }
 kotest-runner-junit5 = { module="io.kotest:kotest-runner-junit5", version.ref="kotest" }
 kotest-property-jvm = { module="io.kotest:kotest-property-jvm", version.ref="kotest" }
 
 kotlinx-coroutines-test = { module="org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref="kotlinx-coroutines-version" }
-mockk = "io.mockk:mockk:1.13.4"
+mockk = "io.mockk:mockk:1.14.5"
 spring-test = { module="org.springframework:spring-test", version.ref="springframework" }
-
-wiremock = "io.kotest.extensions:kotest-extensions-wiremock:1.0.3"
 
 [bundles]
 dependencies = [
@@ -53,11 +52,7 @@ dependencies = [
     "kotlinx-coroutines-core",
     "kotlinx-coroutines-jdk8",
     "spring-context",
-]
-
-kotlin-coroutine = [
-    "kotlinx-coroutines-core",
-    "kotlinx-coroutines-jdk8"
+    "kotlinx-datetime",
 ]
 
 testDependencies = [
@@ -68,4 +63,5 @@ testDependencies = [
     "kotest-property-jvm",
     "kotlinx-coroutines-test",
     "spring-test",
+    "kotlinx-datetime",
 ]

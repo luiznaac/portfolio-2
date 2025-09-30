@@ -28,6 +28,7 @@ subprojects {
 
 	apply(plugin = "kotlin")
 	apply(plugin = "kotlin-spring")
+	apply(plugin = "java-test-fixtures")
 	apply(plugin = "io.gitlab.arturbosch.detekt")
 
 	dependencies {
@@ -62,12 +63,15 @@ subprojects {
 			languageVersion = JavaLanguageVersion.of(21)
 		}
 	}
+
+	tasks.withType<Test> {
+		useJUnitPlatform()
+		testLogging {
+			events("passed", "skipped", "failed")
+		}
+	}
 }
 
 repositories {
 	mavenCentral()
-}
-
-tasks.withType<Test> {
-	useJUnitPlatform()
 }
