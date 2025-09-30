@@ -5,11 +5,11 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
 import dev.agner.portfolio.usecase.bond.model.Bond
+import dev.agner.portfolio.usecase.bond.model.Bond.FixedRateBond
+import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
-import dev.agner.portfolio.usecase.bond.model.FixedRateBond
-import dev.agner.portfolio.usecase.bond.model.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
 import dev.agner.portfolio.usecase.extension.nextDay
 import dev.agner.portfolio.usecase.index.IndexValueService
@@ -74,12 +74,9 @@ class BondConsolidationOrchestrator(
         repository.fetchLastByBondOrderId(id)?.date?.nextDay() ?: date
 
     private suspend fun Bond.buildYieldPercentages(startingAt: LocalDate) = when (this) {
-        is FloatingRateBond -> indexValueService.fetchAllBy(
-            indexId,
-            startingAt
-        ).associate { it.date to YieldPercentageContext(value, it) }
+        is FloatingRateBond -> indexValueService.fetchAllBy(indexId, startingAt)
+            .associate { it.date to YieldPercentageContext(value, it) }
         is FixedRateBond -> TODO()
-        else -> throw IllegalStateException("Unknown bond type: ${this::class.simpleName}")
     }
 
     private data class IntermediateData(

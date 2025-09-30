@@ -2,8 +2,8 @@ package dev.agner.portfolio.persistence.bond
 
 import dev.agner.portfolio.persistence.index.IndexEntity
 import dev.agner.portfolio.usecase.bond.model.BondCreation
-import dev.agner.portfolio.usecase.bond.model.FixedRateBondCreation
-import dev.agner.portfolio.usecase.bond.model.FloatingRateBondCreation
+import dev.agner.portfolio.usecase.bond.model.BondCreation.FixedRateBondCreation
+import dev.agner.portfolio.usecase.bond.model.BondCreation.FloatingRateBondCreation
 import dev.agner.portfolio.usecase.bond.repository.IBondRepository
 import dev.agner.portfolio.usecase.extension.mapToSet
 import dev.agner.portfolio.usecase.extension.now
@@ -30,7 +30,6 @@ class BondRepository(
             name = creation.name
             rateType = creation.resolveType()
             value = creation.value.toBigDecimal()
-            // TODO(): create cache for index entity ref
             indexId = if (creation is FloatingRateBondCreation) IndexEntity.findById(creation.indexId.name) else null
             createdAt = LocalDateTime.now(clock)
         }.toModel()
@@ -40,5 +39,4 @@ class BondRepository(
 private fun BondCreation.resolveType() = when (this) {
     is FixedRateBondCreation -> "FIXED"
     is FloatingRateBondCreation -> "FLOATING"
-    else -> throw IllegalStateException("Unknown rate type for model: ${this::class.simpleName}")
 }
