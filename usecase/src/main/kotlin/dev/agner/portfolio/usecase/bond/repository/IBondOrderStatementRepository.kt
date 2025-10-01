@@ -6,7 +6,7 @@ import kotlinx.datetime.LocalDate
 
 interface IBondOrderStatementRepository {
 
-    suspend fun fetchAll(): Set<BondOrderStatement>
+    suspend fun fetchAllByBondId(bondId: Int): List<BondOrderStatement>
 
     suspend fun fetchLastByBondOrderId(bondOrderId: Int): BondOrderStatement?
 
