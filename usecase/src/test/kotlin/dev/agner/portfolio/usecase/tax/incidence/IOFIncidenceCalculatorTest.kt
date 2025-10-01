@@ -32,7 +32,7 @@ class IOFIncidenceCalculatorTest : StringSpec({
 
         expectedRates.forEach { (day, expectedRate) ->
             val consolidatingDate = LocalDate.parse("2023-12-15")
-            val contributionDate = consolidatingDate.minus(day, DateTimeUnit.DAY)
+            val contributionDate = consolidatingDate.minus(day - 1, DateTimeUnit.DAY)
             val result = calculator.resolve(consolidatingDate, contributionDate)
 
             calculator.isApplicable(consolidatingDate, contributionDate) shouldBe true
