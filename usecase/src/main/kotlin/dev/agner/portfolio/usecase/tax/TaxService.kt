@@ -1,6 +1,6 @@
 package dev.agner.portfolio.usecase.tax
 
-import dev.agner.portfolio.usecase.extension.mapToSet
+import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.tax.incidence.TaxIncidenceCalculator
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service

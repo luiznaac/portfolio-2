@@ -36,6 +36,8 @@ spring-context = { module="org.springframework:spring-context", version.ref="spr
 jackson-kotlin = { module="com.fasterxml.jackson.module:jackson-module-kotlin", version.ref="jackson" }
 jackson-jsr310 = { module="com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref="jackson" }
 
+apache-poi = { module="org.apache.poi:poi-ooxml", version="5.4.1" }
+
 # Test dependencies
 kotest-assertions-core = { module="io.kotest:kotest-assertions-core", version.ref="kotest" }
 kotest-extensions-spring = { module="io.kotest:kotest-extensions-spring", version.ref="kotest" }

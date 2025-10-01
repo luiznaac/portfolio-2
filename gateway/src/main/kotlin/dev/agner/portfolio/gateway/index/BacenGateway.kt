@@ -1,5 +1,6 @@
 package dev.agner.portfolio.gateway.index
 
+import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
 import dev.agner.portfolio.usecase.index.gateway.IIndexValueGateway
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.TheirIndexValue
@@ -11,8 +12,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.path
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.format
-import kotlinx.datetime.format.FormatStringsInDatetimeFormats
-import kotlinx.datetime.format.byUnicodePattern
 import org.springframework.stereotype.Service
 
 @Service
@@ -25,8 +24,8 @@ class BacenGateway(
             url {
                 path("/dados/serie/bcdata.sgs.${indexId.getBacenCode()}/dados")
                 parameter("formato", "json")
-                parameter("dataInicial", from.format(format))
-                parameter("dataFinal", to.format(format))
+                parameter("dataInicial", from.format(brazilianLocalDateFormat))
+                parameter("dataFinal", to.format(brazilianLocalDateFormat))
             }
         }
             .run {
@@ -44,12 +43,9 @@ private fun IndexId.getBacenCode() = when (this) {
     IndexId.SELIC -> 12
 }
 
-@OptIn(FormatStringsInDatetimeFormats::class)
-private val format = LocalDate.Format { byUnicodePattern("dd/MM/yyyy") }
-
 private data class BacenIndexValue(val data: String, val valor: Double) {
     fun toDomain() = TheirIndexValue(
-        date = format.parse(data),
+        date = brazilianLocalDateFormat.parse(data),
         value = valor,
     )
 }

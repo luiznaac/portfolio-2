@@ -1,4 +1,4 @@
-package dev.agner.portfolio.usecase.extension
+package dev.agner.portfolio.usecase.commons
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope

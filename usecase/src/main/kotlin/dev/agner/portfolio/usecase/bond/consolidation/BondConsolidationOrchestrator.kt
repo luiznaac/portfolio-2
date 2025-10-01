@@ -11,7 +11,7 @@ import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
-import dev.agner.portfolio.usecase.extension.nextDay
+import dev.agner.portfolio.usecase.commons.nextDay
 import dev.agner.portfolio.usecase.index.IndexValueService
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service

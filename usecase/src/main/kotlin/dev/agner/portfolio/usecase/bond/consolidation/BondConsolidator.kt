@@ -11,7 +11,7 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxIncidence
-import dev.agner.portfolio.usecase.extension.foldUntil
+import dev.agner.portfolio.usecase.commons.foldUntil
 import dev.agner.portfolio.usecase.tax.TaxService
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
