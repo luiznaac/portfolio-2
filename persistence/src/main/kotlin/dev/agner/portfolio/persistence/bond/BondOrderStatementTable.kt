@@ -22,7 +22,7 @@ object BondOrderStatementTable : IntIdTable("bond_order_statement") {
 class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BondOrderStatementEntity>(BondOrderStatementTable)
 
-    var buyOrderId by BondOrderEntity referencedOn BondOrderStatementTable.buyOrderId
+    var buyOrder by BondOrderEntity referencedOn BondOrderStatementTable.buyOrderId
     var sellOrderId by BondOrderEntity optionalReferencedOn BondOrderStatementTable.sellOrderId
     var type by BondOrderStatementTable.type
     var date by BondOrderStatementTable.date
@@ -31,8 +31,9 @@ class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
 
     fun toModel() = BondOrderStatement(
         id = id.value,
-        buyOrderId = buyOrderId.id.value,
+        buyOrderId = buyOrder.id.value,
         date = date,
+        type = type,
         amount = amount.toDouble(),
     )
 }

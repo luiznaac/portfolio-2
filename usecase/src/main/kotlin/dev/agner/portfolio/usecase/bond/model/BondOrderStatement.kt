@@ -6,6 +6,7 @@ data class BondOrderStatement(
     val id: Int,
     val buyOrderId: Int,
     val date: LocalDate,
+    val type: String,
     val amount: Double,
 )
 

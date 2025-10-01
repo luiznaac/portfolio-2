@@ -1,14 +1,16 @@
 package dev.agner.portfolio.persistence.bond
 
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
-import dev.agner.portfolio.usecase.extension.mapToSet
 import dev.agner.portfolio.usecase.extension.now
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.batchInsert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -18,8 +20,20 @@ class BondOrderStatementRepository(
     private val clock: Clock,
 ) : IBondOrderStatementRepository {
 
-    override suspend fun fetchAll() = transaction {
-        BondOrderStatementEntity.all().mapToSet { it.toModel() }
+    override suspend fun fetchAllByBondId(bondId: Int) = transaction {
+        BondOrderStatementTable
+            .join(BondOrderTable, JoinType.INNER) { BondOrderStatementTable.buyOrderId eq BondOrderTable.id }
+            .select(BondOrderStatementTable.columns)
+            .where { BondOrderTable.bondId eq bondId }
+            .map { row ->
+                BondOrderStatement(
+                    id = row[BondOrderStatementTable.id].value,
+                    buyOrderId = row[BondOrderStatementTable.buyOrderId].value,
+                    date = row[BondOrderStatementTable.date],
+                    type = row[BondOrderStatementTable.type], // TODO(): create enum or maybe sealed class
+                    amount = row[BondOrderStatementTable.amount].toDouble(),
+                )
+            }
     }
 
     override suspend fun fetchLastByBondOrderId(bondOrderId: Int) = transaction {
