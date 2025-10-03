@@ -31,11 +31,11 @@ class BondEntity(id: EntityID<Int>) : IntEntity(id) {
     var createdAt by BondTable.createdAt
 
     fun toModel() = when (rateType) {
-        "FIXED" -> FixedRateBond(id = id.value, name = name, value = value.toDouble())
+        "FIXED" -> FixedRateBond(id = id.value, name = name, value = value)
         "FLOATING" -> FloatingRateBond(
             id = id.value,
             name = name,
-            value = value.toDouble(),
+            value = value,
             indexId = IndexId.valueOf(indexId!!.id.value),
         )
         else -> throw IllegalStateException("Unknown rate type: $rateType")

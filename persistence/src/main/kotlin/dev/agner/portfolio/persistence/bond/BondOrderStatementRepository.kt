@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
+import java.math.BigDecimal
 import java.time.Clock
 
 @Component
@@ -31,7 +32,7 @@ class BondOrderStatementRepository(
                     buyOrderId = row[BondOrderStatementTable.buyOrderId].value,
                     date = row[BondOrderStatementTable.date],
                     type = row[BondOrderStatementTable.type], // TODO(): create enum or maybe sealed class
-                    amount = row[BondOrderStatementTable.amount].toDouble(),
+                    amount = row[BondOrderStatementTable.amount],
                 )
             }
     }
@@ -62,9 +63,10 @@ class BondOrderStatementRepository(
             """.trimIndent()
         ) {
             if (it.next()) {
-                it.getDouble("principal_redeemed") to it.getDouble("yield_result")
+                (it.getBigDecimal("principal_redeemed") ?: BigDecimal("0.00")) to
+                    (it.getBigDecimal("yield_result") ?: BigDecimal("0.00"))
             } else {
-                0.0 to 0.0
+                BigDecimal("0.00") to BigDecimal("0.00")
             }
         }!!
     }
@@ -80,7 +82,7 @@ class BondOrderStatementRepository(
                 WHERE bo.bond_id = $bondId
                 AND bo.type = 'BUY'
                 GROUP BY bo.id
-                HAVING buy_remainder <= 0.01;
+                HAVING buy_remainder <= 0.00;
             """.trimIndent()
         ) {
             val ids = mutableSetOf<Int>()
@@ -103,7 +105,7 @@ class BondOrderStatementRepository(
                 LEFT JOIN bond_order_statement bos on bo.id = bos.sell_order_id
                 WHERE bond_id = $bondId AND bo.type = 'SELL'
                 GROUP BY bo.id
-                HAVING sell_remain <= 0.01;
+                HAVING sell_remain <= 0.00;
             """.trimIndent()
         ) {
             val ids = mutableSetOf<Int>()
@@ -122,7 +124,7 @@ class BondOrderStatementRepository(
             this[BondOrderStatementTable.sellOrderId] = it.resolveSellOrderId()
             this[BondOrderStatementTable.type] = it.resolveType()
             this[BondOrderStatementTable.date] = it.date
-            this[BondOrderStatementTable.amount] = it.amount.toBigDecimal()
+            this[BondOrderStatementTable.amount] = it.amount
             this[BondOrderStatementTable.createdAt] = LocalDateTime.now(clock)
         }
     }

@@ -3,6 +3,7 @@ package dev.agner.portfolio.usecase.bond.repository
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 interface IBondOrderStatementRepository {
 
@@ -14,7 +15,7 @@ interface IBondOrderStatementRepository {
 
     suspend fun fetchAlreadyRedeemedBuyIdsByOrderId(bondId: Int): Set<Int>
 
-    suspend fun sumUpConsolidatedValues(buyOrderId: Int, date: LocalDate): Pair<Double, Double>
+    suspend fun sumUpConsolidatedValues(buyOrderId: Int, date: LocalDate): Pair<BigDecimal, BigDecimal>
 
     suspend fun saveAll(creations: List<BondOrderStatementCreation>)
 }

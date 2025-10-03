@@ -50,7 +50,7 @@ class IndexValueRepository(
         IndexValueTable.batchInsert(indexValues, ignore = true) { (date, value) ->
             this[IndexValueTable.indexId] = indexId.name
             this[IndexValueTable.date] = date
-            this[IndexValueTable.value] = value.toBigDecimal()
+            this[IndexValueTable.value] = value
             this[IndexValueTable.createdAt] = LocalDateTime.now(clock)
         }
     }

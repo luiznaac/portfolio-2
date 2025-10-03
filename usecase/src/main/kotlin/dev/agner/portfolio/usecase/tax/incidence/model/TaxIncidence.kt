@@ -1,6 +1,8 @@
 package dev.agner.portfolio.usecase.tax.incidence.model
 
-sealed class TaxIncidence(open val rate: Double) {
-    data class Renda(override val rate: Double) : TaxIncidence(rate)
-    data class IOF(override val rate: Double) : TaxIncidence(rate)
+import java.math.BigDecimal
+
+sealed class TaxIncidence(open val rate: BigDecimal) {
+    data class Renda(override val rate: BigDecimal) : TaxIncidence(rate)
+    data class IOF(override val rate: BigDecimal) : TaxIncidence(rate)
 }

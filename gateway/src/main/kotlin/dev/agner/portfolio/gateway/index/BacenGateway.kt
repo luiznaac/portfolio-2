@@ -13,6 +13,7 @@ import io.ktor.http.path
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.format
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 
 @Service
 class BacenGateway(
@@ -43,7 +44,7 @@ private fun IndexId.getBacenCode() = when (this) {
     IndexId.SELIC -> 12
 }
 
-private data class BacenIndexValue(val data: String, val valor: Double) {
+private data class BacenIndexValue(val data: String, val valor: BigDecimal) {
     fun toDomain() = TheirIndexValue(
         date = brazilianLocalDateFormat.parse(data),
         value = valor,

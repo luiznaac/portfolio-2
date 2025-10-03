@@ -11,10 +11,11 @@ import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
 import io.kotest.property.arbitrary.string
 import io.kotest.property.arbitrary.take
+import java.math.BigDecimal
 
 fun int() = Arb.int().next()
 
-fun double() = Arb.double().next()
+fun bigDecimal() = BigDecimal(Arb.double().next())
 
 fun boolean() = Arb.boolean().next()
 

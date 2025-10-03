@@ -1,16 +1,17 @@
 package dev.agner.portfolio.usecase.bond.consolidation.model
 
 import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
+import java.math.BigDecimal
 
 data class BondCalculationContext(
     val actualData: ActualData,
     val processingData: ProcessingData,
 ) {
     constructor(
-        principal: Double,
-        startingYield: Double,
-        yieldPercentage: Double,
-        sellAmount: Double,
+        principal: BigDecimal,
+        startingYield: BigDecimal,
+        yieldPercentage: BigDecimal,
+        sellAmount: BigDecimal,
         taxes: Set<TaxIncidence>,
     ) : this(
         ActualData(
@@ -25,13 +26,13 @@ data class BondCalculationContext(
     )
 
     data class ActualData(
-        val principal: Double,
-        val yieldAmount: Double,
+        val principal: BigDecimal,
+        val yieldAmount: BigDecimal,
     )
 
     data class ProcessingData(
-        val yieldPercentage: Double,
-        val redeemedAmount: Double,
+        val yieldPercentage: BigDecimal,
+        val redeemedAmount: BigDecimal,
         val taxes: Set<TaxIncidence> = emptySet(),
     )
 }

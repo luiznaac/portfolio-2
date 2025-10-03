@@ -37,7 +37,7 @@ class IOFIncidenceCalculatorTest : StringSpec({
 
             calculator.isApplicable(consolidatingDate, contributionDate) shouldBe true
             result.shouldBeInstanceOf<TaxIncidence.IOF>()
-            result.rate shouldBe expectedRate
+            result.rate shouldBe expectedRate.toBigDecimal().setScale(2)
         }
     }
 

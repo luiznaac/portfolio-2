@@ -14,6 +14,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
 
@@ -26,7 +27,7 @@ class IndexValueServiceTest : StringSpec({
     beforeTest { clearAllMocks() }
 
     "fetchAllIndexValuesBy should call repository" {
-        val indexValues = listOf(IndexValue(date = LocalDate.parse("2025-01-03"), value = 12.5))
+        val indexValues = listOf(IndexValue(date = LocalDate.parse("2025-01-03"), value = BigDecimal("12.50")))
         coEvery { repository.fetchAllBy(any()) } returns indexValues
 
         val result = service.fetchAllBy(CDI)
@@ -40,9 +41,9 @@ class IndexValueServiceTest : StringSpec({
         coEvery { repository.fetchLastBy(any()) } returns null
         every { clock.instant() } returns Instant.parse("2020-01-04T10:00:00Z")
         val theirIndexValues = listOf(
-            TheirIndexValue(LocalDate.parse("2020-01-01"), 1.0),
-            TheirIndexValue(LocalDate.parse("2020-01-02"), 2.0),
-            TheirIndexValue(LocalDate.parse("2020-01-03"), 3.0),
+            TheirIndexValue(LocalDate.parse("2020-01-01"), BigDecimal("1.00")),
+            TheirIndexValue(LocalDate.parse("2020-01-02"), BigDecimal("2.00")),
+            TheirIndexValue(LocalDate.parse("2020-01-03"), BigDecimal("3.00")),
         )
         coEvery { gateway.getIndexValuesForDateRange(any(), any(), any()) } returns theirIndexValues
         coEvery { repository.saveAll(any(), any()) } returns Unit
@@ -58,11 +59,11 @@ class IndexValueServiceTest : StringSpec({
     }
 
     "hydrateIndexValues should use the next day of the last date as start date" {
-        coEvery { repository.fetchLastBy(any()) } returns IndexValue(LocalDate.parse("2025-01-02"), 0.5)
+        coEvery { repository.fetchLastBy(any()) } returns IndexValue(LocalDate.parse("2025-01-02"), BigDecimal("0.5"))
         every { clock.instant() } returns Instant.parse("2025-01-07T10:00:00Z")
         val theirIndexValues = listOf(
-            TheirIndexValue(LocalDate.parse("2025-01-03"), 3.0),
-            TheirIndexValue(LocalDate.parse("2025-01-04"), 4.0),
+            TheirIndexValue(LocalDate.parse("2025-01-03"), BigDecimal("3.0")),
+            TheirIndexValue(LocalDate.parse("2025-01-04"), BigDecimal("4.0")),
         )
         coEvery { gateway.getIndexValuesForDateRange(any(), any(), any()) } returns theirIndexValues
         coEvery { repository.saveAll(any(), any()) } returns Unit
@@ -78,12 +79,12 @@ class IndexValueServiceTest : StringSpec({
     }
 
     "hydrateIndexValues should correctly generate ranges when over 100 days" {
-        coEvery { repository.fetchLastBy(any()) } returns IndexValue(LocalDate.parse("2025-01-01"), 0.5)
+        coEvery { repository.fetchLastBy(any()) } returns IndexValue(LocalDate.parse("2025-01-01"), BigDecimal("0.5"))
         every { clock.instant() } returns Instant.parse("2025-12-31T10:00:00Z")
-        val theirIndexValues1 = listOf(TheirIndexValue(LocalDate.parse("2025-01-03"), 3.0))
-        val theirIndexValues2 = listOf(TheirIndexValue(LocalDate.parse("2025-04-15"), 4.0))
-        val theirIndexValues3 = listOf(TheirIndexValue(LocalDate.parse("2025-08-23"), 5.0))
-        val theirIndexValues4 = listOf(TheirIndexValue(LocalDate.parse("2025-12-30"), 6.0))
+        val theirIndexValues1 = listOf(TheirIndexValue(LocalDate.parse("2025-01-03"), BigDecimal("3.0")))
+        val theirIndexValues2 = listOf(TheirIndexValue(LocalDate.parse("2025-04-15"), BigDecimal("4.0")))
+        val theirIndexValues3 = listOf(TheirIndexValue(LocalDate.parse("2025-08-23"), BigDecimal("5.0")))
+        val theirIndexValues4 = listOf(TheirIndexValue(LocalDate.parse("2025-12-30"), BigDecimal("6.0")))
         coEvery { gateway.getIndexValuesForDateRange(any(), any(), any()) } returnsMany listOf(
             theirIndexValues1,
             theirIndexValues2,
@@ -115,7 +116,7 @@ class IndexValueServiceTest : StringSpec({
     }
 
     "hydrateIndexValues should not search indexes if last date is today" {
-        coEvery { repository.fetchLastBy(any()) } returns IndexValue(LocalDate.parse("2025-01-07"), 0.5)
+        coEvery { repository.fetchLastBy(any()) } returns IndexValue(LocalDate.parse("2025-01-07"), BigDecimal("0.5"))
         every { clock.instant() } returns Instant.parse("2025-01-07T10:00:00Z")
 
         val result = service.hydrateIndexValues(CDI)

@@ -18,6 +18,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 class BondConsolidatorTest : StringSpec({
 
@@ -34,15 +35,15 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
-            principal = 10000.0,
-            yieldAmount = 0.0,
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(0.5),
-                date2 to BondConsolidationContext.YieldPercentageContext(0.6)
+                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60"))
             ),
             sellOrders = mapOf(
-                date1 to BondConsolidationContext.SellOrderContext(5, 500.0),
-                date2 to BondConsolidationContext.SellOrderContext(7, 500.0)
+                date1 to BondConsolidationContext.SellOrderContext(5, BigDecimal("500.00")),
+                date2 to BondConsolidationContext.SellOrderContext(7, BigDecimal("500.00"))
             )
         )
 
@@ -52,41 +53,41 @@ class BondConsolidatorTest : StringSpec({
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 10000.0,
-                    startingYield = 0.0,
-                    yieldPercentage = 0.5,
-                    sellAmount = 500.0,
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    yieldPercentage = BigDecimal("0.50"),
+                    sellAmount = BigDecimal("500.00"),
                     taxes = taxes1,
                 )
             )
         } returns BondCalculationResult.Ok(
-            principal = 9500.0,
-            yield = 100.0,
+            principal = BigDecimal("9500.00"),
+            yield = BigDecimal("100.00"),
             statements = listOf(
-                BondCalculationRecord.Yield(100.0),
-                BondCalculationRecord.PrincipalRedeem(500.0),
-                BondCalculationRecord.TaxRedeem(12.0, "SOME_TAX"),
+                BondCalculationRecord.Yield(BigDecimal("100.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("500.00")),
+                BondCalculationRecord.TaxRedeem(BigDecimal("12.00"), "SOME_TAX"),
             )
         )
 
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 9500.0,
-                    startingYield = 100.0,
-                    yieldPercentage = 0.6,
-                    sellAmount = 500.0,
+                    principal = BigDecimal("9500.00"),
+                    startingYield = BigDecimal("100.00"),
+                    yieldPercentage = BigDecimal("0.60"),
+                    sellAmount = BigDecimal("500.00"),
                     taxes = taxes2,
                 )
             )
         } returns BondCalculationResult.Ok(
-            principal = 9000.0,
-            yield = 160.0,
+            principal = BigDecimal("9000.00"),
+            yield = BigDecimal("160.00"),
             statements = listOf(
-                BondCalculationRecord.Yield(60.0),
-                BondCalculationRecord.YieldRedeem(100.0),
-                BondCalculationRecord.PrincipalRedeem(400.0),
-                BondCalculationRecord.TaxRedeem(23.0, "SOME_TAX_2"),
+                BondCalculationRecord.Yield(BigDecimal("60.00")),
+                BondCalculationRecord.YieldRedeem(BigDecimal("100.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("400.00")),
+                BondCalculationRecord.TaxRedeem(BigDecimal("23.00"), "SOME_TAX_2"),
             )
         )
 
@@ -97,13 +98,13 @@ class BondConsolidatorTest : StringSpec({
 
         result.remainingSells shouldBe emptyMap()
         result.statements shouldBe listOf(
-            BondOrderStatementCreation.Yield(bondOrderId, date1, 100.0),
-            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 500.0, 5),
-            BondOrderStatementCreation.TaxIncidence(bondOrderId, date1, 12.0, 5, "SOME_TAX"),
-            BondOrderStatementCreation.Yield(bondOrderId, date2, 60.0),
-            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, 100.0, 7),
-            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, 400.0, 7),
-            BondOrderStatementCreation.TaxIncidence(bondOrderId, date2, 23.0, 7, "SOME_TAX_2"),
+            BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("100.00")),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, BigDecimal("500.00"), 5),
+            BondOrderStatementCreation.TaxIncidence(bondOrderId, date1, BigDecimal("12.00"), 5, "SOME_TAX"),
+            BondOrderStatementCreation.Yield(bondOrderId, date2, BigDecimal("60.00")),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, BigDecimal("100.00"), 7),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, BigDecimal("400.00"), 7),
+            BondOrderStatementCreation.TaxIncidence(bondOrderId, date2, BigDecimal("23.00"), 7, "SOME_TAX_2"),
         )
 
         coVerify(exactly = 2) { calculator.calculate(any()) }
@@ -115,43 +116,43 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
-            principal = 1000.0,
-            yieldAmount = 0.0,
+            principal = BigDecimal("1000.00"),
+            yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(0.5)
+                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50"))
             ),
             sellOrders = mapOf(
-                date1 to BondConsolidationContext.SellOrderContext(5, 1500.0)
+                date1 to BondConsolidationContext.SellOrderContext(5, BigDecimal("1500.00"))
             )
         )
 
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 1000.0,
-                    startingYield = 0.0,
-                    yieldPercentage = 0.5,
-                    sellAmount = 1500.0
+                    principal = BigDecimal("1000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    yieldPercentage = BigDecimal("0.50"),
+                    sellAmount = BigDecimal("1500.00")
                 )
             )
         } returns BondCalculationResult.RemainingRedemption(
-            principal = 0.0,
-            yield = 5.0,
+            principal = BigDecimal("0.00"),
+            yield = BigDecimal("5.00"),
             statements = listOf(
-                BondCalculationRecord.Yield(5.0),
-                BondCalculationRecord.PrincipalRedeem(1000.0)
+                BondCalculationRecord.Yield(BigDecimal("5.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("1000.00"))
             ),
-            remainingRedemptionAmount = 500.0
+            remainingRedemptionAmount = BigDecimal("500.00")
         )
 
         val result = service.calculateBondo(consolidationContext)
 
         result.remainingSells shouldBe mapOf(
-            date1 to BondConsolidationContext.SellOrderContext(5, 500.0)
+            date1 to BondConsolidationContext.SellOrderContext(5, BigDecimal("500.00"))
         )
         result.statements shouldBe listOf(
-            BondOrderStatementCreation.Yield(bondOrderId, date1, 5.0),
-            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 1000.0, 5)
+            BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("5.00")),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, BigDecimal("1000.00"), 5)
         )
 
         coVerify(exactly = 1) { calculator.calculate(any()) }
@@ -165,12 +166,12 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
-            principal = 10000.0,
-            yieldAmount = 0.0,
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(0.5),
-                date2 to BondConsolidationContext.YieldPercentageContext(0.4),
-                date3 to BondConsolidationContext.YieldPercentageContext(0.6)
+                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.40")),
+                date3 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60"))
             )
         )
 
@@ -178,54 +179,54 @@ class BondConsolidatorTest : StringSpec({
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 10000.0,
-                    startingYield = 0.0,
-                    yieldPercentage = 0.4, // date2 comes first
-                    sellAmount = 0.0
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    yieldPercentage = BigDecimal("0.40"), // date2 comes first
+                    sellAmount = BigDecimal("0.00")
                 )
             )
         } returns BondCalculationResult.Ok(
-            principal = 10000.0,
-            yield = 40.0,
-            statements = listOf(BondCalculationRecord.Yield(40.0))
+            principal = BigDecimal("10000.00"),
+            yield = BigDecimal("40.00"),
+            statements = listOf(BondCalculationRecord.Yield(BigDecimal("40.00")))
         )
 
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 10000.0,
-                    startingYield = 40.0,
-                    yieldPercentage = 0.5, // date1 comes second
-                    sellAmount = 0.0
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("40.00"),
+                    yieldPercentage = BigDecimal("0.50"), // date1 comes second
+                    sellAmount = BigDecimal("0.00")
                 )
             )
         } returns BondCalculationResult.Ok(
-            principal = 10000.0,
-            yield = 90.0,
-            statements = listOf(BondCalculationRecord.Yield(50.0))
+            principal = BigDecimal("10000.00"),
+            yield = BigDecimal("90.00"),
+            statements = listOf(BondCalculationRecord.Yield(BigDecimal("50.00")))
         )
 
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 10000.0,
-                    startingYield = 90.0,
-                    yieldPercentage = 0.6, // date3 comes third
-                    sellAmount = 0.0
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("90.00"),
+                    yieldPercentage = BigDecimal("0.60"), // date3 comes third
+                    sellAmount = BigDecimal("0.00")
                 )
             )
         } returns BondCalculationResult.Ok(
-            principal = 10000.0,
-            yield = 150.0,
-            statements = listOf(BondCalculationRecord.Yield(60.0))
+            principal = BigDecimal("10000.00"),
+            yield = BigDecimal("150.00"),
+            statements = listOf(BondCalculationRecord.Yield(BigDecimal("60.00")))
         )
 
         val result = service.calculateBondo(consolidationContext)
 
         result.statements shouldBe listOf(
-            BondOrderStatementCreation.Yield(bondOrderId, date2, 40.0),
-            BondOrderStatementCreation.Yield(bondOrderId, date1, 50.0),
-            BondOrderStatementCreation.Yield(bondOrderId, date3, 60.0)
+            BondOrderStatementCreation.Yield(bondOrderId, date2, BigDecimal("40.00")),
+            BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
+            BondOrderStatementCreation.Yield(bondOrderId, date3, BigDecimal("60.00"))
         )
 
         coVerify(exactly = 3) { calculator.calculate(any()) }
@@ -234,8 +235,8 @@ class BondConsolidatorTest : StringSpec({
     "should handle empty yield percentages" {
         val consolidationContext = bondConsolidationContext(
             bondOrderId = 1,
-            principal = 10000.0,
-            yieldAmount = 0.0,
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("0.00"),
             yieldPercentages = emptyMap()
         )
 
@@ -255,16 +256,16 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
-            principal = 1000.0,
-            yieldAmount = 500.0,
+            principal = BigDecimal("1000.00"),
+            yieldAmount = BigDecimal("500.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(0.5),
-                date2 to BondConsolidationContext.YieldPercentageContext(0.6),
-                date3 to BondConsolidationContext.YieldPercentageContext(0.7) // Should not be processed
+                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date3 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.70")) // Should not be processed
             ),
             sellOrders = mapOf(
-                date1 to BondConsolidationContext.SellOrderContext(5, 800.0),
-                date2 to BondConsolidationContext.SellOrderContext(6, 900.0)
+                date1 to BondConsolidationContext.SellOrderContext(5, BigDecimal("800.00")),
+                date2 to BondConsolidationContext.SellOrderContext(6, BigDecimal("900.00"))
             )
         )
 
@@ -272,19 +273,19 @@ class BondConsolidatorTest : StringSpec({
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 1000.0,
-                    startingYield = 500.0,
-                    yieldPercentage = 0.5,
-                    sellAmount = 800.0
+                    principal = BigDecimal("1000.00"),
+                    startingYield = BigDecimal("500.00"),
+                    yieldPercentage = BigDecimal("0.50"),
+                    sellAmount = BigDecimal("800.00")
                 )
             )
         } returns BondCalculationResult.Ok(
-            principal = 200.0,
-            yield = 300.0,
+            principal = BigDecimal("200.00"),
+            yield = BigDecimal("300.00"),
             statements = listOf(
-                BondCalculationRecord.Yield(50.0),
-                BondCalculationRecord.YieldRedeem(250.0),
-                BondCalculationRecord.PrincipalRedeem(500.0)
+                BondCalculationRecord.Yield(BigDecimal("50.00")),
+                BondCalculationRecord.YieldRedeem(BigDecimal("250.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("500.00"))
             )
         )
 
@@ -292,37 +293,37 @@ class BondConsolidatorTest : StringSpec({
         coEvery {
             calculator.calculate(
                 bondCalculationContext(
-                    principal = 200.0,
-                    startingYield = 300.0,
-                    yieldPercentage = 0.6,
-                    sellAmount = 900.0
+                    principal = BigDecimal("200.00"),
+                    startingYield = BigDecimal("300.00"),
+                    yieldPercentage = BigDecimal("0.60"),
+                    sellAmount = BigDecimal("900.00")
                 )
             )
         } returns BondCalculationResult.RemainingRedemption(
-            principal = 0.0,
-            yield = 0.0, // Both reach zero - should stop processing here
+            principal = BigDecimal("0.00"),
+            yield = BigDecimal("0.00"), // Both reach zero - should stop processing here
             statements = listOf(
-                BondCalculationRecord.Yield(20.0),
-                BondCalculationRecord.YieldRedeem(320.0),
-                BondCalculationRecord.PrincipalRedeem(200.0)
+                BondCalculationRecord.Yield(BigDecimal("20.00")),
+                BondCalculationRecord.YieldRedeem(BigDecimal("320.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("200.00"))
             ),
-            remainingRedemptionAmount = 200.0,
+            remainingRedemptionAmount = BigDecimal("200.00"),
         )
 
         val result = service.calculateBondo(consolidationContext)
 
         result.statements shouldBe listOf(
-            BondOrderStatementCreation.Yield(bondOrderId, date1, 50.0),
-            BondOrderStatementCreation.YieldRedeem(bondOrderId, date1, 250.0, 5),
-            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, 500.0, 5),
-            BondOrderStatementCreation.Yield(bondOrderId, date2, 20.0),
-            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, 320.0, 6),
-            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, 200.0, 6)
+            BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date1, BigDecimal("250.00"), 5),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date1, BigDecimal("500.00"), 5),
+            BondOrderStatementCreation.Yield(bondOrderId, date2, BigDecimal("20.00")),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, BigDecimal("320.00"), 6),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, BigDecimal("200.00"), 6)
         )
 
         // The remaining sell orders should include the unprocessed date2 sell order
         result.remainingSells shouldBe mapOf(
-            date2 to BondConsolidationContext.SellOrderContext(6, 200.0)
+            date2 to BondConsolidationContext.SellOrderContext(6, BigDecimal("200.00"))
         )
 
         // Should only call calculator twice (date1 and date2), not for date3

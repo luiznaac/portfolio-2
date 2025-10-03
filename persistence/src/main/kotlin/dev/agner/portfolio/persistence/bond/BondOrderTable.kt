@@ -33,6 +33,6 @@ class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
         bond = bond.toModel(),
         type = BondOrderType.valueOf(type),
         date = date,
-        amount = amount.toDouble(),
+        amount = amount,
     )
 }

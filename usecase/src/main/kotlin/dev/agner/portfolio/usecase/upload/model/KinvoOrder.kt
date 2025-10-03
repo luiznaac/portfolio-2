@@ -6,13 +6,14 @@ import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.index.model.IndexId
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 data class KinvoOrder(
     val date: LocalDate,
     val description: String,
     val type: Type,
     val action: Action,
-    val amount: Double,
+    val amount: BigDecimal,
 ) {
     enum class Type(val value: String) {
         CHECKING_ACCOUNT("Conta Corrente"),
@@ -38,7 +39,7 @@ data class KinvoOrder(
     fun toBondCreation(): BondCreation {
         return FloatingRateBondCreation(
             name = description,
-            value = percentageRegex.find(description)!!.groupValues[1].toDouble(),
+            value = percentageRegex.find(description)!!.groupValues[1].toBigDecimal(),
             indexId = IndexId.CDI,
         )
     }

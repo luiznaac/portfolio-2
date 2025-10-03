@@ -34,6 +34,6 @@ class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
         buyOrderId = buyOrder.id.value,
         date = date,
         type = type,
-        amount = amount.toDouble(),
+        amount = amount,
     )
 }

@@ -27,6 +27,6 @@ class IndexValueEntity(id: EntityID<Int>) : IntEntity(id) {
 
     fun toIndexValue() = IndexValue(
         date = date,
-        value = value.toDouble(),
+        value = value,
     )
 }

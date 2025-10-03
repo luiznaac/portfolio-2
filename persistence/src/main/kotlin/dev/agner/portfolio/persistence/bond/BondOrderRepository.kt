@@ -28,7 +28,7 @@ class BondOrderRepository(
             bond = BondEntity.findById(creation.bondId)!!
             type = creation.type.name
             date = creation.date
-            amount = creation.amount.toBigDecimal()
+            amount = creation.amount
             createdAt = LocalDateTime.now(clock)
         }.toModel()
     }

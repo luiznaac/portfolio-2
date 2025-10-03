@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.bond.position.model.BondPosition
 import dev.agner.portfolio.usecase.bond.statement.BondStatementService
 import dev.agner.portfolio.usecase.tax.TaxService
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 
 @Service
 class BondPositionService(
@@ -21,24 +22,24 @@ class BondPositionService(
         val bond = ordersById.values.first().bond
 
         return statementsGroupedByDate.keys.sorted()
-            .fold(PositionData(0.0, 0.0, emptyMap(), emptyList())) { acc, date ->
+            .fold(PositionData()) { acc, date ->
                 val yieldsOnDateByOrderId = statementsGroupedByDate[date]!!.filter { it.type == "YIELD" }.associateBy { it.buyOrderId }
                 val principalRedeemsByOrderId = statementsGroupedByDate[date]!!.filter { it.type == "PRINCIPAL_REDEEM" }.associateBy { it.buyOrderId }
                 val yieldRedeemsGroupedByOrderId = statementsGroupedByDate[date]!!.filter { it.type == "YIELD_REDEEM" || it.type.contains("_TAX") }.groupBy { it.buyOrderId }
 
-                val newPrincipal = acc.principal + (ordersById.values.firstOrNull { it.date == date }?.amount ?: 0.0) - principalRedeemsByOrderId.values.sumOf { it.amount }
+                val newPrincipal = acc.principal + (ordersById.values.firstOrNull { it.date == date }?.amount ?: BigDecimal("0.00")) - principalRedeemsByOrderId.values.sumOf { it.amount }
                 val newYield = acc.yield + (yieldsOnDateByOrderId.values.sumOf { it.amount }) - yieldRedeemsGroupedByOrderId.values.flatten().sumOf { it.amount }
 
                 val newYieldPerOderId = ordersById.values.associate { order ->
-                     val orderYield = (acc.yieldPerOrder[order.id] ?: 0.0) + (yieldsOnDateByOrderId[order.id]?.amount ?: 0.0) - (yieldRedeemsGroupedByOrderId[order.id]?.sumOf { it.amount } ?: 0.0)
+                     val orderYield = (acc.yieldPerOrder[order.id] ?: BigDecimal("0.00")) + (yieldsOnDateByOrderId[order.id]?.amount ?: BigDecimal("0.00")) - (yieldRedeemsGroupedByOrderId[order.id]?.sumOf { it.amount } ?: BigDecimal("0.00"))
 
                     order.id to orderYield
                 }
 
                 val totalTax = newYieldPerOderId.map { (id, value) ->
-                    val taxRate = 1 - taxService.getTaxIncidencesBy(date, ordersById[id]!!.date).map { 1 - it.rate/100 }.reduce { acc, d -> acc * d }
+                    val taxRate = BigDecimal.ONE - taxService.getTaxIncidencesBy(date, ordersById[id]!!.date).map { BigDecimal.ONE - it.rate/ BigDecimal("100") }.reduce { acc, d -> acc * d }
                     taxRate * value
-                }.sum()
+                }.reduce { acc, d -> acc + d }
 
                 val position = BondPosition(
                     bond = bond,
@@ -60,4 +61,4 @@ class BondPositionService(
     }
 }
 
-private data class PositionData(val principal: Double, val yield: Double, val yieldPerOrder: Map<Int, Double>, val positions: List<BondPosition>)
+private data class PositionData(val principal: BigDecimal = BigDecimal("0.00"), val yield: BigDecimal = BigDecimal("0.00"), val yieldPerOrder: Map<Int, BigDecimal> = emptyMap(), val positions: List<BondPosition> = emptyList())

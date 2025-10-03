@@ -13,14 +13,14 @@ class RendaIncidenceCalculator : TaxIncidenceCalculator {
     override fun resolve(consolidatingDate: LocalDate, contributionDate: LocalDate): TaxIncidence {
         val daysOfApplication = contributionDate.daysUntil(consolidatingDate)
         val rendaRate = calculateRendaRate(daysOfApplication)
-        return TaxIncidence.Renda(rendaRate)
+        return TaxIncidence.Renda(rendaRate.toBigDecimal())
     }
 
     private fun calculateRendaRate(daysOfApplication: Int) =
         when {
-            daysOfApplication <= 180 -> 22.5
-            daysOfApplication <= 360 -> 20.0
-            daysOfApplication <= 720 -> 17.5
-            else -> 15.0
+            daysOfApplication <= 180 -> "22.50"
+            daysOfApplication <= 360 -> "20.00"
+            daysOfApplication <= 720 -> "17.50"
+            else -> "15.00"
         }
 }

@@ -5,12 +5,13 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 fun bondCalculationContext(
-    principal: Double,
-    startingYield: Double,
-    yieldPercentage: Double,
-    sellAmount: Double = 0.0,
+    principal: BigDecimal,
+    startingYield: BigDecimal,
+    yieldPercentage: BigDecimal,
+    sellAmount: BigDecimal = BigDecimal("0.00"),
     taxes: Set<TaxIncidence> = emptySet(),
 ) = BondCalculationContext(
     principal = principal,
@@ -22,8 +23,8 @@ fun bondCalculationContext(
 
 fun bondConsolidationContext(
     bondOrderId: Int,
-    principal: Double,
-    yieldAmount: Double,
+    principal: BigDecimal,
+    yieldAmount: BigDecimal,
     yieldPercentages: Map<LocalDate, BondConsolidationContext.YieldPercentageContext>,
     sellOrders: Map<LocalDate, BondConsolidationContext.SellOrderContext> = emptyMap(),
     contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
@@ -39,6 +40,6 @@ fun bondConsolidationContext(
 fun floatingRateBond() = FloatingRateBond(
     id = int(),
     name = arbAsciiString(),
-    value = double(),
+    value = bigDecimal(),
     indexId = enum(),
 )
