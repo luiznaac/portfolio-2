@@ -2,8 +2,9 @@ package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.BondService
 import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidationOrchestrator
+import dev.agner.portfolio.usecase.bond.model.BondCreation.FixedRateBondCreation
+import dev.agner.portfolio.usecase.bond.model.BondCreation.FloatingRateBondCreation
 import dev.agner.portfolio.usecase.bond.position.BondPositionService
-import dev.agner.portfolio.usecase.index.model.IndexId
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -26,20 +27,20 @@ class BondController(
             }
 
             post("/fixed") {
-                val payload = call.receive<FixedRateBondRequest>()
+                val payload = call.receive<FixedRateBondCreation>()
 
                 call.respond(
                     HttpStatusCode.Created,
-                    service.createFixedRateBond(payload.name, payload.value),
+                    service.createBond(payload),
                 )
             }
 
             post("/floating") {
-                val payload = call.receive<FloatingRateBondRequest>()
+                val payload = call.receive<FloatingRateBondCreation>()
 
                 call.respond(
                     HttpStatusCode.Created,
-                    service.createFloatingRateBond(payload.name, payload.value, payload.indexId),
+                    service.createBond(payload),
                 )
             }
 
@@ -58,14 +59,3 @@ class BondController(
         }
     }
 }
-
-private data class FixedRateBondRequest(
-    val name: String,
-    val value: Double,
-)
-
-private data class FloatingRateBondRequest(
-    val name: String,
-    val value: Double,
-    val indexId: IndexId,
-)

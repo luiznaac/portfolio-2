@@ -40,11 +40,11 @@ class KtorConfig(
                 register(ContentType.Application.Xlsx, XlsxConverter(mapper)) {
                     register<KinvoOrder>(
                         DataDef("Data", "date") { LocalDate.parse(this!!, brazilianLocalDateFormat) },
+                        DataDef("Produto", "description"),
                         DataDef("Tipo", "type") { KinvoOrder.Type.fromValue(this!!) },
                         DataDef("Descrição", "action") { KinvoOrder.Action.fromValue(this!!) },
                         DataDef("Valor Total", "amount") { this!!.toDouble() },
 
-                        DataDef("Produto"),
                         DataDef("Instituição"),
                         DataDef("Conexão"),
                         DataDef("Valor"),

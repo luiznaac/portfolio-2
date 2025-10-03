@@ -1,14 +1,13 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
-import dev.agner.portfolio.usecase.bond.model.BondOrderType
+import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Component
 
 @Component
@@ -19,12 +18,9 @@ class BondOrderController(
     override fun routes(): RouteDefinition = {
         route("/bonds/orders") {
             post {
-                val payload = call.receive<BondOrderCreationRequest>()
+                val payload = call.receive<BondOrderCreation>()
 
-                call.respond(
-                    HttpStatusCode.Created,
-                    service.create(payload.bondId, payload.type, payload.date, payload.amount)
-                )
+                call.respond(HttpStatusCode.Created, service.create(payload))
             }
 
             get {
@@ -33,10 +29,3 @@ class BondOrderController(
         }
     }
 }
-
-private data class BondOrderCreationRequest(
-    val bondId: Int,
-    val type: BondOrderType,
-    val date: LocalDate,
-    val amount: Double,
-)

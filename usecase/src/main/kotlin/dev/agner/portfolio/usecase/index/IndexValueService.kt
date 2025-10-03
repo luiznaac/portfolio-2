@@ -56,7 +56,7 @@ class IndexValueService(
     }
 
     private suspend fun resolveStartDate(indexId: IndexId) =
-        repository.fetchLastBy(indexId)?.date?.nextDay() ?: "2025-01-01".run(LocalDate::parse)
+        repository.fetchLastBy(indexId)?.date?.nextDay() ?: "2020-01-01".run(LocalDate::parse)
 
     private val log = logger()
 }

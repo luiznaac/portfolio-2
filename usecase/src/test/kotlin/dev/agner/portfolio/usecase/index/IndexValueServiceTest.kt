@@ -38,11 +38,11 @@ class IndexValueServiceTest : StringSpec({
 
     "hydrateIndexValues should use default start date when last record is null" {
         coEvery { repository.fetchLastBy(any()) } returns null
-        every { clock.instant() } returns Instant.parse("2025-01-07T10:00:00Z")
+        every { clock.instant() } returns Instant.parse("2020-01-04T10:00:00Z")
         val theirIndexValues = listOf(
-            TheirIndexValue(LocalDate.parse("2025-01-01"), 1.0),
-            TheirIndexValue(LocalDate.parse("2025-01-02"), 2.0),
-            TheirIndexValue(LocalDate.parse("2025-01-03"), 3.0),
+            TheirIndexValue(LocalDate.parse("2020-01-01"), 1.0),
+            TheirIndexValue(LocalDate.parse("2020-01-02"), 2.0),
+            TheirIndexValue(LocalDate.parse("2020-01-03"), 3.0),
         )
         coEvery { gateway.getIndexValuesForDateRange(any(), any(), any()) } returns theirIndexValues
         coEvery { repository.saveAll(any(), any()) } returns Unit
@@ -52,7 +52,7 @@ class IndexValueServiceTest : StringSpec({
         result shouldBe 3
         coVerify(exactly = 1) { repository.fetchLastBy(CDI) }
         coVerify(exactly = 1) {
-            gateway.getIndexValuesForDateRange(CDI, LocalDate.parse("2025-01-01"), LocalDate.parse("2025-01-06"))
+            gateway.getIndexValuesForDateRange(CDI, LocalDate.parse("2020-01-01"), LocalDate.parse("2020-01-03"))
         }
         coVerify(exactly = 1) { repository.saveAll(CDI, theirIndexValues.map(::theirToCreation)) }
     }
