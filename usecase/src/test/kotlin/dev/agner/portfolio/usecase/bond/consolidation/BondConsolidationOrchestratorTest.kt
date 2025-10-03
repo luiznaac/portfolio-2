@@ -15,7 +15,9 @@ import dev.agner.portfolio.usecase.commons.nextDay
 import dev.agner.portfolio.usecase.floatingRateBond
 import dev.agner.portfolio.usecase.index.IndexValueService
 import dev.agner.portfolio.usecase.index.model.IndexValue
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.shouldBe
 import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
@@ -548,5 +550,173 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 )
             )
         }
+    }
+
+    "should update remaining sell order amount when there is exactly one remaining sell" {
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate = LocalDate.parse("2024-01-01")
+        val sellDate = LocalDate.parse("2024-01-15")
+
+        val buyOrder = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate,
+            amount = BigDecimal("5000.00")
+        )
+
+        val sellOrder = BondOrder(
+            id = 2,
+            bond = floatingRateBond,
+            type = BondOrderType.SELL,
+            date = sellDate,
+            amount = BigDecimal("3000.00") // Original amount
+        )
+
+        val remainingSellAfterConsolidation = SellOrderContext(
+            2,
+            BigDecimal("500.00")
+        ) // Remaining amount after partial processing
+
+        val consolidationResult = BondConsolidationResult(
+            remainingSells = mapOf(sellDate to remainingSellAfterConsolidation),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, sellDate, BigDecimal("25.00")),
+                BondOrderStatementCreation.PrincipalRedeem(1, sellDate, BigDecimal("2500.00"), 2)
+            )
+        )
+
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { repository.saveAll(any()) } just Runs
+        coEvery { bondOrderService.fetchById(2) } returns sellOrder
+        coEvery { bondOrderService.updateAmount(2, BigDecimal("2500.00")) } just Runs
+
+        orchestrator.consolidateBy(bondId)
+
+        // Verify that the sell order amount is updated to the remaining amount
+        // Original amount (3000.00) - remaining amount (500.00) = 2500.00
+        coVerify(exactly = 1) { bondOrderService.fetchById(2) }
+        coVerify(exactly = 1) { bondOrderService.updateAmount(2, BigDecimal("2500.00")) }
+        coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
+    }
+
+    "should throw IllegalStateException when there are multiple remaining sells" {
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate = LocalDate.parse("2024-01-01")
+        val sellDate1 = LocalDate.parse("2024-01-15")
+        val sellDate2 = LocalDate.parse("2024-01-20")
+
+        val buyOrder = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate,
+            amount = BigDecimal("10000.00")
+        )
+
+        val sellOrder1 = BondOrder(
+            id = 2,
+            bond = floatingRateBond,
+            type = BondOrderType.SELL,
+            date = sellDate1,
+            amount = BigDecimal("2000.00")
+        )
+
+        val sellOrder2 = BondOrder(
+            id = 3,
+            bond = floatingRateBond,
+            type = BondOrderType.SELL,
+            date = sellDate2,
+            amount = BigDecimal("3000.00")
+        )
+
+        // Consolidation result with multiple remaining sells (invalid scenario)
+        val consolidationResult = BondConsolidationResult(
+            remainingSells = mapOf(
+                sellDate1 to SellOrderContext(2, BigDecimal("500.00")),
+                sellDate2 to SellOrderContext(3, BigDecimal("1000.00"))
+            ),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, sellDate1, BigDecimal("30.00"))
+            )
+        )
+
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder1, sellOrder2)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+
+        val exception = shouldThrow<IllegalStateException> {
+            orchestrator.consolidateBy(bondId)
+        }
+
+        exception.message shouldBe "There are more than one remaining sell"
+
+        // Verify that no bond order updates or statement saves occur when exception is thrown
+        coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
+        coVerify(exactly = 0) { bondOrderService.updateAmount(any(), any()) }
+        coVerify(exactly = 0) { repository.saveAll(any()) }
+    }
+
+    "should not update any sell order when there are no remaining sells" {
+        val floatingRateBond = floatingRateBond()
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate = LocalDate.parse("2024-01-01")
+        val sellDate = LocalDate.parse("2024-01-15")
+
+        val buyOrder = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate,
+            amount = BigDecimal("5000.00")
+        )
+
+        val sellOrder = BondOrder(
+            id = 2,
+            bond = floatingRateBond,
+            type = BondOrderType.SELL,
+            date = sellDate,
+            amount = BigDecimal("2000.00")
+        )
+
+        // Consolidation result with no remaining sells (all processed completely)
+        val consolidationResult = BondConsolidationResult(
+            remainingSells = emptyMap(),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, sellDate, BigDecimal("25.00")),
+                BondOrderStatementCreation.PrincipalRedeem(1, sellDate, BigDecimal("2000.00"), 2)
+            )
+        )
+
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { repository.saveAll(any()) } just Runs
+
+        orchestrator.consolidateBy(bondId)
+
+        // Verify that no bond order updates occur when there are no remaining sells
+        coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
+        coVerify(exactly = 0) { bondOrderService.updateAmount(any(), any()) }
+        coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }
 })

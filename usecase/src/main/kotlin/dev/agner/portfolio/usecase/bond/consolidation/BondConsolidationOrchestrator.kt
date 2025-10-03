@@ -59,6 +59,7 @@ class BondConsolidationOrchestrator(
                     statements = acc.statements + calc.statements,
                 )
             }
+            .also { it.remainingSells.values.handleRemainingSells() }
             .statements
             .chunked(100)
             .onEach { repository.saveAll(it) }
@@ -71,6 +72,21 @@ class BondConsolidationOrchestrator(
         is FloatingRateBond -> indexValueService.fetchAllBy(indexId, startingAt)
             .associate { it.date to YieldPercentageContext(value, it) }
         is FixedRateBond -> TODO()
+    }
+
+    private suspend fun Collection<SellOrderContext>.handleRemainingSells() {
+        if (size > 1) {
+            throw IllegalStateException("There are more than one remaining sell")
+        }
+
+        if (size == 1) {
+            val remainingSell = first()
+
+            bondOrderService.updateAmount(
+                remainingSell.id,
+                bondOrderService.fetchById(remainingSell.id).amount - remainingSell.amount,
+            )
+        }
     }
 
     private data class IntermediateData(

@@ -8,6 +8,7 @@ import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
+import java.math.BigDecimal
 import java.time.Clock
 
 @Component
@@ -17,6 +18,10 @@ class BondOrderRepository(
 
     override suspend fun fetchAll() = transaction {
         BondOrderEntity.all().mapToSet { it.toModel() }
+    }
+
+    override suspend fun fetchById(id: Int) = transaction {
+        BondOrderEntity.findById(id)?.toModel()
     }
 
     override suspend fun fetchByBondId(bondId: Int) = transaction {
@@ -31,5 +36,11 @@ class BondOrderRepository(
             amount = creation.amount
             createdAt = LocalDateTime.now(clock)
         }.toModel()
+    }
+
+    override suspend fun updateAmount(id: Int, amount: BigDecimal) = transaction {
+        BondOrderEntity.findByIdAndUpdate(id) {
+            it.amount = amount
+        }!!.toModel()
     }
 }
