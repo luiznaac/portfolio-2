@@ -9,7 +9,7 @@ CREATE TABLE index_value (
     id INT PRIMARY KEY AUTO_INCREMENT,
     index_id VARCHAR(10) NOT NULL,
     date DATE NOT NULL,
-    value DECIMAL(12, 8) NOT NULL,
+    value DECIMAL(12, 6) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (index_id) REFERENCES `index`(id),

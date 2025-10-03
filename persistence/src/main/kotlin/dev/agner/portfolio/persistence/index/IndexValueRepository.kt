@@ -1,6 +1,6 @@
 package dev.agner.portfolio.persistence.index
 
-import dev.agner.portfolio.usecase.extension.now
+import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import dev.agner.portfolio.usecase.index.model.IndexValueCreation

@@ -1,0 +1,8 @@
+package dev.agner.portfolio.usecase.commons
+
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.format.FormatStringsInDatetimeFormats
+import kotlinx.datetime.format.byUnicodePattern
+
+@OptIn(FormatStringsInDatetimeFormats::class)
+val brazilianLocalDateFormat = LocalDate.Format { byUnicodePattern("dd/MM/yyyy") }

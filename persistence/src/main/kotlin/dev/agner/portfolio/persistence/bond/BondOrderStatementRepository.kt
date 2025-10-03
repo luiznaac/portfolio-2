@@ -3,7 +3,7 @@ package dev.agner.portfolio.persistence.bond
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
-import dev.agner.portfolio.usecase.extension.now
+import dev.agner.portfolio.usecase.commons.now
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.JoinType

@@ -1,6 +1,6 @@
 package dev.agner.portfolio.httpapi.controller
 
-import dev.agner.portfolio.usecase.extension.mapAsync
+import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.health.HealthChecker
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respond

@@ -1,8 +1,8 @@
 package dev.agner.portfolio.usecase.index
 
-import dev.agner.portfolio.usecase.extension.logger
-import dev.agner.portfolio.usecase.extension.nextDay
-import dev.agner.portfolio.usecase.extension.yesterday
+import dev.agner.portfolio.usecase.commons.logger
+import dev.agner.portfolio.usecase.commons.nextDay
+import dev.agner.portfolio.usecase.commons.yesterday
 import dev.agner.portfolio.usecase.index.gateway.IIndexValueGateway
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.repository.IIndexValueRepository
@@ -56,7 +56,7 @@ class IndexValueService(
     }
 
     private suspend fun resolveStartDate(indexId: IndexId) =
-        repository.fetchLastBy(indexId)?.date?.nextDay() ?: "2025-01-01".run(LocalDate::parse)
+        repository.fetchLastBy(indexId)?.date?.nextDay() ?: "2020-01-01".run(LocalDate::parse)
 
     private val log = logger()
 }

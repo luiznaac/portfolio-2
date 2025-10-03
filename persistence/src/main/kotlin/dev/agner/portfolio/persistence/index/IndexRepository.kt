@@ -1,6 +1,6 @@
 package dev.agner.portfolio.persistence.index
 
-import dev.agner.portfolio.usecase.extension.mapToSet
+import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.index.model.Index
 import dev.agner.portfolio.usecase.index.repository.IIndexRepository
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction

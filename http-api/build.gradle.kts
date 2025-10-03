@@ -10,4 +10,7 @@ dependencies {
     implementation(libs.ktor.status.pages)
     implementation(libs.ktor.content.negotiation)
     implementation(libs.ktor.jackson)
+    implementation(libs.apache.poi)
+
+    testImplementation(libs.bundles.testDependencies)
 }
