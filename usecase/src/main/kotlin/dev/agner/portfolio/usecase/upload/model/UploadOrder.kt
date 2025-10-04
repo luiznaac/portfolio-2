@@ -5,19 +5,21 @@ import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-data class KinvoOrder(
+data class UploadOrder(
     val date: LocalDate,
     val action: Action,
     val amount: BigDecimal,
 ) {
-    enum class Action(val value: String) {
-        BUY("Aplicação"),
-        SELL("Resgate"),
+    enum class Action(val values: List<String>) {
+        BUY(listOf("Aplicação", "Guardado")),
+        SELL(listOf("Resgate", "Resgatado")),
         ;
 
         companion object {
-            fun fromValue(value: String) = entries.firstOrNull { it.value.equals(value, ignoreCase = true) }
-                ?: throw IllegalArgumentException("Invalid value for Action: $value")
+            fun fromValue(value: String) = entries.firstOrNull {
+                    act ->
+                act.values.any { it.equals(value, ignoreCase = true) }
+            } ?: throw IllegalArgumentException("Invalid value for Action: $value")
         }
     }
 
