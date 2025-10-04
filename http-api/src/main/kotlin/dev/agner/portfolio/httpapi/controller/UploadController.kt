@@ -15,11 +15,12 @@ class UploadController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/upload") {
-            post("/kinvo") {
+        route("/upload/kinvo") {
+            post("/bond/{bond_id}") {
+                val bondId = call.parameters["bond_id"]!!.toInt()
                 val analise = call.receive<List<KinvoOrder>>()
 
-                service.createOrders(analise)
+                service.createOrders(bondId, analise)
 
                 call.respond(HttpStatusCode.OK, analise)
             }

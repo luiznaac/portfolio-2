@@ -82,7 +82,7 @@ class BondConsolidationOrchestrator(
 
     private suspend fun Collection<SellOrderContext>.handleRemainingSells() {
         if (size > 1) {
-            throw IllegalStateException("There are more than one remaining sell")
+            throw IllegalStateException("There is more than one remaining sell")
         }
 
         if (size == 1) {
