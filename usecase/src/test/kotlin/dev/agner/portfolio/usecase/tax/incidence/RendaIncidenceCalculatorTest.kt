@@ -7,6 +7,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
+import java.math.BigDecimal
 
 class RendaIncidenceCalculatorTest : StringSpec({
 
@@ -29,7 +30,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 22.5
+        result.rate shouldBe BigDecimal("22.50")
     }
 
     "should calculate 22.5% for investments exactly at 180 days" {
@@ -38,7 +39,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 22.5
+        result.rate shouldBe BigDecimal("22.50")
     }
 
     "should calculate 20.0% for investments between 181 and 360 days" {
@@ -47,7 +48,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 20.0
+        result.rate shouldBe BigDecimal("20.00")
     }
 
     "should calculate 20.0% for investments exactly at 360 days" {
@@ -56,7 +57,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 20.0
+        result.rate shouldBe BigDecimal("20.00")
     }
 
     "should calculate 17.5% for investments between 361 and 720 days" {
@@ -65,7 +66,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 17.5
+        result.rate shouldBe BigDecimal("17.50")
     }
 
     "should calculate 17.5% for investments exactly at 720 days" {
@@ -74,7 +75,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 17.5
+        result.rate shouldBe BigDecimal("17.50")
     }
 
     "should calculate 15.0% for investments over 720 days" {
@@ -83,7 +84,7 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 15.0
+        result.rate shouldBe BigDecimal("15.00")
     }
 
     "should calculate 15.0% for very old investments" {
@@ -92,6 +93,6 @@ class RendaIncidenceCalculatorTest : StringSpec({
         val result = calculator.resolve(consolidatingDate, contributionDate)
 
         result.shouldBeInstanceOf<TaxIncidence.Renda>()
-        result.rate shouldBe 15.0
+        result.rate shouldBe BigDecimal("15.00")
     }
 })

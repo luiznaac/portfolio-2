@@ -15,6 +15,7 @@ import dev.agner.portfolio.usecase.commons.foldUntil
 import dev.agner.portfolio.usecase.tax.TaxService
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 
 @Service
 class BondConsolidator(
@@ -27,14 +28,14 @@ class BondConsolidator(
             .keys.sorted()
             .foldUntil(
                 IntermediateData(consolidationContext),
-                { ctx.principal + ctx.yieldAmount <= 0.01 }
+                { (ctx.principal + ctx.yieldAmount).compareTo(BigDecimal("0.00")) == 0 }
             ) { acc, date ->
                 val result = calculator.calculate(
                     BondCalculationContext(
                         acc.ctx.principal,
                         acc.ctx.yieldAmount,
                         acc.ctx.yieldPercentages[date]!!.percentage,
-                        acc.ctx.sellOrders[date]?.amount ?: 0.0,
+                        acc.ctx.sellOrders[date]?.amount ?: BigDecimal("0.00"),
                         taxService.getTaxIncidencesBy(date, acc.ctx.contributionDate),
                     )
                 )

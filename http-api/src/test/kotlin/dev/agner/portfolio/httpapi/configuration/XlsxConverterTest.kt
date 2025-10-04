@@ -14,6 +14,7 @@ import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.ss.usermodel.Workbook
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.ByteArrayOutputStream
+import java.math.BigDecimal
 
 @Suppress("UNCHECKED_CAST")
 class XlsxConverterTest : DescribeSpec({
@@ -31,7 +32,7 @@ class XlsxConverterTest : DescribeSpec({
         it("should deserialize xlsx with complete data") {
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
-                DataDef("Amount", "amount") { this!!.toDouble() },
+                DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
                 DataDef("Description", "description")
             )
 
@@ -51,17 +52,17 @@ class XlsxConverterTest : DescribeSpec({
 
             result.size shouldBe 2
             result[0].date shouldBe LocalDate.parse("2023-01-15")
-            result[0].amount shouldBe 100.50
+            result[0].amount shouldBe BigDecimal("100.50")
             result[0].description shouldBe "Test Order 1"
             result[1].date shouldBe LocalDate.parse("2023-02-20")
-            result[1].amount shouldBe 250.75
+            result[1].amount shouldBe BigDecimal("250.75")
             result[1].description shouldBe "Test Order 2"
         }
 
         it("should handle empty cells correctly") {
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
-                DataDef("Amount", "amount") { this?.toDouble() ?: 0.0 },
+                DataDef("Amount", "amount") { this?.toBigDecimal()?.setScale(2) ?: BigDecimal("0.00") },
                 DataDef("Description", "description")
             )
 
@@ -81,17 +82,17 @@ class XlsxConverterTest : DescribeSpec({
 
             result.size shouldBe 2
             result[0].date shouldBe LocalDate.parse("2023-01-15")
-            result[0].amount shouldBe 0.0
+            result[0].amount shouldBe BigDecimal("0.00")
             result[0].description shouldBe "Test Order 1"
             result[1].date shouldBe LocalDate.parse("2023-02-20")
-            result[1].amount shouldBe 0.0
+            result[1].amount shouldBe BigDecimal("0.00")
             result[1].description shouldBe "Test Order 2"
         }
 
         it("should handle data definitions without target property") {
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
-                DataDef("Amount", "amount") { this!!.toDouble() },
+                DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
                 DataDef("Description", "description"),
                 DataDef("Ignored Column") // No target property, should be ignored
             )
@@ -111,14 +112,14 @@ class XlsxConverterTest : DescribeSpec({
 
             result.size shouldBe 1
             result[0].date shouldBe LocalDate.parse("2023-01-15")
-            result[0].amount shouldBe 100.50
+            result[0].amount shouldBe BigDecimal("100.50")
             result[0].description shouldBe "Test Order"
         }
 
         it("should throw exception when no matching definition found") {
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
-                DataDef("Amount", "amount") { this!!.toDouble() }
+                DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) }
             )
 
             val xlsxBytes = createTestXlsx(
@@ -138,13 +139,13 @@ class XlsxConverterTest : DescribeSpec({
         it("should handle multiple registered types and pick correct one") {
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
-                DataDef("Amount", "amount") { this!!.toDouble() },
+                DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
                 DataDef("Description", "description")
             )
 
             converter.register<AnotherTestOrder>(
                 DataDef("Order Date", "order_date") { LocalDate.parse(this!!) },
-                DataDef("Price", "price") { this!!.toDouble() }
+                DataDef("Price", "price") { this!!.toBigDecimal().setScale(2) }
             )
 
             val xlsxBytes = createTestXlsx(
@@ -160,7 +161,7 @@ class XlsxConverterTest : DescribeSpec({
 
             result.size shouldBe 1
             result[0].orderDate shouldBe LocalDate.parse("2023-01-15")
-            result[0].price shouldBe 100.50
+            result[0].price shouldBe BigDecimal("100.50")
         }
     }
 })
@@ -190,11 +191,11 @@ private fun createTestXlsx(headers: List<String>, rows: List<List<String>>): Byt
 
 data class TestOrder(
     val date: LocalDate,
-    val amount: Double,
+    val amount: BigDecimal,
     val description: String?
 )
 
 data class AnotherTestOrder(
     val orderDate: LocalDate,
-    val price: Double
+    val price: BigDecimal
 )

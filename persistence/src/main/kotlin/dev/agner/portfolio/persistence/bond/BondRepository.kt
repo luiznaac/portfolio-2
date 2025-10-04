@@ -29,7 +29,7 @@ class BondRepository(
         BondEntity.new {
             name = creation.name
             rateType = creation.resolveType()
-            value = creation.value.toBigDecimal()
+            value = creation.value
             indexId = if (creation is FloatingRateBondCreation) IndexEntity.findById(creation.indexId.name) else null
             createdAt = LocalDateTime.now(clock)
         }.toModel()

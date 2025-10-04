@@ -2,7 +2,8 @@ package dev.agner.portfolio.httpapi.configuration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.controller.ControllerTemplate
-import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
+import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.commons.disgustingLocalDateFormat
 import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.upload.model.KinvoOrder
 import io.ktor.http.ContentType
@@ -39,18 +40,14 @@ class KtorConfig(
                 register(ContentType.Application.Json, JacksonConverter(mapper))
                 register(ContentType.Application.Xlsx, XlsxConverter(mapper)) {
                     register<KinvoOrder>(
-                        DataDef("Data", "date") { LocalDate.parse(this!!, brazilianLocalDateFormat) },
-                        DataDef("Produto", "description"),
-                        DataDef("Tipo", "type") { KinvoOrder.Type.fromValue(this!!) },
+                        DataDef("Data", "date") { LocalDate.parse(this!!, disgustingLocalDateFormat) },
                         DataDef("Descrição", "action") { KinvoOrder.Action.fromValue(this!!) },
-                        DataDef("Valor Total", "amount") { this!!.toDouble() },
-
-                        DataDef("Instituição"),
-                        DataDef("Conexão"),
-                        DataDef("Valor"),
+                        DataDef("Preço"),
                         DataDef("Quantidade"),
-                        DataDef("Custo"),
-                        DataDef("Câmbio"),
+                        DataDef("Valor", "amount") { this!!.sanitizeCurrency().toBigDecimal().defaultScale() },
+                        DataDef("Taxas"),
+                        DataDef("Quantidade acumulada"),
+                        DataDef("Preço Médio"),
                     )
                 }
             }
@@ -67,3 +64,5 @@ class KtorConfig(
         }.start(wait = true)
     }
 }
+
+private fun String.sanitizeCurrency() = replace(".", "").replace(",", ".")

@@ -11,6 +11,8 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.toKotlinInstant
@@ -40,3 +42,5 @@ fun LocalDate.Companion.today(clock: Clock) = LocalDateTime.now(clock).date
 fun LocalDate.Companion.yesterday(clock: Clock) = LocalDate.today(clock).minus(1, DateTimeUnit.DAY)
 
 fun LocalDate.nextDay() = plus(1, DateTimeUnit.DAY)
+
+fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)

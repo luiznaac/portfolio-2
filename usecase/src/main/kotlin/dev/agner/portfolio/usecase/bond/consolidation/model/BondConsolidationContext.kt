@@ -2,25 +2,26 @@ package dev.agner.portfolio.usecase.bond.consolidation.model
 
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 data class BondConsolidationContext(
     val bondOrderId: Int,
     val contributionDate: LocalDate,
-    val principal: Double,
-    val yieldAmount: Double,
+    val principal: BigDecimal,
+    val yieldAmount: BigDecimal,
     val yieldPercentages: Map<LocalDate, YieldPercentageContext>,
     val sellOrders: Map<LocalDate, SellOrderContext> = emptyMap(),
 ) {
     data class SellOrderContext(
         val id: Int,
-        val amount: Double,
+        val amount: BigDecimal,
     )
 
     data class YieldPercentageContext(
-        val percentage: Double,
+        val percentage: BigDecimal,
     ) {
-        constructor(multiplier: Double, indexValue: IndexValue) : this(
-            percentage = (multiplier / 100) * indexValue.value,
+        constructor(multiplier: BigDecimal, indexValue: IndexValue) : this(
+            percentage = (multiplier / BigDecimal("100")) * indexValue.value,
         )
     }
 }
