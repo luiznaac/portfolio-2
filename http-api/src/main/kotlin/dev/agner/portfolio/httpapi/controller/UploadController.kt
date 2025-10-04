@@ -1,7 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.upload.UploadService
-import dev.agner.portfolio.usecase.upload.model.KinvoOrder
+import dev.agner.portfolio.usecase.upload.model.UploadOrder
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -15,14 +15,23 @@ class UploadController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/upload/kinvo") {
-            post("/bond/{bond_id}") {
+        route("/upload") {
+            post("/kinvo/bond/{bond_id}") {
                 val bondId = call.parameters["bond_id"]!!.toInt()
-                val analise = call.receive<List<KinvoOrder>>()
+                val analise = call.receive<List<UploadOrder>>()
 
-                service.createOrders(bondId, analise)
+                val result = service.createOrders(bondId, analise)
 
-                call.respond(HttpStatusCode.OK, analise)
+                call.respond(HttpStatusCode.OK, result)
+            }
+
+            post("/picpay/bond/{bond_id}") {
+                val bondId = call.parameters["bond_id"]!!.toInt()
+                val analise = call.receive<List<UploadOrder>>()
+
+                val result = service.createOrders(bondId, analise)
+
+                call.respond(HttpStatusCode.OK, result)
             }
         }
     }

@@ -24,8 +24,8 @@ class BondConsolidator(
 ) {
 
     suspend fun calculateBondo(consolidationContext: BondConsolidationContext): BondConsolidationResult =
-        consolidationContext.yieldPercentages
-            .keys.sorted()
+        consolidationContext.dateRange
+            .sorted()
             .foldUntil(
                 IntermediateData(consolidationContext),
                 { (ctx.principal + ctx.yieldAmount).compareTo(BigDecimal("0.00")) == 0 }
@@ -34,7 +34,7 @@ class BondConsolidator(
                     BondCalculationContext(
                         acc.ctx.principal,
                         acc.ctx.yieldAmount,
-                        acc.ctx.yieldPercentages[date]!!.percentage,
+                        acc.ctx.yieldPercentages[date]?.percentage ?: BigDecimal("0.00"),
                         acc.ctx.sellOrders[date]?.amount ?: BigDecimal("0.00"),
                         taxService.getTaxIncidencesBy(date, acc.ctx.contributionDate),
                     )

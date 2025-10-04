@@ -7,6 +7,7 @@ import java.math.BigDecimal
 data class BondConsolidationContext(
     val bondOrderId: Int,
     val contributionDate: LocalDate,
+    val dateRange: List<LocalDate>,
     val principal: BigDecimal,
     val yieldAmount: BigDecimal,
     val yieldPercentages: Map<LocalDate, YieldPercentageContext>,

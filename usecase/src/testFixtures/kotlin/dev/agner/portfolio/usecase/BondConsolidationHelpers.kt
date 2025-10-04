@@ -28,6 +28,7 @@ fun bondConsolidationContext(
     yieldPercentages: Map<LocalDate, BondConsolidationContext.YieldPercentageContext>,
     sellOrders: Map<LocalDate, BondConsolidationContext.SellOrderContext> = emptyMap(),
     contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
+    dateRange: List<LocalDate> = emptyList(),
 ) = BondConsolidationContext(
     bondOrderId = bondOrderId,
     contributionDate = contributionDate,
@@ -35,6 +36,7 @@ fun bondConsolidationContext(
     yieldAmount = yieldAmount,
     yieldPercentages = yieldPercentages,
     sellOrders = sellOrders,
+    dateRange = dateRange,
 )
 
 fun floatingRateBond() = FloatingRateBond(

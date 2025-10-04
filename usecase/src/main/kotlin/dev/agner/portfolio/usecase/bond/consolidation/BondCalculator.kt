@@ -18,7 +18,8 @@ class BondCalculator {
 
         val newPrincipal = (ctx.actualData.principal - redeemedPrincipal)
         val newYield = (ctx.actualData.yieldAmount + yieldedAmount - redeemedYield - redeemedTaxes)
-        val statements = listOf(BondCalculationRecord.Yield(yieldedAmount))
+        val statements = emptyList<BondCalculationRecord>()
+            .plusIf(yieldedAmount > BigDecimal("0.00")) { BondCalculationRecord.Yield(yieldedAmount) }
             .plusIf(redeemedPrincipal > BigDecimal("0.00")) { BondCalculationRecord.PrincipalRedeem(redeemedPrincipal) }
             .plusIf(redeemedYield > BigDecimal("0.00")) { BondCalculationRecord.YieldRedeem(redeemedYield) }
             .plus(redeemedTaxes.map { it.buildRecord() })
@@ -65,7 +66,7 @@ class BondCalculator {
                 )
             }
 
-            val proportion = principal / (principal + netYield)
+            val proportion = principal.setScale(6) / (principal + netYield)
             val redeemedPrincipal = (processingData.redeemedAmount * proportion).defaultScale()
             val redeemedYield = (processingData.redeemedAmount * (BigDecimal.ONE - proportion)).setScale(
                 2,
@@ -87,8 +88,9 @@ private fun Set<TaxIncidence>.calculate(
     grossAmount: BigDecimal,
 ): Set<Pair<TaxIncidence, BigDecimal>> {
     if (isEmpty()) return emptySet()
+    if (redeemedNetAmount == BigDecimal("0.00")) return emptySet()
 
-    val redeemedGrossAmount = ((redeemedNetAmount / netAmount) * grossAmount).defaultScale()
+    val redeemedGrossAmount = ((redeemedNetAmount.setScale(8) / netAmount) * grossAmount).defaultScale()
 
     data class TaxState(val remainingAmount: BigDecimal, val results: Set<Pair<TaxIncidence, BigDecimal>>)
 

@@ -5,7 +5,7 @@ import dev.agner.portfolio.httpapi.controller.ControllerTemplate
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.disgustingLocalDateFormat
 import dev.agner.portfolio.usecase.commons.logger
-import dev.agner.portfolio.usecase.upload.model.KinvoOrder
+import dev.agner.portfolio.usecase.upload.model.UploadOrder
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -39,9 +39,9 @@ class KtorConfig(
             install(ContentNegotiation) {
                 register(ContentType.Application.Json, JacksonConverter(mapper))
                 register(ContentType.Application.Xlsx, XlsxConverter(mapper)) {
-                    register<KinvoOrder>(
+                    register<UploadOrder>(
                         DataDef("Data", "date") { LocalDate.parse(this!!, disgustingLocalDateFormat) },
-                        DataDef("Descrição", "action") { KinvoOrder.Action.fromValue(this!!) },
+                        DataDef("Descrição", "action") { UploadOrder.Action.fromValue(this!!) },
                         DataDef("Preço"),
                         DataDef("Quantidade"),
                         DataDef("Valor", "amount") { this!!.sanitizeCurrency().toBigDecimal().defaultScale() },
@@ -50,6 +50,7 @@ class KtorConfig(
                         DataDef("Preço Médio"),
                     )
                 }
+                register(ContentType.Application.Pdf, PdfConverter())
             }
 
             install(CORS) {
