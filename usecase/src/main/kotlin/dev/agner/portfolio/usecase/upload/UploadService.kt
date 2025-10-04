@@ -12,6 +12,14 @@ class UploadService(
 ) {
 
     suspend fun createOrders(bondId: Int, orders: List<KinvoOrder>) =
-        orders.mapAsync { bondOrderService.create(it.toBondOrderCreation(bondId)) }
+        orders
+            .groupBy { it.date }
+            .mapValues { x -> x.value.groupBy { it.action } }
+            .flatMap { (date, ordersByAction) ->
+                ordersByAction.map { (action, orders) ->
+                    KinvoOrder(date, action, orders.sumOf { it.amount })
+                }
+            }
+            .mapAsync { bondOrderService.create(it.toBondOrderCreation(bondId)) }
             .awaitAll()
 }

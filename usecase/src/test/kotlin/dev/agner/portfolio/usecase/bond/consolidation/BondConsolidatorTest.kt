@@ -35,6 +35,7 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
+            dateRange = listOf(date1, date2),
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
@@ -116,6 +117,7 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
+            dateRange = listOf(date1),
             principal = BigDecimal("1000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
@@ -166,6 +168,7 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
+            dateRange = listOf(date1, date2, date3),
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
@@ -232,9 +235,10 @@ class BondConsolidatorTest : StringSpec({
         coVerify(exactly = 3) { calculator.calculate(any()) }
     }
 
-    "should handle empty yield percentages" {
+    "should handle empty date range" {
         val consolidationContext = bondConsolidationContext(
             bondOrderId = 1,
+            dateRange = listOf(),
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = emptyMap()
@@ -256,6 +260,7 @@ class BondConsolidatorTest : StringSpec({
 
         val consolidationContext = bondConsolidationContext(
             bondOrderId = bondOrderId,
+            dateRange = listOf(date1, date2, date3),
             principal = BigDecimal("1000.00"),
             yieldAmount = BigDecimal("500.00"),
             yieldPercentages = mapOf(
@@ -328,5 +333,41 @@ class BondConsolidatorTest : StringSpec({
 
         // Should only call calculator twice (date1 and date2), not for date3
         coVerify(exactly = 2) { calculator.calculate(any()) }
+    }
+
+    "should process bond consolidation without yield percentage correctly and default to 0.00" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-16")
+
+        val consolidationContext = bondConsolidationContext(
+            bondOrderId = bondOrderId,
+            dateRange = listOf(date1),
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("0.00"),
+            yieldPercentages = emptyMap(),
+        )
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    yieldPercentage = BigDecimal("0.00"),
+                )
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("10000.00"),
+            yield = BigDecimal("0.00"),
+            statements = listOf()
+        )
+
+        every { taxService.getTaxIncidencesBy(date1, consolidationContext.contributionDate) } returns emptySet()
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.remainingSells shouldBe emptyMap()
+        result.statements shouldBe emptyList()
+
+        coVerify(exactly = 1) { calculator.calculate(any()) }
     }
 })

@@ -1,3 +1,4 @@
+
 package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
@@ -22,10 +23,15 @@ import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import kotlinx.datetime.DayOfWeek.SATURDAY
+import kotlinx.datetime.DayOfWeek.SUNDAY
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
 
 class BondConsolidationOrchestratorTest : StringSpec({
 
@@ -33,8 +39,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
     val bondOrderService = mockk<BondOrderService>()
     val indexValueService = mockk<IndexValueService>()
     val consolidator = mockk<BondConsolidator>()
+    val clock = mockk<Clock>()
 
-    val orchestrator = BondConsolidationOrchestrator(repository, bondOrderService, indexValueService, consolidator)
+    val orchestrator =
+        BondConsolidationOrchestrator(repository, bondOrderService, indexValueService, consolidator, clock)
 
     beforeEach {
         clearAllMocks()
@@ -47,6 +55,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-16")
         val lastStatementDate = LocalDate.parse("2024-01-15")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -84,6 +93,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder)
@@ -106,6 +116,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 BondConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = orderDate,
+                    dateRange = (lastStatementDate.nextDay()..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("9500.00"),
                     yieldAmount = BigDecimal("25.00"),
                     yieldPercentages = mapOf(
@@ -125,6 +138,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val bondId = floatingRateBond.id
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-10")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 100,
@@ -139,6 +153,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             statements = emptyList()
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder)
@@ -159,6 +174,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 BondConsolidationContext(
                     bondOrderId = 100,
                     contributionDate = orderDate,
+                    dateRange = (orderDate..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("5000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = emptyMap(),
@@ -175,6 +193,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val date1 = LocalDate.parse("2024-01-10")
         val date2 = LocalDate.parse("2024-01-20")
         val sellDate = LocalDate.parse("2024-01-25")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder1 = BondOrder(
             id = 1,
@@ -219,6 +238,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder1, buyOrder2, sellOrder)
@@ -238,6 +258,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 bondConsolidationContext(
                     bondOrderId = 2,
                     contributionDate = date1,
+                    dateRange = (date1..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("5000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = indexValues.associate {
@@ -254,6 +277,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 bondConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = date2,
+                    dateRange = (date2..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("8000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = indexValues.associate {
@@ -275,6 +301,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate1 = LocalDate.parse("2024-01-15")
         val sellDate2 = LocalDate.parse("2024-01-20")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -305,6 +332,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             statements = emptyList()
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder1, sellOrder2)
@@ -321,6 +349,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 BondConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = orderDate,
+                    dateRange = (orderDate..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("10000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = emptyMap(),
@@ -338,6 +369,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val bondId = floatingRateBond.id
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder1 = BondOrder(
             id = 1,
@@ -364,6 +396,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns alreadyRedeemedBuyIds
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder1, buyOrder2)
@@ -384,6 +417,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 BondConsolidationContext(
                     bondOrderId = 2,
                     contributionDate = orderDate,
+                    dateRange = (orderDate..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("8000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = emptyMap(),
@@ -400,6 +436,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate1 = LocalDate.parse("2024-01-15")
         val sellDate2 = LocalDate.parse("2024-01-20")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -436,6 +473,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns alreadyRedeemedBuyIds
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns consolidatedSellIds
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder1, sellOrder2)
@@ -454,6 +492,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 BondConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = orderDate,
+                    dateRange = (orderDate..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("10000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = emptyMap(),
@@ -472,6 +513,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-15")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder1 = BondOrder(
             id = 1,
@@ -516,6 +558,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns alreadyRedeemedBuyIds
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns consolidatedSellIds
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder1, buyOrder2, sellOrder1, sellOrder2)
@@ -541,6 +584,9 @@ class BondConsolidationOrchestratorTest : StringSpec({
                 BondConsolidationContext(
                     bondOrderId = 2,
                     contributionDate = orderDate,
+                    dateRange = (orderDate..yesterdayDate).mapNotNull {
+                        it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) }
+                    },
                     principal = BigDecimal("7000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldPercentages = emptyMap(),
@@ -558,6 +604,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-15")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -588,6 +635,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder)
@@ -615,6 +663,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate1 = LocalDate.parse("2024-01-15")
         val sellDate2 = LocalDate.parse("2024-01-20")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -651,6 +700,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder1, sellOrder2)
@@ -663,7 +713,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             orchestrator.consolidateBy(bondId)
         }
 
-        exception.message shouldBe "There are more than one remaining sell"
+        exception.message shouldBe "There is more than one remaining sell"
 
         // Verify that no bond order updates or statement saves occur when exception is thrown
         coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
@@ -677,6 +727,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-15")
+        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -703,6 +754,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         )
 
+        every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
         coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder)

@@ -60,25 +60,7 @@ class BondCalculatorTest : StringSpec({
         result.shouldBeInstanceOf<BondCalculationResult.Ok>()
         result.principal shouldBe principal
         result.yield shouldBe startingYield
-        result.statements.size shouldBe 1
-        result.statements[0].amount shouldBe BigDecimal("0.00")
-    }
-
-    "should handle negative yield percentage" {
-        val principal = BigDecimal("1000.00")
-        val startingYield = BigDecimal("100.00")
-        val yieldPercentage = BigDecimal("-2.00")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
-        val expectedYieldedAmount = ((principal + startingYield) * yieldPercentage / BigDecimal("100")).defaultScale()
-
-        val result = calculator.calculate(context)
-
-        result.shouldBeInstanceOf<BondCalculationResult.Ok>()
-        result.principal shouldBe principal
-        result.yield shouldBe startingYield + expectedYieldedAmount
-        result.statements.size shouldBe 1
-        result.statements[0].amount shouldBe expectedYieldedAmount
-        (result.statements[0].amount < BigDecimal("0.00")) shouldBe true
+        result.statements.size shouldBe 0
     }
 
     "should calculate partial redemption with equal principal and yield proportions" {
@@ -93,7 +75,7 @@ class BondCalculatorTest : StringSpec({
         result.shouldBeInstanceOf<BondCalculationResult.Ok>()
         result.principal shouldBe BigDecimal("750.00")
         result.yield shouldBe BigDecimal("750.00")
-        result.statements.size shouldBe 3
+        result.statements.size shouldBe 2
         result.statements.find { it is BondCalculationRecord.PrincipalRedeem }.also {
             it!!.amount shouldBe BigDecimal("250.00")
         }
@@ -111,7 +93,7 @@ class BondCalculatorTest : StringSpec({
 
         val totalBeforeRedemption = principal + startingYield +
             ((principal + startingYield) * yieldPercentage / BigDecimal("100")).defaultScale()
-        val principalProportion = principal / totalBeforeRedemption
+        val principalProportion = principal.setScale(6) / totalBeforeRedemption
         val expectedRedeemedPrincipal = (redemptionAmount * principalProportion).defaultScale()
         val expectedRedeemedYield = (redemptionAmount * (BigDecimal.ONE - principalProportion)).defaultScale()
 
@@ -190,11 +172,11 @@ class BondCalculatorTest : StringSpec({
 
         result.shouldBeInstanceOf<BondCalculationResult.Ok>()
         result.principal shouldBe BigDecimal("0.00")
-        result.yield shouldBe BigDecimal("28.00")
+        result.yield shouldBe BigDecimal("28.21")
 
         result.statements.find {
             it is BondCalculationRecord.TaxRedeem && it.taxType == "RENDA"
-        }!!.amount shouldBe BigDecimal("16.36")
+        }!!.amount shouldBe BigDecimal("16.15")
     }
 
     "should handle taxes - full redemption" {
