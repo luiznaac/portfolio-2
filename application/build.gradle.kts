@@ -19,5 +19,6 @@ dependencies {
     implementation(project(":usecase"))
     implementation(project(":gateway"))
 
-    implementation(libs.spring.context)
+    implementation(libs.spring.boot)
+    implementation(libs.snakeyaml)
 }
