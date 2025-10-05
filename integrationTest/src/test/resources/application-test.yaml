@@ -1,2 +1,6 @@
 ktor:
   wait: false
+
+gateways:
+  bacen:
+    host: 'http://localhost:3000'

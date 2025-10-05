@@ -8,4 +8,6 @@ dependencies {
     testImplementation(libs.ktor.client.core)
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.testcontainers)
+    testImplementation(libs.wiremock)
+    implementation(libs.jackson.kotlin)
 }

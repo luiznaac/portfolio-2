@@ -7,5 +7,6 @@ object KotestConfig : AbstractProjectConfig() {
     override fun extensions() = listOf(
         SpringExtension,
         DockerComposeExtension,
+        ResetWiremock,
     )
 }
