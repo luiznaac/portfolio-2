@@ -5,7 +5,7 @@ plugins {
 	jacoco
 	kotlin("jvm") version "2.1.21"
 	kotlin("plugin.spring") version "2.2.20"
-	id("io.gitlab.arturbosch.detekt") version "1.23.6"
+	id("io.gitlab.arturbosch.detekt") version "1.23.8"
 	id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -33,7 +33,7 @@ subprojects {
 	apply(plugin = "io.gitlab.arturbosch.detekt")
 
 	dependencies {
-		detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.6")
+		detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.8")
 	}
 
 	jacoco {
