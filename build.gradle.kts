@@ -33,7 +33,7 @@ subprojects {
 	apply(plugin = "io.gitlab.arturbosch.detekt")
 
 	dependencies {
-		detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.6")
+		detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.8")
 	}
 
 	jacoco {
