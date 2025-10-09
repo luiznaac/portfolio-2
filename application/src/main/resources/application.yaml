@@ -1,0 +1,11 @@
+ktor:
+  wait: true
+
+mysql:
+  host: 'localhost'
+  user: 'root'
+  password: ''
+
+gateways:
+  bacen:
+    host: 'https://api.bcb.gov.br'

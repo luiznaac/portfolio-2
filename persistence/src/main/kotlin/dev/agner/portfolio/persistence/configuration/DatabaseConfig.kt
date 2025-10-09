@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.configuration
 
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -8,9 +9,14 @@ import org.springframework.context.annotation.Configuration
 class DatabaseConfig {
 
     @Bean
-    fun databaseConnection() = Database.connect(
-        url = "jdbc:mysql://localhost:3306/portfolio",
+    fun databaseConnection(
+        @Value("\${mysql.host}") host: String,
+        @Value("\${mysql.user}") user: String,
+        @Value("\${mysql.password}") password: String,
+    ) = Database.connect(
+        url = "jdbc:mysql://$host:3306/portfolio",
         driver = "com.mysql.cj.jdbc.Driver",
-        user = "root",
+        user = user,
+        password = password,
     )
 }

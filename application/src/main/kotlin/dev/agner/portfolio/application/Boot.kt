@@ -1,7 +1,6 @@
 package dev.agner.portfolio.application
 
-import dev.agner.portfolio.httpapi.configuration.KtorConfig
-import org.springframework.context.annotation.AnnotationConfigApplicationContext
+import org.springframework.boot.runApplication
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
 
@@ -10,6 +9,5 @@ import org.springframework.context.annotation.Configuration
 class Boot
 
 fun main() {
-    val springContext = AnnotationConfigApplicationContext(Boot::class.java)
-    springContext.getBean(KtorConfig::class.java).start()
+    runApplication<Boot>()
 }
