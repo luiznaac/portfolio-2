@@ -37,7 +37,8 @@ class BondConsolidator(
                         acc.ctx.yieldPercentages[date]?.percentage ?: BigDecimal("0.00"),
                         acc.ctx.sellOrders[date]?.amount ?: BigDecimal("0.00"),
                         taxService.getTaxIncidencesBy(date, acc.ctx.contributionDate),
-                    )
+                    ),
+                    fullRedemption = acc.ctx.fullRedemption?.date == date,
                 )
 
                 acc.updateWith(result, date)
@@ -56,7 +57,9 @@ class BondConsolidator(
                 yieldAmount = result.yield,
                 sellOrders = result.resolveSells(ctx, date)
             ),
-            statements = statements + result.statements.map { it.buildCreation(ctx, date) }
+            statements = statements + result.statements.map {
+                it.buildCreation(ctx.bondOrderId, ctx.fullRedemption?.id ?: ctx.sellOrders[date]?.id, date)
+            }
         )
 
     private fun BondCalculationResult.resolveSells(ctx: BondConsolidationContext, date: LocalDate) = when (this) {
@@ -69,17 +72,17 @@ class BondConsolidator(
         }
     }
 
-    private fun BondCalculationRecord.buildCreation(ctx: BondConsolidationContext, date: LocalDate) =
+    private fun BondCalculationRecord.buildCreation(bondOrderId: Int, sellOrderId: Int?, date: LocalDate) =
         when (this) {
-            is Yield -> BondOrderStatementCreation.Yield(ctx.bondOrderId, date, amount)
+            is Yield -> BondOrderStatementCreation.Yield(bondOrderId, date, amount)
             is YieldRedeem -> {
-                BondOrderStatementCreation.YieldRedeem(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id)
+                BondOrderStatementCreation.YieldRedeem(bondOrderId, date, amount, sellOrderId!!)
             }
             is PrincipalRedeem -> {
-                BondOrderStatementCreation.PrincipalRedeem(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id)
+                BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date, amount, sellOrderId!!)
             }
             is TaxRedeem -> {
-                TaxIncidence(ctx.bondOrderId, date, amount, ctx.sellOrders[date]!!.id, taxType)
+                TaxIncidence(bondOrderId, date, amount, sellOrderId!!, taxType)
             }
         }
 

@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
 import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.tax.incidence.model.TaxIncidence
 import kotlinx.datetime.LocalDate
@@ -29,6 +30,7 @@ fun bondConsolidationContext(
     sellOrders: Map<LocalDate, BondConsolidationContext.SellOrderContext> = emptyMap(),
     contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
     dateRange: List<LocalDate> = emptyList(),
+    fullRedemption: FullRedemptionContext? = null,
 ) = BondConsolidationContext(
     bondOrderId = bondOrderId,
     contributionDate = contributionDate,
@@ -37,6 +39,7 @@ fun bondConsolidationContext(
     yieldPercentages = yieldPercentages,
     sellOrders = sellOrders,
     dateRange = dateRange,
+    fullRedemption = fullRedemption,
 )
 
 fun floatingRateBond() = FloatingRateBond(

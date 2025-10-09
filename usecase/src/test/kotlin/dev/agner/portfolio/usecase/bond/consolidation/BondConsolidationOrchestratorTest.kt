@@ -3,6 +3,7 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
@@ -73,6 +74,14 @@ class BondConsolidationOrchestratorTest : StringSpec({
             amount = BigDecimal("1000.00")
         )
 
+        val fullRedemptionOrder = BondOrder(
+            id = 3,
+            bond = floatingRateBond,
+            type = BondOrderType.FULL_REDEMPTION,
+            date = sellDate,
+            amount = BigDecimal.ZERO,
+        )
+
         val lastStatement = BondOrderStatement(
             id = 1,
             buyOrderId = 1,
@@ -96,7 +105,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         every { clock.instant() } returns Instant.parse("2024-01-31T10:00:00Z")
         coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
         coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
-        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder)
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder, sellOrder, fullRedemptionOrder)
         coEvery { repository.fetchLastByBondOrderId(1) } returns lastStatement
         coEvery { indexValueService.fetchAllBy(indexId, lastStatementDate.nextDay()) } returns indexValues
         coEvery {
@@ -126,7 +135,8 @@ class BondConsolidationOrchestratorTest : StringSpec({
                     ),
                     sellOrders = mapOf(
                         sellDate to SellOrderContext(2, BigDecimal("1000.00"))
-                    )
+                    ),
+                    fullRedemption = FullRedemptionContext(fullRedemptionOrder.id, fullRedemptionOrder.date),
                 )
             )
         }

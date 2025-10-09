@@ -12,10 +12,16 @@ data class BondConsolidationContext(
     val yieldAmount: BigDecimal,
     val yieldPercentages: Map<LocalDate, YieldPercentageContext>,
     val sellOrders: Map<LocalDate, SellOrderContext> = emptyMap(),
+    val fullRedemption: FullRedemptionContext? = null,
 ) {
     data class SellOrderContext(
         val id: Int,
         val amount: BigDecimal,
+    )
+
+    data class FullRedemptionContext(
+        val id: Int,
+        val date: LocalDate,
     )
 
     data class YieldPercentageContext(
