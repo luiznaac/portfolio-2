@@ -10,8 +10,8 @@ data class BondCalculationContext(
     constructor(
         principal: BigDecimal,
         startingYield: BigDecimal,
-        yieldPercentage: BigDecimal,
-        sellAmount: BigDecimal,
+        yieldPercentage: BigDecimal = BigDecimal.ZERO,
+        sellAmount: BigDecimal = BigDecimal.ZERO,
         taxes: Set<TaxIncidence>,
     ) : this(
         ActualData(

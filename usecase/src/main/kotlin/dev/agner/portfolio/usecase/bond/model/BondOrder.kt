@@ -7,6 +7,7 @@ enum class BondOrderType {
     BUY,
     SELL,
     FULL_REDEMPTION,
+    MATURITY,
 }
 
 data class BondOrder(
