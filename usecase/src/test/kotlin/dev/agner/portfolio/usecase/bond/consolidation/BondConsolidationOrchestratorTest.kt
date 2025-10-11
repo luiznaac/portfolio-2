@@ -655,14 +655,14 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
         coEvery { bondOrderService.fetchById(2) } returns sellOrder
-        coEvery { bondOrderService.updateAmount(2, BigDecimal("2500.00")) } just Runs
+        coEvery { bondOrderService.updateType(2, BigDecimal("2500.00")) } just Runs
 
         orchestrator.consolidateBy(bondId)
 
         // Verify that the sell order amount is updated to the remaining amount
         // Original amount (3000.00) - remaining amount (500.00) = 2500.00
         coVerify(exactly = 1) { bondOrderService.fetchById(2) }
-        coVerify(exactly = 1) { bondOrderService.updateAmount(2, BigDecimal("2500.00")) }
+        coVerify(exactly = 1) { bondOrderService.updateType(2, BigDecimal("2500.00")) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }
 
@@ -727,7 +727,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         // Verify that no bond order updates or statement saves occur when exception is thrown
         coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
-        coVerify(exactly = 0) { bondOrderService.updateAmount(any(), any()) }
+        coVerify(exactly = 0) { bondOrderService.updateType(any(), any()) }
         coVerify(exactly = 0) { repository.saveAll(any()) }
     }
 
@@ -778,7 +778,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         // Verify that no bond order updates occur when there are no remaining sells
         coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
-        coVerify(exactly = 0) { bondOrderService.updateAmount(any(), any()) }
+        coVerify(exactly = 0) { bondOrderService.updateType(any(), any()) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }
 })
