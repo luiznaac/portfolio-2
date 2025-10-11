@@ -4,6 +4,7 @@ package dev.agner.portfolio.usecase.bond.consolidation
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bondCalculationContext
 import dev.agner.portfolio.usecase.bondConsolidationContext
@@ -369,5 +370,122 @@ class BondConsolidatorTest : StringSpec({
         result.statements shouldBe emptyList()
 
         coVerify(exactly = 1) { calculator.calculate(any()) }
+    }
+
+    "should pass fullRedemption flag to calculator when full redemption date matches" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-16")
+        val date2 = LocalDate.parse("2024-01-17")
+        val fullRedemptionDate = LocalDate.parse("2024-01-17")
+
+        val consolidationContext = bondConsolidationContext(
+            bondOrderId = bondOrderId,
+            dateRange = listOf(date1, date2),
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("0.00"),
+            yieldPercentages = mapOf(
+                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60"))
+            ),
+            fullRedemption = FullRedemptionContext(
+                id = 10,
+                date = fullRedemptionDate
+            )
+        )
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    yieldPercentage = BigDecimal("0.50"),
+                    sellAmount = BigDecimal("0.00"),
+                ),
+                fullRedemption = false, // date1 is not the full redemption date
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("10000.00"),
+            yield = BigDecimal("50.00"),
+            statements = listOf(
+                BondCalculationRecord.Yield(BigDecimal("50.00")),
+            )
+        )
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("50.00"),
+                    yieldPercentage = BigDecimal("0.60"),
+                    sellAmount = BigDecimal("0.00"),
+                ),
+                fullRedemption = true, // date2 matches full redemption date
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("0.00"),
+            yield = BigDecimal("0.00"),
+            statements = listOf(
+                BondCalculationRecord.Yield(BigDecimal("60.00")),
+                BondCalculationRecord.YieldRedeem(BigDecimal("88.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("10000.00")),
+            )
+        )
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.remainingSells shouldBe emptyMap()
+        result.statements shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
+            BondOrderStatementCreation.Yield(bondOrderId, date2, BigDecimal("60.00")),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, date2, BigDecimal("88.00"), 10),
+            BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date2, BigDecimal("10000.00"), 10),
+        )
+
+        coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = false) }
+        coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = true) }
+    }
+
+    "should not pass fullRedemption flag when there is no full redemption context" {
+        val bondOrderId = 1
+        val date1 = LocalDate.parse("2024-01-16")
+
+        val consolidationContext = bondConsolidationContext(
+            bondOrderId = bondOrderId,
+            dateRange = listOf(date1),
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("0.00"),
+            yieldPercentages = mapOf(
+                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50"))
+            ),
+            fullRedemption = null // No full redemption
+        )
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    yieldPercentage = BigDecimal("0.50"),
+                    sellAmount = BigDecimal("0.00"),
+                ),
+                fullRedemption = false,
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("10000.00"),
+            yield = BigDecimal("50.00"),
+            statements = listOf(
+                BondCalculationRecord.Yield(BigDecimal("50.00")),
+            )
+        )
+
+        val result = service.calculateBondo(consolidationContext)
+
+        result.remainingSells shouldBe emptyMap()
+        result.statements shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
+        )
+
+        coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = false) }
+        coVerify(exactly = 0) { calculator.calculate(any(), fullRedemption = true) }
     }
 })

@@ -110,7 +110,7 @@ class BondCalculatorTest : StringSpec({
         }
     }
 
-    "should calculate full redemption" {
+    "should calculate full redemption by sell amount" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("200.00")
         val yieldPercentage = BigDecimal("5.00")
@@ -119,8 +119,7 @@ class BondCalculatorTest : StringSpec({
             RoundingMode.HALF_EVEN
         )
         val totalAmount = principal + startingYield + yieldedAmount
-        val redemptionAmount = totalAmount
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, totalAmount)
 
         val result = calculator.calculate(context)
 
@@ -179,7 +178,7 @@ class BondCalculatorTest : StringSpec({
         }!!.amount shouldBe BigDecimal("16.15")
     }
 
-    "should handle taxes - full redemption" {
+    "should handle taxes - full redemption by sell amount" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("100.00")
         val yieldPercentage = BigDecimal("0.00")
@@ -188,6 +187,28 @@ class BondCalculatorTest : StringSpec({
         val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
 
         val result = calculator.calculate(context)
+
+        result.shouldBeInstanceOf<BondCalculationResult.Ok>()
+        result.principal shouldBe BigDecimal("0.00")
+        result.yield shouldBe BigDecimal("0.00")
+
+        result.statements.find {
+            it is BondCalculationRecord.TaxRedeem && it.taxType == "RENDA"
+        }!!.amount shouldBe BigDecimal("22.50")
+        result.statements.find {
+            it is BondCalculationRecord.TaxRedeem && it.taxType == "IOF"
+        }!!.amount shouldBe BigDecimal("69.75")
+    }
+
+    "full redemption by parameter" {
+        val principal = BigDecimal("1000.00")
+        val startingYield = BigDecimal("100.00")
+        val yieldPercentage = BigDecimal("0.00")
+        val taxes = setOf(TaxIncidence.Renda(BigDecimal("22.50")), TaxIncidence.IOF(BigDecimal("90.00")))
+        val redemptionAmount = BigDecimal.ZERO
+        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
+
+        val result = calculator.calculate(context, fullRedemption = true)
 
         result.shouldBeInstanceOf<BondCalculationResult.Ok>()
         result.principal shouldBe BigDecimal("0.00")

@@ -12,9 +12,9 @@ import java.math.RoundingMode
 @Component
 class BondCalculator {
 
-    fun calculate(ctx: BondCalculationContext): BondCalculationResult {
+    fun calculate(ctx: BondCalculationContext, fullRedemption: Boolean = false): BondCalculationResult {
         val yieldedAmount = ctx.calculateYield()
-        val (redeemedPrincipal, redeemedYield, redeemedTaxes) = ctx.calculateRedemption(yieldedAmount)
+        val (redeemedPrincipal, redeemedYield, redeemedTaxes) = ctx.calculateRedemption(yieldedAmount, fullRedemption)
 
         val newPrincipal = (ctx.actualData.principal - redeemedPrincipal)
         val newYield = (ctx.actualData.yieldAmount + yieldedAmount - redeemedYield - redeemedTaxes)
@@ -45,8 +45,13 @@ class BondCalculator {
         ((actualData.principal + actualData.yieldAmount) * processingData.yieldPercentage / BigDecimal("100"))
             .defaultScale()
 
-    private fun BondCalculationContext.calculateRedemption(yieldedAmount: BigDecimal): RedemptionCalculation {
-        if (processingData.redeemedAmount == BigDecimal("0.00")) return RedemptionCalculation.zero()
+    private fun BondCalculationContext.calculateRedemption(
+        yieldedAmount: BigDecimal,
+        fullRedemption: Boolean,
+    ): RedemptionCalculation {
+        if (!fullRedemption && processingData.redeemedAmount.compareTo(BigDecimal.ZERO) == 0) {
+            return RedemptionCalculation.zero()
+        }
 
         with(actualData) {
             val grossYield = yieldAmount + yieldedAmount
@@ -58,7 +63,7 @@ class BondCalculator {
                     )
                 }
 
-            if (principal + netYield <= processingData.redeemedAmount) {
+            if (fullRedemption || principal + netYield <= processingData.redeemedAmount) {
                 return RedemptionCalculation(
                     principal,
                     netYield,

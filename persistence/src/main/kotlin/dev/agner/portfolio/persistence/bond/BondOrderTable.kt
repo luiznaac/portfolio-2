@@ -13,7 +13,7 @@ import kotlin.time.ExperimentalTime
 @OptIn(ExperimentalTime::class)
 object BondOrderTable : IntIdTable("bond_order") {
     val bondId = reference("bond_id", BondTable.id)
-    val type = varchar("type", 10)
+    val type = varchar("type", 20)
     val date = date("date")
     val amount = decimal("amount", 12, 2)
     val createdAt = datetime("created_at")

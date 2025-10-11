@@ -1,6 +1,11 @@
 ktor:
   wait: false
 
+mysql:
+  host: 'localhost'
+  user: 'root'
+  password: ''
+
 gateways:
   bacen:
     host: 'http://localhost:3000'

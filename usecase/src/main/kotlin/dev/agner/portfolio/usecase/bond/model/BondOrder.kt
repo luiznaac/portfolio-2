@@ -6,6 +6,7 @@ import java.math.BigDecimal
 enum class BondOrderType {
     BUY,
     SELL,
+    FULL_REDEMPTION,
 }
 
 data class BondOrder(
@@ -13,12 +14,12 @@ data class BondOrder(
     val bond: Bond,
     val type: BondOrderType,
     val date: LocalDate,
-    val amount: BigDecimal,
+    val amount: BigDecimal = BigDecimal.ZERO,
 )
 
 data class BondOrderCreation(
     val bondId: Int,
     val type: BondOrderType,
     val date: LocalDate,
-    val amount: BigDecimal,
+    val amount: BigDecimal = BigDecimal.ZERO,
 )

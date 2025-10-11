@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
 import dev.agner.portfolio.usecase.bond.model.Bond
@@ -45,13 +46,20 @@ class BondConsolidationOrchestrator(
             .filterNot { alreadyRedeemedBuys.contains(it.id) }
             .sortedBy { it.date }
 
-        consolidate(buyOrders, sellOrders)
+        val fullRedemptionOrder = orders.firstOrNull { it.type == BondOrderType.FULL_REDEMPTION }
+
+        consolidate(buyOrders, sellOrders, fullRedemptionOrder)
     }
 
     // TODO(): Later it can be extract to be reused with checking accounts (that will aggregate multiple
     //         bonds and thus it'll have to consider all orders from different bonds at the same time)
-    private suspend fun consolidate(buyOrders: List<BondOrder>, sellOrders: List<BondOrder>) {
+    private suspend fun consolidate(
+        buyOrders: List<BondOrder>,
+        sellOrders: List<BondOrder>,
+        fullRedemptionOrder: BondOrder?,
+    ) {
         val sellContexts = sellOrders.associate { it.date to SellOrderContext(it.id, it.amount) }
+        val fullRedemptionContext = fullRedemptionOrder?.let { FullRedemptionContext(it.id, it.date) }
 
         buyOrders
             .fold(IntermediateData(sellContexts)) { acc, order ->
@@ -66,6 +74,7 @@ class BondConsolidationOrchestrator(
                     yieldAmount = startingValues.second,
                     yieldPercentages = yieldPercentages,
                     sellOrders = acc.remainingSells,
+                    fullRedemption = fullRedemptionContext,
                 )
 
                 val calc = consolidator.calculateBondo(ctx)
