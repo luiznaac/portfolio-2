@@ -205,7 +205,7 @@ class BondCalculatorTest : StringSpec({
         val startingYield = BigDecimal("100.00")
         val yieldPercentage = BigDecimal("0.00")
         val taxes = setOf(TaxIncidence.Renda(BigDecimal("22.50")), TaxIncidence.IOF(BigDecimal("90.00")))
-        val redemptionAmount = BigDecimal.ZERO
+        val redemptionAmount = BigDecimal("0.00")
         val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
 
         val result = calculator.calculate(context, fullRedemption = true)

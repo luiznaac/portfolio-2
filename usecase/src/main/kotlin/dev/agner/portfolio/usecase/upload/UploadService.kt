@@ -7,7 +7,6 @@ import dev.agner.portfolio.usecase.upload.model.UploadOrder
 import kotlinx.coroutines.awaitAll
 import kotlinx.datetime.DayOfWeek.SATURDAY
 import kotlinx.datetime.DayOfWeek.SUNDAY
-import kotlinx.datetime.plus
 import org.springframework.stereotype.Service
 
 @Service

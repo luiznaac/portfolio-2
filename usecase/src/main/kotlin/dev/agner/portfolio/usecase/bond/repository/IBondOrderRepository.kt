@@ -2,7 +2,7 @@ package dev.agner.portfolio.usecase.bond.repository
 
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
-import java.math.BigDecimal
+import dev.agner.portfolio.usecase.bond.model.BondOrderType
 
 interface IBondOrderRepository {
 
@@ -14,5 +14,5 @@ interface IBondOrderRepository {
 
     suspend fun save(creation: BondOrderCreation): BondOrder
 
-    suspend fun updateAmount(id: Int, amount: BigDecimal): BondOrder
+    suspend fun updateType(id: Int, type: BondOrderType): BondOrder
 }

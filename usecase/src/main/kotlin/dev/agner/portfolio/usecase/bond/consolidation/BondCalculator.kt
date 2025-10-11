@@ -49,7 +49,7 @@ class BondCalculator {
         yieldedAmount: BigDecimal,
         fullRedemption: Boolean,
     ): RedemptionCalculation {
-        if (!fullRedemption && processingData.redeemedAmount.compareTo(BigDecimal.ZERO) == 0) {
+        if (!fullRedemption && processingData.redeemedAmount.compareTo(BigDecimal("0.00")) == 0) {
             return RedemptionCalculation.zero()
         }
 

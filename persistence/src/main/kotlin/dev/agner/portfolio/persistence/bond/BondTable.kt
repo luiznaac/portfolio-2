@@ -9,6 +9,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
 import org.jetbrains.exposed.v1.dao.IntEntityClass
+import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.datetime
 import kotlin.time.ExperimentalTime
 
@@ -18,6 +19,7 @@ object BondTable : IntIdTable("bond") {
     val rateType = varchar("rate_type", 10)
     val value = decimal("value", 8, 4)
     val indexId = reference("index_id", IndexTable.id).nullable()
+    val maturityDate = date("maturity_date")
     val createdAt = datetime("created_at")
 }
 
@@ -28,14 +30,16 @@ class BondEntity(id: EntityID<Int>) : IntEntity(id) {
     var rateType by BondTable.rateType
     var value by BondTable.value
     var indexId by IndexEntity optionalReferencedOn BondTable.indexId
+    var maturityDate by BondTable.maturityDate
     var createdAt by BondTable.createdAt
 
     fun toModel() = when (rateType) {
-        "FIXED" -> FixedRateBond(id = id.value, name = name, value = value)
+        "FIXED" -> FixedRateBond(id = id.value, name = name, value = value, maturityDate = maturityDate)
         "FLOATING" -> FloatingRateBond(
             id = id.value,
             name = name,
             value = value,
+            maturityDate = maturityDate,
             indexId = IndexId.valueOf(indexId!!.id.value),
         )
         else -> throw IllegalStateException("Unknown rate type: $rateType")

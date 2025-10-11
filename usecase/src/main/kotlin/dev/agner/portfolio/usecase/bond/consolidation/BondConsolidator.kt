@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecor
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxIncidence
 import dev.agner.portfolio.usecase.commons.foldUntil
@@ -45,10 +46,27 @@ class BondConsolidator(
             }
             .run {
                 BondConsolidationResult(
+                    principal = ctx.principal,
+                    yieldAmount = ctx.yieldAmount,
                     remainingSells = ctx.sellOrders,
                     statements = statements,
                 )
             }
+
+    suspend fun consolidateMaturity(ctx: BondMaturityConsolidationContext): List<BondOrderStatementCreation> {
+        val result = calculator.calculate(
+            BondCalculationContext(
+                principal = ctx.principal,
+                startingYield = ctx.yieldAmount,
+                taxes = taxService.getTaxIncidencesBy(ctx.date, ctx.contributionDate),
+            ),
+            fullRedemption = true,
+        )
+
+        return result.statements.map {
+            it.buildCreation(ctx.bondOrderId, ctx.maturityOrderId, ctx.date)
+        }
+    }
 
     private fun IntermediateData.updateWith(result: BondCalculationResult, date: LocalDate) =
         copy(

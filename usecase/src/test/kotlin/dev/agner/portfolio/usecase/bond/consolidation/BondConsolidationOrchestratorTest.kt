@@ -6,13 +6,16 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.model.BondOrder
+import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
+import dev.agner.portfolio.usecase.bond.model.BondOrderType.FULL_REDEMPTION
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
 import dev.agner.portfolio.usecase.bondConsolidationContext
+import dev.agner.portfolio.usecase.bondConsolidationResult
+import dev.agner.portfolio.usecase.bondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.commons.nextDay
 import dev.agner.portfolio.usecase.floatingRateBond
 import dev.agner.portfolio.usecase.index.IndexValueService
@@ -79,7 +82,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             bond = floatingRateBond,
             type = BondOrderType.FULL_REDEMPTION,
             date = sellDate,
-            amount = BigDecimal.ZERO,
+            amount = BigDecimal("0.00"),
         )
 
         val lastStatement = BondOrderStatement(
@@ -94,7 +97,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             IndexValue(date = sellDate, value = BigDecimal("100.00"))
         )
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(1, sellDate, BigDecimal("50.00")),
@@ -158,7 +161,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             amount = BigDecimal("5000.00")
         )
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = emptyList()
         )
@@ -233,14 +236,14 @@ class BondConsolidationOrchestratorTest : StringSpec({
             IndexValue(date = sellDate, value = BigDecimal("102.00"))
         )
 
-        val consolidationResult1 = BondConsolidationResult(
+        val consolidationResult1 = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(2, sellDate, BigDecimal("20.00"))
             )
         )
 
-        val consolidationResult2 = BondConsolidationResult(
+        val consolidationResult2 = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(1, sellDate, BigDecimal("30.00")),
@@ -337,7 +340,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             amount = BigDecimal("2500.00")
         )
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = emptyList()
         )
@@ -399,7 +402,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         val alreadyRedeemedBuyIds = setOf(1) // Order 1 is already fully redeemed
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(2, orderDate, BigDecimal("30.00"))
@@ -475,7 +478,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val alreadyRedeemedBuyIds = emptySet<Int>()
         val consolidatedSellIds = setOf(2) // Only sell order 2 is consolidated
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(1, sellDate2, BigDecimal("25.00")),
@@ -560,7 +563,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val alreadyRedeemedBuyIds = setOf(1) // Buy order 1 is already redeemed
         val consolidatedSellIds = setOf(3) // Only sell order 3 is consolidated
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(2, sellDate, BigDecimal("35.00")),
@@ -608,13 +611,12 @@ class BondConsolidationOrchestratorTest : StringSpec({
         }
     }
 
-    "should update remaining sell order amount when there is exactly one remaining sell" {
+    "should update remaining sell order type to FULL_REDEMPTION when there is exactly one remaining sell" {
         val floatingRateBond = floatingRateBond()
         val bondId = floatingRateBond.id
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-15")
-        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -637,7 +639,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             BigDecimal("500.00")
         ) // Remaining amount after partial processing
 
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = mapOf(sellDate to remainingSellAfterConsolidation),
             statements = listOf(
                 BondOrderStatementCreation.Yield(1, sellDate, BigDecimal("25.00")),
@@ -655,14 +657,11 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
         coEvery { bondOrderService.fetchById(2) } returns sellOrder
-        coEvery { bondOrderService.updateAmount(2, BigDecimal("2500.00")) } just Runs
+        coEvery { bondOrderService.updateType(2, FULL_REDEMPTION) } just Runs
 
         orchestrator.consolidateBy(bondId)
 
-        // Verify that the sell order amount is updated to the remaining amount
-        // Original amount (3000.00) - remaining amount (500.00) = 2500.00
-        coVerify(exactly = 1) { bondOrderService.fetchById(2) }
-        coVerify(exactly = 1) { bondOrderService.updateAmount(2, BigDecimal("2500.00")) }
+        coVerify(exactly = 1) { bondOrderService.updateType(2, FULL_REDEMPTION) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }
 
@@ -673,7 +672,6 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate1 = LocalDate.parse("2024-01-15")
         val sellDate2 = LocalDate.parse("2024-01-20")
-        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -700,7 +698,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         )
 
         // Consolidation result with multiple remaining sells (invalid scenario)
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = mapOf(
                 sellDate1 to SellOrderContext(2, BigDecimal("500.00")),
                 sellDate2 to SellOrderContext(3, BigDecimal("1000.00"))
@@ -727,7 +725,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         // Verify that no bond order updates or statement saves occur when exception is thrown
         coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
-        coVerify(exactly = 0) { bondOrderService.updateAmount(any(), any()) }
+        coVerify(exactly = 0) { bondOrderService.updateType(any(), any()) }
         coVerify(exactly = 0) { repository.saveAll(any()) }
     }
 
@@ -737,7 +735,6 @@ class BondConsolidationOrchestratorTest : StringSpec({
         val indexId = floatingRateBond.indexId
         val orderDate = LocalDate.parse("2024-01-01")
         val sellDate = LocalDate.parse("2024-01-15")
-        val yesterdayDate = LocalDate.parse("2024-01-30")
 
         val buyOrder = BondOrder(
             id = 1,
@@ -756,7 +753,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         )
 
         // Consolidation result with no remaining sells (all processed completely)
-        val consolidationResult = BondConsolidationResult(
+        val consolidationResult = bondConsolidationResult(
             remainingSells = emptyMap(),
             statements = listOf(
                 BondOrderStatementCreation.Yield(1, sellDate, BigDecimal("25.00")),
@@ -778,7 +775,277 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         // Verify that no bond order updates occur when there are no remaining sells
         coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
-        coVerify(exactly = 0) { bondOrderService.updateAmount(any(), any()) }
+        coVerify(exactly = 0) { bondOrderService.updateType(any(), any()) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
+    }
+
+    "should handle maturity when final date equals maturity date and has remaining balance" {
+        val maturityDate = LocalDate.parse("2024-06-30")
+        val floatingRateBond = floatingRateBond(maturityDate = maturityDate)
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate = LocalDate.parse("2024-01-01")
+
+        val buyOrder = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate,
+            amount = BigDecimal("10000.00")
+        )
+
+        val maturityOrder = BondOrder(
+            id = 100,
+            bond = floatingRateBond,
+            type = BondOrderType.MATURITY,
+            date = maturityDate,
+            amount = BigDecimal("0.00"),
+        )
+
+        val consolidationResult = bondConsolidationResult(
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("500.00"),
+            remainingSells = emptyMap(),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, maturityDate, BigDecimal("50.00"))
+            )
+        )
+
+        val maturityStatements = listOf(
+            BondOrderStatementCreation.YieldRedeem(1, maturityDate, BigDecimal("550.00"), 100),
+            BondOrderStatementCreation.PrincipalRedeem(1, maturityDate, BigDecimal("10000.00"), 100),
+        )
+
+        every { clock.instant() } returns Instant.parse("2024-07-01T10:00:00Z")
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { bondOrderService.create(any(), any()) } returns maturityOrder
+        coEvery {
+            consolidator.consolidateMaturity(
+                bondMaturityConsolidationContext(
+                    bondOrderId = 1,
+                    maturityOrderId = 100,
+                    date = maturityDate,
+                    contributionDate = orderDate,
+                    principal = BigDecimal("10000.00"),
+                    yieldAmount = BigDecimal("500.00"),
+                )
+            )
+        } returns maturityStatements
+        coEvery { repository.saveAll(any()) } just Runs
+
+        orchestrator.consolidateBy(bondId)
+
+        coVerify(exactly = 1) {
+            bondOrderService.create(
+                BondOrderCreation(
+                    bondId = bondId,
+                    type = BondOrderType.MATURITY,
+                    date = maturityDate,
+                    amount = BigDecimal("0.00"),
+                ),
+                isInternal = true,
+            )
+        }
+        coVerify(exactly = 1) {
+            consolidator.consolidateMaturity(
+                bondMaturityConsolidationContext(
+                    bondOrderId = 1,
+                    maturityOrderId = 100,
+                    date = maturityDate,
+                    contributionDate = orderDate,
+                    principal = BigDecimal("10000.00"),
+                    yieldAmount = BigDecimal("500.00"),
+                )
+            )
+        }
+        coVerify(exactly = 1) {
+            repository.saveAll(consolidationResult.statements + maturityStatements)
+        }
+    }
+
+    "should not handle maturity when final date is before maturity date" {
+        val maturityDate = LocalDate.parse("2024-12-31")
+        val floatingRateBond = floatingRateBond(maturityDate = maturityDate)
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate = LocalDate.parse("2024-01-01")
+        val yesterdayDate = LocalDate.parse("2024-06-30") // Before maturity
+
+        val buyOrder = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate,
+            amount = BigDecimal("10000.00")
+        )
+
+        val consolidationResult = bondConsolidationResult(
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("300.00"),
+            remainingSells = emptyMap(),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, yesterdayDate, BigDecimal("30.00"))
+            )
+        )
+
+        every { clock.instant() } returns Instant.parse("2024-07-01T10:00:00Z")
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { repository.saveAll(any()) } just Runs
+
+        orchestrator.consolidateBy(bondId)
+
+        coVerify(exactly = 0) { bondOrderService.create(any(), any()) }
+        coVerify(exactly = 0) { consolidator.consolidateMaturity(any()) }
+        coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
+    }
+
+    "should not handle maturity when principal and yield are zero" {
+        val maturityDate = LocalDate.parse("2024-06-30")
+        val floatingRateBond = floatingRateBond(maturityDate = maturityDate)
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate = LocalDate.parse("2024-01-01")
+
+        val buyOrder = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate,
+            amount = BigDecimal("10000.00")
+        )
+
+        val consolidationResult = bondConsolidationResult(
+            principal = BigDecimal("0.00"),
+            yieldAmount = BigDecimal("0.00"),
+            remainingSells = emptyMap(),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, maturityDate, BigDecimal("50.00")),
+                BondOrderStatementCreation.YieldRedeem(1, maturityDate, BigDecimal("550.00"), 2),
+                BondOrderStatementCreation.PrincipalRedeem(1, maturityDate, BigDecimal("10000.00"), 2)
+            )
+        )
+
+        every { clock.instant() } returns Instant.parse("2024-07-01T10:00:00Z")
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { repository.saveAll(any()) } just Runs
+
+        orchestrator.consolidateBy(bondId)
+
+        coVerify(exactly = 0) { bondOrderService.create(any(), any()) }
+        coVerify(exactly = 0) { consolidator.consolidateMaturity(any()) }
+        coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
+    }
+
+    "should handle maturity for multiple buy orders reaching maturity" {
+        val maturityDate = LocalDate.parse("2024-08-31")
+        val floatingRateBond = floatingRateBond(maturityDate = maturityDate)
+        val bondId = floatingRateBond.id
+        val indexId = floatingRateBond.indexId
+        val orderDate1 = LocalDate.parse("2024-01-01")
+        val orderDate2 = LocalDate.parse("2024-02-01")
+
+        val buyOrder1 = BondOrder(
+            id = 1,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate1,
+            amount = BigDecimal("3000.00")
+        )
+
+        val buyOrder2 = BondOrder(
+            id = 2,
+            bond = floatingRateBond,
+            type = BondOrderType.BUY,
+            date = orderDate2,
+            amount = BigDecimal("7000.00")
+        )
+
+        val maturityOrder1 = BondOrder(
+            id = 101,
+            bond = floatingRateBond,
+            type = BondOrderType.MATURITY,
+            date = maturityDate,
+            amount = BigDecimal("0.00"),
+        )
+
+        val maturityOrder2 = BondOrder(
+            id = 102,
+            bond = floatingRateBond,
+            type = BondOrderType.MATURITY,
+            date = maturityDate,
+            amount = BigDecimal("0.00"),
+        )
+
+        val consolidationResult1 = bondConsolidationResult(
+            principal = BigDecimal("3000.00"),
+            yieldAmount = BigDecimal("180.00"),
+            remainingSells = emptyMap(),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(1, maturityDate, BigDecimal("18.00"))
+            )
+        )
+
+        val consolidationResult2 = bondConsolidationResult(
+            principal = BigDecimal("7000.00"),
+            yieldAmount = BigDecimal("350.00"),
+            remainingSells = emptyMap(),
+            statements = listOf(
+                BondOrderStatementCreation.Yield(2, maturityDate, BigDecimal("35.00"))
+            )
+        )
+
+        val maturityStatements1 = listOf(
+            BondOrderStatementCreation.YieldRedeem(1, maturityDate, BigDecimal("198.00"), 101),
+            BondOrderStatementCreation.PrincipalRedeem(1, maturityDate, BigDecimal("3000.00"), 101),
+        )
+
+        val maturityStatements2 = listOf(
+            BondOrderStatementCreation.YieldRedeem(2, maturityDate, BigDecimal("385.00"), 102),
+            BondOrderStatementCreation.PrincipalRedeem(2, maturityDate, BigDecimal("7000.00"), 102),
+        )
+
+        every { clock.instant() } returns Instant.parse("2024-09-01T10:00:00Z")
+        coEvery { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) } returns emptySet()
+        coEvery { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) } returns emptySet()
+        coEvery { bondOrderService.fetchByBondId(bondId) } returns listOf(buyOrder1, buyOrder2)
+        coEvery { repository.fetchLastByBondOrderId(1) } returns null
+        coEvery { repository.fetchLastByBondOrderId(2) } returns null
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate1) } returns emptyList()
+        coEvery { indexValueService.fetchAllBy(indexId, orderDate2) } returns emptyList()
+        coEvery { repository.sumUpConsolidatedValues(1, orderDate1) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { repository.sumUpConsolidatedValues(2, orderDate2) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
+        coEvery { consolidator.calculateBondo(any()) } returnsMany listOf(consolidationResult1, consolidationResult2)
+        coEvery { bondOrderService.create(any(), any()) } returnsMany listOf(maturityOrder1, maturityOrder2)
+        coEvery { consolidator.consolidateMaturity(any()) } returnsMany listOf(maturityStatements1, maturityStatements2)
+        coEvery { repository.saveAll(any()) } just Runs
+
+        orchestrator.consolidateBy(bondId)
+
+        coVerify(exactly = 2) { bondOrderService.create(any(), any()) }
+        coVerify(exactly = 2) { consolidator.consolidateMaturity(any()) }
+        coVerify(exactly = 1) {
+            repository.saveAll(
+                consolidationResult1.statements + maturityStatements1 +
+                    consolidationResult2.statements + maturityStatements2
+            )
+        }
     }
 })

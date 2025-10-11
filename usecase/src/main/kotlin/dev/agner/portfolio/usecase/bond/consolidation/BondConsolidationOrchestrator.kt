@@ -5,23 +5,27 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.Bond
 import dev.agner.portfolio.usecase.bond.model.Bond.FixedRateBond
 import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.model.BondOrder
+import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
+import dev.agner.portfolio.usecase.bond.model.BondOrderType.FULL_REDEMPTION
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
+import dev.agner.portfolio.usecase.commons.isWeekend
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.commons.nextDay
 import dev.agner.portfolio.usecase.commons.yesterday
 import dev.agner.portfolio.usecase.index.IndexValueService
 import kotlinx.coroutines.awaitAll
-import kotlinx.datetime.DayOfWeek.SATURDAY
-import kotlinx.datetime.DayOfWeek.SUNDAY
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateRange
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.time.Clock
 
 @Service
@@ -46,7 +50,7 @@ class BondConsolidationOrchestrator(
             .filterNot { alreadyRedeemedBuys.contains(it.id) }
             .sortedBy { it.date }
 
-        val fullRedemptionOrder = orders.firstOrNull { it.type == BondOrderType.FULL_REDEMPTION }
+        val fullRedemptionOrder = orders.firstOrNull { it.type == FULL_REDEMPTION }
 
         consolidate(buyOrders, sellOrders, fullRedemptionOrder)
     }
@@ -64,12 +68,14 @@ class BondConsolidationOrchestrator(
         buyOrders
             .fold(IntermediateData(sellContexts)) { acc, order ->
                 val startingDate = order.resolveCalculationStartingDate()
+                val finalDate = minOf(LocalDate.yesterday(clock), order.bond.maturityDate)
                 val yieldPercentages = order.bond.buildYieldPercentages(startingDate)
                 val startingValues = repository.sumUpConsolidatedValues(order.id, startingDate)
+
                 val ctx = BondConsolidationContext(
                     bondOrderId = order.id,
                     contributionDate = order.date,
-                    dateRange = (startingDate..LocalDate.yesterday(clock)).removeWeekends(),
+                    dateRange = (startingDate..finalDate).removeWeekends(),
                     principal = order.amount - startingValues.first,
                     yieldAmount = startingValues.second,
                     yieldPercentages = yieldPercentages,
@@ -78,10 +84,11 @@ class BondConsolidationOrchestrator(
                 )
 
                 val calc = consolidator.calculateBondo(ctx)
+                val maturityStatements = order.handleMaturity(finalDate, calc)
 
                 acc.copy(
                     remainingSells = calc.remainingSells,
-                    statements = acc.statements + calc.statements,
+                    statements = acc.statements + calc.statements + maturityStatements,
                 )
             }
             .also { it.remainingSells.values.handleRemainingSells() }
@@ -100,6 +107,35 @@ class BondConsolidationOrchestrator(
         is FixedRateBond -> TODO()
     }
 
+    private suspend fun BondOrder.handleMaturity(finalDate: LocalDate, result: BondConsolidationResult) =
+        if (finalDate == bond.maturityDate && result.principal + result.yieldAmount > BigDecimal("0.00")) {
+            val maturityOrder = createMaturityOrder(bond.id, finalDate)
+
+            consolidator.consolidateMaturity(
+                BondMaturityConsolidationContext(
+                    bondOrderId = id,
+                    maturityOrderId = maturityOrder.id,
+                    date = finalDate,
+                    contributionDate = date,
+                    principal = result.principal,
+                    yieldAmount = result.yieldAmount,
+                )
+            )
+        } else {
+            emptyList()
+        }
+
+    private suspend fun createMaturityOrder(bondId: Int, date: LocalDate) =
+        bondOrderService.create(
+            BondOrderCreation(
+                bondId = bondId,
+                type = BondOrderType.MATURITY,
+                date = date,
+                amount = BigDecimal("0.00"),
+            ),
+            isInternal = true,
+        )
+
     private suspend fun Collection<SellOrderContext>.handleRemainingSells() {
         if (size > 1) {
             throw IllegalStateException("There is more than one remaining sell")
@@ -108,9 +144,9 @@ class BondConsolidationOrchestrator(
         if (size == 1) {
             val remainingSell = first()
 
-            bondOrderService.updateAmount(
+            bondOrderService.updateType(
                 remainingSell.id,
-                bondOrderService.fetchById(remainingSell.id).amount - remainingSell.amount,
+                FULL_REDEMPTION,
             )
         }
     }
@@ -122,4 +158,4 @@ class BondConsolidationOrchestrator(
 }
 
 private fun LocalDateRange.removeWeekends() =
-    mapNotNull { it.takeIf { !listOf(SATURDAY, SUNDAY).contains(it.dayOfWeek) } }
+    mapNotNull { it.takeIf { !it.isWeekend() } }

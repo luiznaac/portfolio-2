@@ -7,6 +7,7 @@ enum class BondOrderType {
     BUY,
     SELL,
     FULL_REDEMPTION,
+    MATURITY,
 }
 
 data class BondOrder(
@@ -14,12 +15,12 @@ data class BondOrder(
     val bond: Bond,
     val type: BondOrderType,
     val date: LocalDate,
-    val amount: BigDecimal = BigDecimal.ZERO,
+    val amount: BigDecimal = BigDecimal("0.00"),
 )
 
 data class BondOrderCreation(
     val bondId: Int,
     val type: BondOrderType,
     val date: LocalDate,
-    val amount: BigDecimal = BigDecimal.ZERO,
+    val amount: BigDecimal = BigDecimal("0.00"),
 )

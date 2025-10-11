@@ -35,7 +35,7 @@ class BondTest : StringSpec({
             listOf(
                 IndexValueCreation(
                     LocalDate.parse("2025-05-29"),
-                    BigDecimal.ZERO,
+                    BigDecimal("0.00"),
                 )
             ),
         )
@@ -70,6 +70,43 @@ class BondTest : StringSpec({
             it["yield"]!! shouldBe 1271.92
             it["taxes"]!! shouldBe 279.8224
             it["result"]!! shouldBe 31142.9576
+        }
+    }
+
+    "single bond with maturity" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2025-09-08T10:00:00Z")
+        // Doing this so index values will be hydrated from this date beyond
+        getBean<IIndexValueRepository>().saveAll(
+            IndexId.CDI,
+            listOf(
+                IndexValueCreation(
+                    LocalDate.parse("2025-05-29"),
+                    BigDecimal("0.00"),
+                )
+            ),
+        )
+
+        configureResponses {
+            response {
+                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
+            }
+        }
+
+        hydrateIndexValues("CDI")["count"]!! shouldBe "87"
+
+        val bondId = createFloatingBond("102.00", "CDI", "2025-09-01")
+        createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
+
+        consolidateBond(bondId)
+        val positions = bondPositions(bondId)
+
+        positions.size shouldBe 66
+        positions.last().also {
+            it["date"]!! shouldBe "2025-09-01"
+            it["principal"]!! shouldBe 0.00
+            it["yield"]!! shouldBe 0.00
+            it["taxes"]!! shouldBe 0.00
+            it["result"]!! shouldBe 0.00
         }
     }
 })

@@ -4,6 +4,8 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.DayOfWeek.SATURDAY
+import kotlinx.datetime.DayOfWeek.SUNDAY
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -61,5 +63,9 @@ fun LocalDate.Companion.today(clock: Clock) = LocalDateTime.now(clock).date
 fun LocalDate.Companion.yesterday(clock: Clock) = LocalDate.today(clock).minus(1, DateTimeUnit.DAY)
 
 fun LocalDate.nextDay() = plus(1, DateTimeUnit.DAY)
+
+fun LocalDate.dayBefore() = minus(1, DateTimeUnit.DAY)
+
+fun LocalDate.isWeekend() = listOf(SATURDAY, SUNDAY).contains(dayOfWeek)
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
