@@ -57,6 +57,17 @@ CREATE TABLE bond_order_statement (
     INDEX (buy_order_id, date)
 );
 
+CREATE TABLE checking_account (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    value DECIMAL(8, 4) NOT NULL,
+    index_id VARCHAR(10) NOT NULL,
+    maturity_duration VARCHAR(5) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (index_id) REFERENCES `index`(id)
+);
+
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('IPCA', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('SELIC', NOW());

@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import org.springframework.context.annotation.Bean
 import org.springframework.stereotype.Component
@@ -24,7 +25,7 @@ object JsonMapper {
     val mapper: ObjectMapper = ObjectMapper()
         .registerKotlinModule()
         .registerModule(JavaTimeModule())
-        .registerModule(kotlinxLocalDateModule)
+        .registerModule(kotlinxDatetimeModule)
         .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
         .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -48,7 +49,23 @@ private class KotlinxLocalDateDeserializer : JsonDeserializer<LocalDate>() {
     }
 }
 
-private val kotlinxLocalDateModule = SimpleModule().apply {
+private class KotlinxDatePeriodSerializer : JsonSerializer<DatePeriod>() {
+    override fun serialize(value: DatePeriod, gen: JsonGenerator, serializers: SerializerProvider) {
+        gen.writeString(value.toString())
+    }
+}
+
+private class KotlinxDatePeriodDeserializer : JsonDeserializer<DatePeriod>() {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): DatePeriod {
+        val node = p.codec.readTree<com.fasterxml.jackson.databind.JsonNode>(p)
+        return DatePeriod.parse(node.textValue())
+    }
+}
+
+private val kotlinxDatetimeModule = SimpleModule().apply {
     addSerializer(LocalDate::class.java, KotlinxLocalDateSerializer())
     addDeserializer(LocalDate::class.java, KotlinxLocalDateDeserializer())
+
+    addSerializer(DatePeriod::class.java, KotlinxDatePeriodSerializer())
+    addDeserializer(DatePeriod::class.java, KotlinxDatePeriodDeserializer())
 }
