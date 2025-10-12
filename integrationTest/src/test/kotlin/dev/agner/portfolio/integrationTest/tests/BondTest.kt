@@ -10,6 +10,7 @@ import dev.agner.portfolio.integrationTest.helpers.createBondOrder
 import dev.agner.portfolio.integrationTest.helpers.createFloatingBond
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.hydrateIndexValues
+import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.IndexValueCreation
@@ -107,6 +108,66 @@ class BondTest : StringSpec({
             it["yield"]!! shouldBe 0.00
             it["taxes"]!! shouldBe 0.00
             it["result"]!! shouldBe 0.00
+        }
+
+        val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
+        orders.size shouldBe 2
+        orders.find { it.type.name == "BUY" }!!.also {
+            it.amount shouldBe BigDecimal("4019.01")
+            it.date shouldBe LocalDate.parse("2025-05-30")
+        }
+        orders.find { it.type.name == "MATURITY" }!!.also {
+            it.amount shouldBe BigDecimal("0.00")
+            it.date shouldBe LocalDate.parse("2025-09-01")
+        }
+    }
+
+    "single bond with sell order that turns into full redemption" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2025-09-08T10:00:00Z")
+        // Doing this so index values will be hydrated from this date beyond
+        getBean<IIndexValueRepository>().saveAll(
+            IndexId.CDI,
+            listOf(
+                IndexValueCreation(
+                    LocalDate.parse("2025-05-29"),
+                    BigDecimal("0.00"),
+                )
+            ),
+        )
+
+        configureResponses {
+            response {
+                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
+            }
+        }
+
+        hydrateIndexValues("CDI")["count"]!! shouldBe "87"
+
+        val bondId = createFloatingBond("102.00", "CDI")
+        createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
+        createBondOrder(bondId, "SELL", "2025-06-03", "5123.45")
+
+        consolidateBond(bondId)
+        val positions = bondPositions(bondId)
+
+        positions.size shouldBe 3
+        positions.last().also {
+            it["date"]!! shouldBe "2025-06-03"
+            it["principal"]!! shouldBe 0.00
+            it["yield"]!! shouldBe 0.00
+            it["taxes"]!! shouldBe 0.00
+            it["result"]!! shouldBe 0.00
+        }
+
+        val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
+        orders.size shouldBe 2
+        orders.find { it.type.name == "BUY" }!!.also {
+            it.amount shouldBe BigDecimal("4019.01")
+            it.date shouldBe LocalDate.parse("2025-05-30")
+        }
+        orders.find { it.type.name == "FULL_REDEMPTION" }!!.also {
+            it.amount shouldBe BigDecimal("5123.45")
+            it.date shouldBe LocalDate.parse("2025-06-03")
         }
     }
 })
