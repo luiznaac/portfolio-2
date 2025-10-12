@@ -18,10 +18,15 @@ suspend fun getIndexValues(index: String) =
         path = "/indexes/$index/values"
     }
 
-suspend fun createFloatingBond(value: String, index: String) =
+suspend fun createFloatingBond(value: String, index: String, maturityDate: String = "2025-10-20") =
     postRequest<Map<String, String>> {
         path = "/bonds/floating"
-        body = mapOf("name" to "pipipipopopo", "value" to value, "index_id" to index)
+        body = mapOf(
+            "name" to "pipipipopopo",
+            "value" to value,
+            "index_id" to index,
+            "maturity_date" to maturityDate,
+        )
     }["id"]!!
 
 suspend fun createBondOrder(bondId: String, type: String, date: String, amount: String) =

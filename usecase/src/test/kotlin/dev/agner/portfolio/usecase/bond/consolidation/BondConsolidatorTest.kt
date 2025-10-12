@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bondCalculationContext
 import dev.agner.portfolio.usecase.bondConsolidationContext
+import dev.agner.portfolio.usecase.bondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.iofIncidence
 import dev.agner.portfolio.usecase.rendaIncidence
 import dev.agner.portfolio.usecase.tax.TaxService
@@ -98,6 +99,8 @@ class BondConsolidatorTest : StringSpec({
 
         val result = service.calculateBondo(consolidationContext)
 
+        result.principal shouldBe BigDecimal("9000.00")
+        result.yieldAmount shouldBe BigDecimal("160.00")
         result.remainingSells shouldBe emptyMap()
         result.statements shouldBe listOf(
             BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("100.00")),
@@ -227,6 +230,8 @@ class BondConsolidatorTest : StringSpec({
 
         val result = service.calculateBondo(consolidationContext)
 
+        result.principal shouldBe BigDecimal("10000.00")
+        result.yieldAmount shouldBe BigDecimal("150.00")
         result.statements shouldBe listOf(
             BondOrderStatementCreation.Yield(bondOrderId, date2, BigDecimal("40.00")),
             BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
@@ -318,6 +323,8 @@ class BondConsolidatorTest : StringSpec({
 
         val result = service.calculateBondo(consolidationContext)
 
+        result.principal shouldBe BigDecimal("0.00")
+        result.yieldAmount shouldBe BigDecimal("0.00")
         result.statements shouldBe listOf(
             BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
             BondOrderStatementCreation.YieldRedeem(bondOrderId, date1, BigDecimal("250.00"), 5),
@@ -366,6 +373,8 @@ class BondConsolidatorTest : StringSpec({
 
         val result = service.calculateBondo(consolidationContext)
 
+        result.principal shouldBe BigDecimal("10000.00")
+        result.yieldAmount shouldBe BigDecimal("0.00")
         result.remainingSells shouldBe emptyMap()
         result.statements shouldBe emptyList()
 
@@ -433,6 +442,8 @@ class BondConsolidatorTest : StringSpec({
 
         val result = service.calculateBondo(consolidationContext)
 
+        result.principal shouldBe BigDecimal("0.00")
+        result.yieldAmount shouldBe BigDecimal("0.00")
         result.remainingSells shouldBe emptyMap()
         result.statements shouldBe listOf(
             BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
@@ -480,6 +491,8 @@ class BondConsolidatorTest : StringSpec({
 
         val result = service.calculateBondo(consolidationContext)
 
+        result.principal shouldBe BigDecimal("10000.00")
+        result.yieldAmount shouldBe BigDecimal("50.00")
         result.remainingSells shouldBe emptyMap()
         result.statements shouldBe listOf(
             BondOrderStatementCreation.Yield(bondOrderId, date1, BigDecimal("50.00")),
@@ -487,5 +500,177 @@ class BondConsolidatorTest : StringSpec({
 
         coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = false) }
         coVerify(exactly = 0) { calculator.calculate(any(), fullRedemption = true) }
+    }
+
+    "should consolidate maturity and create proper statements" {
+        val bondOrderId = 1
+        val maturityOrderId = 10
+        val maturityDate = LocalDate.parse("2024-06-30")
+        val contributionDate = LocalDate.parse("2024-01-01")
+
+        val maturityContext = bondMaturityConsolidationContext(
+            bondOrderId = bondOrderId,
+            maturityOrderId = maturityOrderId,
+            date = maturityDate,
+            contributionDate = contributionDate,
+            principal = BigDecimal("10000.00"),
+            yieldAmount = BigDecimal("500.00"),
+        )
+
+        val taxes = setOf(iofIncidence(), rendaIncidence())
+
+        coEvery { taxService.getTaxIncidencesBy(maturityDate, contributionDate) } returns taxes
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("10000.00"),
+                    startingYield = BigDecimal("500.00"),
+                    taxes = taxes,
+                ),
+                fullRedemption = true,
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("0.00"),
+            yield = BigDecimal("0.00"),
+            statements = listOf(
+                BondCalculationRecord.Yield(BigDecimal("50.00")),
+                BondCalculationRecord.YieldRedeem(BigDecimal("550.00")),
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("10000.00")),
+                BondCalculationRecord.TaxRedeem(BigDecimal("82.50"), "RENDA"),
+            )
+        )
+
+        val result = service.consolidateMaturity(maturityContext)
+
+        result shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, maturityDate, BigDecimal("50.00")),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, maturityDate, BigDecimal("550.00"), maturityOrderId),
+            BondOrderStatementCreation.PrincipalRedeem(
+                bondOrderId,
+                maturityDate,
+                BigDecimal("10000.00"),
+                maturityOrderId,
+            ),
+            BondOrderStatementCreation.TaxIncidence(
+                bondOrderId,
+                maturityDate,
+                BigDecimal("82.50"),
+                maturityOrderId,
+                "RENDA",
+            ),
+        )
+
+        coVerify(exactly = 1) { taxService.getTaxIncidencesBy(maturityDate, contributionDate) }
+        coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = true) }
+    }
+
+    "should consolidate maturity with only principal (no yield)" {
+        val bondOrderId = 2
+        val maturityOrderId = 20
+        val maturityDate = LocalDate.parse("2024-12-31")
+        val contributionDate = LocalDate.parse("2024-01-15")
+
+        val maturityContext = bondMaturityConsolidationContext(
+            bondOrderId = bondOrderId,
+            maturityOrderId = maturityOrderId,
+            date = maturityDate,
+            contributionDate = contributionDate,
+            principal = BigDecimal("5000.00"),
+            yieldAmount = BigDecimal("0.00"),
+        )
+
+        val taxes = setOf(rendaIncidence())
+
+        coEvery {
+            taxService.getTaxIncidencesBy(maturityDate, contributionDate)
+        } returns taxes
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("5000.00"),
+                    startingYield = BigDecimal("0.00"),
+                    taxes = taxes,
+                ),
+                fullRedemption = true,
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("0.00"),
+            yield = BigDecimal("0.00"),
+            statements = listOf(
+                BondCalculationRecord.PrincipalRedeem(BigDecimal("5000.00")),
+            )
+        )
+
+        val result = service.consolidateMaturity(maturityContext)
+
+        result shouldBe listOf(
+            BondOrderStatementCreation.PrincipalRedeem(
+                bondOrderId,
+                maturityDate,
+                BigDecimal("5000.00"),
+                maturityOrderId,
+            ),
+        )
+
+        coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = true) }
+    }
+
+    "should consolidate maturity with yield only (no principal)" {
+        val bondOrderId = 3
+        val maturityOrderId = 30
+        val maturityDate = LocalDate.parse("2024-09-15")
+        val contributionDate = LocalDate.parse("2024-06-01")
+
+        val maturityContext = bondMaturityConsolidationContext(
+            bondOrderId = bondOrderId,
+            maturityOrderId = maturityOrderId,
+            date = maturityDate,
+            contributionDate = contributionDate,
+            principal = BigDecimal("0.00"),
+            yieldAmount = BigDecimal("1250.75"),
+        )
+
+        val taxes = setOf(iofIncidence(), rendaIncidence())
+
+        coEvery {
+            taxService.getTaxIncidencesBy(maturityDate, contributionDate)
+        } returns taxes
+
+        coEvery {
+            calculator.calculate(
+                bondCalculationContext(
+                    principal = BigDecimal("0.00"),
+                    startingYield = BigDecimal("1250.75"),
+                    taxes = taxes,
+                ),
+                fullRedemption = true,
+            )
+        } returns BondCalculationResult.Ok(
+            principal = BigDecimal("0.00"),
+            yield = BigDecimal("0.00"),
+            statements = listOf(
+                BondCalculationRecord.Yield(BigDecimal("25.50")),
+                BondCalculationRecord.YieldRedeem(BigDecimal("1276.25")),
+                BondCalculationRecord.TaxRedeem(BigDecimal("191.44"), "RENDA"),
+            )
+        )
+
+        val result = service.consolidateMaturity(maturityContext)
+
+        result shouldBe listOf(
+            BondOrderStatementCreation.Yield(bondOrderId, maturityDate, BigDecimal("25.50")),
+            BondOrderStatementCreation.YieldRedeem(bondOrderId, maturityDate, BigDecimal("1276.25"), maturityOrderId),
+            BondOrderStatementCreation.TaxIncidence(
+                bondOrderId,
+                maturityDate,
+                BigDecimal("191.44"),
+                maturityOrderId,
+                "RENDA",
+            ),
+        )
+
+        coVerify(exactly = 1) { calculator.calculate(any(), fullRedemption = true) }
     }
 })

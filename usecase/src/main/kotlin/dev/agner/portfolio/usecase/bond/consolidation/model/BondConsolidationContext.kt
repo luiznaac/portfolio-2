@@ -32,3 +32,12 @@ data class BondConsolidationContext(
         )
     }
 }
+
+data class BondMaturityConsolidationContext(
+    val bondOrderId: Int,
+    val maturityOrderId: Int,
+    val date: LocalDate,
+    val contributionDate: LocalDate,
+    val principal: BigDecimal,
+    val yieldAmount: BigDecimal,
+)

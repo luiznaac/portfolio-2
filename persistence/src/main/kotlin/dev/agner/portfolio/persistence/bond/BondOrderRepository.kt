@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.bond
 
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
+import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.commons.now
@@ -8,7 +9,6 @@ import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
-import java.math.BigDecimal
 import java.time.Clock
 
 @Component
@@ -38,9 +38,9 @@ class BondOrderRepository(
         }.toModel()
     }
 
-    override suspend fun updateAmount(id: Int, amount: BigDecimal) = transaction {
+    override suspend fun updateType(id: Int, type: BondOrderType) = transaction {
         BondOrderEntity.findByIdAndUpdate(id) {
-            it.amount = amount
+            it.type = type.name
         }!!.toModel()
     }
 }

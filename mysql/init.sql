@@ -22,6 +22,7 @@ CREATE TABLE bond (
     rate_type VARCHAR(10) NOT NULL,
     value DECIMAL(8, 4) NOT NULL,
     index_id VARCHAR(10),
+    maturity_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (index_id) REFERENCES `index`(id)
