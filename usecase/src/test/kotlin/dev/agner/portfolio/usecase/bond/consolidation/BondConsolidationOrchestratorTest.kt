@@ -656,7 +656,6 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
         coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
-        coEvery { bondOrderService.fetchById(2) } returns sellOrder
         coEvery { bondOrderService.updateType(2, FULL_REDEMPTION) } just Runs
 
         orchestrator.consolidateBy(bondId)
@@ -724,7 +723,6 @@ class BondConsolidationOrchestratorTest : StringSpec({
         exception.message shouldBe "There is more than one remaining sell"
 
         // Verify that no bond order updates or statement saves occur when exception is thrown
-        coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
         coVerify(exactly = 0) { bondOrderService.updateType(any(), any()) }
         coVerify(exactly = 0) { repository.saveAll(any()) }
     }
@@ -774,7 +772,6 @@ class BondConsolidationOrchestratorTest : StringSpec({
         orchestrator.consolidateBy(bondId)
 
         // Verify that no bond order updates occur when there are no remaining sells
-        coVerify(exactly = 0) { bondOrderService.fetchById(any()) }
         coVerify(exactly = 0) { bondOrderService.updateType(any(), any()) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }

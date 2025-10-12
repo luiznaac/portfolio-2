@@ -19,7 +19,7 @@ class BondPositionService(
     suspend fun calculatePositions(bondId: Int): List<BondPosition> {
         val statementsGroupedByDate = statementService.fetchAllByBondId(bondId).groupBy { it.date }
         val ordersById = bondOrderService.fetchByBondId(bondId).filter { it.type == BUY }.associateBy { it.id }
-        val bond = ordersById.values.first().bond
+        val bond = ordersById.values.first().bond!!
 
         return statementsGroupedByDate.keys.sorted()
             .fold(PositionData()) { acc, date ->

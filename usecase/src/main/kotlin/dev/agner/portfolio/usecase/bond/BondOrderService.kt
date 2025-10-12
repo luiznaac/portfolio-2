@@ -12,10 +12,6 @@ import java.math.BigDecimal
 class BondOrderService(
     private val bondOrderRepository: IBondOrderRepository,
 ) {
-    suspend fun fetchAll() = bondOrderRepository.fetchAll()
-
-    suspend fun fetchById(id: Int) = bondOrderRepository.fetchById(id)
-        ?: throw IllegalArgumentException("Bond order not found for id $id")
 
     suspend fun fetchByBondId(bondId: Int) = bondOrderRepository.fetchByBondId(bondId)
 

@@ -22,10 +22,6 @@ class BondOrderController(
 
                 call.respond(HttpStatusCode.Created, service.create(payload))
             }
-
-            get {
-                call.respond(service.fetchAll())
-            }
         }
     }
 }

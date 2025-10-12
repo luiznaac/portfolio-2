@@ -43,13 +43,15 @@ CREATE TABLE bond (
 
 CREATE TABLE bond_order (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    bond_id INT NOT NULL,
+    bond_id INT,
+    checking_account_id INT,
     type VARCHAR(20) NOT NULL,
     date DATE NOT NULL,
     amount DECIMAL(12,2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (bond_id) REFERENCES bond(id),
+    FOREIGN KEY (checking_account_id) REFERENCES checking_account(id),
 
     INDEX (bond_id, type)
 );

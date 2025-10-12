@@ -12,15 +12,17 @@ enum class BondOrderType {
 
 data class BondOrder(
     val id: Int,
-    val bond: Bond,
+    val bond: Bond?,
     val type: BondOrderType,
     val date: LocalDate,
     val amount: BigDecimal = BigDecimal("0.00"),
+    val checkingAccountId: Int? = null,
 )
 
 data class BondOrderCreation(
-    val bondId: Int,
+    val bondId: Int?,
     val type: BondOrderType,
     val date: LocalDate,
     val amount: BigDecimal = BigDecimal("0.00"),
+    val checkingAccountId: Int? = null,
 )

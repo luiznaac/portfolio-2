@@ -1,5 +1,7 @@
 package dev.agner.portfolio.persistence.bond
 
+import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
+import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -12,7 +14,8 @@ import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 object BondOrderTable : IntIdTable("bond_order") {
-    val bondId = reference("bond_id", BondTable.id)
+    val bondId = reference("bond_id", BondTable.id).nullable()
+    val checkingAccountId = reference("checking_account_id", CheckingAccountTable.id).nullable()
     val type = varchar("type", 20)
     val date = date("date")
     val amount = decimal("amount", 12, 2)
@@ -22,7 +25,8 @@ object BondOrderTable : IntIdTable("bond_order") {
 class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BondOrderEntity>(BondOrderTable)
 
-    var bond by BondEntity referencedOn BondOrderTable.bondId
+    var bond by BondEntity optionalReferencedOn BondOrderTable.bondId
+    var checkingAccount by CheckingAccountEntity optionalReferencedOn BondOrderTable.checkingAccountId
     var type by BondOrderTable.type
     var date by BondOrderTable.date
     var amount by BondOrderTable.amount
@@ -30,9 +34,10 @@ class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
 
     fun toModel() = BondOrder(
         id = id.value,
-        bond = bond.toModel(),
+        bond = bond?.toModel(),
         type = BondOrderType.valueOf(type),
         date = date,
         amount = amount,
+        checkingAccountId = checkingAccount?.id?.value,
     )
 }

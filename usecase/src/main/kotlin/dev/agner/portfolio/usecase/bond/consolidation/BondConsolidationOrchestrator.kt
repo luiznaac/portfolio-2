@@ -68,7 +68,7 @@ class BondConsolidationOrchestrator(
         buyOrders
             .fold(IntermediateData(sellContexts)) { acc, order ->
                 val startingDate = order.resolveCalculationStartingDate()
-                val finalDate = minOf(LocalDate.yesterday(clock), order.bond.maturityDate)
+                val finalDate = minOf(LocalDate.yesterday(clock), order.bond!!.maturityDate)
                 val yieldPercentages = order.bond.buildYieldPercentages(startingDate)
                 val startingValues = repository.sumUpConsolidatedValues(order.id, startingDate)
 
@@ -108,13 +108,13 @@ class BondConsolidationOrchestrator(
     }
 
     private suspend fun BondOrder.handleMaturity(finalDate: LocalDate, result: BondConsolidationResult) =
-        if (finalDate == bond.maturityDate && result.principal + result.yieldAmount > BigDecimal("0.00")) {
-            val maturityOrder = createMaturityOrder(bond.id, finalDate)
+        if (finalDate == bond!!.maturityDate && result.principal + result.yieldAmount > BigDecimal("0.00")) {
+            val maturityOrderId = createMaturityOrder(bond.id, finalDate)
 
             consolidator.consolidateMaturity(
                 BondMaturityConsolidationContext(
                     bondOrderId = id,
-                    maturityOrderId = maturityOrder.id,
+                    maturityOrderId = maturityOrderId,
                     date = finalDate,
                     contributionDate = date,
                     principal = result.principal,
@@ -134,7 +134,7 @@ class BondConsolidationOrchestrator(
                 amount = BigDecimal("0.00"),
             ),
             isInternal = true,
-        )
+        ).id
 
     private suspend fun Collection<SellOrderContext>.handleRemainingSells() {
         if (size > 1) {
