@@ -1,5 +1,7 @@
 package dev.agner.portfolio.persistence.bond
 
+import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
+import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.persistence.index.IndexEntity
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.usecase.bond.model.Bond.FixedRateBond
@@ -20,6 +22,7 @@ object BondTable : IntIdTable("bond") {
     val value = decimal("value", 8, 4)
     val indexId = reference("index_id", IndexTable.id).nullable()
     val maturityDate = date("maturity_date")
+    val checkingAccount = reference("checking_account_id", CheckingAccountTable.id).nullable()
     val createdAt = datetime("created_at")
 }
 
@@ -31,6 +34,7 @@ class BondEntity(id: EntityID<Int>) : IntEntity(id) {
     var value by BondTable.value
     var indexId by IndexEntity optionalReferencedOn BondTable.indexId
     var maturityDate by BondTable.maturityDate
+    var checkingAccount by CheckingAccountEntity optionalReferencedOn BondTable.checkingAccount
     var createdAt by BondTable.createdAt
 
     fun toModel() = when (rateType) {

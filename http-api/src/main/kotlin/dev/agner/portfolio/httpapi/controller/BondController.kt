@@ -31,7 +31,7 @@ class BondController(
 
                 call.respond(
                     HttpStatusCode.Created,
-                    service.createBond(payload),
+                    service.create(payload),
                 )
             }
 
@@ -40,7 +40,7 @@ class BondController(
 
                 call.respond(
                     HttpStatusCode.Created,
-                    service.createBond(payload),
+                    service.create(payload),
                 )
             }
 

@@ -16,6 +16,17 @@ CREATE TABLE index_value (
     UNIQUE (index_id, date)
 );
 
+CREATE TABLE checking_account (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    value DECIMAL(8, 4) NOT NULL,
+    index_id VARCHAR(10) NOT NULL,
+    maturity_duration VARCHAR(5) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (index_id) REFERENCES `index`(id)
+);
+
 CREATE TABLE bond (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
@@ -23,9 +34,11 @@ CREATE TABLE bond (
     value DECIMAL(8, 4) NOT NULL,
     index_id VARCHAR(10),
     maturity_date DATE NOT NULL,
+    checking_account_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
-    FOREIGN KEY (index_id) REFERENCES `index`(id)
+    FOREIGN KEY (index_id) REFERENCES `index`(id),
+    FOREIGN KEY (checking_account_id) REFERENCES checking_account(id)
 );
 
 CREATE TABLE bond_order (
@@ -55,17 +68,6 @@ CREATE TABLE bond_order_statement (
     UNIQUE (buy_order_id, type, date),
 
     INDEX (buy_order_id, date)
-);
-
-CREATE TABLE checking_account (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(100) NOT NULL,
-    value DECIMAL(8, 4) NOT NULL,
-    index_id VARCHAR(10) NOT NULL,
-    maturity_duration VARCHAR(5) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-
-    FOREIGN KEY (index_id) REFERENCES `index`(id)
 );
 
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());

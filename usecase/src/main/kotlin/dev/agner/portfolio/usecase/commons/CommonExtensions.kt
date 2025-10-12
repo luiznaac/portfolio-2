@@ -68,4 +68,10 @@ fun LocalDate.dayBefore() = minus(1, DateTimeUnit.DAY)
 
 fun LocalDate.isWeekend() = listOf(SATURDAY, SUNDAY).contains(dayOfWeek)
 
+fun LocalDate.toMondayIfWeekend() = when (dayOfWeek) {
+    SATURDAY -> nextDay().nextDay()
+    SUNDAY -> nextDay()
+    else -> this
+}
+
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)

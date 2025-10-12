@@ -1,6 +1,8 @@
 package dev.agner.portfolio.persistence.bond
 
+import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
 import dev.agner.portfolio.persistence.index.IndexEntity
+import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.model.BondCreation
 import dev.agner.portfolio.usecase.bond.model.BondCreation.FixedRateBondCreation
 import dev.agner.portfolio.usecase.bond.model.BondCreation.FloatingRateBondCreation
@@ -34,6 +36,18 @@ class BondRepository(
             indexId = if (creation is FloatingRateBondCreation) IndexEntity.findById(creation.indexId.name) else null
             createdAt = LocalDateTime.now(clock)
         }.toModel()
+    }
+
+    override suspend fun save(checkingAccountId: Int, creation: FloatingRateBondCreation) = transaction {
+        BondEntity.new {
+            name = creation.name
+            rateType = "FLOATING"
+            value = creation.value
+            maturityDate = creation.maturityDate
+            indexId = IndexEntity.findById(creation.indexId.name)
+            checkingAccount = CheckingAccountEntity.findById(checkingAccountId)
+            createdAt = LocalDateTime.now(clock)
+        }.toModel() as FloatingRateBond
     }
 }
 
