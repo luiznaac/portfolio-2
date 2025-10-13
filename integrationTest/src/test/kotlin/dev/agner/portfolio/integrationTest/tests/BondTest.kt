@@ -10,8 +10,12 @@ import dev.agner.portfolio.integrationTest.helpers.createBondOrder
 import dev.agner.portfolio.integrationTest.helpers.createFloatingBond
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.hydrateIndexValues
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.Maturity
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
+import dev.agner.portfolio.usecase.commons.firstOfInstance
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.index.model.IndexValueCreation
 import dev.agner.portfolio.usecase.index.repository.IIndexValueRepository
@@ -112,12 +116,11 @@ class BondTest : StringSpec({
 
         val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
         orders.size shouldBe 2
-        orders.find { it.type.name == "BUY" }!!.also {
+        orders.firstOfInstance<Buy>().also {
             it.amount shouldBe BigDecimal("4019.01")
             it.date shouldBe LocalDate.parse("2025-05-30")
         }
-        orders.find { it.type.name == "MATURITY" }!!.also {
-            it.amount shouldBe BigDecimal("0.00")
+        orders.firstOfInstance<Maturity>().also {
             it.date shouldBe LocalDate.parse("2025-09-01")
         }
     }
@@ -161,12 +164,11 @@ class BondTest : StringSpec({
 
         val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
         orders.size shouldBe 2
-        orders.find { it.type.name == "BUY" }!!.also {
+        orders.firstOfInstance<Buy>().also {
             it.amount shouldBe BigDecimal("4019.01")
             it.date shouldBe LocalDate.parse("2025-05-30")
         }
-        orders.find { it.type.name == "FULL_REDEMPTION" }!!.also {
-            it.amount shouldBe BigDecimal("5123.45")
+        orders.firstOfInstance<FullRedemption>().also {
             it.date shouldBe LocalDate.parse("2025-06-03")
         }
     }

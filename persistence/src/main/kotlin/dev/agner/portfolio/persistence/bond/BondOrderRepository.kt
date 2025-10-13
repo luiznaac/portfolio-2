@@ -1,8 +1,9 @@
 package dev.agner.portfolio.persistence.bond
 
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
+import dev.agner.portfolio.usecase.bond.model.BondOrder
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
-import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.commons.now
 import kotlinx.datetime.LocalDateTime
@@ -10,6 +11,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
+import kotlin.reflect.KClass
 
 @Component
 class BondOrderRepository(
@@ -31,9 +33,12 @@ class BondOrderRepository(
         }.toModel()
     }
 
-    override suspend fun updateType(id: Int, type: BondOrderType) = transaction {
+    override suspend fun <T : BondOrder> updateType(id: Int, type: KClass<T>) = transaction {
         BondOrderEntity.findByIdAndUpdate(id) {
-            it.type = type.name
+            it.type = when (type) {
+                FullRedemption::class -> "FULL_REDEMPTION"
+                else -> throw IllegalArgumentException("Cannot update type to ${type.simpleName}")
+            }
         }!!.toModel()
     }
 }

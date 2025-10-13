@@ -11,15 +11,24 @@ data class BondConsolidationContext(
     val principal: BigDecimal,
     val yieldAmount: BigDecimal,
     val yieldPercentages: Map<LocalDate, YieldPercentageContext>,
-    val sellOrders: Map<LocalDate, SellOrderContext> = emptyMap(),
-    val fullRedemption: FullRedemptionContext? = null,
+    val redemptionOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
+    val downToZeroContext: DownToZeroContext? = null,
 ) {
-    data class SellOrderContext(
-        val id: Int,
-        val amount: BigDecimal,
-    )
+    sealed class RedemptionContext(
+        open val id: Int,
+        open val amount: BigDecimal,
+    ) {
+        abstract fun copy(amount: BigDecimal): RedemptionContext
 
-    data class FullRedemptionContext(
+        data class SellContext(
+            override val id: Int,
+            override val amount: BigDecimal,
+        ) : RedemptionContext(id, amount) {
+            override fun copy(amount: BigDecimal): SellContext = copy(id = id, amount = amount)
+        }
+    }
+
+    data class DownToZeroContext(
         val id: Int,
         val date: LocalDate,
     )

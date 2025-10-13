@@ -2,16 +2,16 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.PrincipalRedeem
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.TaxRedeem
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.Yield
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.YieldRedeem
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.PrincipalRedeemCalculation
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.TaxRedeemCalculation
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.YieldCalculation
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord.YieldRedeemCalculation
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
-import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxIncidence
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxIncidenceCreation
 import dev.agner.portfolio.usecase.commons.foldUntil
 import dev.agner.portfolio.usecase.tax.TaxService
 import kotlinx.datetime.LocalDate
@@ -36,10 +36,10 @@ class BondConsolidator(
                         acc.ctx.principal,
                         acc.ctx.yieldAmount,
                         acc.ctx.yieldPercentages[date]?.percentage ?: BigDecimal("0.00"),
-                        acc.ctx.sellOrders[date]?.amount ?: BigDecimal("0.00"),
+                        acc.ctx.redemptionOrders[date]?.amount ?: BigDecimal("0.00"),
                         taxService.getTaxIncidencesBy(date, acc.ctx.contributionDate),
                     ),
-                    fullRedemption = acc.ctx.fullRedemption?.date == date,
+                    fullRedemption = acc.ctx.downToZeroContext?.date == date,
                 )
 
                 acc.updateWith(result, date)
@@ -48,7 +48,7 @@ class BondConsolidator(
                 BondConsolidationResult(
                     principal = ctx.principal,
                     yieldAmount = ctx.yieldAmount,
-                    remainingSells = ctx.sellOrders,
+                    remainingSells = ctx.redemptionOrders,
                     statements = statements,
                 )
             }
@@ -73,34 +73,34 @@ class BondConsolidator(
             ctx = ctx.copy(
                 principal = result.principal,
                 yieldAmount = result.yield,
-                sellOrders = result.resolveSells(ctx, date)
+                redemptionOrders = result.resolveSells(ctx, date)
             ),
             statements = statements + result.statements.map {
-                it.buildCreation(ctx.bondOrderId, ctx.fullRedemption?.id ?: ctx.sellOrders[date]?.id, date)
+                it.buildCreation(ctx.bondOrderId, ctx.downToZeroContext?.id ?: ctx.redemptionOrders[date]?.id, date)
             }
         )
 
     private fun BondCalculationResult.resolveSells(ctx: BondConsolidationContext, date: LocalDate) = when (this) {
-        is BondCalculationResult.Ok -> ctx.sellOrders.filterKeys { it != date }
+        is BondCalculationResult.Ok -> ctx.redemptionOrders.filterKeys { it != date }
         is BondCalculationResult.RemainingRedemption -> {
             // Builds new sell order with the remaining amount
-            val remainingSell = ctx.sellOrders[date]!!.copy(amount = remainingRedemptionAmount)
-            ctx.sellOrders.filterKeys { it != date }
+            val remainingSell = ctx.redemptionOrders[date]!!.copy(amount = remainingRedemptionAmount)
+            ctx.redemptionOrders.filterKeys { it != date }
                 .plus(date to remainingSell)
         }
     }
 
     private fun BondCalculationRecord.buildCreation(bondOrderId: Int, sellOrderId: Int?, date: LocalDate) =
         when (this) {
-            is Yield -> BondOrderStatementCreation.Yield(bondOrderId, date, amount)
-            is YieldRedeem -> {
-                BondOrderStatementCreation.YieldRedeem(bondOrderId, date, amount, sellOrderId!!)
+            is YieldCalculation -> BondOrderStatementCreation.YieldCreation(bondOrderId, date, amount)
+            is YieldRedeemCalculation -> {
+                BondOrderStatementCreation.YieldRedeemCreation(bondOrderId, date, amount, sellOrderId!!)
             }
-            is PrincipalRedeem -> {
-                BondOrderStatementCreation.PrincipalRedeem(bondOrderId, date, amount, sellOrderId!!)
+            is PrincipalRedeemCalculation -> {
+                BondOrderStatementCreation.PrincipalRedeemCreation(bondOrderId, date, amount, sellOrderId!!)
             }
-            is TaxRedeem -> {
-                TaxIncidence(bondOrderId, date, amount, sellOrderId!!, taxType)
+            is TaxRedeemCalculation -> {
+                TaxIncidenceCreation(bondOrderId, date, amount, sellOrderId!!, taxType)
             }
         }
 

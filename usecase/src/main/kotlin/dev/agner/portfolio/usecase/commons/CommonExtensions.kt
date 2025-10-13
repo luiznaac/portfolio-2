@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Clock
+import kotlin.collections.ArrayList
 import kotlin.time.ExperimentalTime
 import kotlin.time.toKotlinInstant
 
@@ -53,6 +54,11 @@ inline fun <T, R> Iterable<T>.foldUntil(initial: R, condition: R.() -> Boolean, 
         if (condition(accumulator)) break
     }
     return accumulator
+}
+
+inline fun <reified R> Iterable<*>.firstOfInstance(): R {
+    return filterIsInstanceTo(ArrayList<R>()).firstOrNull()
+        ?: throw NoSuchElementException("Collection contains no element of type ${R::class.simpleName}")
 }
 
 @OptIn(ExperimentalTime::class)

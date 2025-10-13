@@ -2,8 +2,8 @@ package dev.agner.portfolio.usecase
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.DownToZeroContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
@@ -31,19 +31,19 @@ fun bondConsolidationContext(
     principal: BigDecimal,
     yieldAmount: BigDecimal,
     yieldPercentages: Map<LocalDate, BondConsolidationContext.YieldPercentageContext>,
-    sellOrders: Map<LocalDate, SellOrderContext> = emptyMap(),
+    sellOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
     contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
     dateRange: List<LocalDate> = emptyList(),
-    fullRedemption: FullRedemptionContext? = null,
+    fullRedemption: DownToZeroContext? = null,
 ) = BondConsolidationContext(
     bondOrderId = bondOrderId,
     contributionDate = contributionDate,
     principal = principal,
     yieldAmount = yieldAmount,
     yieldPercentages = yieldPercentages,
-    sellOrders = sellOrders,
+    redemptionOrders = sellOrders,
     dateRange = dateRange,
-    fullRedemption = fullRedemption,
+    downToZeroContext = fullRedemption,
 )
 
 fun floatingRateBond(
@@ -57,7 +57,7 @@ fun floatingRateBond(
 )
 
 fun bondConsolidationResult(
-    remainingSells: Map<LocalDate, SellOrderContext> = emptyMap(),
+    remainingSells: Map<LocalDate, RedemptionContext> = emptyMap(),
     statements: List<BondOrderStatementCreation> = emptyList(),
     principal: BigDecimal = BigDecimal("0.00"),
     yieldAmount: BigDecimal = BigDecimal("0.00"),

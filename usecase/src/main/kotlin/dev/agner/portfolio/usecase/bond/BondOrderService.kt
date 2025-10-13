@@ -1,12 +1,13 @@
 package dev.agner.portfolio.usecase.bond
 
+import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
-import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.model.BondOrderType.FULL_REDEMPTION
 import dev.agner.portfolio.usecase.bond.model.BondOrderType.MATURITY
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import kotlin.reflect.KClass
 
 @Service
 class BondOrderService(
@@ -27,5 +28,7 @@ class BondOrderService(
         bondOrderRepository.save(creation = this)
     }
 
-    suspend fun updateType(id: Int, newType: BondOrderType) { bondOrderRepository.updateType(id, newType) }
+    suspend fun <T : BondOrder> updateType(id: Int, type: KClass<T>) {
+        bondOrderRepository.updateType(id, type)
+    }
 }

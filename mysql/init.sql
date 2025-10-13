@@ -47,7 +47,7 @@ CREATE TABLE bond_order (
     checking_account_id INT,
     type VARCHAR(20) NOT NULL,
     date DATE NOT NULL,
-    amount DECIMAL(12,2) NOT NULL,
+    amount DECIMAL(12,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
     FOREIGN KEY (bond_id) REFERENCES bond(id),

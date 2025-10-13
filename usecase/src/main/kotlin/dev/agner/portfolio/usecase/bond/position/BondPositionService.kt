@@ -2,6 +2,13 @@
 package dev.agner.portfolio.usecase.bond.position
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
+import dev.agner.portfolio.usecase.bond.model.BondOrder
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.PrincipalRedeem
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.TaxIncidence
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.Yield
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.YieldRedeem
 import dev.agner.portfolio.usecase.bond.model.BondOrderType.BUY
 import dev.agner.portfolio.usecase.bond.position.model.BondPosition
 import dev.agner.portfolio.usecase.bond.statement.BondStatementService
@@ -18,14 +25,14 @@ class BondPositionService(
 
     suspend fun calculatePositions(bondId: Int): List<BondPosition> {
         val statementsGroupedByDate = statementService.fetchAllByBondId(bondId).groupBy { it.date }
-        val ordersById = bondOrderService.fetchByBondId(bondId).filter { it.type == BUY }.associateBy { it.id }
-        val bond = ordersById.values.first().bond!!
+        val ordersById = bondOrderService.fetchByBondId(bondId).filterIsInstance<Buy>().associateBy { it.id }
+        val bond = ordersById.values.first().bond
 
         return statementsGroupedByDate.keys.sorted()
             .fold(PositionData()) { acc, date ->
-                val yieldsOnDateByOrderId = statementsGroupedByDate[date]!!.filter { it.type == "YIELD" }.associateBy { it.buyOrderId }
-                val principalRedeemsByOrderId = statementsGroupedByDate[date]!!.filter { it.type == "PRINCIPAL_REDEEM" }.associateBy { it.buyOrderId }
-                val yieldRedeemsGroupedByOrderId = statementsGroupedByDate[date]!!.filter { it.type == "YIELD_REDEEM" || it.type.contains("_TAX") }.groupBy { it.buyOrderId }
+                val yieldsOnDateByOrderId = statementsGroupedByDate[date]!!.filterIsInstance<Yield>().associateBy { it.buyOrderId }
+                val principalRedeemsByOrderId = statementsGroupedByDate[date]!!.filterIsInstance<PrincipalRedeem>().associateBy { it.buyOrderId }
+                val yieldRedeemsGroupedByOrderId = statementsGroupedByDate[date]!!.filter { it is YieldRedeem || it is TaxIncidence }.groupBy { it.buyOrderId }
 
                 val newPrincipal = acc.principal + (ordersById.values.firstOrNull { it.date == date }?.amount ?: BigDecimal("0.00")) - principalRedeemsByOrderId.values.sumOf { it.amount }
                 val newYield = acc.yield + (yieldsOnDateByOrderId.values.sumOf { it.amount }) - yieldRedeemsGroupedByOrderId.values.flatten().sumOf { it.amount }

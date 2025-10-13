@@ -1,12 +1,16 @@
 package dev.agner.portfolio.persistence.bond
 
-import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.PrincipalRedeem
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.TaxIncidence
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.Yield
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.YieldRedeem
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
 import org.jetbrains.exposed.v1.dao.IntEntityClass
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.datetime
+import kotlin.Int
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
@@ -29,11 +33,38 @@ class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     var amount by BondOrderStatementTable.amount
     var createdAt by BondOrderStatementTable.createdAt
 
-    fun toModel() = BondOrderStatement(
-        id = id.value,
-        buyOrderId = buyOrder.id.value,
-        date = date,
-        type = type,
-        amount = amount,
-    )
+    fun toModel() = when (type) {
+        "YIELD" -> Yield(
+            id = id.value,
+            buyOrderId = buyOrder.id.value,
+            date = date,
+            amount = amount,
+        )
+        "YIELD_REDEEM" -> YieldRedeem(
+            id = id.value,
+            buyOrderId = buyOrder.id.value,
+            date = date,
+            amount = amount,
+            sellOrderId = sellOrderId!!.id.value,
+        )
+        "PRINCIPAL_REDEEM" -> PrincipalRedeem(
+            id = id.value,
+            buyOrderId = buyOrder.id.value,
+            date = date,
+            amount = amount,
+            sellOrderId = sellOrderId!!.id.value,
+        )
+        else -> {
+            if (!type.contains("_TAX")) throw IllegalArgumentException("Invalid bond order statement type: $type")
+
+            TaxIncidence(
+                id = id.value,
+                buyOrderId = buyOrder.id.value,
+                date = date,
+                amount = amount,
+                sellOrderId = sellOrderId!!.id.value,
+                taxType = type,
+            )
+        }
+    }
 }

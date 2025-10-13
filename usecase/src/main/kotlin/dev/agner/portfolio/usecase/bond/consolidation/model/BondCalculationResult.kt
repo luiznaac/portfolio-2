@@ -24,8 +24,9 @@ sealed class BondCalculationResult(
 sealed class BondCalculationRecord(
     open val amount: BigDecimal,
 ) {
-    data class Yield(override val amount: BigDecimal) : BondCalculationRecord(amount)
-    data class PrincipalRedeem(override val amount: BigDecimal) : BondCalculationRecord(amount)
-    data class YieldRedeem(override val amount: BigDecimal) : BondCalculationRecord(amount)
-    data class TaxRedeem(override val amount: BigDecimal, val taxType: String) : BondCalculationRecord(amount)
+    data class YieldCalculation(override val amount: BigDecimal) : BondCalculationRecord(amount)
+    data class PrincipalRedeemCalculation(override val amount: BigDecimal) : BondCalculationRecord(amount)
+    data class YieldRedeemCalculation(override val amount: BigDecimal) : BondCalculationRecord(amount)
+    data class TaxRedeemCalculation(override val amount: BigDecimal, val taxType: String) :
+        BondCalculationRecord(amount)
 }

@@ -2,7 +2,7 @@ package dev.agner.portfolio.usecase.bond.repository
 
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
-import dev.agner.portfolio.usecase.bond.model.BondOrderType
+import kotlin.reflect.KClass
 
 interface IBondOrderRepository {
 
@@ -10,5 +10,5 @@ interface IBondOrderRepository {
 
     suspend fun save(creation: BondOrderCreation): BondOrder
 
-    suspend fun updateType(id: Int, type: BondOrderType): BondOrder
+    suspend fun <T : BondOrder> updateType(id: Int, type: KClass<T>): BondOrder
 }
