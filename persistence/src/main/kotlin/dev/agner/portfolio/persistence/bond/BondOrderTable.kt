@@ -3,9 +3,12 @@ package dev.agner.portfolio.persistence.bond
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.Maturity
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Sell
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Withdrawal
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
@@ -56,6 +59,24 @@ class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
             id = id.value,
             date = date,
             bond = bond!!.toModel(),
+        )
+        "DEPOSIT" -> Deposit(
+            id = id.value,
+            date = date,
+            amount = amount!!,
+            bond = bond!!.toModel(),
+            checkingAccountId = checkingAccount!!.id.value,
+        )
+        "WITHDRAWAL" -> Withdrawal(
+            id = id.value,
+            date = date,
+            amount = amount!!,
+            checkingAccountId = checkingAccount!!.id.value,
+        )
+        "FULL_WITHDRAWAL" -> FullWithdrawal(
+            id = id.value,
+            date = date,
+            checkingAccountId = checkingAccount!!.id.value,
         )
         else -> throw IllegalStateException("Unknown order type: $type")
     }

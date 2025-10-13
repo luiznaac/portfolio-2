@@ -21,6 +21,10 @@ class BondService(
     }
 
     suspend fun createForCheckingAccount(checkingAccountId: Int, creation: FloatingRateBondCreation) = with(creation) {
+        if (creation.maturityDate.isWeekend()) {
+            throw IllegalArgumentException("Cannot create a bond with a weekend maturity date")
+        }
+
         bondRepository.save(checkingAccountId, copy(maturityDate = maturityDate.toMondayIfWeekend()))
     }
 

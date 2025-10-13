@@ -8,6 +8,9 @@ enum class BondOrderType {
     SELL,
     FULL_REDEMPTION,
     MATURITY,
+    DEPOSIT,
+    WITHDRAWAL,
+    FULL_WITHDRAWAL,
 }
 
 sealed class BondOrder(
@@ -28,6 +31,14 @@ sealed class BondOrder(
             override val amount: BigDecimal,
             override val bond: Bond,
         ) : Contribution(id, date, bond, amount)
+
+        data class Deposit(
+            override val id: Int,
+            override val date: LocalDate,
+            override val amount: BigDecimal,
+            override val bond: Bond,
+            val checkingAccountId: Int,
+        ) : Contribution(id, date, bond, amount)
     }
 
     sealed class Redemption(
@@ -42,6 +53,13 @@ sealed class BondOrder(
             override val amount: BigDecimal,
             val bond: Bond,
         ) : Redemption(id, date, amount)
+
+        data class Withdrawal(
+            override val id: Int,
+            override val date: LocalDate,
+            override val amount: BigDecimal,
+            val checkingAccountId: Int,
+        ) : Redemption(id, date, amount)
     }
 
     sealed class DownToZero(
@@ -55,6 +73,12 @@ sealed class BondOrder(
             val bond: Bond,
         ) : DownToZero(id, date)
 
+        data class FullWithdrawal(
+            override val id: Int,
+            override val date: LocalDate,
+            val checkingAccountId: Int,
+        ) : DownToZero(id, date)
+
         data class Maturity(
             override val id: Int,
             override val date: LocalDate,
@@ -64,9 +88,9 @@ sealed class BondOrder(
 }
 
 data class BondOrderCreation(
-    val bondId: Int?,
+    val bondId: Int? = null,
     val type: BondOrderType,
     val date: LocalDate,
-    val amount: BigDecimal = BigDecimal("0.00"),
+    val amount: BigDecimal? = null,
     val checkingAccountId: Int? = null,
 )

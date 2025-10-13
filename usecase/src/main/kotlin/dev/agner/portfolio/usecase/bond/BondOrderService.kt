@@ -3,10 +3,10 @@ package dev.agner.portfolio.usecase.bond
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType.FULL_REDEMPTION
+import dev.agner.portfolio.usecase.bond.model.BondOrderType.FULL_WITHDRAWAL
 import dev.agner.portfolio.usecase.bond.model.BondOrderType.MATURITY
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
 import kotlin.reflect.KClass
 
 @Service
@@ -17,8 +17,8 @@ class BondOrderService(
     suspend fun fetchByBondId(bondId: Int) = bondOrderRepository.fetchByBondId(bondId)
 
     suspend fun create(bondCreation: BondOrderCreation, isInternal: Boolean = false) = with(bondCreation) {
-        if (bondCreation.type == FULL_REDEMPTION && bondCreation.amount > BigDecimal("0.00")) {
-            throw IllegalArgumentException("Cannot create a full redemption order with a non-zero amount")
+        if (listOf(FULL_REDEMPTION, FULL_WITHDRAWAL).contains(bondCreation.type) && bondCreation.amount != null) {
+            throw IllegalArgumentException("Cannot create a full redemption order with an amount")
         }
 
         if (bondCreation.type == MATURITY && !isInternal) {

@@ -18,6 +18,7 @@ import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Sell
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Withdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
@@ -170,4 +171,5 @@ private fun LocalDateRange.removeWeekends() =
 
 private fun Redemption.toContext() = when (this) {
     is Sell -> SellContext(id, amount)
+    is Withdrawal -> TODO()
 }
