@@ -37,7 +37,7 @@ object DockerComposeExtension : Extension, BeforeProjectListener, AfterProjectLi
                                    mysql -e "set FOREIGN_KEY_CHECKS=0; truncate table ${'$'}table" portfolio;
                                fi
                             done
-                        """.trimIndent()
+                        """.trimIndent(),
                     )
                     .exitCode shouldBe 0
             }
@@ -46,7 +46,7 @@ object DockerComposeExtension : Extension, BeforeProjectListener, AfterProjectLi
 }
 
 object DockerCompose : ComposeContainer(
-    File("../docker-compose.yml").canonicalFile
+    File("../docker-compose.yml").canonicalFile,
 ) {
     init {
         withLocalCompose(true)

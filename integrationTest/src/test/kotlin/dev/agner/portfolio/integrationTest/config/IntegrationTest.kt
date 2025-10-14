@@ -12,7 +12,7 @@ import org.springframework.test.context.TestExecutionListeners
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 @TestExecutionListeners(
     value = [StopKtorServer::class],
-    mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
+    mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS,
 )
 @Isolate
 annotation class IntegrationTest

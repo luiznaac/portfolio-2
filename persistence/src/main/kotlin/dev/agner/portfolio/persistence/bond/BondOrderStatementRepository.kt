@@ -51,7 +51,7 @@ class BondOrderStatementRepository(
                     SUM(IF(type = 'PRINCIPAL_REDEEM', amount, 0)) AS principal_redeemed
                 FROM bond_order_statement
                 WHERE buy_order_id = $buyOrderId AND date < '$date';
-            """.trimIndent()
+            """.trimIndent(),
         ) {
             if (it.next()) {
                 (it.getBigDecimal("principal_redeemed") ?: BigDecimal("0.00")) to
@@ -74,7 +74,7 @@ class BondOrderStatementRepository(
                 AND bo.type = 'BUY'
                 GROUP BY bo.id
                 HAVING buy_remainder <= 0.00;
-            """.trimIndent()
+            """.trimIndent(),
         ) {
             val ids = mutableSetOf<Int>()
 
@@ -97,7 +97,7 @@ class BondOrderStatementRepository(
                 WHERE bond_id = $bondId AND bo.type = 'SELL'
                 GROUP BY bo.id
                 HAVING sell_remain <= 0.00;
-            """.trimIndent()
+            """.trimIndent(),
         ) {
             val ids = mutableSetOf<Int>()
 

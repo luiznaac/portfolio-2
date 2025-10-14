@@ -29,7 +29,7 @@ class BondConsolidator(
             .sorted()
             .foldUntil(
                 IntermediateData(consolidationContext),
-                { (ctx.principal + ctx.yieldAmount).compareTo(BigDecimal("0.00")) == 0 }
+                { (ctx.principal + ctx.yieldAmount).compareTo(BigDecimal("0.00")) == 0 },
             ) { acc, date ->
                 val result = calculator.calculate(
                     BondCalculationContext(
@@ -73,11 +73,11 @@ class BondConsolidator(
             ctx = ctx.copy(
                 principal = result.principal,
                 yieldAmount = result.yield,
-                redemptionOrders = result.resolveSells(ctx, date)
+                redemptionOrders = result.resolveSells(ctx, date),
             ),
             statements = statements + result.statements.map {
                 it.buildCreation(ctx.bondOrderId, ctx.downToZeroContext?.id ?: ctx.redemptionOrders[date]?.id, date)
-            }
+            },
         )
 
     private fun BondCalculationResult.resolveSells(ctx: BondConsolidationContext, date: LocalDate) = when (this) {

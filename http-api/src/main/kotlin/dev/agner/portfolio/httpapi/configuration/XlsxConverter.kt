@@ -24,7 +24,7 @@ class XlsxConverter(
     override suspend fun deserialize(
         charset: Charset,
         typeInfo: TypeInfo,
-        content: ByteReadChannel
+        content: ByteReadChannel,
     ): Any? {
         val sheetos = WorkbookFactory.create(content.toInputStream()).getSheetAt(0)
         val headers = sheetos.getRow(0).toList().map { it.toString() }
@@ -54,7 +54,7 @@ class XlsxConverter(
         contentType: ContentType,
         charset: Charset,
         typeInfo: TypeInfo,
-        value: Any?
+        value: Any?,
     ): OutgoingContent? {
         TODO("Won't be used")
     }

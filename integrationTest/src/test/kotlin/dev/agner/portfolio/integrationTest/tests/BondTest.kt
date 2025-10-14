@@ -41,7 +41,7 @@ class BondTest : StringSpec({
                 IndexValueCreation(
                     LocalDate.parse("2025-05-29"),
                     BigDecimal("0.00"),
-                )
+                ),
             ),
         )
 
@@ -87,7 +87,7 @@ class BondTest : StringSpec({
                 IndexValueCreation(
                     LocalDate.parse("2025-05-29"),
                     BigDecimal("0.00"),
-                )
+                ),
             ),
         )
 
@@ -134,7 +134,7 @@ class BondTest : StringSpec({
                 IndexValueCreation(
                     LocalDate.parse("2025-05-29"),
                     BigDecimal("0.00"),
-                )
+                ),
             ),
         )
 
@@ -180,7 +180,7 @@ private fun buildBacenValues() =
         .map {
             mapOf(
                 "data" to it.format(brazilianLocalDateFormat),
-                "valor" to "0.054266"
+                "valor" to "0.054266",
             )
         } +
         (LocalDate.parse("2025-06-20")..LocalDate.parse("2025-09-30"))
@@ -188,6 +188,6 @@ private fun buildBacenValues() =
             .map {
                 mapOf(
                     "data" to it.format(brazilianLocalDateFormat),
-                    "valor" to "0.055131"
+                    "valor" to "0.055131",
                 )
             }

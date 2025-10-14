@@ -20,7 +20,7 @@ class PdfConverter : ContentConverter {
     override suspend fun deserialize(
         charset: Charset,
         typeInfo: TypeInfo,
-        content: ByteReadChannel
+        content: ByteReadChannel,
     ): Any? {
         val doc = Loader.loadPDF(content.toByteArray())
 
@@ -40,12 +40,12 @@ class PdfConverter : ContentConverter {
                 line.contains("Data:") && acc.orphanMovements.isNotEmpty() -> {
                     val date = LocalDate.parse(
                         line.substringAfter("Data:").trim().replaceMonth(),
-                        brazilianLocalDateFormat
+                        brazilianLocalDateFormat,
                     )
 
                     acc.copy(
                         orphanMovements = emptyList(),
-                        movements = acc.movements + (date to acc.orphanMovements)
+                        movements = acc.movements + (date to acc.orphanMovements),
                     )
                 }
 
@@ -58,7 +58,7 @@ class PdfConverter : ContentConverter {
                     UploadOrder(
                         it.key,
                         Action.fromValue(movement.substringBefore(" ")),
-                        movement.substringAfter("R$").sanitizeCurrency().toBigDecimal().defaultScale()
+                        movement.substringAfter("R$").sanitizeCurrency().toBigDecimal().defaultScale(),
                     )
                 }
             }
@@ -68,7 +68,7 @@ class PdfConverter : ContentConverter {
         contentType: ContentType,
         charset: Charset,
         typeInfo: TypeInfo,
-        value: Any?
+        value: Any?,
     ): OutgoingContent? {
         TODO("Won't be used")
     }
@@ -88,7 +88,7 @@ private val MONTH_REPLACEMENTS = mapOf(
     "set" to "09",
     "out" to "10",
     "nov" to "11",
-    "dez" to "12"
+    "dez" to "12",
 )
 
 private fun String.replaceMonth() =

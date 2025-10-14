@@ -129,7 +129,7 @@ class BondConsolidationOrchestrator(
                     contributionDate = date,
                     principal = result.principal,
                     yieldAmount = result.yieldAmount,
-                )
+                ),
             )
         } else {
             emptyList()

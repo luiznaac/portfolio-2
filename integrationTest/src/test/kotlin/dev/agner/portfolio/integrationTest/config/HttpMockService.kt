@@ -40,7 +40,7 @@ object HttpMockService {
                     endpoint = configuration.endpoint,
                     queryParams = configuration.queryParams,
                     httpStatus = configuration.httpStatus,
-                    desiredResponsePayload = configuration.payload
+                    desiredResponsePayload = configuration.payload,
                 )
             }
     }
@@ -61,8 +61,8 @@ object HttpMockService {
                     WireMock.aResponse()
                         .withHeader("Content-Type", "application/json")
                         .withStatus(httpStatus)
-                        .withBody(mapper.writeValueAsBytes(desiredResponsePayload))
-                )
+                        .withBody(mapper.writeValueAsBytes(desiredResponsePayload)),
+                ),
         )
     }
 

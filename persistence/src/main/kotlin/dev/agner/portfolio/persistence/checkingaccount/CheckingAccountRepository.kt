@@ -44,7 +44,7 @@ class CheckingAccountRepository(
                 WHERE bo.checking_account_id = $checkingAccountId AND bo.type = 'WITHDRAWAL'
                 GROUP BY bo.id
                 HAVING withdrawal_remain <= 0.00;
-            """.trimIndent()
+            """.trimIndent(),
         ) {
             val ids = mutableSetOf<Int>()
 
@@ -68,7 +68,7 @@ class CheckingAccountRepository(
                 AND bo.type = 'DEPOSIT'
                 GROUP BY bo.id
                 HAVING deposit_remainder <= 0.00;
-            """.trimIndent()
+            """.trimIndent(),
         ) {
             val ids = mutableSetOf<Int>()
 

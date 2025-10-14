@@ -10,7 +10,7 @@ sealed class BondCalculationResult(
     data class Ok(
         override val principal: BigDecimal,
         override val yield: BigDecimal,
-        override val statements: List<BondCalculationRecord>
+        override val statements: List<BondCalculationRecord>,
     ) : BondCalculationResult(principal, yield, statements)
 
     data class RemainingRedemption(

@@ -21,7 +21,7 @@ class BondCalculator {
         val statements = emptyList<BondCalculationRecord>()
             .plusIf(yieldedAmount > BigDecimal("0.00")) { BondCalculationRecord.YieldCalculation(yieldedAmount) }
             .plusIf(
-                redeemedPrincipal > BigDecimal("0.00")
+                redeemedPrincipal > BigDecimal("0.00"),
             ) { BondCalculationRecord.PrincipalRedeemCalculation(redeemedPrincipal) }
             .plusIf(redeemedYield > BigDecimal("0.00")) { BondCalculationRecord.YieldRedeemCalculation(redeemedYield) }
             .plus(redeemedTaxes.map { it.buildRecord() })
@@ -61,7 +61,7 @@ class BondCalculator {
                 .fold(grossYield) { acc, incidence ->
                     (acc * (BigDecimal("100.0000") - incidence.rate) / BigDecimal("100")).setScale(
                         2,
-                        RoundingMode.HALF_EVEN
+                        RoundingMode.HALF_EVEN,
                     )
                 }
 
@@ -77,7 +77,7 @@ class BondCalculator {
             val redeemedPrincipal = (processingData.redeemedAmount * proportion).defaultScale()
             val redeemedYield = (processingData.redeemedAmount * (BigDecimal.ONE - proportion)).setScale(
                 2,
-                RoundingMode.HALF_EVEN
+                RoundingMode.HALF_EVEN,
             )
 
             return RedemptionCalculation(
@@ -138,5 +138,5 @@ private fun Pair<TaxIncidence, BigDecimal>.buildRecord() = BondCalculationRecord
     taxType = when (first) {
         is TaxIncidence.IOF -> "IOF"
         is TaxIncidence.Renda -> "RENDA"
-    }
+    },
 )

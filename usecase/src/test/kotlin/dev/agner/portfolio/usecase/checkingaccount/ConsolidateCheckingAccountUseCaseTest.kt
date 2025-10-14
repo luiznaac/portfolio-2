@@ -45,7 +45,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = depositDate1,
             amount = BigDecimal("5000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val deposit2 = Deposit(
@@ -53,14 +53,14 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = depositDate2,
             amount = BigDecimal("3000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val withdrawal = Withdrawal(
             id = 20,
             date = withdrawalDate,
             amount = BigDecimal("1000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         coEvery { bondOrderService.fetchByCheckingAccountId(checkingAccountId) } returns
@@ -90,14 +90,14 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             id = 30,
             date = LocalDate.parse("2024-02-01"),
             amount = BigDecimal("500.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val withdrawal2 = Withdrawal(
             id = 31,
             date = LocalDate.parse("2024-02-15"),
             amount = BigDecimal("700.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val alreadyConsolidatedWithdrawals = setOf(30) // First withdrawal already consolidated
@@ -115,7 +115,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             consolidationOrchestrator.consolidate(
                 contribution = emptyList(),
                 redemption = listOf(withdrawal2), // Only non-consolidated withdrawal
-                downToZero = null
+                downToZero = null,
             )
         }
     }
@@ -129,7 +129,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = LocalDate.parse("2024-01-01"),
             amount = BigDecimal("5000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val deposit2 = Deposit(
@@ -137,7 +137,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = LocalDate.parse("2024-01-15"),
             amount = BigDecimal("3000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val alreadyRedeemedDeposits = setOf(40) // First deposit already redeemed
@@ -153,7 +153,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             consolidationOrchestrator.consolidate(
                 contribution = listOf(deposit2), // Only non-redeemed deposit
                 redemption = emptyList(),
-                downToZero = null
+                downToZero = null,
             )
         }
     }
@@ -168,7 +168,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = LocalDate.parse("2024-01-01"),
             amount = BigDecimal("10000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val fullWithdrawal = FullWithdrawal(
@@ -202,7 +202,7 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = LocalDate.parse("2024-01-01"),
             amount = BigDecimal("5000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val deposit2 = Deposit(
@@ -210,21 +210,21 @@ class ConsolidateCheckingAccountUseCaseTest : StringSpec({
             bond = bond,
             date = LocalDate.parse("2024-01-15"),
             amount = BigDecimal("3000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val withdrawal1 = Withdrawal(
             id = 62,
             date = LocalDate.parse("2024-02-01"),
             amount = BigDecimal("1000.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val withdrawal2 = Withdrawal(
             id = 63,
             date = LocalDate.parse("2024-02-15"),
             amount = BigDecimal("500.00"),
-            checkingAccountId = checkingAccountId
+            checkingAccountId = checkingAccountId,
         )
 
         val alreadyRedeemedDeposits = setOf(60)

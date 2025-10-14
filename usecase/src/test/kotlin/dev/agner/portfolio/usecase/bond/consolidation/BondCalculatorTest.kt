@@ -116,7 +116,7 @@ class BondCalculatorTest : StringSpec({
         val yieldPercentage = BigDecimal("5.00")
         val yieldedAmount = ((principal + startingYield) * yieldPercentage / BigDecimal("100")).setScale(
             2,
-            RoundingMode.HALF_EVEN
+            RoundingMode.HALF_EVEN,
         )
         val totalAmount = principal + startingYield + yieldedAmount
         val context = bondCalculationContext(principal, startingYield, yieldPercentage, totalAmount)

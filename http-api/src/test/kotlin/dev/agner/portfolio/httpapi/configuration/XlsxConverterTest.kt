@@ -33,21 +33,21 @@ class XlsxConverterTest : DescribeSpec({
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
                 DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
-                DataDef("Description", "description")
+                DataDef("Description", "description"),
             )
 
             val xlsxBytes = createTestXlsx(
                 headers = listOf("Date", "Amount", "Description"),
                 rows = listOf(
                     listOf("2023-01-15", "100.50", "Test Order 1"),
-                    listOf("2023-02-20", "250.75", "Test Order 2")
-                )
+                    listOf("2023-02-20", "250.75", "Test Order 2"),
+                ),
             )
 
             val result = converter.deserialize(
                 charset = Charsets.UTF_8,
                 typeInfo = typeInfo<List<TestOrder>>(),
-                content = ByteReadChannel(xlsxBytes)
+                content = ByteReadChannel(xlsxBytes),
             ) as List<TestOrder>
 
             result.size shouldBe 2
@@ -63,21 +63,21 @@ class XlsxConverterTest : DescribeSpec({
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
                 DataDef("Amount", "amount") { this?.toBigDecimal()?.setScale(2) ?: BigDecimal("0.00") },
-                DataDef("Description", "description")
+                DataDef("Description", "description"),
             )
 
             val xlsxBytes = createTestXlsx(
                 headers = listOf("Date", "Amount", "Description"),
                 rows = listOf(
                     listOf("2023-01-15", "", "Test Order 1"),
-                    listOf("2023-02-20", "", "Test Order 2")
-                )
+                    listOf("2023-02-20", "", "Test Order 2"),
+                ),
             )
 
             val result = converter.deserialize(
                 charset = Charsets.UTF_8,
                 typeInfo = typeInfo<List<TestOrder>>(),
-                content = ByteReadChannel(xlsxBytes)
+                content = ByteReadChannel(xlsxBytes),
             ) as List<TestOrder>
 
             result.size shouldBe 2
@@ -94,20 +94,20 @@ class XlsxConverterTest : DescribeSpec({
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
                 DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
                 DataDef("Description", "description"),
-                DataDef("Ignored Column") // No target property, should be ignored
+                DataDef("Ignored Column"), // No target property, should be ignored
             )
 
             val xlsxBytes = createTestXlsx(
                 headers = listOf("Date", "Amount", "Description", "Ignored Column"),
                 rows = listOf(
-                    listOf("2023-01-15", "100.50", "Test Order", "This should be ignored")
-                )
+                    listOf("2023-01-15", "100.50", "Test Order", "This should be ignored"),
+                ),
             )
 
             val result = converter.deserialize(
                 charset = Charsets.UTF_8,
                 typeInfo = typeInfo<List<TestOrder>>(),
-                content = ByteReadChannel(xlsxBytes)
+                content = ByteReadChannel(xlsxBytes),
             ) as List<TestOrder>
 
             result.size shouldBe 1
@@ -119,19 +119,19 @@ class XlsxConverterTest : DescribeSpec({
         it("should throw exception when no matching definition found") {
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
-                DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) }
+                DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
             )
 
             val xlsxBytes = createTestXlsx(
                 headers = listOf("WrongHeader1", "WrongHeader2"),
-                rows = listOf(listOf("Value1", "Value2"))
+                rows = listOf(listOf("Value1", "Value2")),
             )
 
             shouldThrow<NoSuchElementException> {
                 converter.deserialize(
                     charset = Charsets.UTF_8,
                     typeInfo = typeInfo<List<TestOrder>>(),
-                    content = ByteReadChannel(xlsxBytes)
+                    content = ByteReadChannel(xlsxBytes),
                 )
             }
         }
@@ -140,23 +140,23 @@ class XlsxConverterTest : DescribeSpec({
             converter.register<TestOrder>(
                 DataDef("Date", "date") { LocalDate.parse(this!!) },
                 DataDef("Amount", "amount") { this!!.toBigDecimal().setScale(2) },
-                DataDef("Description", "description")
+                DataDef("Description", "description"),
             )
 
             converter.register<AnotherTestOrder>(
                 DataDef("Order Date", "order_date") { LocalDate.parse(this!!) },
-                DataDef("Price", "price") { this!!.toBigDecimal().setScale(2) }
+                DataDef("Price", "price") { this!!.toBigDecimal().setScale(2) },
             )
 
             val xlsxBytes = createTestXlsx(
                 headers = listOf("Order Date", "Price"),
-                rows = listOf(listOf("2023-01-15", "100.50"))
+                rows = listOf(listOf("2023-01-15", "100.50")),
             )
 
             val result = converter.deserialize(
                 charset = Charsets.UTF_8,
                 typeInfo = typeInfo<List<AnotherTestOrder>>(),
-                content = ByteReadChannel(xlsxBytes)
+                content = ByteReadChannel(xlsxBytes),
             ) as List<AnotherTestOrder>
 
             result.size shouldBe 1
@@ -192,10 +192,10 @@ private fun createTestXlsx(headers: List<String>, rows: List<List<String>>): Byt
 data class TestOrder(
     val date: LocalDate,
     val amount: BigDecimal,
-    val description: String?
+    val description: String?,
 )
 
 data class AnotherTestOrder(
     val orderDate: LocalDate,
-    val price: BigDecimal
+    val price: BigDecimal,
 )

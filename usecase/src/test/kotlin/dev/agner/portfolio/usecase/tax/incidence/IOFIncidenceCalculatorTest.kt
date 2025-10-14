@@ -27,7 +27,7 @@ class IOFIncidenceCalculatorTest : StringSpec({
             11 to 63.0, 12 to 60.0, 13 to 56.0, 14 to 53.0, 15 to 50.0,
             16 to 46.0, 17 to 43.0, 18 to 40.0, 19 to 36.0, 20 to 33.0,
             21 to 30.0, 22 to 26.0, 23 to 23.0, 24 to 20.0, 25 to 16.0,
-            26 to 13.0, 27 to 10.0, 28 to 6.0, 29 to 3.0
+            26 to 13.0, 27 to 10.0, 28 to 6.0, 29 to 3.0,
         )
 
         expectedRates.forEach { (day, expectedRate) ->

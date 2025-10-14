@@ -39,8 +39,8 @@ class CheckingAccountService(
                 type = BondOrderType.DEPOSIT,
                 date = creation.date,
                 amount = creation.amount!!,
-                checkingAccountId = creation.checkingAccountId
-            )
+                checkingAccountId = creation.checkingAccountId,
+            ),
         ) as Deposit
     }
 
@@ -50,8 +50,8 @@ class CheckingAccountService(
                 type = BondOrderType.WITHDRAWAL,
                 date = creation.date,
                 amount = creation.amount!!,
-                checkingAccountId = creation.checkingAccountId
-            )
+                checkingAccountId = creation.checkingAccountId,
+            ),
         )
 
     suspend fun fullWithdraw(creation: CheckingAccountMovementCreation) =
@@ -59,8 +59,8 @@ class CheckingAccountService(
             BondOrderCreation(
                 type = BondOrderType.FULL_WITHDRAWAL,
                 date = creation.date,
-                checkingAccountId = creation.checkingAccountId
-            )
+                checkingAccountId = creation.checkingAccountId,
+            ),
         )
 
     suspend fun fetchById(checkingAccountId: Int) = repository.fetchById(checkingAccountId)
