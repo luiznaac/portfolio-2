@@ -31,4 +31,7 @@ class BondOrderService(
     suspend fun <T : BondOrder> updateType(id: Int, type: KClass<T>) {
         bondOrderRepository.updateType(id, type)
     }
+
+    suspend fun fetchByCheckingAccountId(checkingAccountId: Int) =
+        bondOrderRepository.fetchByCheckingAccountId(checkingAccountId)
 }

@@ -26,6 +26,13 @@ data class BondConsolidationContext(
         ) : RedemptionContext(id, amount) {
             override fun copy(amount: BigDecimal): SellContext = copy(id = id, amount = amount)
         }
+
+        data class WithdrawalContext(
+            override val id: Int,
+            override val amount: BigDecimal,
+        ) : RedemptionContext(id, amount) {
+            override fun copy(amount: BigDecimal): WithdrawalContext = copy(id = id, amount = amount)
+        }
     }
 
     data class DownToZeroContext(

@@ -1,6 +1,8 @@
 package dev.agner.portfolio.httpapi.controller
 
+import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.checkingaccount.CheckingAccountService
+import dev.agner.portfolio.usecase.checkingaccount.ConsolidateCheckingAccountUseCase
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountCreation
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountMovementCreation
 import io.ktor.http.HttpStatusCode
@@ -16,6 +18,8 @@ import java.math.BigDecimal
 @Component
 class CheckingAccountController(
     private val service: CheckingAccountService,
+    private val consolidateUseCase: ConsolidateCheckingAccountUseCase,
+    private val positionService: BondPositionService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -32,13 +36,6 @@ class CheckingAccountController(
                     service.create(payload),
                 )
             }
-
-//            post("/{checking_account_id}/consolidate") {
-//                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
-//
-//                consolidationOrchestrator.consolidateCheckingAccountBy(checkingAccountId)
-//                call.respond(HttpStatusCode.NoContent)
-//            }
 
             post("/{checking_account_id}/deposit") {
                 val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
@@ -68,6 +65,19 @@ class CheckingAccountController(
                     HttpStatusCode.Created,
                     service.fullWithdraw(payload.toCreation(checkingAccountId)),
                 )
+            }
+
+            post("/{checking_account_id}/consolidate") {
+                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+
+                consolidateUseCase.execute(checkingAccountId)
+                call.respond(HttpStatusCode.NoContent)
+            }
+
+            get("/{checking_account_id}/positions") {
+                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+
+                call.respond(positionService.calculateByCheckingAccountId(checkingAccountId))
             }
         }
     }

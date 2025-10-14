@@ -10,4 +10,8 @@ interface ICheckingAccountRepository {
     suspend fun fetchById(checkingAccountId: Int): CheckingAccount?
 
     suspend fun save(creation: CheckingAccountCreation): CheckingAccount
+
+    suspend fun fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId: Int): Set<Int>
+
+    suspend fun fetchAlreadyRedeemedDepositIds(checkingAccountId: Int): Set<Int>
 }

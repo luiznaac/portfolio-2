@@ -11,4 +11,6 @@ interface IBondOrderRepository {
     suspend fun save(creation: BondOrderCreation): BondOrder
 
     suspend fun <T : BondOrder> updateType(id: Int, type: KClass<T>): BondOrder
+
+    suspend fun fetchByCheckingAccountId(checkingAccountId: Int): List<BondOrder>
 }

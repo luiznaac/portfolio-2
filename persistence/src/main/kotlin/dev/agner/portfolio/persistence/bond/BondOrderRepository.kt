@@ -3,6 +3,7 @@ package dev.agner.portfolio.persistence.bond
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.commons.now
@@ -37,8 +38,13 @@ class BondOrderRepository(
         BondOrderEntity.findByIdAndUpdate(id) {
             it.type = when (type) {
                 FullRedemption::class -> "FULL_REDEMPTION"
+                FullWithdrawal::class -> "FULL_WITHDRAWAL"
                 else -> throw IllegalArgumentException("Cannot update type to ${type.simpleName}")
             }
         }!!.toModel()
+    }
+
+    override suspend fun fetchByCheckingAccountId(checkingAccountId: Int): List<BondOrder> = transaction {
+        BondOrderEntity.find { BondOrderTable.checkingAccountId eq checkingAccountId }.map { it.toModel() }
     }
 }
