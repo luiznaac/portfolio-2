@@ -19,9 +19,11 @@ class BondCalculator {
         val newPrincipal = (ctx.actualData.principal - redeemedPrincipal)
         val newYield = (ctx.actualData.yieldAmount + yieldedAmount - redeemedYield - redeemedTaxes)
         val statements = emptyList<BondCalculationRecord>()
-            .plusIf(yieldedAmount > BigDecimal("0.00")) { BondCalculationRecord.Yield(yieldedAmount) }
-            .plusIf(redeemedPrincipal > BigDecimal("0.00")) { BondCalculationRecord.PrincipalRedeem(redeemedPrincipal) }
-            .plusIf(redeemedYield > BigDecimal("0.00")) { BondCalculationRecord.YieldRedeem(redeemedYield) }
+            .plusIf(yieldedAmount > BigDecimal("0.00")) { BondCalculationRecord.YieldCalculation(yieldedAmount) }
+            .plusIf(
+                redeemedPrincipal > BigDecimal("0.00")
+            ) { BondCalculationRecord.PrincipalRedeemCalculation(redeemedPrincipal) }
+            .plusIf(redeemedYield > BigDecimal("0.00")) { BondCalculationRecord.YieldRedeemCalculation(redeemedYield) }
             .plus(redeemedTaxes.map { it.buildRecord() })
 
         // Checking whether the total redeemed was enough to redeem the whole processing redeemed amount
@@ -131,7 +133,7 @@ private data class RedemptionCalculation(
     }
 }
 
-private fun Pair<TaxIncidence, BigDecimal>.buildRecord() = BondCalculationRecord.TaxRedeem(
+private fun Pair<TaxIncidence, BigDecimal>.buildRecord() = BondCalculationRecord.TaxRedeemCalculation(
     amount = second,
     taxType = when (first) {
         is TaxIncidence.IOF -> "IOF"

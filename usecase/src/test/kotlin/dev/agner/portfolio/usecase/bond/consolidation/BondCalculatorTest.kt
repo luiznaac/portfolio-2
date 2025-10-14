@@ -28,7 +28,7 @@ class BondCalculatorTest : StringSpec({
         result.principal shouldBe principal
         result.yield shouldBe startingYield + expectedYieldedAmount
         result.statements.size shouldBe 1
-        result.statements[0].shouldBeInstanceOf<BondCalculationRecord.Yield>()
+        result.statements[0].shouldBeInstanceOf<BondCalculationRecord.YieldCalculation>()
         result.statements[0].amount shouldBe expectedYieldedAmount
     }
 
@@ -45,7 +45,7 @@ class BondCalculatorTest : StringSpec({
         result.principal shouldBe principal
         result.yield shouldBe startingYield + expectedYieldedAmount
         result.statements.size shouldBe 1
-        result.statements[0].shouldBeInstanceOf<BondCalculationRecord.Yield>()
+        result.statements[0].shouldBeInstanceOf<BondCalculationRecord.YieldCalculation>()
         result.statements[0].amount shouldBe expectedYieldedAmount
     }
 
@@ -76,10 +76,10 @@ class BondCalculatorTest : StringSpec({
         result.principal shouldBe BigDecimal("750.00")
         result.yield shouldBe BigDecimal("750.00")
         result.statements.size shouldBe 2
-        result.statements.find { it is BondCalculationRecord.PrincipalRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.PrincipalRedeemCalculation }.also {
             it!!.amount shouldBe BigDecimal("250.00")
         }
-        result.statements.find { it is BondCalculationRecord.YieldRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.YieldRedeemCalculation }.also {
             it!!.amount shouldBe BigDecimal("250.00")
         }
     }
@@ -102,10 +102,10 @@ class BondCalculatorTest : StringSpec({
         result.shouldBeInstanceOf<BondCalculationResult.Ok>()
         result.principal shouldBe (principal - expectedRedeemedPrincipal)
         result.statements.size shouldBe 3
-        result.statements.find { it is BondCalculationRecord.PrincipalRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.PrincipalRedeemCalculation }.also {
             it!!.amount shouldBe expectedRedeemedPrincipal
         }
-        result.statements.find { it is BondCalculationRecord.YieldRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.YieldRedeemCalculation }.also {
             it!!.amount shouldBe expectedRedeemedYield
         }
     }
@@ -127,10 +127,10 @@ class BondCalculatorTest : StringSpec({
         result.principal shouldBe BigDecimal("0.00")
         result.yield shouldBe BigDecimal("0.00")
         result.statements.size shouldBe 3
-        result.statements.find { it is BondCalculationRecord.PrincipalRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.PrincipalRedeemCalculation }.also {
             it!!.amount shouldBe principal
         }
-        result.statements.find { it is BondCalculationRecord.YieldRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.YieldRedeemCalculation }.also {
             it!!.amount shouldBe startingYield + yieldedAmount
         }
     }
@@ -151,10 +151,10 @@ class BondCalculatorTest : StringSpec({
         result.yield shouldBe BigDecimal("0.00")
         result.remainingRedemptionAmount shouldBe BigDecimal("500.00")
         result.statements.size shouldBe 3
-        result.statements.find { it is BondCalculationRecord.PrincipalRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.PrincipalRedeemCalculation }.also {
             it!!.amount shouldBe principal
         }
-        result.statements.find { it is BondCalculationRecord.YieldRedeem }.also {
+        result.statements.find { it is BondCalculationRecord.YieldRedeemCalculation }.also {
             it!!.amount shouldBe startingYield + yieldedAmount
         }
     }
@@ -174,7 +174,7 @@ class BondCalculatorTest : StringSpec({
         result.yield shouldBe BigDecimal("28.21")
 
         result.statements.find {
-            it is BondCalculationRecord.TaxRedeem && it.taxType == "RENDA"
+            it is BondCalculationRecord.TaxRedeemCalculation && it.taxType == "RENDA"
         }!!.amount shouldBe BigDecimal("16.15")
     }
 
@@ -193,10 +193,10 @@ class BondCalculatorTest : StringSpec({
         result.yield shouldBe BigDecimal("0.00")
 
         result.statements.find {
-            it is BondCalculationRecord.TaxRedeem && it.taxType == "RENDA"
+            it is BondCalculationRecord.TaxRedeemCalculation && it.taxType == "RENDA"
         }!!.amount shouldBe BigDecimal("22.50")
         result.statements.find {
-            it is BondCalculationRecord.TaxRedeem && it.taxType == "IOF"
+            it is BondCalculationRecord.TaxRedeemCalculation && it.taxType == "IOF"
         }!!.amount shouldBe BigDecimal("69.75")
     }
 
@@ -215,10 +215,10 @@ class BondCalculatorTest : StringSpec({
         result.yield shouldBe BigDecimal("0.00")
 
         result.statements.find {
-            it is BondCalculationRecord.TaxRedeem && it.taxType == "RENDA"
+            it is BondCalculationRecord.TaxRedeemCalculation && it.taxType == "RENDA"
         }!!.amount shouldBe BigDecimal("22.50")
         result.statements.find {
-            it is BondCalculationRecord.TaxRedeem && it.taxType == "IOF"
+            it is BondCalculationRecord.TaxRedeemCalculation && it.taxType == "IOF"
         }!!.amount shouldBe BigDecimal("69.75")
     }
 })

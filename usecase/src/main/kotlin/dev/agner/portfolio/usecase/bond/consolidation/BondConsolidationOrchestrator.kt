@@ -2,8 +2,10 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.FullRedemptionContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.SellOrderContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.DownToZeroContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext.SellContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext.WithdrawalContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondMaturityConsolidationContext
@@ -11,10 +13,18 @@ import dev.agner.portfolio.usecase.bond.model.Bond
 import dev.agner.portfolio.usecase.bond.model.Bond.FixedRateBond
 import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.model.BondOrder
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Sell
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Withdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
-import dev.agner.portfolio.usecase.bond.model.BondOrderType.FULL_REDEMPTION
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
 import dev.agner.portfolio.usecase.commons.isWeekend
 import dev.agner.portfolio.usecase.commons.mapAsync
@@ -37,61 +47,61 @@ class BondConsolidationOrchestrator(
     private val clock: Clock,
 ) {
 
+    // TODO: extract this to use case
     suspend fun consolidateBy(bondId: Int) {
         val orders = bondOrderService.fetchByBondId(bondId)
         val alreadyConsolidatedSells = repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId)
-        val sellOrders = orders
-            .filter { it.type == BondOrderType.SELL }
+        val sells = orders
+            .filterIsInstance<Sell>()
             .filterNot { alreadyConsolidatedSells.contains(it.id) }
 
         val alreadyRedeemedBuys = repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId)
-        val buyOrders = orders
-            .filter { it.type == BondOrderType.BUY }
+        val buys = orders
+            .filterIsInstance<Buy>()
             .filterNot { alreadyRedeemedBuys.contains(it.id) }
             .sortedBy { it.date }
 
-        val fullRedemptionOrder = orders.firstOrNull { it.type == FULL_REDEMPTION }
+        val fullRedemption = orders.filterIsInstance<FullRedemption>().firstOrNull()
 
-        consolidate(buyOrders, sellOrders, fullRedemptionOrder)
+        consolidate(buys, sells, fullRedemption)
     }
 
-    // TODO(): Later it can be extract to be reused with checking accounts (that will aggregate multiple
-    //         bonds and thus it'll have to consider all orders from different bonds at the same time)
-    private suspend fun consolidate(
-        buyOrders: List<BondOrder>,
-        sellOrders: List<BondOrder>,
-        fullRedemptionOrder: BondOrder?,
+    suspend fun consolidate(
+        contribution: List<Contribution>,
+        redemption: List<Redemption>,
+        downToZero: DownToZero?,
     ) {
-        val sellContexts = sellOrders.associate { it.date to SellOrderContext(it.id, it.amount) }
-        val fullRedemptionContext = fullRedemptionOrder?.let { FullRedemptionContext(it.id, it.date) }
+        val redemptionContexts = redemption.associate { it.date to it.toContext() }
+        val downToZeroContext = downToZero?.let { DownToZeroContext(it.id, it.date) }
 
-        buyOrders
-            .fold(IntermediateData(sellContexts)) { acc, order ->
-                val startingDate = order.resolveCalculationStartingDate()
-                val finalDate = minOf(LocalDate.yesterday(clock), order.bond.maturityDate)
-                val yieldPercentages = order.bond.buildYieldPercentages(startingDate)
-                val startingValues = repository.sumUpConsolidatedValues(order.id, startingDate)
+        contribution
+            .sortedBy { it.date }
+            .fold(IntermediateData(redemptionContexts)) { acc, contributionOrder ->
+                val startingDate = contributionOrder.resolveCalculationStartingDate()
+                val finalDate = minOf(LocalDate.yesterday(clock), contributionOrder.bond.maturityDate)
+                val yieldPercentages = contributionOrder.bond.buildYieldPercentages(startingDate)
+                val startingValues = repository.sumUpConsolidatedValues(contributionOrder.id, startingDate)
 
                 val ctx = BondConsolidationContext(
-                    bondOrderId = order.id,
-                    contributionDate = order.date,
+                    bondOrderId = contributionOrder.id,
+                    contributionDate = contributionOrder.date,
                     dateRange = (startingDate..finalDate).removeWeekends(),
-                    principal = order.amount - startingValues.first,
+                    principal = contributionOrder.amount - startingValues.first,
                     yieldAmount = startingValues.second,
                     yieldPercentages = yieldPercentages,
-                    sellOrders = acc.remainingSells,
-                    fullRedemption = fullRedemptionContext,
+                    redemptionOrders = acc.remainingRedemptions,
+                    downToZeroContext = downToZeroContext,
                 )
 
                 val calc = consolidator.calculateBondo(ctx)
-                val maturityStatements = order.handleMaturity(finalDate, calc)
+                val maturityStatements = contributionOrder.handleMaturity(finalDate, calc)
 
                 acc.copy(
-                    remainingSells = calc.remainingSells,
+                    remainingRedemptions = calc.remainingSells,
                     statements = acc.statements + calc.statements + maturityStatements,
                 )
             }
-            .also { it.remainingSells.values.handleRemainingSells() }
+            .also { it.remainingRedemptions.values.handleRemaining() }
             .statements
             .chunked(100)
             .mapAsync { repository.saveAll(it) }
@@ -107,14 +117,14 @@ class BondConsolidationOrchestrator(
         is FixedRateBond -> TODO()
     }
 
-    private suspend fun BondOrder.handleMaturity(finalDate: LocalDate, result: BondConsolidationResult) =
+    private suspend fun Contribution.handleMaturity(finalDate: LocalDate, result: BondConsolidationResult) =
         if (finalDate == bond.maturityDate && result.principal + result.yieldAmount > BigDecimal("0.00")) {
-            val maturityOrder = createMaturityOrder(bond.id, finalDate)
+            val maturityOrderId = createMaturityOrder(finalDate)
 
             consolidator.consolidateMaturity(
                 BondMaturityConsolidationContext(
                     bondOrderId = id,
-                    maturityOrderId = maturityOrder.id,
+                    maturityOrderId = maturityOrderId,
                     date = finalDate,
                     contributionDate = date,
                     principal = result.principal,
@@ -125,37 +135,46 @@ class BondConsolidationOrchestrator(
             emptyList()
         }
 
-    private suspend fun createMaturityOrder(bondId: Int, date: LocalDate) =
+    private suspend fun Contribution.createMaturityOrder(date: LocalDate) =
         bondOrderService.create(
             BondOrderCreation(
-                bondId = bondId,
+                bondId = bond.id,
                 type = BondOrderType.MATURITY,
                 date = date,
                 amount = BigDecimal("0.00"),
+                checkingAccountId = if (this is Deposit) checkingAccountId else null,
             ),
             isInternal = true,
-        )
+        ).id
 
-    private suspend fun Collection<SellOrderContext>.handleRemainingSells() {
+    private suspend fun Collection<RedemptionContext>.handleRemaining() {
         if (size > 1) {
             throw IllegalStateException("There is more than one remaining sell")
         }
 
         if (size == 1) {
-            val remainingSell = first()
+            val remainingRedemption = first()
 
             bondOrderService.updateType(
-                remainingSell.id,
-                FULL_REDEMPTION,
+                id = remainingRedemption.id,
+                type = when (remainingRedemption) {
+                    is SellContext -> FullRedemption::class
+                    is WithdrawalContext -> FullWithdrawal::class
+                },
             )
         }
     }
 
     private data class IntermediateData(
-        val remainingSells: Map<LocalDate, SellOrderContext>,
+        val remainingRedemptions: Map<LocalDate, RedemptionContext>,
         val statements: List<BondOrderStatementCreation> = emptyList(),
     )
 }
 
 private fun LocalDateRange.removeWeekends() =
     mapNotNull { it.takeIf { !it.isWeekend() } }
+
+private fun Redemption.toContext() = when (this) {
+    is Sell -> SellContext(id, amount)
+    is Withdrawal -> WithdrawalContext(id, amount)
+}

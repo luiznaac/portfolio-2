@@ -1,6 +1,5 @@
 package dev.agner.portfolio.persistence.bond
 
-import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
 import dev.agner.portfolio.usecase.commons.now
@@ -26,15 +25,7 @@ class BondOrderStatementRepository(
             .join(BondOrderTable, JoinType.INNER) { BondOrderStatementTable.buyOrderId eq BondOrderTable.id }
             .select(BondOrderStatementTable.columns)
             .where { BondOrderTable.bondId eq bondId }
-            .map { row ->
-                BondOrderStatement(
-                    id = row[BondOrderStatementTable.id].value,
-                    buyOrderId = row[BondOrderStatementTable.buyOrderId].value,
-                    date = row[BondOrderStatementTable.date],
-                    type = row[BondOrderStatementTable.type], // TODO(): create enum or maybe sealed class
-                    amount = row[BondOrderStatementTable.amount],
-                )
-            }
+            .map { BondOrderStatementEntity.wrapRow(it).toModel() }
     }
 
     override suspend fun fetchLastByBondOrderId(bondOrderId: Int) = transaction {
@@ -131,15 +122,15 @@ class BondOrderStatementRepository(
 }
 
 private fun BondOrderStatementCreation.resolveSellOrderId() = when (this) {
-    is BondOrderStatementCreation.Yield -> null
-    is BondOrderStatementCreation.YieldRedeem -> sellOrderId
-    is BondOrderStatementCreation.PrincipalRedeem -> sellOrderId
-    is BondOrderStatementCreation.TaxIncidence -> sellOrderId
+    is BondOrderStatementCreation.YieldCreation -> null
+    is BondOrderStatementCreation.YieldRedeemCreation -> sellOrderId
+    is BondOrderStatementCreation.PrincipalRedeemCreation -> sellOrderId
+    is BondOrderStatementCreation.TaxIncidenceCreation -> sellOrderId
 }
 
 private fun BondOrderStatementCreation.resolveType() = when (this) {
-    is BondOrderStatementCreation.Yield -> "YIELD"
-    is BondOrderStatementCreation.YieldRedeem -> "YIELD_REDEEM"
-    is BondOrderStatementCreation.PrincipalRedeem -> "PRINCIPAL_REDEEM"
-    is BondOrderStatementCreation.TaxIncidence -> "${taxType}_TAX"
+    is BondOrderStatementCreation.YieldCreation -> "YIELD"
+    is BondOrderStatementCreation.YieldRedeemCreation -> "YIELD_REDEEM"
+    is BondOrderStatementCreation.PrincipalRedeemCreation -> "PRINCIPAL_REDEEM"
+    is BondOrderStatementCreation.TaxIncidenceCreation -> "${taxType}_TAX"
 }

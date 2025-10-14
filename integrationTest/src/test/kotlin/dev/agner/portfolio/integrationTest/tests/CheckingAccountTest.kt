@@ -4,14 +4,15 @@ import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.HttpMockService.configureResponses
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.bacenCDIValues
-import dev.agner.portfolio.integrationTest.helpers.bondPositions
-import dev.agner.portfolio.integrationTest.helpers.consolidateBond
-import dev.agner.portfolio.integrationTest.helpers.createBondOrder
-import dev.agner.portfolio.integrationTest.helpers.createFloatingBond
+import dev.agner.portfolio.integrationTest.helpers.checkingAccountPositions
+import dev.agner.portfolio.integrationTest.helpers.consolidateCheckingAccount
+import dev.agner.portfolio.integrationTest.helpers.createCheckingAccount
+import dev.agner.portfolio.integrationTest.helpers.createDeposit
+import dev.agner.portfolio.integrationTest.helpers.createWithdrawal
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.hydrateIndexValues
-import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
-import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
+import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
+import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.Maturity
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderRepository
 import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
@@ -30,9 +31,9 @@ import java.math.BigDecimal
 import java.time.Instant
 
 @IntegrationTest
-class BondTest : StringSpec({
+class CheckingAccountTest : StringSpec({
 
-    "single bond with multiple buys and sells" {
+    "single checking account with multiple deposits and withdrawals" {
         every { ClockMock.clock.instant() } returns Instant.parse("2025-10-01T10:00:00Z")
         // Doing this so index values will be hydrated from this date beyond
         getBean<IIndexValueRepository>().saveAll(
@@ -55,18 +56,18 @@ class BondTest : StringSpec({
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
 
-        val bondId = createFloatingBond("102.00", "CDI")
-        createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
-        createBondOrder(bondId, "BUY", "2025-06-02", "28610.17")
-        createBondOrder(bondId, "SELL", "2025-06-16", "10785.00")
-        createBondOrder(bondId, "BUY", "2025-06-30", "4204.47")
-        createBondOrder(bondId, "BUY", "2025-07-07", "1320.00")
-        createBondOrder(bondId, "BUY", "2025-07-31", "3000.00")
-        createBondOrder(bondId, "SELL", "2025-08-11", "2500.00")
-        createBondOrder(bondId, "BUY", "2025-08-29", "2200.00")
+        val checkingAccountId = createCheckingAccount("102.00", "CDI", "P3Y")
+        createDeposit(checkingAccountId, "2025-05-30", "4019.01")
+        createDeposit(checkingAccountId, "2025-06-02", "28610.17")
+        createWithdrawal(checkingAccountId, "2025-06-16", "10785.00")
+        createDeposit(checkingAccountId, "2025-06-30", "4204.47")
+        createDeposit(checkingAccountId, "2025-07-07", "1320.00")
+        createDeposit(checkingAccountId, "2025-07-31", "3000.00")
+        createWithdrawal(checkingAccountId, "2025-08-11", "2500.00")
+        createDeposit(checkingAccountId, "2025-08-29", "2200.00")
 
-        consolidateBond(bondId)
-        val positions = bondPositions(bondId)
+        consolidateCheckingAccount(checkingAccountId)
+        val positions = checkingAccountPositions(checkingAccountId)
 
         positions.size shouldBe 87
         positions.last().also {
@@ -78,7 +79,7 @@ class BondTest : StringSpec({
         }
     }
 
-    "single bond with maturity" {
+    "single deposit with maturity" {
         every { ClockMock.clock.instant() } returns Instant.parse("2025-09-08T10:00:00Z")
         // Doing this so index values will be hydrated from this date beyond
         getBean<IIndexValueRepository>().saveAll(
@@ -99,11 +100,11 @@ class BondTest : StringSpec({
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
 
-        val bondId = createFloatingBond("102.00", "CDI", "2025-09-01")
-        createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
+        val checkingAccountId = createCheckingAccount("102.00", "CDI", "P3M")
+        createDeposit(checkingAccountId, "2025-05-30", "4019.01")
 
-        consolidateBond(bondId)
-        val positions = bondPositions(bondId)
+        consolidateCheckingAccount(checkingAccountId)
+        val positions = checkingAccountPositions(checkingAccountId)
 
         positions.size shouldBe 66
         positions.last().also {
@@ -114,9 +115,9 @@ class BondTest : StringSpec({
             it["result"]!! shouldBe 0.00
         }
 
-        val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
+        val orders = getBean<IBondOrderRepository>().fetchByCheckingAccountId(checkingAccountId.toInt())
         orders.size shouldBe 2
-        orders.firstOfInstance<Buy>().also {
+        orders.firstOfInstance<Deposit>().also {
             it.amount shouldBe BigDecimal("4019.01")
             it.date shouldBe LocalDate.parse("2025-05-30")
         }
@@ -146,12 +147,12 @@ class BondTest : StringSpec({
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
 
-        val bondId = createFloatingBond("102.00", "CDI")
-        createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
-        createBondOrder(bondId, "SELL", "2025-06-03", "5123.45")
+        val checkingAccountId = createCheckingAccount("102.00", "CDI", "P3Y")
+        createDeposit(checkingAccountId, "2025-05-30", "4019.01")
+        createWithdrawal(checkingAccountId, "2025-06-03", "5123.45")
 
-        consolidateBond(bondId)
-        val positions = bondPositions(bondId)
+        consolidateCheckingAccount(checkingAccountId)
+        val positions = checkingAccountPositions(checkingAccountId)
 
         positions.size shouldBe 3
         positions.last().also {
@@ -162,13 +163,13 @@ class BondTest : StringSpec({
             it["result"]!! shouldBe 0.00
         }
 
-        val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
+        val orders = getBean<IBondOrderRepository>().fetchByCheckingAccountId(checkingAccountId.toInt())
         orders.size shouldBe 2
-        orders.firstOfInstance<Buy>().also {
+        orders.firstOfInstance<Deposit>().also {
             it.amount shouldBe BigDecimal("4019.01")
             it.date shouldBe LocalDate.parse("2025-05-30")
         }
-        orders.firstOfInstance<FullRedemption>().also {
+        orders.firstOfInstance<FullWithdrawal>().also {
             it.date shouldBe LocalDate.parse("2025-06-03")
         }
     }

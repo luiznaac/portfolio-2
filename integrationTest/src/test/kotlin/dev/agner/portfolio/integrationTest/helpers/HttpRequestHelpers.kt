@@ -49,3 +49,42 @@ suspend fun bondPositions(bondId: String) =
     getRequest<List<Map<String, Any>>> {
         path = "/bonds/$bondId/positions"
     }
+
+suspend fun createCheckingAccount(value: String, index: String, maturityDuration: String) =
+    postRequest<Map<String, String>> {
+        path = "/checking-accounts"
+        body = mapOf(
+            "name" to "pipipipopopo",
+            "value" to value,
+            "index_id" to index,
+            "maturity_duration" to maturityDuration,
+        )
+    }["id"]!!
+
+suspend fun createDeposit(checkingAccountId: String, date: String, amount: String) =
+    postRequest<Unit> {
+        path = "/checking-accounts/$checkingAccountId/deposit"
+        body = mapOf(
+            "date" to date,
+            "amount" to amount.toBigDecimal(),
+        )
+    }
+
+suspend fun createWithdrawal(checkingAccountId: String, date: String, amount: String) =
+    postRequest<Unit> {
+        path = "/checking-accounts/$checkingAccountId/withdraw"
+        body = mapOf(
+            "date" to date,
+            "amount" to amount.toBigDecimal(),
+        )
+    }
+
+suspend fun consolidateCheckingAccount(checkingAccountId: String) =
+    postRequest<Unit> {
+        path = "/checking-accounts/$checkingAccountId/consolidate"
+    }
+
+suspend fun checkingAccountPositions(checkingAccountId: String) =
+    getRequest<List<Map<String, Any>>> {
+        path = "/checking-accounts/$checkingAccountId/positions"
+    }
