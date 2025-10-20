@@ -51,7 +51,7 @@ kotlinx-coroutines-test = { module="org.jetbrains.kotlinx:kotlinx-coroutines-tes
 mockk = "io.mockk:mockk:1.14.6"
 spring-test = { module="org.springframework:spring-test", version.ref="springframework" }
 spring-boot-starter-test = { module="org.springframework.boot:spring-boot-starter-test", version = "3.5.6" }
-testcontainers = { module="org.testcontainers:testcontainers", version = "1.21.3" }
+testcontainers = { module="org.testcontainers:testcontainers", version = "2.0.1" }
 wiremock = "io.kotest.extensions:kotest-extensions-wiremock:3.1.0"
 
 [bundles]
