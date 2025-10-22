@@ -29,4 +29,4 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: luiznaac/portfolio-app:latest
+          tags: luiznaac/portfolio:latest
