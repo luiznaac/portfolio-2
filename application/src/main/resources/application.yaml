@@ -2,9 +2,9 @@ ktor:
   wait: true
 
 mysql:
-  host: 'localhost'
-  user: 'root'
-  password: ''
+  host: ${MYSQL_HOST}
+  user: ${MYSQL_USER}
+  password: ${MYSQL_PASSWORD}
 
 gateways:
   bacen:
