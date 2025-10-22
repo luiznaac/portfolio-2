@@ -17,6 +17,7 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 
 class IndexValueServiceTest : StringSpec({
     val repository = mockk<IIndexValueRepository>(relaxed = true)
@@ -24,7 +25,10 @@ class IndexValueServiceTest : StringSpec({
     val clock = mockk<Clock>()
     val service = IndexValueService(repository, gateway, clock)
 
-    beforeTest { clearAllMocks() }
+    beforeTest {
+        clearAllMocks()
+        every { clock.zone } returns ZoneId.systemDefault()
+    }
 
     "fetchAllIndexValuesBy should call repository" {
         val indexValues = listOf(IndexValue(date = LocalDate.parse("2025-01-03"), value = BigDecimal("12.50")))

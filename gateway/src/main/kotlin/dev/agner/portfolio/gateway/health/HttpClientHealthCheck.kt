@@ -16,7 +16,11 @@ class HttpClientHealthCheck(
 
     override suspend fun getHealthStatus() = HealthCheckResult(
         serviceName = "http-client",
-        isHealthy = healthGateway.isHealthy(),
+        isHealthy = try {
+            healthGateway.isHealthy()
+        } catch (e: Exception) {
+            false
+        },
         timestamp = LocalDateTime.now(clock),
     )
 }

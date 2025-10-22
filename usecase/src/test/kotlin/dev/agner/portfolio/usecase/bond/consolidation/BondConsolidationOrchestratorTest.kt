@@ -38,6 +38,7 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 
 class BondConsolidationOrchestratorTest : StringSpec({
 
@@ -52,6 +53,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
     beforeEach {
         clearAllMocks()
+        every { clock.zone } returns ZoneId.systemDefault()
     }
 
     "should consolidate floating rate bond orders with buy and sell orders" {
