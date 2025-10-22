@@ -62,7 +62,9 @@ inline fun <reified R> Iterable<*>.firstOfInstance(): R {
 }
 
 @OptIn(ExperimentalTime::class)
-fun LocalDateTime.Companion.now(clock: Clock) = clock.instant().toKotlinInstant().toLocalDateTime(TimeZone.UTC)
+fun LocalDateTime.Companion.now(
+    clock: Clock,
+) = clock.instant().toKotlinInstant().toLocalDateTime(TimeZone.currentSystemDefault())
 
 fun LocalDate.Companion.today(clock: Clock) = LocalDateTime.now(clock).date
 
