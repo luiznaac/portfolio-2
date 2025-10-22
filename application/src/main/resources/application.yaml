@@ -1,4 +1,5 @@
 ktor:
+  port: 8080
   wait: true
 
 mysql:
