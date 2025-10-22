@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.index.repository.IIndexValueRepository
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.jdbc.batchInsert
@@ -27,8 +28,8 @@ class IndexValueRepository(
 
     override suspend fun fetchAllBy(indexId: IndexId, from: LocalDate): List<IndexValue> = transaction {
         IndexValueEntity.find {
-            IndexValueTable.indexId eq indexId.name
-            IndexValueTable.date greaterEq from
+            (IndexValueTable.indexId eq indexId.name) and
+                (IndexValueTable.date greaterEq from)
         }.map { it.toIndexValue() }
     }
 
