@@ -10,3 +10,7 @@ mysql:
 gateways:
   bacen:
     host: 'https://api.bcb.gov.br'
+  chameidor:
+    host: 'http://localhost:8081'
+
+app-own-host: 'localhost:8080'
