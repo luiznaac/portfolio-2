@@ -3,9 +3,9 @@ package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.DownToZeroContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext.SellContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.DownToZeroContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.RedemptionContext.SellContext
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxIncidenceCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.YieldCreation
@@ -26,11 +26,12 @@ import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-class BondConsolidatorTest : StringSpec({
+@Suppress("MaximumLineLength")
+class BondContributionConsolidatorTest : StringSpec({
 
     val calculator = mockk<BondCalculator>()
     val taxService = mockk<TaxService>(relaxed = true)
-    val service = BondConsolidator(calculator, taxService)
+    val service = BondContributionConsolidator(calculator, taxService)
 
     beforeEach { clearAllMocks() }
 
@@ -45,8 +46,8 @@ class BondConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("500.00")),
@@ -129,7 +130,7 @@ class BondConsolidatorTest : StringSpec({
             principal = BigDecimal("1000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("1500.00")),
@@ -180,9 +181,9 @@ class BondConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.40")),
-                date3 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.40")),
+                date3 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
             ),
         )
 
@@ -274,9 +275,9 @@ class BondConsolidatorTest : StringSpec({
             principal = BigDecimal("1000.00"),
             yieldAmount = BigDecimal("500.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
-                date3 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.70")), // Should not be processed
+                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date3 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.70")), // Should not be processed
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("800.00")),
@@ -397,8 +398,8 @@ class BondConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
             ),
             fullRedemption = DownToZeroContext(
                 id = 10,
@@ -470,7 +471,7 @@ class BondConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
             ),
             fullRedemption = null, // No full redemption
         )

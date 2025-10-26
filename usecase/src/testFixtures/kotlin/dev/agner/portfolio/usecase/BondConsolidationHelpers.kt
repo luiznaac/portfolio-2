@@ -1,10 +1,10 @@
 package dev.agner.portfolio.usecase
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.DownToZeroContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationResult
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.DownToZeroContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.RedemptionContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.bond.model.Bond.FloatingRateBond
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
@@ -30,12 +30,12 @@ fun bondConsolidationContext(
     bondOrderId: Int,
     principal: BigDecimal,
     yieldAmount: BigDecimal,
-    yieldPercentages: Map<LocalDate, BondConsolidationContext.YieldPercentageContext>,
+    yieldPercentages: Map<LocalDate, BondContributionConsolidationContext.YieldPercentageContext>,
     sellOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
     contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
     dateRange: List<LocalDate> = emptyList(),
     fullRedemption: DownToZeroContext? = null,
-) = BondConsolidationContext(
+) = BondContributionConsolidationContext(
     bondOrderId = bondOrderId,
     contributionDate = contributionDate,
     principal = principal,
@@ -61,7 +61,7 @@ fun bondConsolidationResult(
     statements: List<BondOrderStatementCreation> = emptyList(),
     principal: BigDecimal = BigDecimal("0.00"),
     yieldAmount: BigDecimal = BigDecimal("0.00"),
-) = BondConsolidationResult(
+) = BondContributionConsolidationResult(
     remainingSells = remainingSells,
     statements = statements,
     principal = principal,

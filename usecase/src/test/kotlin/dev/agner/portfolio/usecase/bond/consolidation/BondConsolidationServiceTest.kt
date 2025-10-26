@@ -2,10 +2,10 @@
 package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.DownToZeroContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.RedemptionContext.SellContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationContext.YieldPercentageContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.DownToZeroContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.RedemptionContext.SellContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.YieldPercentageContext
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
@@ -40,16 +40,19 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 
-class BondConsolidationOrchestratorTest : StringSpec({
+class BondConsolidationServiceTest : StringSpec({
 
     val repository = mockk<IBondOrderStatementRepository>()
     val bondOrderService = mockk<BondOrderService>()
     val indexValueService = mockk<IndexValueService>()
-    val consolidator = mockk<BondConsolidator>()
+    val contributionConsolidator = mockk<BondContributionConsolidator>()
     val clock = mockk<Clock>()
 
-    val orchestrator =
-        BondConsolidationOrchestrator(repository, bondOrderService, indexValueService, consolidator, clock)
+    val service =
+        BondConsolidationService(repository, bondOrderService, indexValueService, contributionConsolidator, clock)
+
+    // Doing this so that I don't have to rewrite the whole test class and I ensure that the refactor hasn't broken anything
+    val consolidator = BondConsolidator(repository, bondOrderService, service)
 
     beforeEach {
         clearAllMocks()
@@ -113,18 +116,18 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery {
             repository.sumUpConsolidatedValues(1, lastStatementDate.nextDay())
         } returns (BigDecimal("500.00") to BigDecimal("25.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 1) { bondOrderService.fetchByBondId(bondId) }
         coVerify(exactly = 1) { repository.fetchLastByBondOrderId(1) }
         coVerify(exactly = 1) { indexValueService.fetchAllBy(indexId, lastStatementDate.nextDay()) }
         coVerify(exactly = 1) { repository.sumUpConsolidatedValues(1, lastStatementDate.nextDay()) }
         coVerify(exactly = 1) {
-            consolidator.calculateBondo(
-                BondConsolidationContext(
+            contributionConsolidator.calculateBondo(
+                BondContributionConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = orderDate,
                     dateRange = (lastStatementDate.nextDay()..yesterdayDate).mapNotNull {
@@ -172,17 +175,17 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(100, orderDate) } returns
             (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify { repository.fetchLastByBondOrderId(100) }
         coVerify { indexValueService.fetchAllBy(indexId, orderDate) }
         coVerify { repository.sumUpConsolidatedValues(100, orderDate) }
         coVerify {
-            consolidator.calculateBondo(
-                BondConsolidationContext(
+            contributionConsolidator.calculateBondo(
+                BondContributionConsolidationContext(
                     bondOrderId = 100,
                     contributionDate = orderDate,
                     dateRange = (orderDate..yesterdayDate).mapNotNull {
@@ -256,13 +259,15 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { indexValueService.fetchAllBy(indexId, date2) } returns indexValues
         coEvery { repository.sumUpConsolidatedValues(2, date1) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
         coEvery { repository.sumUpConsolidatedValues(1, date2) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returnsMany listOf(consolidationResult1, consolidationResult2)
+        coEvery {
+            contributionConsolidator.calculateBondo(any())
+        } returnsMany listOf(consolidationResult1, consolidationResult2)
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 1) {
-            consolidator.calculateBondo(
+            contributionConsolidator.calculateBondo(
                 bondConsolidationContext(
                     bondOrderId = 2,
                     contributionDate = date1,
@@ -281,7 +286,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         }
         coVerify(exactly = 1) {
-            consolidator.calculateBondo(
+            contributionConsolidator.calculateBondo(
                 bondConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = date2,
@@ -344,14 +349,14 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify {
-            consolidator.calculateBondo(
-                BondConsolidationContext(
+            contributionConsolidator.calculateBondo(
+                BondContributionConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = orderDate,
                     dateRange = (orderDate..yesterdayDate).mapNotNull {
@@ -406,18 +411,18 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(2) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(2, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         // Verify that only the non-redeemed buy order (id=2) is processed
         coVerify(exactly = 1) { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) }
         coVerify(exactly = 1) { repository.fetchLastByBondOrderId(2) }
         coVerify(exactly = 0) { repository.fetchLastByBondOrderId(1) } // Should not be called for redeemed order
         coVerify(exactly = 1) {
-            consolidator.calculateBondo(
-                BondConsolidationContext(
+            contributionConsolidator.calculateBondo(
+                BondContributionConsolidationContext(
                     bondOrderId = 2,
                     contributionDate = orderDate,
                     dateRange = (orderDate..yesterdayDate).mapNotNull {
@@ -480,16 +485,16 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         // Verify that only the non-consolidated sell order (id=3) is included in sell orders mapping
         coVerify(exactly = 1) { repository.fetchAlreadyConsolidatedSellIdsByOrderId(bondId) }
         coVerify {
-            consolidator.calculateBondo(
-                BondConsolidationContext(
+            contributionConsolidator.calculateBondo(
+                BondContributionConsolidationContext(
                     bondOrderId = 1,
                     contributionDate = orderDate,
                     dateRange = (orderDate..yesterdayDate).mapNotNull {
@@ -561,10 +566,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(2) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(2, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         // Verify both filtering methods are called
         coVerify(exactly = 1) { repository.fetchAlreadyRedeemedBuyIdsByOrderId(bondId) }
@@ -576,8 +581,8 @@ class BondConsolidationOrchestratorTest : StringSpec({
 
         // Verify only non-consolidated sell order is included
         coVerify {
-            consolidator.calculateBondo(
-                BondConsolidationContext(
+            contributionConsolidator.calculateBondo(
+                BondContributionConsolidationContext(
                     bondOrderId = 2,
                     contributionDate = orderDate,
                     dateRange = (orderDate..yesterdayDate).mapNotNull {
@@ -635,11 +640,11 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
         coEvery { bondOrderService.updateType(2, FullRedemption::class) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 1) { bondOrderService.updateType(2, FullRedemption::class) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
@@ -692,10 +697,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
 
         val exception = shouldThrow<IllegalStateException> {
-            orchestrator.consolidateBy(bondId)
+            consolidator.consolidate(consolidator.buildContext(bondId))
         }
 
         exception.message shouldBe "There is more than one remaining sell"
@@ -742,10 +747,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         // Verify that no bond order updates occur when there are no remaining sells
         coVerify(exactly = 0) { bondOrderService.updateType(any(), FullRedemption::class) }
@@ -793,10 +798,10 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { bondOrderService.create(any(), any()) } returns maturityOrder
         coEvery {
-            consolidator.consolidateMaturity(
+            contributionConsolidator.consolidateMaturity(
                 bondMaturityConsolidationContext(
                     bondOrderId = 1,
                     maturityOrderId = 100,
@@ -809,7 +814,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
         } returns maturityStatements
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 1) {
             bondOrderService.create(
@@ -823,7 +828,7 @@ class BondConsolidationOrchestratorTest : StringSpec({
             )
         }
         coVerify(exactly = 1) {
-            consolidator.consolidateMaturity(
+            contributionConsolidator.consolidateMaturity(
                 bondMaturityConsolidationContext(
                     bondOrderId = 1,
                     maturityOrderId = 100,
@@ -870,13 +875,13 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 0) { bondOrderService.create(any(), any()) }
-        coVerify(exactly = 0) { consolidator.consolidateMaturity(any()) }
+        coVerify(exactly = 0) { contributionConsolidator.consolidateMaturity(any()) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }
 
@@ -912,13 +917,13 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { repository.fetchLastByBondOrderId(1) } returns null
         coEvery { indexValueService.fetchAllBy(indexId, orderDate) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returns consolidationResult
+        coEvery { contributionConsolidator.calculateBondo(any()) } returns consolidationResult
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 0) { bondOrderService.create(any(), any()) }
-        coVerify(exactly = 0) { consolidator.consolidateMaturity(any()) }
+        coVerify(exactly = 0) { contributionConsolidator.consolidateMaturity(any()) }
         coVerify(exactly = 1) { repository.saveAll(consolidationResult.statements) }
     }
 
@@ -994,15 +999,19 @@ class BondConsolidationOrchestratorTest : StringSpec({
         coEvery { indexValueService.fetchAllBy(indexId, orderDate2) } returns emptyList()
         coEvery { repository.sumUpConsolidatedValues(1, orderDate1) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
         coEvery { repository.sumUpConsolidatedValues(2, orderDate2) } returns (BigDecimal("0.00") to BigDecimal("0.00"))
-        coEvery { consolidator.calculateBondo(any()) } returnsMany listOf(consolidationResult1, consolidationResult2)
+        coEvery {
+            contributionConsolidator.calculateBondo(any())
+        } returnsMany listOf(consolidationResult1, consolidationResult2)
         coEvery { bondOrderService.create(any(), any()) } returnsMany listOf(maturityOrder1, maturityOrder2)
-        coEvery { consolidator.consolidateMaturity(any()) } returnsMany listOf(maturityStatements1, maturityStatements2)
+        coEvery {
+            contributionConsolidator.consolidateMaturity(any())
+        } returnsMany listOf(maturityStatements1, maturityStatements2)
         coEvery { repository.saveAll(any()) } just Runs
 
-        orchestrator.consolidateBy(bondId)
+        consolidator.consolidate(consolidator.buildContext(bondId))
 
         coVerify(exactly = 2) { bondOrderService.create(any(), any()) }
-        coVerify(exactly = 2) { consolidator.consolidateMaturity(any()) }
+        coVerify(exactly = 2) { contributionConsolidator.consolidateMaturity(any()) }
         coVerify(exactly = 1) {
             repository.saveAll(
                 consolidationResult1.statements + maturityStatements1 +
