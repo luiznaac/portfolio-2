@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component
 
 @Component
 class CheckingAccountConsolidator(
-    private val bondOrderService: BondOrderService,
     private val repository: ICheckingAccountRepository,
+    private val bondOrderService: BondOrderService,
     private val consolidationOrchestrator: BondConsolidationService,
 ) : ProductConsolidator<CheckingAccountConsolidationContext> {
     override val type = ProductType.CHECKING_ACCOUNT
@@ -38,5 +38,9 @@ class CheckingAccountConsolidator(
 
     override suspend fun consolidate(ctx: CheckingAccountConsolidationContext) {
         consolidationOrchestrator.consolidate(ctx.deposits, ctx.withdrawals, ctx.fullWithdrawal)
+    }
+
+    override suspend fun getConsolidatableIds(): List<Int> {
+        TODO("Not yet implemented")
     }
 }

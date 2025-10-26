@@ -14,4 +14,6 @@ interface IBondRepository {
     suspend fun save(creation: BondCreation): Bond
 
     suspend fun save(checkingAccountId: Int, creation: FloatingRateBondCreation): FloatingRateBond
+
+    suspend fun fetchBondsWithoutFullRedemptionOrMaturity(): List<Bond>
 }

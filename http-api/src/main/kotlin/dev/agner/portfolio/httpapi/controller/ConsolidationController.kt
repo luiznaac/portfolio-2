@@ -1,7 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
+import dev.agner.portfolio.usecase.consolidation.ConsolidationService
 import dev.agner.portfolio.usecase.consolidation.ProductType
-import dev.agner.portfolio.usecase.schedule.ScheduleService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class ConsolidationController(
-    private val service: ScheduleService,
+    private val service: ConsolidationService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -18,7 +18,7 @@ class ConsolidationController(
             post("/{product_type}/schedule") {
                 val productType = ProductType.valueOf(call.parameters["product_type"]!!)
 
-                service.scheduleProductConsolidation(productType)
+//                service.scheduleProductConsolidation(productType)
 
                 call.respond(HttpStatusCode.OK)
             }

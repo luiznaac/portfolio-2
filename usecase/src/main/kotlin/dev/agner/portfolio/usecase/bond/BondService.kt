@@ -29,4 +29,6 @@ class BondService(
     }
 
     suspend fun fetchAll() = bondRepository.fetchAll()
+
+    suspend fun fetchConsolidatableBonds() = bondRepository.fetchBondsWithoutFullRedemptionOrMaturity()
 }

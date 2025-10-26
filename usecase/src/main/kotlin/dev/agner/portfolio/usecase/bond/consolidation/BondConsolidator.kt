@@ -40,4 +40,8 @@ class BondConsolidator(
     override suspend fun consolidate(ctx: BondConsolidationContext) {
         bondConsolidationService.consolidate(ctx.buys, ctx.sells, ctx.fullRedemption)
     }
+
+    override suspend fun getConsolidatableIds(): List<Int> {
+        TODO("Not yet implemented")
+    }
 }

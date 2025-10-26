@@ -7,4 +7,6 @@ interface ProductConsolidator<T> {
     suspend fun buildContext(productId: Int): T
 
     suspend fun consolidate(ctx: T)
+
+    suspend fun getConsolidatableIds(): List<Int>
 }
