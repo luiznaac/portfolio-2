@@ -31,7 +31,7 @@ exposed-datetime = { module="org.jetbrains.exposed:exposed-kotlin-datetime", ver
 
 logback-classic = "ch.qos.logback:logback-classic:1.5.20"
 
-spring-boot = { module = "org.springframework.boot:spring-boot", version = "3.5.6" }
+spring-boot = { module = "org.springframework.boot:spring-boot", version = "3.5.7" }
 spring-context = { module="org.springframework:spring-context", version.ref="springframework" }
 
 snakeyaml = "org.yaml:snakeyaml:2.5"
@@ -50,7 +50,7 @@ kotest-property-jvm = { module="io.kotest:kotest-property-jvm", version.ref="kot
 kotlinx-coroutines-test = { module="org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref="kotlinx-coroutines-version" }
 mockk = "io.mockk:mockk:1.14.6"
 spring-test = { module="org.springframework:spring-test", version.ref="springframework" }
-spring-boot-starter-test = { module="org.springframework.boot:spring-boot-starter-test", version = "3.5.6" }
+spring-boot-starter-test = { module="org.springframework.boot:spring-boot-starter-test", version = "3.5.7" }
 testcontainers = { module="org.testcontainers:testcontainers", version = "1.21.3" }
 wiremock = "io.kotest.extensions:kotest-extensions-wiremock:3.1.0"
 
