@@ -14,11 +14,16 @@ class ConsolidationController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/consolidation") {
-            post("/{product_type}/schedule") {
-                val productType = ProductType.valueOf(call.parameters["product_type"]!!)
+        route("/consolidations") {
+            post("/schedule") {
+                call.respond(HttpStatusCode.OK, service.scheduleConsolidations())
+            }
 
-//                service.scheduleProductConsolidation(productType)
+            post("/{product_type}/{product_id}") {
+                val productType = ProductType.valueOf(call.parameters["product_type"]!!)
+                val productId = call.parameters["product_id"]!!.toInt()
+
+                service.consolidateProduct(productId, productType)
 
                 call.respond(HttpStatusCode.OK)
             }

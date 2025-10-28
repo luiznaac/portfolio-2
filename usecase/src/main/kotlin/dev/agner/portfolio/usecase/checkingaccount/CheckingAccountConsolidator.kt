@@ -40,7 +40,5 @@ class CheckingAccountConsolidator(
         consolidationOrchestrator.consolidate(ctx.deposits, ctx.withdrawals, ctx.fullWithdrawal)
     }
 
-    override suspend fun getConsolidatableIds(): List<Int> {
-        TODO("Not yet implemented")
-    }
+    override suspend fun getConsolidatableIds() = emptyList<Int>()
 }

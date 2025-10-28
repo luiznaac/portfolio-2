@@ -37,7 +37,7 @@ suspend fun <T, R> Iterable<Deferred<T>>.mapAsyncDeferred(transform: suspend (T)
     }
 }
 
-suspend fun <T, R> Iterable<Deferred<T>>.onEachAsyncDeferred(transform: suspend (T) -> R) = coroutineScope {
+suspend fun <T> Iterable<Deferred<T>>.onEachAsyncDeferred(transform: suspend (T) -> Unit) = coroutineScope {
     map {
         async {
             val itt = it.await()

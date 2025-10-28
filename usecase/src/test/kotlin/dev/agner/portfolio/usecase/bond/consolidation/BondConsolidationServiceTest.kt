@@ -2,6 +2,7 @@
 package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.BondOrderService
+import dev.agner.portfolio.usecase.bond.BondService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.DownToZeroContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.RedemptionContext.SellContext
@@ -43,6 +44,7 @@ import java.time.ZoneId
 class BondConsolidationServiceTest : StringSpec({
 
     val repository = mockk<IBondOrderStatementRepository>()
+    val bondService = mockk<BondService>()
     val bondOrderService = mockk<BondOrderService>()
     val indexValueService = mockk<IndexValueService>()
     val contributionConsolidator = mockk<BondContributionConsolidator>()
@@ -52,7 +54,7 @@ class BondConsolidationServiceTest : StringSpec({
         BondConsolidationService(repository, bondOrderService, indexValueService, contributionConsolidator, clock)
 
     // Doing this so that I don't have to rewrite the whole test class and I ensure that the refactor hasn't broken anything
-    val consolidator = BondConsolidator(repository, bondOrderService, service)
+    val consolidator = BondConsolidator(repository, bondService, bondOrderService, service)
 
     beforeEach {
         clearAllMocks()

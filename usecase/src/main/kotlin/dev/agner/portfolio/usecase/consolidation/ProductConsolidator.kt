@@ -4,9 +4,9 @@ interface ProductConsolidator<T> {
 
     val type: ProductType
 
+    suspend fun getConsolidatableIds(): List<Int>
+
     suspend fun buildContext(productId: Int): T
 
     suspend fun consolidate(ctx: T)
-
-    suspend fun getConsolidatableIds(): List<Int>
 }

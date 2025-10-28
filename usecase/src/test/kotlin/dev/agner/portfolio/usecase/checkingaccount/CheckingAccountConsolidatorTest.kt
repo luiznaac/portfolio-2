@@ -24,8 +24,8 @@ class CheckingAccountConsolidatorTest : StringSpec({
     val consolidationService = mockk<BondConsolidationService>()
 
     val consolidator = CheckingAccountConsolidator(
-        bondOrderService,
         repository,
+        bondOrderService,
         consolidationService,
     )
 

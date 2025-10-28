@@ -12,8 +12,8 @@ class ScheduleService(
     @param:Value("\${app-own-host}") private val host: String,
 ) {
 
-    suspend fun scheduleProductConsolidation(type: ProductType) {
-        val context = ScheduleContext(host, "/consolidation/$type/123")
+    suspend fun scheduleProductConsolidation(productId: Int, type: ProductType) {
+        val context = ScheduleContext(host, "/consolidations/$type/$productId")
         gateway.scheduleOneTimeJob(context)
     }
 }
