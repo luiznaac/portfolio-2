@@ -13,11 +13,15 @@ import org.springframework.stereotype.Component
 
 @Component
 class CheckingAccountConsolidator(
+    // Create service to wrap this repository
     private val repository: ICheckingAccountRepository,
     private val bondOrderService: BondOrderService,
     private val consolidationOrchestrator: BondConsolidationService,
 ) : ProductConsolidator<CheckingAccountConsolidationContext> {
+
     override val type = ProductType.CHECKING_ACCOUNT
+
+    override suspend fun getConsolidatableIds() = repository.fetchCheckingAccountsWithoutFullWithdrawal().map { it.id }
 
     override suspend fun buildContext(productId: Int): CheckingAccountConsolidationContext {
         val orders = bondOrderService.fetchByCheckingAccountId(productId)
@@ -39,6 +43,4 @@ class CheckingAccountConsolidator(
     override suspend fun consolidate(ctx: CheckingAccountConsolidationContext) {
         consolidationOrchestrator.consolidate(ctx.deposits, ctx.withdrawals, ctx.fullWithdrawal)
     }
-
-    override suspend fun getConsolidatableIds() = emptyList<Int>()
 }

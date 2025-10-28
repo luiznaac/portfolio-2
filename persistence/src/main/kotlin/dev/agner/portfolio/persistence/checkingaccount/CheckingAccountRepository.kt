@@ -1,11 +1,17 @@
 package dev.agner.portfolio.persistence.checkingaccount
 
+import dev.agner.portfolio.persistence.bond.BondOrderTable
 import dev.agner.portfolio.persistence.index.IndexEntity
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountCreation
 import dev.agner.portfolio.usecase.checkingaccount.repository.ICheckingAccountRepository
 import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.commons.now
 import kotlinx.datetime.LocalDateTime
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.notInSubQuery
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -78,5 +84,18 @@ class CheckingAccountRepository(
 
             ids
         }!!
+    }
+
+    override suspend fun fetchCheckingAccountsWithoutFullWithdrawal() = transaction {
+        val subQuery = BondOrderTable
+            .select(BondOrderTable.checkingAccountId)
+            .where {
+                (BondOrderTable.checkingAccountId.isNotNull()) and
+                    (BondOrderTable.type eq "FULL_WITHDRAWAL")
+            }
+
+        CheckingAccountEntity
+            .find { CheckingAccountTable.id notInSubQuery subQuery }
+            .map { it.toModel() }
     }
 }
