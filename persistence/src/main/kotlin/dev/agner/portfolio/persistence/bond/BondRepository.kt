@@ -10,11 +10,7 @@ import dev.agner.portfolio.usecase.bond.repository.IBondRepository
 import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.commons.now
 import kotlinx.datetime.LocalDateTime
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.isNull
-import org.jetbrains.exposed.v1.core.notInSubQuery
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -56,17 +52,47 @@ class BondRepository(
     }
 
     override suspend fun fetchBondsWithoutFullRedemptionOrMaturity() = transaction {
-        val subQuery = BondOrderTable
-            .select(BondOrderTable.bondId)
-            .where {
-                (BondOrderTable.checkingAccountId.isNull()) and
-                    (BondOrderTable.type inList listOf("FULL_REDEMPTION", "MATURITY"))
+        exec(
+            """
+            SELECT
+                bo.bond_id AS id,
+                COALESCE(SUM(yield_result.amount), 0)
+                    + COALESCE(SUM(bo.amount), 0)
+                    - COALESCE(SUM(principal_redeem.amount), 0) AS result
+            FROM bond_order bo
+            LEFT JOIN (
+                SELECT
+                    buy_order_id,
+                    SUM(CASE
+                        WHEN type = 'YIELD' THEN amount
+                        WHEN type = 'YIELD_REDEEM' THEN -amount
+                        WHEN type LIKE '%_TAX' THEN -amount
+                        ELSE 0
+                    END) AS amount
+                FROM bond_order_statement
+                GROUP BY buy_order_id
+            ) yield_result ON yield_result.buy_order_id = bo.id
+            LEFT JOIN (
+                SELECT
+                    buy_order_id,
+                    SUM(amount) AS amount
+                FROM bond_order_statement
+                WHERE type = 'PRINCIPAL_REDEEM'
+                GROUP BY buy_order_id
+            ) principal_redeem ON principal_redeem.buy_order_id = bo.id
+            WHERE checking_account_id IS NULL
+            GROUP BY bo.bond_id
+            HAVING result > 0;
+            """.trimIndent(),
+        ) { resultSet ->
+            val checkingAccountIds = mutableListOf<Int>()
+            while (resultSet.next()) {
+                checkingAccountIds.add(resultSet.getInt("id"))
             }
-
-        BondEntity.find {
-            (BondTable.checkingAccount.isNull()) and
-                (BondTable.id notInSubQuery subQuery)
-        }.map { it.toModel() }
+            checkingAccountIds
+        }?.let { ids ->
+            BondEntity.find { BondTable.id inList ids }.map { it.toModel() }
+        } ?: emptyList()
     }
 }
 
