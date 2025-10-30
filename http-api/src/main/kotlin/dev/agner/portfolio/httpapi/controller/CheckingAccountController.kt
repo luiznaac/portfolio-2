@@ -2,9 +2,10 @@ package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.checkingaccount.CheckingAccountService
-import dev.agner.portfolio.usecase.checkingaccount.ConsolidateCheckingAccountUseCase
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountCreation
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountMovementCreation
+import dev.agner.portfolio.usecase.consolidation.ConsolidationService
+import dev.agner.portfolio.usecase.consolidation.ProductType.CHECKING_ACCOUNT
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -18,7 +19,7 @@ import java.math.BigDecimal
 @Component
 class CheckingAccountController(
     private val service: CheckingAccountService,
-    private val consolidateUseCase: ConsolidateCheckingAccountUseCase,
+    private val consolidationService: ConsolidationService,
     private val positionService: BondPositionService,
 ) : ControllerTemplate {
 
@@ -70,7 +71,7 @@ class CheckingAccountController(
             post("/{checking_account_id}/consolidate") {
                 val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
 
-                consolidateUseCase.execute(checkingAccountId)
+                consolidationService.consolidateProduct(checkingAccountId, CHECKING_ACCOUNT)
                 call.respond(HttpStatusCode.NoContent)
             }
 

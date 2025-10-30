@@ -1,10 +1,11 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.bond.BondService
-import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidationOrchestrator
 import dev.agner.portfolio.usecase.bond.model.BondCreation.FixedRateBondCreation
 import dev.agner.portfolio.usecase.bond.model.BondCreation.FloatingRateBondCreation
 import dev.agner.portfolio.usecase.bond.position.BondPositionService
+import dev.agner.portfolio.usecase.consolidation.ConsolidationService
+import dev.agner.portfolio.usecase.consolidation.ProductType.BOND
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -16,7 +17,7 @@ import org.springframework.stereotype.Component
 @Component
 class BondController(
     private val service: BondService,
-    private val consolidationOrchestrator: BondConsolidationOrchestrator,
+    private val consolidationService: ConsolidationService,
     private val positionService: BondPositionService,
 ) : ControllerTemplate {
 
@@ -47,7 +48,7 @@ class BondController(
             post("/{bond_id}/consolidate") {
                 val bondId = call.parameters["bond_id"]!!.toInt()
 
-                consolidationOrchestrator.consolidateBy(bondId)
+                consolidationService.consolidateProduct(bondId, BOND)
                 call.respond(HttpStatusCode.NoContent)
             }
 

@@ -1,2 +1,10 @@
 ktor:
   port: 80
+
+gateways:
+  bacen:
+    host: 'https://api.bcb.gov.br'
+  chameidor:
+    host: 'http://chameidor'
+
+app-own-host: 'portfolio'

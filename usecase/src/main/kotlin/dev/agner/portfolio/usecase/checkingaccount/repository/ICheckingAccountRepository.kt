@@ -14,4 +14,6 @@ interface ICheckingAccountRepository {
     suspend fun fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId: Int): Set<Int>
 
     suspend fun fetchAlreadyRedeemedDepositIds(checkingAccountId: Int): Set<Int>
+
+    suspend fun fetchCheckingAccountsWithoutFullWithdrawal(): List<CheckingAccount>
 }

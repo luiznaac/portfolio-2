@@ -15,3 +15,8 @@ fun ResponseConfiguration.bacenCDIValues(from: String, to: String, values: List<
     )
     payload = values
 }
+
+fun ResponseConfiguration.oneTimeTask() {
+    method = RequestMethod.POST
+    endpoint = "/tasks/one-time"
+}
