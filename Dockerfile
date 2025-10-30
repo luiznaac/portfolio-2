@@ -12,7 +12,7 @@ RUN mkdir -p /home/gradle/project/build/distributions/app/
 RUN unzip /home/gradle/project/application/build/distributions/*.zip -d /home/gradle/project/build/distributions/app/
 
 # Application
-FROM openjdk:21-slim
+FROM eclipse-temurin:21-jre-alpine
 
 COPY --from=builder /home/gradle/project/build/distributions/app/ /opt/app/
 
