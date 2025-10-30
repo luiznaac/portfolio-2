@@ -29,14 +29,14 @@ suspend fun createFloatingBond(value: String, index: String, maturityDate: Strin
         )
     }["id"]!!
 
-suspend fun createBondOrder(bondId: String, type: String, date: String, amount: String) =
+suspend fun createBondOrder(bondId: String, type: String, date: String, amount: String? = null) =
     postRequest<Unit> {
         path = "/bonds/orders"
         body = mapOf(
             "bond_id" to bondId,
             "type" to type,
             "date" to date,
-            "amount" to amount.toBigDecimal(),
+            "amount" to amount?.toBigDecimal(),
         )
     }
 
@@ -44,6 +44,23 @@ suspend fun consolidateBond(bondId: String) =
     postRequest<Unit> {
         path = "/bonds/$bondId/consolidate"
     }
+
+suspend fun scheduleConsolidations() =
+    postRequest<Map<String, List<Int>>> {
+        path = "/consolidations/schedule"
+    }.also {
+        it.onEach { (type, ids) ->
+            ids.forEach { id ->
+                consolidateProduct(type, id)
+            }
+        }
+    }
+
+suspend fun consolidateProduct(productType: String, productId: Int) {
+    postRequest<Unit> {
+        path = "/consolidations/$productType/$productId"
+    }
+}
 
 suspend fun bondPositions(bondId: String) =
     getRequest<List<Map<String, Any>>> {
@@ -76,6 +93,14 @@ suspend fun createWithdrawal(checkingAccountId: String, date: String, amount: St
         body = mapOf(
             "date" to date,
             "amount" to amount.toBigDecimal(),
+        )
+    }
+
+suspend fun createFullWithdrawal(checkingAccountId: String, date: String) =
+    postRequest<Unit> {
+        path = "/checking-accounts/$checkingAccountId/full-withdraw"
+        body = mapOf(
+            "date" to date,
         )
     }
 

@@ -111,6 +111,7 @@ class CheckingAccountRepository(
                 WHERE type = 'PRINCIPAL_REDEEM'
                 GROUP BY buy_order_id
             ) principal_redeem ON principal_redeem.buy_order_id = bo.id
+            WHERE bo.type = 'DEPOSIT'
             GROUP BY ca.id
             HAVING result > 0;
             """.trimIndent(),

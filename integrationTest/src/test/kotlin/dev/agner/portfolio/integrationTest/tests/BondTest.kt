@@ -5,11 +5,12 @@ import dev.agner.portfolio.integrationTest.config.HttpMockService.configureRespo
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.bacenCDIValues
 import dev.agner.portfolio.integrationTest.helpers.bondPositions
-import dev.agner.portfolio.integrationTest.helpers.consolidateBond
 import dev.agner.portfolio.integrationTest.helpers.createBondOrder
 import dev.agner.portfolio.integrationTest.helpers.createFloatingBond
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.hydrateIndexValues
+import dev.agner.portfolio.integrationTest.helpers.oneTimeTask
+import dev.agner.portfolio.integrationTest.helpers.scheduleConsolidations
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.Maturity
@@ -46,11 +47,8 @@ class BondTest : StringSpec({
         )
 
         configureResponses {
-            response {
-                // Too lazy to fix this now, but it should return only the values for the date range
-                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
-                bacenCDIValues("2025-09-08", "2025-09-30", buildBacenValues())
-            }
+            response { bacenCDIValues("2025-09-08", "2025-09-30", buildBacenValues()) }
+            response { oneTimeTask() }
         }
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
@@ -65,7 +63,7 @@ class BondTest : StringSpec({
         createBondOrder(bondId, "SELL", "2025-08-11", "2500.00")
         createBondOrder(bondId, "BUY", "2025-08-29", "2200.00")
 
-        consolidateBond(bondId)
+        scheduleConsolidations()
         val positions = bondPositions(bondId)
 
         positions.size shouldBe 87
@@ -75,6 +73,9 @@ class BondTest : StringSpec({
             it["yield"]!! shouldBe 1271.92
             it["taxes"]!! shouldBe 279.8224
             it["result"]!! shouldBe 31142.9576
+        }
+        scheduleConsolidations().also {
+            it["BOND"]!! shouldBe listOf(bondId.toInt())
         }
     }
 
@@ -92,9 +93,8 @@ class BondTest : StringSpec({
         )
 
         configureResponses {
-            response {
-                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
-            }
+            response { bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues()) }
+            response { oneTimeTask() }
         }
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
@@ -102,7 +102,7 @@ class BondTest : StringSpec({
         val bondId = createFloatingBond("102.00", "CDI", "2025-09-01")
         createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
 
-        consolidateBond(bondId)
+        scheduleConsolidations()
         val positions = bondPositions(bondId)
 
         positions.size shouldBe 66
@@ -123,6 +123,9 @@ class BondTest : StringSpec({
         orders.firstOfInstance<Maturity>().also {
             it.date shouldBe LocalDate.parse("2025-09-01")
         }
+        scheduleConsolidations().also {
+            it["BOND"]!!.isEmpty() shouldBe true
+        }
     }
 
     "single bond with sell order that turns into full redemption" {
@@ -139,9 +142,8 @@ class BondTest : StringSpec({
         )
 
         configureResponses {
-            response {
-                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
-            }
+            response { bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues()) }
+            response { oneTimeTask() }
         }
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
@@ -150,7 +152,7 @@ class BondTest : StringSpec({
         createBondOrder(bondId, "BUY", "2025-05-30", "4019.01")
         createBondOrder(bondId, "SELL", "2025-06-03", "5123.45")
 
-        consolidateBond(bondId)
+        scheduleConsolidations()
         val positions = bondPositions(bondId)
 
         positions.size shouldBe 3
@@ -170,6 +172,10 @@ class BondTest : StringSpec({
         }
         orders.firstOfInstance<FullRedemption>().also {
             it.date shouldBe LocalDate.parse("2025-06-03")
+        }
+
+        scheduleConsolidations().also {
+            it["BOND"]!!.isEmpty() shouldBe true
         }
     }
 })

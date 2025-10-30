@@ -9,3 +9,5 @@ mysql:
 gateways:
   bacen:
     host: 'http://localhost:3000'
+  chameidor:
+    host: 'http://localhost:3000'

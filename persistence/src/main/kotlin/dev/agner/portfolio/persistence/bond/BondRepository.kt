@@ -81,6 +81,7 @@ class BondRepository(
                 GROUP BY buy_order_id
             ) principal_redeem ON principal_redeem.buy_order_id = bo.id
             WHERE checking_account_id IS NULL
+                AND bo.type = 'BUY'
             GROUP BY bo.bond_id
             HAVING result > 0;
             """.trimIndent(),

@@ -5,12 +5,13 @@ import dev.agner.portfolio.integrationTest.config.HttpMockService.configureRespo
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.bacenCDIValues
 import dev.agner.portfolio.integrationTest.helpers.checkingAccountPositions
-import dev.agner.portfolio.integrationTest.helpers.consolidateCheckingAccount
 import dev.agner.portfolio.integrationTest.helpers.createCheckingAccount
 import dev.agner.portfolio.integrationTest.helpers.createDeposit
 import dev.agner.portfolio.integrationTest.helpers.createWithdrawal
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.hydrateIndexValues
+import dev.agner.portfolio.integrationTest.helpers.oneTimeTask
+import dev.agner.portfolio.integrationTest.helpers.scheduleConsolidations
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.Maturity
@@ -47,11 +48,8 @@ class CheckingAccountTest : StringSpec({
         )
 
         configureResponses {
-            response {
-                // Too lazy to fix this now, but it should return only the values for the date range
-                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
-                bacenCDIValues("2025-09-08", "2025-09-30", buildBacenValues())
-            }
+            response { bacenCDIValues("2025-09-08", "2025-09-30", buildBacenValues()) }
+            response { oneTimeTask() }
         }
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
@@ -66,7 +64,7 @@ class CheckingAccountTest : StringSpec({
         createWithdrawal(checkingAccountId, "2025-08-11", "2500.00")
         createDeposit(checkingAccountId, "2025-08-29", "2200.00")
 
-        consolidateCheckingAccount(checkingAccountId)
+        scheduleConsolidations()
         val positions = checkingAccountPositions(checkingAccountId)
 
         positions.size shouldBe 87
@@ -76,6 +74,9 @@ class CheckingAccountTest : StringSpec({
             it["yield"]!! shouldBe 1271.92
             it["taxes"]!! shouldBe 279.8224
             it["result"]!! shouldBe 31142.9576
+        }
+        scheduleConsolidations().also {
+            it["CHECKING_ACCOUNT"]!! shouldBe listOf(checkingAccountId.toInt())
         }
     }
 
@@ -93,9 +94,8 @@ class CheckingAccountTest : StringSpec({
         )
 
         configureResponses {
-            response {
-                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
-            }
+            response { bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues()) }
+            response { oneTimeTask() }
         }
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
@@ -103,7 +103,7 @@ class CheckingAccountTest : StringSpec({
         val checkingAccountId = createCheckingAccount("102.00", "CDI", "P3M")
         createDeposit(checkingAccountId, "2025-05-30", "4019.01")
 
-        consolidateCheckingAccount(checkingAccountId)
+        scheduleConsolidations()
         val positions = checkingAccountPositions(checkingAccountId)
 
         positions.size shouldBe 66
@@ -124,6 +124,9 @@ class CheckingAccountTest : StringSpec({
         orders.firstOfInstance<Maturity>().also {
             it.date shouldBe LocalDate.parse("2025-09-01")
         }
+        scheduleConsolidations().also {
+            it["CHECKING_ACCOUNT"]!!.isEmpty() shouldBe true
+        }
     }
 
     "single bond with sell order that turns into full redemption" {
@@ -140,9 +143,8 @@ class CheckingAccountTest : StringSpec({
         )
 
         configureResponses {
-            response {
-                bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues())
-            }
+            response { bacenCDIValues("2025-05-30", "2025-09-07", buildBacenValues()) }
+            response { oneTimeTask() }
         }
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
@@ -151,7 +153,7 @@ class CheckingAccountTest : StringSpec({
         createDeposit(checkingAccountId, "2025-05-30", "4019.01")
         createWithdrawal(checkingAccountId, "2025-06-03", "5123.45")
 
-        consolidateCheckingAccount(checkingAccountId)
+        scheduleConsolidations()
         val positions = checkingAccountPositions(checkingAccountId)
 
         positions.size shouldBe 3
@@ -171,6 +173,9 @@ class CheckingAccountTest : StringSpec({
         }
         orders.firstOfInstance<FullWithdrawal>().also {
             it.date shouldBe LocalDate.parse("2025-06-03")
+        }
+        scheduleConsolidations().also {
+            it["CHECKING_ACCOUNT"]!!.isEmpty() shouldBe true
         }
     }
 })
