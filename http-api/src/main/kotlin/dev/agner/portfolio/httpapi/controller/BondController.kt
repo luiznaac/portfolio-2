@@ -55,7 +55,13 @@ class BondController(
             get("/{bond_id}/positions") {
                 val bondId = call.parameters["bond_id"]!!.toInt()
 
-                call.respond(positionService.calculateByBondId(bondId))
+                call.respond(positionService.getByBondId(bondId))
+            }
+
+            get("/{bond_id}/positions/last") {
+                val bondId = call.parameters["bond_id"]!!.toInt()
+
+                call.respond(positionService.getLastByBondId(bondId))
             }
         }
     }

@@ -8,5 +8,4 @@ data class CheckingAccountPosition(
     val principal: BigDecimal,
     val yield: BigDecimal,
     val taxes: BigDecimal,
-    val result: BigDecimal,
 )

@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidationService
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Withdrawal
+import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountConsolidationContext
 import dev.agner.portfolio.usecase.checkingaccount.repository.ICheckingAccountRepository
 import dev.agner.portfolio.usecase.consolidation.ProductConsolidator
@@ -17,6 +18,7 @@ class CheckingAccountConsolidator(
     private val repository: ICheckingAccountRepository,
     private val bondOrderService: BondOrderService,
     private val consolidationOrchestrator: BondConsolidationService,
+    private val positionService: BondPositionService,
 ) : ProductConsolidator<CheckingAccountConsolidationContext> {
 
     override val type = ProductType.CHECKING_ACCOUNT
@@ -41,6 +43,7 @@ class CheckingAccountConsolidator(
     }
 
     override suspend fun consolidate(ctx: CheckingAccountConsolidationContext) {
-        consolidationOrchestrator.consolidate(ctx.deposits, ctx.withdrawals, ctx.fullWithdrawal)
+        val statements = consolidationOrchestrator.consolidate(ctx.deposits, ctx.withdrawals, ctx.fullWithdrawal)
+        positionService.consolidatePositions(statements, ctx.deposits)
     }
 }
