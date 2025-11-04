@@ -45,8 +45,8 @@ class BondContributionConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.60")),
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("500.00")),
@@ -129,7 +129,7 @@ class BondContributionConsolidatorTest : StringSpec({
             principal = BigDecimal("1000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("1500.00")),
@@ -180,9 +180,9 @@ class BondContributionConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.40")),
-                date3 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.40")),
+                date3 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.60")),
             ),
         )
 
@@ -274,9 +274,9 @@ class BondContributionConsolidatorTest : StringSpec({
             principal = BigDecimal("1000.00"),
             yieldAmount = BigDecimal("500.00"),
             yieldPercentages = mapOf(
-                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
-                date3 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.70")), // Should not be processed
+                date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.60")),
+                date3 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.70")), // Should not be processed
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("800.00")),
@@ -397,8 +397,8 @@ class BondContributionConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
-                date2 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.60")),
+                date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
+                date2 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.60")),
             ),
             fullRedemption = DownToZeroContext(
                 id = 10,
@@ -470,7 +470,7 @@ class BondContributionConsolidatorTest : StringSpec({
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldPercentages = mapOf(
-                date1 to BondContributionConsolidationContext.YieldPercentageContext(BigDecimal("0.50")),
+                date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
             ),
             fullRedemption = null, // No full redemption
         )
