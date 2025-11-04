@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.bond.consolidation.model.BondConsolidationCon
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Sell
+import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
 import dev.agner.portfolio.usecase.consolidation.ProductConsolidator
 import dev.agner.portfolio.usecase.consolidation.ProductType
@@ -17,6 +18,7 @@ class BondConsolidator(
     private val bondService: BondService,
     private val bondOrderService: BondOrderService,
     private val bondConsolidationService: BondConsolidationService,
+    private val bondPositionService: BondPositionService,
 ) : ProductConsolidator<BondConsolidationContext> {
 
     override val type = ProductType.BOND
@@ -42,6 +44,7 @@ class BondConsolidator(
     }
 
     override suspend fun consolidate(ctx: BondConsolidationContext) {
-        bondConsolidationService.consolidate(ctx.buys, ctx.sells, ctx.fullRedemption)
+        val statements = bondConsolidationService.consolidate(ctx.buys, ctx.sells, ctx.fullRedemption)
+        bondPositionService.consolidatePositions(statements, ctx.buys)
     }
 }

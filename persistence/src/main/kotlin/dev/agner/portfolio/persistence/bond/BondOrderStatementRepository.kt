@@ -109,7 +109,7 @@ class BondOrderStatementRepository(
         }!!
     }
 
-    override suspend fun saveAll(creations: List<BondOrderStatementCreation>): Unit = transaction {
+    override suspend fun saveAll(creations: List<BondOrderStatementCreation>) = transaction {
         BondOrderStatementTable.batchInsert(creations) {
             this[BondOrderStatementTable.buyOrderId] = it.buyOrderId
             this[BondOrderStatementTable.sellOrderId] = it.resolveSellOrderId()
@@ -117,7 +117,7 @@ class BondOrderStatementRepository(
             this[BondOrderStatementTable.date] = it.date
             this[BondOrderStatementTable.amount] = it.amount
             this[BondOrderStatementTable.createdAt] = LocalDateTime.now(clock)
-        }
+        }.map { inserted -> BondOrderStatementEntity.wrapRow(inserted).toModel() }
     }
 }
 

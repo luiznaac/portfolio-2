@@ -10,6 +10,7 @@ import dev.agner.portfolio.usecase.bond.repository.IBondRepository
 import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.commons.now
 import kotlinx.datetime.LocalDateTime
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
@@ -94,6 +95,10 @@ class BondRepository(
         }?.let { ids ->
             BondEntity.find { BondTable.id inList ids }.map { it.toModel() }
         } ?: emptyList()
+    }
+
+    override suspend fun fetchByCheckingAccountId(checkingAccountId: Int) = transaction {
+        BondEntity.find { BondTable.checkingAccount eq checkingAccountId }.map { it.toModel() }
     }
 }
 

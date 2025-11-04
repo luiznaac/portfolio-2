@@ -17,5 +17,5 @@ interface IBondOrderStatementRepository {
 
     suspend fun sumUpConsolidatedValues(buyOrderId: Int, date: LocalDate): Pair<BigDecimal, BigDecimal>
 
-    suspend fun saveAll(creations: List<BondOrderStatementCreation>)
+    suspend fun saveAll(creations: List<BondOrderStatementCreation>): List<BondOrderStatement>
 }

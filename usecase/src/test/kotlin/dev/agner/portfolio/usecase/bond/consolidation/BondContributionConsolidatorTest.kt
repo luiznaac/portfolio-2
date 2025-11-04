@@ -1,4 +1,3 @@
-
 package dev.agner.portfolio.usecase.bond.consolidation
 
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord

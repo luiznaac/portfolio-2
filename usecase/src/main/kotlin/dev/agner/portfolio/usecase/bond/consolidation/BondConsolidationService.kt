@@ -22,6 +22,7 @@ import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Sell
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Withdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
+import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
@@ -50,11 +51,11 @@ class BondConsolidationService(
         contribution: List<Contribution>,
         redemption: List<Redemption>,
         downToZero: DownToZero?,
-    ) {
+    ): List<BondOrderStatement> {
         val redemptionContexts = redemption.associate { it.date to it.toContext() }
         val downToZeroContext = downToZero?.let { DownToZeroContext(it.id, it.date) }
 
-        contribution
+        return contribution
             .sortedBy { it.date }
             .fold(IntermediateData(redemptionContexts)) { acc, contributionOrder ->
                 val startingDate = contributionOrder.resolveCalculationStartingDate()
@@ -86,6 +87,7 @@ class BondConsolidationService(
             .chunked(100)
             .mapAsync { repository.saveAll(it) }
             .awaitAll()
+            .flatten()
     }
 
     private suspend fun BondOrder.resolveCalculationStartingDate() =

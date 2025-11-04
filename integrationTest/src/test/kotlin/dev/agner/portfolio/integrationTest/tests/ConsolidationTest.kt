@@ -80,8 +80,7 @@ class ConsolidationTest : StringSpec({
                 it["date"]!! shouldBe "2025-09-30"
                 it["principal"]!! shouldBe 4019.01
                 it["yield"]!! shouldBe 200.95
-                it["taxes"]!! shouldBe 44.209
-                it["result"]!! shouldBe 4175.751
+                it["taxes"]!! shouldBe 44.21
             }
         }
         bondPositions(bondId_withMaturity).also { positions ->
@@ -91,7 +90,6 @@ class ConsolidationTest : StringSpec({
                 it["principal"]!! shouldBe 0.0
                 it["yield"]!! shouldBe 0.0
                 it["taxes"]!! shouldBe 0.0
-                it["result"]!! shouldBe 0.0
             }
         }
         bondPositions(bondId_withFullRedemption).also { positions ->
@@ -101,7 +99,6 @@ class ConsolidationTest : StringSpec({
                 it["principal"]!! shouldBe 0.0
                 it["yield"]!! shouldBe 0.0
                 it["taxes"]!! shouldBe 0.0
-                it["result"]!! shouldBe 0.0
             }
         }
 
@@ -111,8 +108,7 @@ class ConsolidationTest : StringSpec({
                 it["date"]!! shouldBe "2025-09-30"
                 it["principal"]!! shouldBe 4019.01
                 it["yield"]!! shouldBe 200.95
-                it["taxes"]!! shouldBe 44.209
-                it["result"]!! shouldBe 4175.751
+                it["taxes"]!! shouldBe 44.21
             }
         }
         checkingAccountPositions(checkingAccountId_withMaturity).also { positions ->
@@ -122,7 +118,6 @@ class ConsolidationTest : StringSpec({
                 it["principal"]!! shouldBe 0.0
                 it["yield"]!! shouldBe 0.0
                 it["taxes"]!! shouldBe 0.0
-                it["result"]!! shouldBe 0.0
             }
         }
         checkingAccountPositions(checkingAccountId_withFullWithdraw).also { positions ->
@@ -132,7 +127,6 @@ class ConsolidationTest : StringSpec({
                 it["principal"]!! shouldBe 0.0
                 it["yield"]!! shouldBe 0.0
                 it["taxes"]!! shouldBe 0.0
-                it["result"]!! shouldBe 0.0
             }
         }
 

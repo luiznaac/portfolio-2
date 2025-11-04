@@ -5,14 +5,13 @@ import dev.agner.portfolio.usecase.bond.consolidation.BondConsolidationService
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullWithdrawal
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Redemption.Withdrawal
+import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.checkingaccount.repository.ICheckingAccountRepository
 import dev.agner.portfolio.usecase.floatingRateBond
 import io.kotest.core.spec.style.StringSpec
-import io.mockk.Runs
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.just
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
@@ -22,11 +21,13 @@ class CheckingAccountConsolidatorTest : StringSpec({
     val bondOrderService = mockk<BondOrderService>()
     val repository = mockk<ICheckingAccountRepository>()
     val consolidationService = mockk<BondConsolidationService>()
+    val positionService = mockk<BondPositionService>(relaxUnitFun = true)
 
     val consolidator = CheckingAccountConsolidator(
         repository,
         bondOrderService,
         consolidationService,
+        positionService,
     )
 
     beforeEach {
@@ -67,7 +68,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
             listOf(deposit1, withdrawal, deposit2)
         coEvery { repository.fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId) } returns emptySet()
         coEvery { repository.fetchAlreadyRedeemedDepositIds(checkingAccountId) } returns emptySet()
-        coEvery { consolidationService.consolidate(any(), any(), any()) } just Runs
+        coEvery { consolidationService.consolidate(any(), any(), any()) } returns emptyList()
 
         consolidator.consolidate(consolidator.buildContext(checkingAccountId))
 
@@ -81,6 +82,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
                 downToZero = null,
             )
         }
+        coVerify(exactly = 1) { positionService.consolidatePositions(emptyList(), listOf(deposit1, deposit2)) }
     }
 
     "should filter out already consolidated withdrawals" {
@@ -107,7 +109,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
         coEvery { repository.fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId) } returns
             alreadyConsolidatedWithdrawals
         coEvery { repository.fetchAlreadyRedeemedDepositIds(checkingAccountId) } returns emptySet()
-        coEvery { consolidationService.consolidate(any(), any(), any()) } just Runs
+        coEvery { consolidationService.consolidate(any(), any(), any()) } returns emptyList()
 
         consolidator.consolidate(consolidator.buildContext(checkingAccountId))
 
@@ -118,6 +120,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
                 downToZero = null,
             )
         }
+        coVerify(exactly = 1) { positionService.consolidatePositions(emptyList(), emptyList()) }
     }
 
     "should filter out already redeemed deposits" {
@@ -145,7 +148,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
         coEvery { bondOrderService.fetchByCheckingAccountId(checkingAccountId) } returns listOf(deposit1, deposit2)
         coEvery { repository.fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId) } returns emptySet()
         coEvery { repository.fetchAlreadyRedeemedDepositIds(checkingAccountId) } returns alreadyRedeemedDeposits
-        coEvery { consolidationService.consolidate(any(), any(), any()) } just Runs
+        coEvery { consolidationService.consolidate(any(), any(), any()) } returns emptyList()
 
         consolidator.consolidate(consolidator.buildContext(checkingAccountId))
 
@@ -156,6 +159,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
                 downToZero = null,
             )
         }
+        coVerify(exactly = 1) { positionService.consolidatePositions(emptyList(), listOf(deposit2)) }
     }
 
     "should handle full withdrawal order" {
@@ -180,7 +184,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
         coEvery { bondOrderService.fetchByCheckingAccountId(checkingAccountId) } returns listOf(deposit, fullWithdrawal)
         coEvery { repository.fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId) } returns emptySet()
         coEvery { repository.fetchAlreadyRedeemedDepositIds(checkingAccountId) } returns emptySet()
-        coEvery { consolidationService.consolidate(any(), any(), any()) } just Runs
+        coEvery { consolidationService.consolidate(any(), any(), any()) } returns emptyList()
 
         consolidator.consolidate(consolidator.buildContext(checkingAccountId))
 
@@ -191,6 +195,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
                 downToZero = fullWithdrawal,
             )
         }
+        coVerify(exactly = 1) { positionService.consolidatePositions(emptyList(), listOf(deposit)) }
     }
 
     "should filter both deposits and withdrawals when both have already been processed" {
@@ -235,7 +240,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
         coEvery { repository.fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId) } returns
             alreadyConsolidatedWithdrawals
         coEvery { repository.fetchAlreadyRedeemedDepositIds(checkingAccountId) } returns alreadyRedeemedDeposits
-        coEvery { consolidationService.consolidate(any(), any(), any()) } just Runs
+        coEvery { consolidationService.consolidate(any(), any(), any()) } returns emptyList()
 
         consolidator.consolidate(consolidator.buildContext(checkingAccountId))
 
@@ -246,6 +251,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
                 downToZero = null,
             )
         }
+        coVerify(exactly = 1) { positionService.consolidatePositions(emptyList(), listOf(deposit2)) }
     }
 
     "should handle empty orders list" {
@@ -254,7 +260,7 @@ class CheckingAccountConsolidatorTest : StringSpec({
         coEvery { bondOrderService.fetchByCheckingAccountId(checkingAccountId) } returns emptyList()
         coEvery { repository.fetchAlreadyConsolidatedWithdrawalsIds(checkingAccountId) } returns emptySet()
         coEvery { repository.fetchAlreadyRedeemedDepositIds(checkingAccountId) } returns emptySet()
-        coEvery { consolidationService.consolidate(any(), any(), any()) } just Runs
+        coEvery { consolidationService.consolidate(any(), any(), any()) } returns emptyList()
 
         consolidator.consolidate(consolidator.buildContext(checkingAccountId))
 
@@ -265,5 +271,6 @@ class CheckingAccountConsolidatorTest : StringSpec({
                 downToZero = null,
             )
         }
+        coVerify(exactly = 1) { positionService.consolidatePositions(emptyList(), emptyList()) }
     }
 })

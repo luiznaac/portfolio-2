@@ -78,7 +78,13 @@ class CheckingAccountController(
             get("/{checking_account_id}/positions") {
                 val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
 
-                call.respond(positionService.calculateByCheckingAccountId(checkingAccountId))
+                call.respond(positionService.getByCheckingAccountId(checkingAccountId))
+            }
+
+            get("/{checking_account_id}/positions/last") {
+                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+
+                call.respond(positionService.getLastByCheckingAccountId(checkingAccountId))
             }
         }
     }

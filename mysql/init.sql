@@ -72,6 +72,18 @@ CREATE TABLE bond_order_statement (
     INDEX (buy_order_id, date)
 );
 
+CREATE TABLE bond_order_position (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bond_order_id INT NOT NULL,
+    date DATE NOT NULL,
+    principal DECIMAL(12,2) NOT NULL,
+    yield DECIMAL(12,2) NOT NULL,
+    taxes DECIMAL(12,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (bond_order_id) REFERENCES bond_order(id)
+);
+
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('IPCA', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('SELIC', NOW());

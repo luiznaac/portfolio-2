@@ -71,8 +71,7 @@ class BondTest : StringSpec({
             it["date"]!! shouldBe "2025-09-30"
             it["principal"]!! shouldBe 30150.86
             it["yield"]!! shouldBe 1271.92
-            it["taxes"]!! shouldBe 279.8224
-            it["result"]!! shouldBe 31142.9576
+            it["taxes"]!! shouldBe 279.82
         }
         scheduleConsolidations().also {
             it["BOND"]!! shouldBe listOf(bondId.toInt())
@@ -111,7 +110,6 @@ class BondTest : StringSpec({
             it["principal"]!! shouldBe 0.00
             it["yield"]!! shouldBe 0.00
             it["taxes"]!! shouldBe 0.00
-            it["result"]!! shouldBe 0.00
         }
 
         val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
@@ -161,7 +159,6 @@ class BondTest : StringSpec({
             it["principal"]!! shouldBe 0.00
             it["yield"]!! shouldBe 0.00
             it["taxes"]!! shouldBe 0.00
-            it["result"]!! shouldBe 0.00
         }
 
         val orders = getBean<IBondOrderRepository>().fetchByBondId(bondId.toInt())
@@ -176,6 +173,61 @@ class BondTest : StringSpec({
 
         scheduleConsolidations().also {
             it["BOND"]!!.isEmpty() shouldBe true
+        }
+    }
+
+    "single bond with multiple buys - multiple consolidations" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2025-10-01T10:00:00Z")
+        // Doing this so index values will be hydrated from this date beyond
+        getBean<IIndexValueRepository>().saveAll(
+            IndexId.CDI,
+            listOf(
+                IndexValueCreation(
+                    LocalDate.parse("2025-05-29"),
+                    BigDecimal("0.00"),
+                ),
+            ),
+        )
+
+        configureResponses {
+            response { bacenCDIValues("2025-09-08", "2025-09-30", buildBacenValues()) }
+            response { oneTimeTask() }
+        }
+
+        hydrateIndexValues("CDI")["count"]!! shouldBe "87"
+
+        val bondId = createFloatingBond("102.00", "CDI")
+        createBondOrder(bondId, "BUY", "2025-05-29", "1000.12")
+        createBondOrder(bondId, "BUY", "2025-05-30", "234.00")
+
+        // Consolidate on 2025-09-26
+        every { ClockMock.clock.instant() } returns Instant.parse("2025-09-26T10:00:00Z")
+        scheduleConsolidations().also {
+            it["BOND"]!! shouldBe listOf(bondId.toInt())
+        }
+        bondPositions(bondId).also {
+            it.size shouldBe 84
+            it.last().also {
+                it["date"]!! shouldBe "2025-09-25"
+                it["principal"]!! shouldBe 1234.12
+                it["yield"]!! shouldBe 59.55
+                it["taxes"]!! shouldBe 13.1
+            }
+        }
+
+        // Consolidate a few day later, on 2025-10-01
+        every { ClockMock.clock.instant() } returns Instant.parse("2025-10-01T10:00:00Z")
+        scheduleConsolidations().also {
+            it["BOND"]!! shouldBe listOf(bondId.toInt())
+        }
+        bondPositions(bondId).also {
+            it.size shouldBe 87
+            it.last().also {
+                it["date"]!! shouldBe "2025-09-30"
+                it["principal"]!! shouldBe 1234.12
+                it["yield"]!! shouldBe 61.74
+                it["taxes"]!! shouldBe 13.59
+            }
         }
     }
 })
