@@ -25,11 +25,29 @@ class UploadController(
                 call.respond(HttpStatusCode.OK, result)
             }
 
+            post("/kinvo/checking-account/{checking_account_id}") {
+                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val analise = call.receive<List<UploadOrder>>()
+
+                val result = service.createMovements(checkingAccountId, analise)
+
+                call.respond(HttpStatusCode.OK, result)
+            }
+
             post("/picpay/bond/{bond_id}") {
                 val bondId = call.parameters["bond_id"]!!.toInt()
                 val analise = call.receive<List<UploadOrder>>()
 
                 val result = service.createOrders(bondId, analise)
+
+                call.respond(HttpStatusCode.OK, result)
+            }
+
+            post("/picpay/checking-account/{checking_account_id}") {
+                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val analise = call.receive<List<UploadOrder>>()
+
+                val result = service.createMovements(checkingAccountId, analise)
 
                 call.respond(HttpStatusCode.OK, result)
             }
