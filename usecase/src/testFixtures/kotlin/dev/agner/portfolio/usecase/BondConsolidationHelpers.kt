@@ -15,13 +15,13 @@ import java.math.BigDecimal
 fun bondCalculationContext(
     principal: BigDecimal,
     startingYield: BigDecimal,
-    yieldPercentage: BigDecimal = BigDecimal("0.00"),
+    yieldRate: BigDecimal = BigDecimal("0.00"),
     sellAmount: BigDecimal = BigDecimal("0.00"),
     taxes: Set<TaxIncidence> = emptySet(),
 ) = BondCalculationContext(
     principal = principal,
     startingYield = startingYield,
-    yieldPercentage = yieldPercentage,
+    yieldRate = yieldRate,
     sellAmount = sellAmount,
     taxes = taxes,
 )
@@ -30,7 +30,7 @@ fun bondConsolidationContext(
     bondOrderId: Int,
     principal: BigDecimal,
     yieldAmount: BigDecimal,
-    yieldPercentages: Map<LocalDate, BondContributionConsolidationContext.YieldPercentageContext>,
+    yieldRates: Map<LocalDate, BondContributionConsolidationContext.YieldRateContext>,
     sellOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
     contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
     dateRange: List<LocalDate> = emptyList(),
@@ -40,7 +40,7 @@ fun bondConsolidationContext(
     contributionDate = contributionDate,
     principal = principal,
     yieldAmount = yieldAmount,
-    yieldPercentages = yieldPercentages,
+    yieldRates = yieldRates,
     redemptionOrders = sellOrders,
     dateRange = dateRange,
     downToZeroContext = fullRedemption,

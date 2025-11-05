@@ -29,6 +29,16 @@ suspend fun createFloatingBond(value: String, index: String, maturityDate: Strin
         )
     }["id"]!!
 
+suspend fun createFixedBond(value: String, maturityDate: String = "2025-10-20") =
+    postRequest<Map<String, String>> {
+        path = "/bonds/fixed"
+        body = mapOf(
+            "name" to "papapapepepe",
+            "value" to value,
+            "maturity_date" to maturityDate,
+        )
+    }["id"]!!
+
 suspend fun createBondOrder(bondId: String, type: String, date: String, amount: String? = null) =
     postRequest<Unit> {
         path = "/bonds/orders"

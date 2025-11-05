@@ -44,7 +44,7 @@ class BondCalculator {
     }
 
     private fun BondCalculationContext.calculateYield() =
-        ((actualData.principal + actualData.yieldAmount) * processingData.yieldPercentage / BigDecimal("100"))
+        ((actualData.principal + actualData.yieldAmount) * processingData.yieldRate / BigDecimal("100"))
             .defaultScale()
 
     private fun BondCalculationContext.calculateRedemption(

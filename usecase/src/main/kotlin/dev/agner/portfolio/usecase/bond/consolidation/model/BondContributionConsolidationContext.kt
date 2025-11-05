@@ -3,6 +3,7 @@ package dev.agner.portfolio.usecase.bond.consolidation.model
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 data class BondContributionConsolidationContext(
     val bondOrderId: Int,
@@ -10,7 +11,7 @@ data class BondContributionConsolidationContext(
     val dateRange: List<LocalDate>,
     val principal: BigDecimal,
     val yieldAmount: BigDecimal,
-    val yieldPercentages: Map<LocalDate, YieldPercentageContext>,
+    val yieldRates: Map<LocalDate, YieldRateContext>,
     val redemptionOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
     val downToZeroContext: DownToZeroContext? = null,
 ) {
@@ -40,11 +41,11 @@ data class BondContributionConsolidationContext(
         val date: LocalDate,
     )
 
-    data class YieldPercentageContext(
-        val percentage: BigDecimal,
+    data class YieldRateContext(
+        val rate: BigDecimal,
     ) {
         constructor(multiplier: BigDecimal, indexValue: IndexValue) : this(
-            percentage = (multiplier / BigDecimal("100")) * indexValue.value,
+            rate = (multiplier.setScale(4, RoundingMode.HALF_EVEN) / BigDecimal("100")) * indexValue.value,
         )
     }
 }

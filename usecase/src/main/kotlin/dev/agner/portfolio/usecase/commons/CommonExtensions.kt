@@ -7,6 +7,7 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek.SATURDAY
 import kotlinx.datetime.DayOfWeek.SUNDAY
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateRange
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
@@ -80,5 +81,7 @@ fun LocalDate.toMondayIfWeekend() = when (dayOfWeek) {
     SUNDAY -> nextDay()
     else -> this
 }
+
+fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() } }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)

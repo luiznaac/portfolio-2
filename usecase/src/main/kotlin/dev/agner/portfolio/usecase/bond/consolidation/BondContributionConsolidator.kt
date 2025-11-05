@@ -35,7 +35,7 @@ class BondContributionConsolidator(
                     BondCalculationContext(
                         acc.ctx.principal,
                         acc.ctx.yieldAmount,
-                        acc.ctx.yieldPercentages[date]?.percentage ?: BigDecimal("0.00"),
+                        acc.ctx.yieldRates[date]?.rate ?: BigDecimal("0.00"),
                         acc.ctx.redemptionOrders[date]?.amount ?: BigDecimal("0.00"),
                         taxService.getTaxIncidencesBy(date, acc.ctx.contributionDate),
                     ),

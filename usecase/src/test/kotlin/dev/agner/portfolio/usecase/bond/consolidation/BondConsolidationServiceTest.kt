@@ -5,7 +5,7 @@ import dev.agner.portfolio.usecase.bond.BondService
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.DownToZeroContext
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.RedemptionContext.SellContext
-import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.YieldPercentageContext
+import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext.YieldRateContext
 import dev.agner.portfolio.usecase.bond.model.BondOrder
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
 import dev.agner.portfolio.usecase.bond.model.BondOrderCreation
@@ -51,8 +51,9 @@ class BondConsolidationServiceTest : StringSpec({
     val positionService = mockk<BondPositionService>(relaxUnitFun = true)
     val clock = mockk<Clock>()
 
+    val yieldRateService = YieldRateService(indexValueService, clock)
     val service =
-        BondConsolidationService(repository, bondOrderService, indexValueService, contributionConsolidator, clock)
+        BondConsolidationService(repository, bondOrderService, yieldRateService, contributionConsolidator, clock)
 
     // Doing this so that I don't have to rewrite the whole test class and I ensure that the refactor hasn't broken anything
     val consolidator = BondConsolidator(repository, bondService, bondOrderService, service, positionService)
@@ -138,8 +139,8 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("9500.00"),
                     yieldAmount = BigDecimal("25.00"),
-                    yieldPercentages = mapOf(
-                        sellDate to YieldPercentageContext(floatingRateBond.value, indexValues[0]),
+                    yieldRates = mapOf(
+                        sellDate to YieldRateContext(floatingRateBond.value, indexValues[0]),
                     ),
                     redemptionOrders = mapOf(
                         sellDate to SellContext(2, BigDecimal("1000.00")),
@@ -197,7 +198,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("5000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = emptyMap(),
+                    yieldRates = emptyMap(),
                     redemptionOrders = emptyMap(),
                 ),
             )
@@ -281,8 +282,8 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("5000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = indexValues.associate {
-                        it.date to YieldPercentageContext(floatingRateBond.value, it)
+                    yieldRates = indexValues.associate {
+                        it.date to YieldRateContext(floatingRateBond.value, it)
                     },
                     sellOrders = mapOf(
                         sellDate to SellContext(3, BigDecimal("2000.00")),
@@ -300,8 +301,8 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("8000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = indexValues.associate {
-                        it.date to YieldPercentageContext(floatingRateBond.value, it)
+                    yieldRates = indexValues.associate {
+                        it.date to YieldRateContext(floatingRateBond.value, it)
                     },
                     sellOrders = emptyMap(),
                 ),
@@ -370,7 +371,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("10000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = emptyMap(),
+                    yieldRates = emptyMap(),
                     redemptionOrders = mapOf(
                         sellDate1 to SellContext(2, BigDecimal("1500.00")),
                         sellDate2 to SellContext(3, BigDecimal("2500.00")),
@@ -437,7 +438,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("8000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = emptyMap(),
+                    yieldRates = emptyMap(),
                     redemptionOrders = emptyMap(),
                 ),
             )
@@ -509,7 +510,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("10000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = emptyMap(),
+                    yieldRates = emptyMap(),
                     redemptionOrders = mapOf(
                         // Only sell order 3 should be present, sell order 2 is filtered out
                         sellDate2 to SellContext(3, BigDecimal("2500.00")),
@@ -598,7 +599,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("7000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = emptyMap(),
+                    yieldRates = emptyMap(),
                     redemptionOrders = mapOf(
                         sellDate to SellContext(4, BigDecimal("2000.00")),
                     ),
