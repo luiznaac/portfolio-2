@@ -10,7 +10,7 @@ data class BondCalculationContext(
     constructor(
         principal: BigDecimal,
         startingYield: BigDecimal,
-        yieldPercentage: BigDecimal = BigDecimal("0.00"),
+        yieldRate: BigDecimal = BigDecimal("0.00"),
         sellAmount: BigDecimal = BigDecimal("0.00"),
         taxes: Set<TaxIncidence>,
     ) : this(
@@ -19,7 +19,7 @@ data class BondCalculationContext(
             yieldAmount = startingYield,
         ),
         ProcessingData(
-            yieldPercentage = yieldPercentage,
+            yieldRate = yieldRate,
             redeemedAmount = sellAmount,
             taxes = taxes,
         ),
@@ -31,7 +31,7 @@ data class BondCalculationContext(
     )
 
     data class ProcessingData(
-        val yieldPercentage: BigDecimal,
+        val yieldRate: BigDecimal,
         val redeemedAmount: BigDecimal,
         val taxes: Set<TaxIncidence> = emptySet(),
     )

@@ -23,13 +23,12 @@ import dev.agner.portfolio.usecase.bond.model.BondOrderStatement
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderType
 import dev.agner.portfolio.usecase.bond.repository.IBondOrderStatementRepository
-import dev.agner.portfolio.usecase.commons.isWeekend
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.commons.nextDay
+import dev.agner.portfolio.usecase.commons.removeWeekends
 import dev.agner.portfolio.usecase.commons.yesterday
 import kotlinx.coroutines.awaitAll
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateRange
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.time.Clock
@@ -56,7 +55,7 @@ class BondConsolidationService(
             .fold(IntermediateData(redemptionContexts)) { acc, contributionOrder ->
                 val startingDate = contributionOrder.resolveCalculationStartingDate()
                 val finalDate = minOf(LocalDate.yesterday(clock), contributionOrder.bond.maturityDate)
-                val yieldPercentages = contributionOrder.bond.buildYieldRates(startingDate)
+                val yieldRates = contributionOrder.bond.buildYieldRates(startingDate)
                 val startingValues = repository.sumUpConsolidatedValues(contributionOrder.id, startingDate)
 
                 val ctx = BondContributionConsolidationContext(
@@ -65,7 +64,7 @@ class BondConsolidationService(
                     dateRange = (startingDate..finalDate).removeWeekends(),
                     principal = contributionOrder.amount - startingValues.first,
                     yieldAmount = startingValues.second,
-                    yieldRates = yieldPercentages,
+                    yieldRates = yieldRates,
                     redemptionOrders = acc.remainingRedemptions,
                     downToZeroContext = downToZeroContext,
                 )
@@ -145,9 +144,6 @@ class BondConsolidationService(
         val statements: List<BondOrderStatementCreation> = emptyList(),
     )
 }
-
-private fun LocalDateRange.removeWeekends() =
-    mapNotNull { it.takeIf { !it.isWeekend() } }
 
 private fun Redemption.toContext() = when (this) {
     is Sell -> SellContext(id, amount)

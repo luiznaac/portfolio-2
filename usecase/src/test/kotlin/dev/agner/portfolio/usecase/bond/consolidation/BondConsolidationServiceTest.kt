@@ -51,7 +51,7 @@ class BondConsolidationServiceTest : StringSpec({
     val positionService = mockk<BondPositionService>(relaxUnitFun = true)
     val clock = mockk<Clock>()
 
-    val yieldRateService = YieldRateService(indexValueService)
+    val yieldRateService = YieldRateService(indexValueService, clock)
     val service =
         BondConsolidationService(repository, bondOrderService, yieldRateService, contributionConsolidator, clock)
 
@@ -282,7 +282,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("5000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = indexValues.associate {
+                    yieldRates = indexValues.associate {
                         it.date to YieldRateContext(floatingRateBond.value, it)
                     },
                     sellOrders = mapOf(
@@ -301,7 +301,7 @@ class BondConsolidationServiceTest : StringSpec({
                     },
                     principal = BigDecimal("8000.00"),
                     yieldAmount = BigDecimal("0.00"),
-                    yieldPercentages = indexValues.associate {
+                    yieldRates = indexValues.associate {
                         it.date to YieldRateContext(floatingRateBond.value, it)
                     },
                     sellOrders = emptyMap(),

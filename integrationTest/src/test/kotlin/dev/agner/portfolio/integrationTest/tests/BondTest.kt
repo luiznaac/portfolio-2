@@ -6,6 +6,7 @@ import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.bacenCDIValues
 import dev.agner.portfolio.integrationTest.helpers.bondPositions
 import dev.agner.portfolio.integrationTest.helpers.createBondOrder
+import dev.agner.portfolio.integrationTest.helpers.createFixedBond
 import dev.agner.portfolio.integrationTest.helpers.createFloatingBond
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.hydrateIndexValues
@@ -228,6 +229,31 @@ class BondTest : StringSpec({
                 it["yield"]!! shouldBe 61.74
                 it["taxes"]!! shouldBe 13.59
             }
+        }
+    }
+
+    "fixed rate bond" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2025-05-31T10:00:00Z")
+
+        configureResponses {
+            response { oneTimeTask() }
+        }
+
+        val bondId = createFixedBond("12.50", "2025-11-11")
+        createBondOrder(bondId, "BUY", "2024-05-30", "1000.00")
+
+        scheduleConsolidations()
+        val positions = bondPositions(bondId)
+
+        positions.size shouldBe 262
+        positions.last().also {
+            it["date"]!! shouldBe "2025-05-30"
+            it["principal"]!! shouldBe 1000.00
+            it["yield"]!! shouldBe 125.21
+            it["taxes"]!! shouldBe 22.54
+        }
+        scheduleConsolidations().also {
+            it["BOND"]!! shouldBe listOf(bondId.toInt())
         }
     }
 })

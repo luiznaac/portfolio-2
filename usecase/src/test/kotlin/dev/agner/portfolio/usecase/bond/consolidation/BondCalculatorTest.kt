@@ -18,9 +18,9 @@ class BondCalculatorTest : StringSpec({
     "should calculate yield correctly with zero starting yield" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("0.00")
-        val yieldPercentage = BigDecimal("5.00")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
-        val expectedYieldedAmount = ((principal + startingYield) * yieldPercentage / BigDecimal("100")).defaultScale()
+        val yieldRate = BigDecimal("5.00")
+        val context = bondCalculationContext(principal, startingYield, yieldRate)
+        val expectedYieldedAmount = ((principal + startingYield) * yieldRate / BigDecimal("100")).defaultScale()
 
         val result = calculator.calculate(context)
 
@@ -35,9 +35,9 @@ class BondCalculatorTest : StringSpec({
     "should calculate yield correctly with existing yield" {
         val principal = BigDecimal("2000.00")
         val startingYield = BigDecimal("150.00")
-        val yieldPercentage = BigDecimal("3.50")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
-        val expectedYieldedAmount = ((principal + startingYield) * yieldPercentage / BigDecimal("100")).defaultScale()
+        val yieldRate = BigDecimal("3.50")
+        val context = bondCalculationContext(principal, startingYield, yieldRate)
+        val expectedYieldedAmount = ((principal + startingYield) * yieldRate / BigDecimal("100")).defaultScale()
 
         val result = calculator.calculate(context)
 
@@ -49,11 +49,11 @@ class BondCalculatorTest : StringSpec({
         result.statements[0].amount shouldBe expectedYieldedAmount
     }
 
-    "should handle zero yield percentage" {
+    "should handle zero yield rate" {
         val principal = BigDecimal("5000.00")
         val startingYield = BigDecimal("200.00")
-        val yieldPercentage = BigDecimal("0.00")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage)
+        val yieldRate = BigDecimal("0.00")
+        val context = bondCalculationContext(principal, startingYield, yieldRate)
 
         val result = calculator.calculate(context)
 
@@ -66,9 +66,9 @@ class BondCalculatorTest : StringSpec({
     "should calculate partial redemption with equal principal and yield proportions" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("1000.00")
-        val yieldPercentage = BigDecimal("0.00")
+        val yieldRate = BigDecimal("0.00")
         val redemptionAmount = BigDecimal("500.00")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, redemptionAmount)
 
         val result = calculator.calculate(context)
 
@@ -87,12 +87,12 @@ class BondCalculatorTest : StringSpec({
     "should calculate redemption with higher principal proportion" {
         val principal = BigDecimal("2000.00")
         val startingYield = BigDecimal("500.00")
-        val yieldPercentage = BigDecimal("2.00")
+        val yieldRate = BigDecimal("2.00")
         val redemptionAmount = BigDecimal("600.00")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, redemptionAmount)
 
         val totalBeforeRedemption = principal + startingYield +
-            ((principal + startingYield) * yieldPercentage / BigDecimal("100")).defaultScale()
+            ((principal + startingYield) * yieldRate / BigDecimal("100")).defaultScale()
         val principalProportion = principal.setScale(6) / totalBeforeRedemption
         val expectedRedeemedPrincipal = (redemptionAmount * principalProportion).defaultScale()
         val expectedRedeemedYield = (redemptionAmount * (BigDecimal.ONE - principalProportion)).defaultScale()
@@ -113,13 +113,13 @@ class BondCalculatorTest : StringSpec({
     "should calculate full redemption by sell amount" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("200.00")
-        val yieldPercentage = BigDecimal("5.00")
-        val yieldedAmount = ((principal + startingYield) * yieldPercentage / BigDecimal("100")).setScale(
+        val yieldRate = BigDecimal("5.00")
+        val yieldedAmount = ((principal + startingYield) * yieldRate / BigDecimal("100")).setScale(
             2,
             RoundingMode.HALF_EVEN,
         )
         val totalAmount = principal + startingYield + yieldedAmount
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, totalAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, totalAmount)
 
         val result = calculator.calculate(context)
 
@@ -138,11 +138,11 @@ class BondCalculatorTest : StringSpec({
     "should return RemainingRedemption when redemption amount exceeds total bond value" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("200.00")
-        val yieldPercentage = BigDecimal("5.00")
-        val yieldedAmount = ((principal + startingYield) * yieldPercentage / BigDecimal("100")).defaultScale()
+        val yieldRate = BigDecimal("5.00")
+        val yieldedAmount = ((principal + startingYield) * yieldRate / BigDecimal("100")).defaultScale()
         val totalAmount = principal + startingYield + yieldedAmount
         val redemptionAmount = totalAmount + BigDecimal("500.00") // Exceeds total by 500
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, redemptionAmount)
 
         val result = calculator.calculate(context)
 
@@ -162,10 +162,10 @@ class BondCalculatorTest : StringSpec({
     "should handle taxes" {
         val principal = BigDecimal("0.00")
         val startingYield = BigDecimal("100.00")
-        val yieldPercentage = BigDecimal("0.00")
+        val yieldRate = BigDecimal("0.00")
         val taxes = setOf(TaxIncidence.Renda(BigDecimal("22.50")))
         val redemptionAmount = BigDecimal("55.64")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, redemptionAmount, taxes)
 
         val result = calculator.calculate(context)
 
@@ -181,10 +181,10 @@ class BondCalculatorTest : StringSpec({
     "should handle taxes - full redemption by sell amount" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("100.00")
-        val yieldPercentage = BigDecimal("0.00")
+        val yieldRate = BigDecimal("0.00")
         val taxes = setOf(TaxIncidence.Renda(BigDecimal("22.50")), TaxIncidence.IOF(BigDecimal("90.00")))
         val redemptionAmount = BigDecimal("1007.75")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, redemptionAmount, taxes)
 
         val result = calculator.calculate(context)
 
@@ -203,10 +203,10 @@ class BondCalculatorTest : StringSpec({
     "full redemption by parameter" {
         val principal = BigDecimal("1000.00")
         val startingYield = BigDecimal("100.00")
-        val yieldPercentage = BigDecimal("0.00")
+        val yieldRate = BigDecimal("0.00")
         val taxes = setOf(TaxIncidence.Renda(BigDecimal("22.50")), TaxIncidence.IOF(BigDecimal("90.00")))
         val redemptionAmount = BigDecimal("0.00")
-        val context = bondCalculationContext(principal, startingYield, yieldPercentage, redemptionAmount, taxes)
+        val context = bondCalculationContext(principal, startingYield, yieldRate, redemptionAmount, taxes)
 
         val result = calculator.calculate(context, fullRedemption = true)
 
