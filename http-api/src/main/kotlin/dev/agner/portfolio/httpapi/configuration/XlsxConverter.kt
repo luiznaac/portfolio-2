@@ -36,9 +36,11 @@ class XlsxConverter(
         val definitions = defs[klass]!!
 
         return sheetos.drop(1)
-            .map { row ->
+            .mapNotNull { row ->
                 // Doing this because it does not return the cells that are empty, so we must fill them manually
                 val rowValues = headers.indices.map { row.getCell(it)?.toString() }
+
+                if (rowValues.all { it == null || it.isEmpty() }) return@mapNotNull null
 
                 headers
                     .zip(rowValues)
