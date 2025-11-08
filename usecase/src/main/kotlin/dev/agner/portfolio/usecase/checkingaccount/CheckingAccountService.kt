@@ -11,6 +11,7 @@ import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountCreation
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccountMovementCreation
 import dev.agner.portfolio.usecase.checkingaccount.repository.ICheckingAccountRepository
 import dev.agner.portfolio.usecase.commons.toMondayIfWeekend
+import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import kotlinx.datetime.yearMonth
@@ -21,19 +22,20 @@ class CheckingAccountService(
     private val repository: ICheckingAccountRepository,
     private val bondService: BondService,
     private val bondOrderService: BondOrderService,
+    private val transaction: ITransactionTemplate,
 ) {
 
     suspend fun create(creation: CheckingAccountCreation) = with(creation) {
         repository.save(this)
     }
 
-    suspend fun deposit(creation: CheckingAccountMovementCreation): Deposit {
+    suspend fun deposit(creation: CheckingAccountMovementCreation) = transaction.execute {
         val bond = bondService.createForCheckingAccount(
             checkingAccountId = creation.checkingAccountId,
             creation = fetchById(creation.checkingAccountId).toBondCreation(creation.date),
         )
 
-        return bondOrderService.create(
+        bondOrderService.create(
             BondOrderCreation(
                 bondId = bond.id,
                 type = BondOrderType.DEPOSIT,
@@ -44,7 +46,7 @@ class CheckingAccountService(
         ) as Deposit
     }
 
-    suspend fun withdraw(creation: CheckingAccountMovementCreation) =
+    suspend fun withdraw(creation: CheckingAccountMovementCreation) = transaction.execute {
         bondOrderService.create(
             BondOrderCreation(
                 type = BondOrderType.WITHDRAWAL,
@@ -53,6 +55,7 @@ class CheckingAccountService(
                 checkingAccountId = creation.checkingAccountId,
             ),
         )
+    }
 
     suspend fun fullWithdraw(creation: CheckingAccountMovementCreation) =
         bondOrderService.create(
