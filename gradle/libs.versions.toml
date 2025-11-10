@@ -5,7 +5,7 @@ springframework = "6.2.12"
 kotest = "5.9.1"
 jackson = "2.20.0"
 ktor = "3.3.1"
-exposed = "1.0.0-rc-1"
+exposed = "1.0.0-rc-3"
 
 [libraries]
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version = "2.2.21" }
