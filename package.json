@@ -1,0 +1,21 @@
+{
+  "name": "portfolio-monorepo",
+  "private": true,
+  "description": "Task runner for the portfolio-2 monorepo (backend/ + frontend/). Not a real Node package — just scripts.",
+  "scripts": {
+    "setup": "npm --prefix frontend install",
+    "be:run": "cd backend && ./gradlew :application:run",
+    "be:check": "cd backend && ./gradlew detekt test",
+    "be:test": "cd backend && ./gradlew test",
+    "be:build": "cd backend && ./gradlew clean build",
+    "fe:dev": "npm --prefix frontend run dev",
+    "fe:build": "npm --prefix frontend run build",
+    "fe:typecheck": "npm --prefix frontend run typecheck",
+    "check": "npm run be:check && npm run fe:typecheck && npm run fe:build",
+    "db": "docker compose -f backend/docker-compose.yml up -d mysql",
+    "db:migrate": "cd backend && ./gradlew :persistence:migrate",
+    "db:generate": "cd backend && ./gradlew :persistence:generateMigrationScript",
+    "up": "docker compose up --build",
+    "down": "docker compose down"
+  }
+}

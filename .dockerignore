@@ -1,0 +1,27 @@
+# Keep the build context small — only backend/ and frontend/ source (plus the shared
+# contracts/ fixtures the frontend build resolves) is needed.
+
+.git
+.github
+.idea
+.vscode
+**/*.md
+
+# Gradle / Kotlin
+**/build
+**/.gradle
+**/.kotlin
+**/out
+
+# Node
+**/node_modules
+**/dist
+**/dist-ssr
+**/.vite
+**/*.tsbuildinfo
+
+# Not needed inside the image (integrationTest stays: settings.gradle.kts includes it,
+# so Gradle configuration fails if the module directory is absent).
+backend/integrationTest/src
+backend/integrationTest/build
+docker-compose*.yml

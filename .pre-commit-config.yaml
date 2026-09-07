@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: [--branch, master]
+
+  - repo: local
+    hooks:
+      - id: detekt
+        name: detekt
+        entry: sh -c 'cd backend && ./gradlew detekt'
+        language: system
+        files: ^backend/.*\.kt$
+        pass_filenames: false
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: sh -c 'cd frontend && npm run typecheck'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false

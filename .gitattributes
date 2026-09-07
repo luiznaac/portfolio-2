@@ -1,3 +1,12 @@
-/gradlew text eol=lf
+/backend/gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+# Container assets must keep LF endings even when checked out on Windows.
+*.sh          text eol=lf
+Dockerfile    text eol=lf
+deploy/**     text eol=lf
+
+# Biome enforces LF and CI checks out on Linux, so the working tree must be LF
+# on Windows too or `npm run check` passes locally and fails in CI.
+frontend/**   text eol=lf
