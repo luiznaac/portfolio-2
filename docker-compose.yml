@@ -1,11 +1,51 @@
+# Full stack in one command: the combined app image (Ktor/Spring backend + built
+# SPA, from ./Dockerfile) plus its MySQL.
+#
+#   docker compose up --build                         # everything
+#   docker compose -f backend/docker-compose.yml up -d mysql   # just the DB
+#     (for local `cd backend` + IntelliJ run + `cd frontend && npm run dev`)
+#
+# The published image (docker.io/luiznaac/portfolio) is the `app` service only —
+# in production the database is a separate, externally provisioned container.
+# `backend/docker-compose.yml` is the DB-only file consumed by the integrationTest
+# module via Testcontainers; keep the two in sync.
+
 services:
   mysql:
     image: mysql:9.4.0
-    restart: always
+    restart: unless-stopped
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
       - MYSQL_DATABASE=portfolio
     ports:
       - "3306:3306"
     volumes:
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - portfolio-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: luiznaac/portfolio:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - API_PORT=8080
+      - WEB_PORT=8081
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=
+    ports:
+      - "8080:8080"   # API      (Ktor)
+      - "8081:8081"   # web / UI  (nginx: SPA + /api proxy)
+
+volumes:
+  portfolio-mysql-data:
