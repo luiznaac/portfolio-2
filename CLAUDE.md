@@ -33,6 +33,8 @@ SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → the app). No DB in the ima
 is the MySQL-only file consumed by the `integrationTest` module via Testcontainers — keep the two
 MySQL definitions in sync.
 
-`.github/workflows/test.yml` runs `backend` (Gradle `clean build`) and `frontend`
-(`npm ci && typecheck && build`) jobs; `docker-image.yml` publishes `luiznaac/portfolio:latest`
-after a green master build.
+`.github/workflows/ci.yml` runs `backend` (Gradle `clean build`) and `frontend`
+(`npm ci && typecheck && build`) jobs on every push to master and every PR. Its `publish` job
+(`needs: [backend, frontend]`, push-to-master only) then builds the repo-root `Dockerfile` and
+pushes `luiznaac/portfolio` with tags `latest` and `sha-<short>` — so the image is published
+only after a green CI run.
