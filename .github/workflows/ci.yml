@@ -1,14 +1,12 @@
-name: Build and Test
+name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [master]
   pull_request:
-    branches: [ "master" ]
 
 jobs:
   backend:
-    name: backend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,7 +37,6 @@ jobs:
         run: ./gradlew clean build
 
   frontend:
-    name: frontend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -54,3 +51,34 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+
+  publish:
+    needs: [backend, frontend]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: luiznaac/portfolio
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
