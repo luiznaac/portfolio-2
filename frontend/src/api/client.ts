@@ -2,15 +2,25 @@ import type {
   Bond,
   BondOrder,
   BondOrderCreation,
+  BonusCreation,
   CheckingAccount,
   CheckingAccountCreation,
+  CorporateAction,
+  DividendDeclaration,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   Index,
   IndexId,
   IndexValue,
+  ListedAsset,
+  ListedAssetCreation,
   MovementRequest,
   Position,
+  ReverseSplitCreation,
+  SplitCreation,
+  TickerChangeCreation,
+  Trade,
+  TradeCreation,
   UploadBroker,
   UploadProduct,
 } from "./types.ts";
@@ -148,5 +158,50 @@ export const api = {
   // --- health ---
   health(): Promise<unknown> {
     return request(`/health`);
+  },
+
+  // --- listed assets (stocks, FIIs, ETFs, BDRs) ---
+  listListedAssets(): Promise<ListedAsset[]> {
+    return request(`/listed-assets`);
+  },
+  createListedAsset(body: ListedAssetCreation): Promise<ListedAsset> {
+    return request(`/listed-assets`, json("POST", body));
+  },
+  consolidateListedAsset(id: number): Promise<void> {
+    return request(`/listed-assets/${id}/consolidate`, json("POST"));
+  },
+  listedAssetPositions(id: number): Promise<Position[]> {
+    return request(`/listed-assets/${id}/positions`);
+  },
+  listedAssetLastPosition(id: number): Promise<Position> {
+    return request(`/listed-assets/${id}/positions/last`);
+  },
+  listedAssetDividends(id: number): Promise<DividendDeclaration[]> {
+    return request(`/listed-assets/${id}/dividends`);
+  },
+
+  // --- trades ---
+  listTrades(assetId: number): Promise<Trade[]> {
+    return request(`/listed-assets/${assetId}/trades`);
+  },
+  createTrade(assetId: number, body: TradeCreation): Promise<Trade> {
+    return request(`/listed-assets/${assetId}/trades`, json("POST", body));
+  },
+
+  // --- corporate actions ---
+  listCorporateActions(assetId: number): Promise<CorporateAction[]> {
+    return request(`/listed-assets/${assetId}/corporate-actions`);
+  },
+  createSplit(assetId: number, body: SplitCreation): Promise<CorporateAction> {
+    return request(`/listed-assets/${assetId}/corporate-actions/split`, json("POST", body));
+  },
+  createReverseSplit(assetId: number, body: ReverseSplitCreation): Promise<CorporateAction> {
+    return request(`/listed-assets/${assetId}/corporate-actions/reverse-split`, json("POST", body));
+  },
+  createBonus(assetId: number, body: BonusCreation): Promise<CorporateAction> {
+    return request(`/listed-assets/${assetId}/corporate-actions/bonus`, json("POST", body));
+  },
+  createTickerChange(assetId: number, body: TickerChangeCreation): Promise<CorporateAction> {
+    return request(`/listed-assets/${assetId}/corporate-actions/ticker-change`, json("POST", body));
   },
 };

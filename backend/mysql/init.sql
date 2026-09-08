@@ -87,3 +87,68 @@ CREATE TABLE bond_order_position (
 INSERT INTO `index` (id, created_at) VALUES ('CDI', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('IPCA', NOW());
 INSERT INTO `index` (id, created_at) VALUES ('SELIC', NOW());
+
+CREATE TABLE listed_asset (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    ticker VARCHAR(12) NOT NULL,
+    kind VARCHAR(10) NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    b3_identifier VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    UNIQUE (ticker)
+);
+
+CREATE TABLE listed_asset_ticker_history (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    listed_asset_id INT NOT NULL,
+    ticker VARCHAR(12) NOT NULL,
+    effective_from DATE NOT NULL,
+    effective_to DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (listed_asset_id) REFERENCES listed_asset(id),
+
+    INDEX (ticker, effective_from)
+);
+
+CREATE TABLE trade (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    listed_asset_id INT NOT NULL,
+    date DATE NOT NULL,
+    quantity DECIMAL(18, 8) NOT NULL,
+    price DECIMAL(12, 4) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (listed_asset_id) REFERENCES listed_asset(id),
+
+    INDEX (listed_asset_id, date)
+);
+
+CREATE TABLE corporate_action (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    listed_asset_id INT NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    date DATE NOT NULL,
+    ratio DECIMAL(18, 8),
+    value_per_new_share DECIMAL(12, 4),
+    new_ticker VARCHAR(12),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (listed_asset_id) REFERENCES listed_asset(id),
+
+    INDEX (listed_asset_id, date)
+);
+
+CREATE TABLE listed_asset_position (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    listed_asset_id INT NOT NULL,
+    date DATE NOT NULL,
+    principal DECIMAL(14, 2) NOT NULL,
+    yield DECIMAL(14, 2) NOT NULL,
+    taxes DECIMAL(14, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (listed_asset_id) REFERENCES listed_asset(id),
+    UNIQUE (listed_asset_id, date)
+);

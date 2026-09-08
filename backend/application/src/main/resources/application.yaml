@@ -12,5 +12,10 @@ gateways:
     host: 'https://api.bcb.gov.br'
   chameidor:
     host: 'http://localhost:8081'
+  brapi:
+    host: 'https://brapi.dev'
+    token: ${BRAPI_TOKEN}
+  b3:
+    host: 'https://sistemaswebb3-listados.b3.com.br'
 
 app-own-host: 'localhost:8080'
