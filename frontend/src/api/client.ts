@@ -1,0 +1,152 @@
+import type {
+  Bond,
+  BondOrder,
+  BondOrderCreation,
+  CheckingAccount,
+  CheckingAccountCreation,
+  FixedRateBondCreation,
+  FloatingRateBondCreation,
+  Index,
+  IndexId,
+  IndexValue,
+  MovementRequest,
+  Position,
+  UploadBroker,
+  UploadProduct,
+} from "./types.ts";
+
+const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
+
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers:
+      init?.body instanceof Blob
+        ? init.headers
+        : { "Content-Type": "application/json", ...init?.headers },
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const text = await res.text();
+      if (text) {
+        try {
+          const body = JSON.parse(text);
+          detail = body.detail ?? body.message ?? text;
+        } catch {
+          detail = text;
+        }
+      }
+    } catch {
+      /* body already consumed / unavailable */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+const json = (method: string, body?: unknown): RequestInit => ({
+  method,
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+});
+
+export const api = {
+  // --- bonds ---
+  listBonds(): Promise<Bond[]> {
+    return request(`/bonds`);
+  },
+  createFixedBond(body: FixedRateBondCreation): Promise<Bond> {
+    return request(`/bonds/fixed`, json("POST", body));
+  },
+  createFloatingBond(body: FloatingRateBondCreation): Promise<Bond> {
+    return request(`/bonds/floating`, json("POST", body));
+  },
+  consolidateBond(id: number): Promise<void> {
+    return request(`/bonds/${id}/consolidate`, json("POST"));
+  },
+  bondPositions(id: number): Promise<Position[]> {
+    return request(`/bonds/${id}/positions`);
+  },
+  bondLastPosition(id: number): Promise<Position> {
+    return request(`/bonds/${id}/positions/last`);
+  },
+  createBondOrder(body: BondOrderCreation): Promise<BondOrder> {
+    return request(`/bonds/orders`, json("POST", body));
+  },
+
+  // --- checking accounts ---
+  listCheckingAccounts(): Promise<CheckingAccount[]> {
+    return request(`/checking-accounts`);
+  },
+  createCheckingAccount(body: CheckingAccountCreation): Promise<CheckingAccount> {
+    return request(`/checking-accounts`, json("POST", body));
+  },
+  deposit(id: number, body: MovementRequest): Promise<unknown> {
+    return request(`/checking-accounts/${id}/deposit`, json("POST", body));
+  },
+  withdraw(id: number, body: MovementRequest): Promise<unknown> {
+    return request(`/checking-accounts/${id}/withdraw`, json("POST", body));
+  },
+  fullWithdraw(id: number, body: MovementRequest): Promise<unknown> {
+    return request(`/checking-accounts/${id}/full-withdraw`, json("POST", body));
+  },
+  consolidateCheckingAccount(id: number): Promise<void> {
+    return request(`/checking-accounts/${id}/consolidate`, json("POST"));
+  },
+  checkingAccountPositions(id: number): Promise<Position[]> {
+    return request(`/checking-accounts/${id}/positions`);
+  },
+  checkingAccountLastPosition(id: number): Promise<Position> {
+    return request(`/checking-accounts/${id}/positions/last`);
+  },
+
+  // --- indexes ---
+  listIndexes(): Promise<Index[]> {
+    return request(`/indexes`);
+  },
+  indexValues(indexId: IndexId): Promise<IndexValue[]> {
+    return request(`/indexes/${indexId.toLowerCase()}/values`);
+  },
+  hydrateIndex(indexId: IndexId): Promise<{ count: number }> {
+    return request(`/indexes/${indexId.toLowerCase()}/values/hydrate`, json("POST"));
+  },
+
+  // --- consolidation ---
+  scheduleConsolidations(): Promise<Record<string, unknown>> {
+    return request(`/consolidations/schedule`, json("POST"));
+  },
+
+  // --- upload: POST the broker's raw .xlsx export ---
+  uploadXlsx(
+    broker: UploadBroker,
+    product: UploadProduct,
+    productId: number,
+    file: Blob,
+  ): Promise<unknown[]> {
+    return request(`/upload/${broker}/${product}/${productId}`, {
+      method: "POST",
+      headers: { "Content-Type": XLSX_MIME },
+      body: file,
+    });
+  },
+
+  // --- health ---
+  health(): Promise<unknown> {
+    return request(`/health`);
+  },
+};
