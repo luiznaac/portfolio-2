@@ -3,6 +3,7 @@ import type {
   ApplyTransferRequest,
   AssetClassTarget,
   AssetClassTargetCreation,
+  AssetIncomeSummary,
   AttributionMovementCreation,
   AttributionSummary,
   Bond,
@@ -15,18 +16,22 @@ import type {
   CheckingAccountCreation,
   CorporateAction,
   DividendDeclaration,
+  DriftAlert,
   FixedIncomeSubClassTarget,
   FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   ImportedTradeConfirmation,
   ImportPreview,
+  IncomeEvent,
+  IncomeReconciliation,
   Index,
   IndexId,
   IndexValue,
   ListedAsset,
   ListedAssetCreation,
   MonthlyCapitalGain,
+  MonthlyClose,
   MovementRequest,
   OrderPlan,
   Position,
@@ -325,5 +330,32 @@ export const api = {
   },
   stepUpPlan(): Promise<StepUpPlan> {
     return request(`/tax/step-up-plan`);
+  },
+
+  // --- income + monthly close (Fase 7) ---
+  incomeSummary(): Promise<AssetIncomeSummary[]> {
+    return request(`/income/summary`);
+  },
+  incomeForAsset(assetId: number): Promise<IncomeEvent[]> {
+    return request(`/income/assets/${assetId}`);
+  },
+  reconcileIncome(file: Blob): Promise<IncomeReconciliation[]> {
+    return request(`/income/reconcile`, {
+      method: "POST",
+      headers: { "Content-Type": XLSX_MIME },
+      body: file,
+    });
+  },
+  currentMonthlyClose(): Promise<MonthlyClose> {
+    return request(`/monthly-close/current`);
+  },
+  monthlyCloseHistory(): Promise<MonthlyClose[]> {
+    return request(`/monthly-close/history`);
+  },
+  closeMonth(): Promise<MonthlyClose> {
+    return request(`/monthly-close/close`, { method: "POST" });
+  },
+  driftAlert(): Promise<DriftAlert[]> {
+    return request(`/monthly-close/drift-alert`);
   },
 };

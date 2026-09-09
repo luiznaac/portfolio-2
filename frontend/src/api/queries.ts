@@ -55,6 +55,10 @@ export const keys = {
   orderPlan: ["orders", "plan"] as const,
   monthlyCapitalGains: ["tax", "capital-gains"] as const,
   stepUpPlan: ["tax", "step-up-plan"] as const,
+  incomeSummary: ["income", "summary"] as const,
+  currentMonthlyClose: ["monthly-close", "current"] as const,
+  monthlyCloseHistory: ["monthly-close", "history"] as const,
+  driftAlert: ["monthly-close", "drift-alert"] as const,
 };
 
 // --- bonds ---
@@ -487,6 +491,41 @@ export function useMonthlyCapitalGains() {
 
 export function useStepUpPlan() {
   return useQuery({ queryKey: keys.stepUpPlan, queryFn: () => api.stepUpPlan() });
+}
+
+// --- income + monthly close (Fase 7) ---
+
+export function useIncomeSummary() {
+  return useQuery({ queryKey: keys.incomeSummary, queryFn: () => api.incomeSummary() });
+}
+
+export function useReconcileIncome() {
+  return useMutation({
+    mutationFn: (file: Blob) => api.reconcileIncome(file),
+  });
+}
+
+export function useCurrentMonthlyClose() {
+  return useQuery({ queryKey: keys.currentMonthlyClose, queryFn: () => api.currentMonthlyClose() });
+}
+
+export function useMonthlyCloseHistory() {
+  return useQuery({ queryKey: keys.monthlyCloseHistory, queryFn: () => api.monthlyCloseHistory() });
+}
+
+export function useCloseMonth() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.closeMonth(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.currentMonthlyClose });
+      qc.invalidateQueries({ queryKey: keys.monthlyCloseHistory });
+    },
+  });
+}
+
+export function useDriftAlert() {
+  return useQuery({ queryKey: keys.driftAlert, queryFn: () => api.driftAlert() });
 }
 
 export function useUploadXlsx() {

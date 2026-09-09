@@ -18,6 +18,7 @@ import dev.agner.portfolio.persistence.listedasset.ListedAssetPositionTable
 import dev.agner.portfolio.persistence.listedasset.ListedAssetTable
 import dev.agner.portfolio.persistence.listedasset.ListedAssetTickerHistoryTable
 import dev.agner.portfolio.persistence.listedasset.TickerCatalogTable
+import dev.agner.portfolio.persistence.monthlyclose.MonthlyCloseTable
 import dev.agner.portfolio.persistence.strategy.StrategyEditionTable
 import dev.agner.portfolio.persistence.strategy.StrategyTable
 import dev.agner.portfolio.persistence.strategy.StrategyTargetTable
@@ -57,6 +58,7 @@ val allTables: Array<Table> = arrayOf(
     StrategyTargetTable,
     StrategyWeightTable,
     AttributionMovementTable,
+    MonthlyCloseTable,
 )
 
 // Authoring half of the migration workflow (backend/CLAUDE.md §7). Diffs `allTables` against a
