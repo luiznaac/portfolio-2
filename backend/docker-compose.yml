@@ -9,3 +9,10 @@ services:
       - "3306:3306"
     volumes:
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - portfolio-mysql-data:/var/lib/mysql
+
+volumes:
+  # Named explicitly so it never collides with another project's data volume — Compose's
+  # default project name is just the directory basename ("backend"), which isn't unique across
+  # repos on the same machine.
+  portfolio-mysql-data:
