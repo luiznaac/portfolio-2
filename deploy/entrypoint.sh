@@ -1,6 +1,6 @@
 #!/bin/sh
-# Render the nginx site config from the template (so the ports are
-# configurable at run time) and hand off to supervisord.
+# Render the nginx site config from the template (so the ports are configurable at run time),
+# migrate the database, then hand off to supervisord.
 set -e
 
 : "${API_PORT:=8080}"
@@ -10,5 +10,10 @@ export API_PORT WEB_PORT
 envsubst '${WEB_PORT} ${API_PORT}' \
   < /etc/nginx/templates/portfolio.conf.template \
   > /etc/nginx/conf.d/portfolio.conf
+
+# Bring the schema up to date before anything can serve traffic. `set -e` above means a failed
+# migration aborts the container instead of starting the app against a stale database.
+echo "applying database migrations..."
+/opt/app/application-1.0/bin/migrate
 
 exec supervisord -n -c /etc/supervisor/supervisord.conf

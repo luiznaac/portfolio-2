@@ -1,12 +1,21 @@
 import type {
+  AllocationPlan,
+  AssetClassTarget,
+  AssetClassTargetCreation,
+  AttributionMovementCreation,
+  AttributionSummary,
   Bond,
   BondOrder,
   BondOrderCreation,
   BonusCreation,
+  CapitalSnapshot,
+  CapitalSnapshotCreation,
   CheckingAccount,
   CheckingAccountCreation,
   CorporateAction,
   DividendDeclaration,
+  FixedIncomeSubClassTarget,
+  FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   Index,
@@ -16,8 +25,11 @@ import type {
   ListedAssetCreation,
   MovementRequest,
   Position,
+  ProductClassification,
   ReverseSplitCreation,
   SplitCreation,
+  Strategy,
+  StrategyCreation,
   TickerCatalogEntry,
   TickerChangeCreation,
   Trade,
@@ -209,5 +221,55 @@ export const api = {
   // --- ticker catalog (search-as-you-type source for asset registration) ---
   searchTickerCatalog(query: string): Promise<TickerCatalogEntry[]> {
     return request(`/ticker-catalog/search?q=${encodeURIComponent(query)}`);
+  },
+
+  // --- allocation ---
+  allocationPlan(): Promise<AllocationPlan> {
+    return request(`/allocation/plan`);
+  },
+  capitalSnapshots(): Promise<CapitalSnapshot[]> {
+    return request(`/allocation/capital-snapshots`);
+  },
+  recordCapitalSnapshot(body: CapitalSnapshotCreation): Promise<CapitalSnapshot> {
+    return request(`/allocation/capital-snapshots`, json("POST", body));
+  },
+  classTargets(): Promise<AssetClassTarget[]> {
+    return request(`/allocation/class-targets`);
+  },
+  setClassTarget(body: AssetClassTargetCreation): Promise<AssetClassTarget> {
+    return request(`/allocation/class-targets`, json("POST", body));
+  },
+  fixedIncomeSubClassTargets(): Promise<FixedIncomeSubClassTarget[]> {
+    return request(`/allocation/fixed-income-subclass-targets`);
+  },
+  setFixedIncomeSubClassTarget(
+    body: FixedIncomeSubClassTargetCreation,
+  ): Promise<FixedIncomeSubClassTarget> {
+    return request(`/allocation/fixed-income-subclass-targets`, json("POST", body));
+  },
+  classifications(): Promise<ProductClassification[]> {
+    return request(`/allocation/classifications`);
+  },
+  classify(body: ProductClassification): Promise<ProductClassification> {
+    return request(`/allocation/classifications`, json("POST", body));
+  },
+
+  // --- strategies ---
+  listStrategies(): Promise<Strategy[]> {
+    return request(`/strategies`);
+  },
+  createStrategy(body: StrategyCreation): Promise<Strategy> {
+    return request(`/strategies`, json("POST", body));
+  },
+
+  // --- attribution ---
+  attributionSummary(assetId: number): Promise<AttributionSummary> {
+    return request(`/listed-assets/${assetId}/attribution`);
+  },
+  recordAttributionMovement(
+    assetId: number,
+    body: AttributionMovementCreation,
+  ): Promise<unknown> {
+    return request(`/listed-assets/${assetId}/attribution/movements`, json("POST", body));
   },
 };

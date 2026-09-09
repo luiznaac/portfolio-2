@@ -1,16 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.ts";
 import type {
+  AssetClassTargetCreation,
+  AttributionMovementCreation,
   BondOrderCreation,
   BonusCreation,
+  CapitalSnapshotCreation,
   CheckingAccountCreation,
+  FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   IndexId,
   ListedAssetCreation,
   MovementRequest,
+  ProductClassification,
   ReverseSplitCreation,
   SplitCreation,
+  StrategyCreation,
   TickerChangeCreation,
   TradeCreation,
   UploadBroker,
@@ -34,6 +40,13 @@ export const keys = {
   dividends: (assetId: number) =>
     ["listed-assets", assetId, "dividends"] as const,
   tickerCatalogSearch: (query: string) => ["ticker-catalog", query] as const,
+  allocationPlan: ["allocation", "plan"] as const,
+  capitalSnapshots: ["allocation", "capital-snapshots"] as const,
+  classTargets: ["allocation", "class-targets"] as const,
+  fixedIncomeSubClassTargets: ["allocation", "fixed-income-subclass-targets"] as const,
+  classifications: ["allocation", "classifications"] as const,
+  strategies: ["strategies"] as const,
+  attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
 };
 
 // --- bonds ---
@@ -278,6 +291,120 @@ export function useTickerCatalogSearch(query: string) {
     queryKey: keys.tickerCatalogSearch(query),
     queryFn: () => api.searchTickerCatalog(query),
     enabled: query.trim().length >= 2,
+  });
+}
+
+// --- allocation ---
+
+export function useAllocationPlan() {
+  return useQuery({
+    queryKey: keys.allocationPlan,
+    queryFn: () => api.allocationPlan(),
+  });
+}
+
+export function useCapitalSnapshots() {
+  return useQuery({
+    queryKey: keys.capitalSnapshots,
+    queryFn: () => api.capitalSnapshots(),
+  });
+}
+
+export function useRecordCapitalSnapshot() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CapitalSnapshotCreation) => api.recordCapitalSnapshot(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.capitalSnapshots });
+      qc.invalidateQueries({ queryKey: keys.allocationPlan });
+    },
+  });
+}
+
+export function useClassTargets() {
+  return useQuery({
+    queryKey: keys.classTargets,
+    queryFn: () => api.classTargets(),
+  });
+}
+
+export function useSetClassTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AssetClassTargetCreation) => api.setClassTarget(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.classTargets });
+      qc.invalidateQueries({ queryKey: keys.allocationPlan });
+    },
+  });
+}
+
+export function useFixedIncomeSubClassTargets() {
+  return useQuery({
+    queryKey: keys.fixedIncomeSubClassTargets,
+    queryFn: () => api.fixedIncomeSubClassTargets(),
+  });
+}
+
+export function useSetFixedIncomeSubClassTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: FixedIncomeSubClassTargetCreation) =>
+      api.setFixedIncomeSubClassTarget(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.fixedIncomeSubClassTargets });
+      qc.invalidateQueries({ queryKey: keys.allocationPlan });
+    },
+  });
+}
+
+export function useClassifications() {
+  return useQuery({
+    queryKey: keys.classifications,
+    queryFn: () => api.classifications(),
+  });
+}
+
+export function useClassify() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProductClassification) => api.classify(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.classifications });
+      qc.invalidateQueries({ queryKey: keys.allocationPlan });
+    },
+  });
+}
+
+// --- strategies ---
+
+export function useStrategies() {
+  return useQuery({ queryKey: keys.strategies, queryFn: () => api.listStrategies() });
+}
+
+export function useCreateStrategy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: StrategyCreation) => api.createStrategy(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.strategies }),
+  });
+}
+
+// --- attribution ---
+
+export function useAttributionSummary(assetId: number) {
+  return useQuery({
+    queryKey: keys.attribution(assetId),
+    queryFn: () => api.attributionSummary(assetId),
+  });
+}
+
+export function useRecordAttributionMovement(assetId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AttributionMovementCreation) =>
+      api.recordAttributionMovement(assetId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.attribution(assetId) }),
   });
 }
 

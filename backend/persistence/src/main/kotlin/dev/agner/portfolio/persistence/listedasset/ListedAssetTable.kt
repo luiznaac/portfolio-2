@@ -9,7 +9,7 @@ import org.jetbrains.exposed.v1.dao.IntEntityClass
 import org.jetbrains.exposed.v1.datetime.datetime
 
 object ListedAssetTable : IntIdTable("listed_asset") {
-    val ticker = varchar("ticker", 12)
+    val ticker = varchar("ticker", 12).uniqueIndex()
     val kind = varchar("kind", 10)
     val name = varchar("name", 150)
     val b3Identifier = varchar("b3_identifier", 100)

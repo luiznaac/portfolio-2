@@ -21,6 +21,11 @@ object BondOrderStatementTable : IntIdTable("bond_order_statement") {
     val date = date("date")
     val amount = decimal("amount", 12, 2)
     val createdAt = datetime("created_at")
+
+    init {
+        index(null, false, buyOrderId, date)
+        uniqueIndex(buyOrderId, type, date)
+    }
 }
 
 class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
