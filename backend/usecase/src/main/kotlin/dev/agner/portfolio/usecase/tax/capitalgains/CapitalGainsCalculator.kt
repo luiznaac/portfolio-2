@@ -1,0 +1,89 @@
+package dev.agner.portfolio.usecase.tax.capitalgains
+
+import dev.agner.portfolio.usecase.tax.capitalgains.model.MonthlyCapitalGain
+import kotlinx.datetime.LocalDate
+import org.springframework.stereotype.Component
+import java.math.BigDecimal
+import java.math.RoundingMode
+
+/** One realized sale, already stripped of which ticker it was — all this calculator needs. */
+data class TaxableSale(
+    val date: LocalDate,
+    val isFii: Boolean,
+    val proceeds: BigDecimal,
+    val costBasis: BigDecimal,
+) {
+    val gain: BigDecimal get() = proceeds - costBasis
+}
+
+/**
+ * Pure: replays realized sales into the monthly gain/loss ledger the plan's Fase 5 calls for —
+ * same lot-derived-from-replay spirit as [dev.agner.portfolio.usecase.trade.AveragePriceCalculator],
+ * just one level up. Two independent buckets (stocks/ETFs/BDRs vs. FIIs — [MonthlyCapitalGain.isFii]),
+ * each carrying its own loss forward, because Brazilian tax law never lets a stock loss offset a
+ * FII gain or vice versa. Day-trade gains are NOT taxed at the special day-trade rate here — see
+ * [dev.agner.portfolio.usecase.order.model.Order.dayTradeRisk] for where that risk is flagged
+ * instead; folding it into this calculator is left for a later pass.
+ */
+@Component
+class CapitalGainsCalculator {
+
+    fun calculate(sales: List<TaxableSale>): List<MonthlyCapitalGain> =
+        sales
+            .groupBy { it.isFii to monthOf(it.date) }
+            .toList()
+            .sortedBy { (key, _) -> key.second }
+            .groupBy({ (key, _) -> key.first }, { (key, group) -> key.second to group })
+            .flatMap { (isFii, monthGroups) -> replay(isFii, monthGroups.sortedBy { it.first }) }
+            .sortedWith(compareBy({ it.month }, { it.isFii }))
+
+    private fun replay(
+        isFii: Boolean,
+        monthGroups: List<Pair<LocalDate, List<TaxableSale>>>,
+    ): List<MonthlyCapitalGain> {
+        var carriedLoss = BigDecimal.ZERO
+
+        return monthGroups.map { (month, sales) ->
+            val proceeds = sales.sumOf { it.proceeds }
+            val grossGain = sales.sumOf { it.gain }
+            val exempt = !isFii && proceeds <= EXEMPTION_LIMIT
+
+            val (compensation, taxable) = when {
+                grossGain <= BigDecimal.ZERO -> BigDecimal.ZERO to BigDecimal.ZERO
+                exempt -> BigDecimal.ZERO to BigDecimal.ZERO
+                else -> {
+                    val used = grossGain.min(carriedLoss)
+                    used to (grossGain - used)
+                }
+            }
+
+            carriedLoss = if (grossGain < BigDecimal.ZERO) {
+                carriedLoss + grossGain.negate()
+            } else {
+                carriedLoss - compensation
+            }
+
+            val rate = if (isFii) FII_RATE else STOCK_RATE
+
+            MonthlyCapitalGain(
+                month = month,
+                isFii = isFii,
+                proceeds = proceeds.setScale(2, RoundingMode.HALF_EVEN),
+                grossGain = grossGain.setScale(2, RoundingMode.HALF_EVEN),
+                exempt = exempt,
+                lossCompensated = compensation.setScale(2, RoundingMode.HALF_EVEN),
+                taxableGain = taxable.setScale(2, RoundingMode.HALF_EVEN),
+                taxDue = (taxable * rate).setScale(2, RoundingMode.HALF_EVEN),
+                lossCarriedForward = carriedLoss.setScale(2, RoundingMode.HALF_EVEN),
+            )
+        }
+    }
+
+    private fun monthOf(date: LocalDate) = LocalDate(date.year, date.month, 1)
+
+    private companion object {
+        val EXEMPTION_LIMIT: BigDecimal = BigDecimal("20000.00")
+        val STOCK_RATE: BigDecimal = BigDecimal("0.15")
+        val FII_RATE: BigDecimal = BigDecimal("0.20")
+    }
+}

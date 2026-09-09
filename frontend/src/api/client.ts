@@ -16,22 +16,24 @@ import type {
   CorporateAction,
   DividendDeclaration,
   FixedIncomeSubClassTarget,
-  ImportedTradeConfirmation,
-  ImportPreview,
   FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  ImportedTradeConfirmation,
+  ImportPreview,
   Index,
   IndexId,
   IndexValue,
   ListedAsset,
   ListedAssetCreation,
+  MonthlyCapitalGain,
   MovementRequest,
   OrderPlan,
   Position,
   ProductClassification,
   ReverseSplitCreation,
   SplitCreation,
+  StepUpPlan,
   Strategy,
   StrategyCreation,
   StrategyEditionWithDiff,
@@ -315,5 +317,13 @@ export const api = {
   },
   confirmBrokerageNote(trades: ImportedTradeConfirmation[]): Promise<Trade[]> {
     return request(`/notes/import/confirm`, json("POST", trades));
+  },
+
+  // --- tax: capital gains + step-up (Fase 5) ---
+  monthlyCapitalGains(): Promise<MonthlyCapitalGain[]> {
+    return request(`/tax/capital-gains`);
+  },
+  stepUpPlan(): Promise<StepUpPlan> {
+    return request(`/tax/step-up-plan`);
   },
 };

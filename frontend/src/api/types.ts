@@ -473,3 +473,34 @@ export interface ImportedTradeConfirmation {
   quantity: number;
   price: number;
 }
+
+// --- tax: capital gains + step-up (Fase 5) ---
+
+// One (month, asset group) bucket. is_fii mirrors Order.is_fii — FIIs have no sale exemption and
+// are always taxed at 20%; stocks/ETFs/BDRs share the R$20,000/month exemption at 15%.
+export interface MonthlyCapitalGain {
+  month: string;
+  is_fii: boolean;
+  proceeds: number;
+  gross_gain: number;
+  exempt: boolean;
+  loss_compensated: number;
+  taxable_gain: number;
+  tax_due: number;
+  loss_carried_forward: number;
+}
+
+export interface StepUpSuggestion {
+  listed_asset_id: number;
+  ticker: string;
+  quantity: number;
+  notional: number;
+  realized_gain: number;
+  rebuy_date: string;
+}
+
+export interface StepUpPlan {
+  suggestions: StepUpSuggestion[];
+  total_realized_gain: number;
+  remaining_ceiling_after: number;
+}
