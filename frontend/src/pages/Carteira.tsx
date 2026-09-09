@@ -1,14 +1,13 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import {
   useAllocationPlan,
   useCapitalSnapshots,
   useClassTargets,
-  useCreateStrategy,
   useFixedIncomeSubClassTargets,
   useRecordCapitalSnapshot,
   useSetClassTarget,
   useSetFixedIncomeSubClassTarget,
-  useStrategies,
 } from "../api/queries.ts";
 import type { AssetClass, FixedIncomeSubClass } from "../api/types.ts";
 import {
@@ -45,9 +44,13 @@ export function Carteira() {
         </Panel>
       </div>
 
-      <Panel title="Estratégias (carteiras XP)">
-        <StrategiesPanel />
-      </Panel>
+      <p className="text-sm text-slate-400">
+        Cadastro e relatórios das carteiras XP ficam em{" "}
+        <Link to="/estrategias" className="text-accent-500 hover:underline">
+          Estratégias
+        </Link>
+        .
+      </p>
     </div>
   );
 }
@@ -305,55 +308,6 @@ function SubClassTargetsPanel() {
           className="rounded-md bg-accent-500 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
         >
           {mutation.isPending ? "Salvando…" : "Definir"}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function StrategiesPanel() {
-  const strategies = useStrategies();
-  const mutation = useCreateStrategy();
-  const [name, setName] = useState("");
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    mutation.mutate({ name }, { onSuccess: () => setName("") });
-  };
-
-  return (
-    <div className="space-y-4">
-      {strategies.data && strategies.data.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {strategies.data.map((s) => (
-            <li
-              key={s.id}
-              className="rounded bg-slate-800 px-2.5 py-1 text-sm text-slate-300"
-            >
-              {s.name}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-slate-500">Nenhuma estratégia cadastrada.</p>
-      )}
-      <form onSubmit={submit} className="flex items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-xs text-slate-500">Nome</span>
-          <input
-            required
-            placeholder="ex.: Top, Dividendos…"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-56 rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-accent-500"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="rounded-md bg-accent-500 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
-        >
-          {mutation.isPending ? "Salvando…" : "Adicionar"}
         </button>
       </form>
     </div>

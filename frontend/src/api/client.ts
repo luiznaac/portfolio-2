@@ -30,6 +30,7 @@ import type {
   SplitCreation,
   Strategy,
   StrategyCreation,
+  StrategyEditionWithDiff,
   TickerCatalogEntry,
   TickerChangeCreation,
   Trade,
@@ -42,6 +43,7 @@ const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PDF_MIME = "application/pdf";
 
 export class ApiError extends Error {
   constructor(
@@ -260,6 +262,16 @@ export const api = {
   },
   createStrategy(body: StrategyCreation): Promise<Strategy> {
     return request(`/strategies`, json("POST", body));
+  },
+  listStrategyEditions(strategyId: number): Promise<StrategyEditionWithDiff[]> {
+    return request(`/strategies/${strategyId}/editions`);
+  },
+  uploadStrategyReport(strategyId: number, file: Blob): Promise<unknown> {
+    return request(`/strategies/${strategyId}/reports`, {
+      method: "POST",
+      headers: { "Content-Type": PDF_MIME },
+      body: file,
+    });
   },
 
   // --- attribution ---
