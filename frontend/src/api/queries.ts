@@ -33,6 +33,7 @@ export const keys = {
     ["listed-assets", assetId, "corporate-actions"] as const,
   dividends: (assetId: number) =>
     ["listed-assets", assetId, "dividends"] as const,
+  tickerCatalogSearch: (query: string) => ["ticker-catalog", query] as const,
 };
 
 // --- bonds ---
@@ -267,6 +268,16 @@ export function useCreateCorporateAction(assetId: number) {
       qc.invalidateQueries({ queryKey: keys.corporateActions(assetId) });
       qc.invalidateQueries({ queryKey: keys.listedAssets });
     },
+  });
+}
+
+// --- ticker catalog ---
+
+export function useTickerCatalogSearch(query: string) {
+  return useQuery({
+    queryKey: keys.tickerCatalogSearch(query),
+    queryFn: () => api.searchTickerCatalog(query),
+    enabled: query.trim().length >= 2,
   });
 }
 

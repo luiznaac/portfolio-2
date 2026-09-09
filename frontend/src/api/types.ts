@@ -132,6 +132,15 @@ export interface ListedAssetCreation {
   b3_identifier: string;
 }
 
+// A row of B3's ticker universe (stocks/FIIs/ETFs/BDRs), synced from brapi — powers the
+// search-as-you-type box on the asset registration screen so the user picks a ticker instead of
+// typing its company name and kind by hand.
+export interface TickerCatalogEntry {
+  ticker: string;
+  name: string;
+  kind: AssetKind;
+}
+
 // --- trades ---
 
 export interface Trade {

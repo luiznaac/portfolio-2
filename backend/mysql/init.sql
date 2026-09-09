@@ -152,3 +152,13 @@ CREATE TABLE listed_asset_position (
     FOREIGN KEY (listed_asset_id) REFERENCES listed_asset(id),
     UNIQUE (listed_asset_id, date)
 );
+
+-- B3's whole ticker universe (stocks/FIIs/ETFs/BDRs), synced from brapi — powers the search box
+-- on the asset registration screen. Independent of listed_asset (what the user actually holds).
+CREATE TABLE ticker_catalog (
+    ticker VARCHAR(12) PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    kind VARCHAR(10) NOT NULL,
+
+    INDEX (name)
+);

@@ -18,6 +18,7 @@ import type {
   Position,
   ReverseSplitCreation,
   SplitCreation,
+  TickerCatalogEntry,
   TickerChangeCreation,
   Trade,
   TradeCreation,
@@ -203,5 +204,10 @@ export const api = {
   },
   createTickerChange(assetId: number, body: TickerChangeCreation): Promise<CorporateAction> {
     return request(`/listed-assets/${assetId}/corporate-actions/ticker-change`, json("POST", body));
+  },
+
+  // --- ticker catalog (search-as-you-type source for asset registration) ---
+  searchTickerCatalog(query: string): Promise<TickerCatalogEntry[]> {
+    return request(`/ticker-catalog/search?q=${encodeURIComponent(query)}`);
   },
 };
