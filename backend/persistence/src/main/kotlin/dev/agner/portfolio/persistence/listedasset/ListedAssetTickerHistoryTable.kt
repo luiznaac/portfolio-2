@@ -13,6 +13,8 @@ object ListedAssetTickerHistoryTable : IntIdTable("listed_asset_ticker_history")
     val effectiveFrom = date("effective_from")
     val effectiveTo = date("effective_to").nullable()
     val createdAt = datetime("created_at")
+
+    init { index(null, false, ticker, effectiveFrom) }
 }
 
 class ListedAssetTickerHistoryEntity(id: EntityID<Int>) : IntEntity(id) {

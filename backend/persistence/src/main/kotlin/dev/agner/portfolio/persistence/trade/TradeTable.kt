@@ -16,6 +16,8 @@ object TradeTable : IntIdTable("trade") {
     val quantity = decimal("quantity", 18, 8)
     val price = decimal("price", 12, 4)
     val createdAt = datetime("created_at")
+
+    init { index(null, false, listedAsset, date) }
 }
 
 class TradeEntity(id: EntityID<Int>) : IntEntity(id) {

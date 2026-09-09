@@ -1,3 +1,6 @@
+# The schema is NOT seeded here: db/migration/V*.sql is applied by Flyway
+# (./gradlew :persistence:migrate locally, deploy/entrypoint.sh in the container).
+
 services:
   mysql:
     image: mysql:9.4.0
@@ -8,7 +11,6 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - portfolio-mysql-data:/var/lib/mysql
 
 volumes:

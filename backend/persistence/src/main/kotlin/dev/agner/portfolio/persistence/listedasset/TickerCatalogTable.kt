@@ -7,7 +7,7 @@ import org.jetbrains.exposed.v1.core.Table
 // Entity/EntityClass ceremony the rest of the module uses for user-owned data.
 object TickerCatalogTable : Table("ticker_catalog") {
     val ticker = varchar("ticker", 12)
-    val name = varchar("name", 150)
+    val name = varchar("name", 150).index()
     val kind = varchar("kind", 10)
 
     override val primaryKey = PrimaryKey(ticker)
