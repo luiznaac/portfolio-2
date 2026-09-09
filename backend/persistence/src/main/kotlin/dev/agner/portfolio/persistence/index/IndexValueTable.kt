@@ -15,6 +15,8 @@ object IndexValueTable : IntIdTable("index_value") {
     val date = date("date")
     val value = decimal("value", 12, 8)
     val createdAt = datetime("created_at")
+
+    init { uniqueIndex(indexId, date) }
 }
 
 class IndexValueEntity(id: EntityID<Int>) : IntEntity(id) {

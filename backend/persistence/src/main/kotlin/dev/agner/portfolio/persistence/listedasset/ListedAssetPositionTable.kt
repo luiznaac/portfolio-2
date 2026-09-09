@@ -14,6 +14,8 @@ object ListedAssetPositionTable : IntIdTable("listed_asset_position") {
     val yieldValue = decimal("yield", 14, 2)
     val taxes = decimal("taxes", 14, 2)
     val createdAt = datetime("created_at")
+
+    init { uniqueIndex(listedAsset, date) }
 }
 
 class ListedAssetPositionEntity(id: EntityID<Int>) : IntEntity(id) {

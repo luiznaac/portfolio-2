@@ -1,5 +1,6 @@
 package dev.agner.portfolio.integrationTest.config
 
+import dev.agner.portfolio.persistence.migration.migrate
 import io.kotest.core.extensions.Extension
 import io.kotest.core.listeners.AfterProjectListener
 import io.kotest.core.listeners.AfterTestListener
@@ -17,6 +18,11 @@ import java.io.File
 object DockerComposeExtension : Extension, BeforeProjectListener, AfterProjectListener, AfterTestListener {
     override suspend fun beforeProject() {
         DockerCompose.start()
+        // backend/docker-compose.yml no longer seeds a schema (mysql/init.sql is gone) — the
+        // container starts empty, same as it would in prod on a fresh volume. Migrate it once,
+        // here, before any spec boots the Spring context and starts a repository transaction;
+        // matches localhost:3306/root/<empty> from application-test.yaml.
+        migrate(host = "localhost", user = "root", password = "")
     }
 
     override suspend fun afterProject() {
@@ -33,7 +39,7 @@ object DockerComposeExtension : Extension, BeforeProjectListener, AfterProjectLi
                         "-c",
                         """
                             mysql -uroot -Nse 'show tables' portfolio | while read table; do
-                               if [ "${'$'}table" != 'index' ]; then
+                               if [ "${'$'}table" != 'index' ] && [ "${'$'}table" != 'flyway_schema_history' ]; then
                                    mysql -e "set FOREIGN_KEY_CHECKS=0; truncate table ${'$'}table" portfolio;
                                fi
                             done

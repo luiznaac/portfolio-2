@@ -104,6 +104,7 @@ Example: adding a new consolidated product type (portfolio-2 already has `Produc
    accounts are wired in there.
 5. **Implement persistence** in `persistence/src/main/kotlin/dev/agner/portfolio/persistence/<feature>/`
    with an Exposed `Table`, `Entity`, and `@Component class <Name>Repository : I<Name>Repository`.
+   If the feature needs a new table or column, write the migration for it too — see §7.
 6. **Expose HTTP endpoints** in `http-api/.../controller/` as a `@Component class
    <Name>Controller(...) : ControllerTemplate` — no manual registration needed, same as chameidor.
 7. **Add tests**: unit tests for the calculator/service in `usecase`'s `src/test/kotlin`
@@ -131,7 +132,57 @@ reference: `BondCalculatorTest`, `BondConsolidationServiceTest`,
 ./gradlew testCoverageReport   # aggregated JaCoCo report
 ```
 
-## 7. Configuration
+## 7. Database migrations
+
+The schema is versioned SQL under `persistence/src/main/resources/db/migration/V*.sql` — there is
+no more `mysql/init.sql`. Two tools, each doing one half of the job:
+
+- **Exposed's migration module** (`persistence/.../migration/MigrationScripts.kt`) *generates* the
+  SQL by diffing `allTables` (every `Table` object, defined in the same file) against a live
+  database. It never applies anything.
+- **Flyway** (`persistence/.../migration/Migrator.kt`) *applies* those `V*.sql` files. It runs as
+  a standalone `main()` — packaged as a second start script, `bin/migrate`, alongside
+  `bin/application` (see `application/build.gradle.kts`) — invoked from `deploy/entrypoint.sh`
+  before the app starts. Not from the Spring context: `KtorConfig` blocks the main thread for the
+  process's entire lifetime (`ktor.wait: true`), so nothing hooked into Spring's lifecycle would
+  run before the server starts accepting requests anyway. A failed migration aborts the container
+  instead of serving traffic against a stale schema. `baselineOnMigrate` means a database that
+  already has some of the tables gets stamped at V1 rather than having it re-applied — **V1
+  deliberately only covers the 7 tables production had when migrations were introduced** (`index`,
+  `index_value`, `checking_account`, `bond`, `bond_order`, `bond_order_statement`,
+  `bond_order_position`); everything added since (`listed_asset` and its family in V2, the Fase 1
+  allocation-engine tables in V3) is a real migration that Flyway actually runs against
+  production, not something baselining could silently skip. Keep this shape for future baseline
+  changes: **V1 (or whichever version you baseline at) must never describe more than what
+  production already has** — anything extra in it would never actually get created there.
+  V4 widens two columns that were already wider in the Exposed `Table` objects than what
+  production physically has — that ALTER runs for real on production (V1 is invisible to it) and
+  is a no-op on any database that went through V1 directly.
+- One residual, harmless divergence from baselining: production's original 7 tables keep their
+  physical `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` columns and MySQL's auto-generated FK constraint
+  names (`bond_ibfk_1`, …) forever, since V1's own `CREATE TABLE` statements never run against
+  them — only freshly-created databases get Exposed's `DATETIME(6)` / `fk_..._id` naming. Harmless
+  because every repository sets `createdAt` explicitly (see `TaskRepository`-style patterns) and
+  because a constraint's name has no behavioral effect — but don't be surprised if you inspect
+  production's schema and see it doesn't byte-for-byte match what `MigrationSchemaTest` (below)
+  guards.
+
+Changing a table:
+
+1. Edit the `Table` object in `persistence/.../<feature>/` (or add it to `allTables` if it's new).
+2. Point `MYSQL_HOST`/`MYSQL_USER`/`MYSQL_PASSWORD` at a database already migrated to head, then
+   `./gradlew :persistence:generateMigrationScript -Pname=V5__add_something` (or
+   `npm run db:generate -- -Pname=V5__add_something` from the repo root). Review the generated
+   `.sql` before committing — the diff is mechanical and won't know a rename is a rename rather
+   than a drop-and-add.
+3. `./gradlew :persistence:migrate` (or `npm run db:migrate`) to apply it locally.
+
+`integrationTest/.../tests/MigrationSchemaTest.kt` is the guard: `DockerComposeExtension`
+migrates the compose-provided MySQL to head before any spec runs, and this test asserts
+`MigrationUtils.statementsRequiredForDatabaseMigration(*allTables)` is empty. If a `Table`
+changes without a matching migration (or vice versa), this test fails.
+
+## 8. Configuration
 
 `application/src/main/resources/application.yaml`:
 
@@ -143,7 +194,7 @@ reference: `BondCalculatorTest`, `BondConsolidationServiceTest`,
 | `gateways.chameidor.host` | fixed (overridable) | `http://localhost:8081` locally — chameidor must be running separately for scheduling to work end-to-end |
 | `app-own-host` | fixed | `localhost:8080` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 
-## 8. Build, run, deploy
+## 9. Build, run, deploy
 
 ```bash
 ./gradlew clean build
@@ -164,7 +215,7 @@ one image: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy
 `docker-compose.yml` adds MySQL for full-stack runs; `backend/docker-compose.yml` is the
 MySQL-only file used by `integrationTest` (via Testcontainers) and by plain backend dev.
 
-## 9. Git & CI
+## 10. Git & CI
 
 - Remote: `git@github.com:luiznaac/portfolio-2.git`.
 - **Dependabot is active** — expect `dependabot/gradle/...` branches with auto-merged PRs; don't
@@ -173,7 +224,10 @@ MySQL-only file used by `integrationTest` (via Testcontainers) and by plain back
   Feature branches are named after the domain concept (`bond-full-redemption`,
   `checking-account`, `yield-service`).
 
-## 10. Related repositories
+**AI agents: never commit directly to `master`.** Always create a feature branch and open a PR,
+even for a small or "obviously safe" change — no exceptions for agent-authored commits.
+
+## 11. Related repositories
 
 Uses [chameidor](../../chameidor/CLAUDE.md) as its scheduling backend and was generated from the same
 [environments/kotlin](../../environments/CLAUDE.md) template. If you introduce a new cross-cutting

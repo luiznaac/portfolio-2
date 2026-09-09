@@ -22,6 +22,8 @@ object CorporateActionTable : IntIdTable("corporate_action") {
     val valuePerNewShare = decimal("value_per_new_share", 12, 4).nullable()
     val newTicker = varchar("new_ticker", 12).nullable()
     val createdAt = datetime("created_at")
+
+    init { index(null, false, listedAsset, date) }
 }
 
 class CorporateActionEntity(id: EntityID<Int>) : IntEntity(id) {

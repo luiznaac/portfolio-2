@@ -21,6 +21,8 @@ object AttributionMovementTable : IntIdTable("attribution_movement") {
     val reason = varchar("reason", 20)
     val note = varchar("note", 255).nullable()
     val createdAt = datetime("created_at")
+
+    init { index(null, false, listedAsset, date) }
 }
 
 class AttributionMovementEntity(id: EntityID<Int>) : IntEntity(id) {
