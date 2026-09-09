@@ -21,6 +21,7 @@ import dev.agner.portfolio.persistence.listedasset.TickerCatalogTable
 import dev.agner.portfolio.persistence.strategy.StrategyEditionTable
 import dev.agner.portfolio.persistence.strategy.StrategyTable
 import dev.agner.portfolio.persistence.strategy.StrategyTargetTable
+import dev.agner.portfolio.persistence.strategy.StrategyWeightTable
 import dev.agner.portfolio.persistence.trade.TradeTable
 import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
 import org.jetbrains.exposed.v1.core.Table
@@ -54,6 +55,7 @@ val allTables: Array<Table> = arrayOf(
     StrategyTable,
     StrategyEditionTable,
     StrategyTargetTable,
+    StrategyWeightTable,
     AttributionMovementTable,
 )
 

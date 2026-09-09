@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.ts";
 import type {
+  ApplyTransferRequest,
   AssetClassTargetCreation,
   AttributionMovementCreation,
   BondOrderCreation,
@@ -17,6 +18,7 @@ import type {
   ReverseSplitCreation,
   SplitCreation,
   StrategyCreation,
+  StrategyWeightCreation,
   TickerChangeCreation,
   TradeCreation,
   UploadBroker,
@@ -47,7 +49,9 @@ export const keys = {
   classifications: ["allocation", "classifications"] as const,
   strategies: ["strategies"] as const,
   strategyEditions: (strategyId: number) => ["strategies", strategyId, "editions"] as const,
+  strategyWeights: ["strategies", "weights"] as const,
   attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
+  orderPlan: ["orders", "plan"] as const,
 };
 
 // --- bonds ---
@@ -406,6 +410,24 @@ export function useUploadStrategyReport(strategyId: number) {
   });
 }
 
+export function useStrategyWeightHistory() {
+  return useQuery({
+    queryKey: keys.strategyWeights,
+    queryFn: () => api.strategyWeightHistory(),
+  });
+}
+
+export function useSetStrategyWeight(strategyId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: StrategyWeightCreation) => api.setStrategyWeight(strategyId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.strategyWeights });
+      qc.invalidateQueries({ queryKey: keys.orderPlan });
+    },
+  });
+}
+
 // --- attribution ---
 
 export function useAttributionSummary(assetId: number) {
@@ -421,6 +443,20 @@ export function useRecordAttributionMovement(assetId: number) {
     mutationFn: (body: AttributionMovementCreation) =>
       api.recordAttributionMovement(assetId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.attribution(assetId) }),
+  });
+}
+
+// --- orders (Fase 3) ---
+
+export function useOrderPlan() {
+  return useQuery({ queryKey: keys.orderPlan, queryFn: () => api.orderPlan() });
+}
+
+export function useApplyTransfer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplyTransferRequest) => api.applyTransfer(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
 }
 

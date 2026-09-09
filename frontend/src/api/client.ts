@@ -1,5 +1,6 @@
 import type {
   AllocationPlan,
+  ApplyTransferRequest,
   AssetClassTarget,
   AssetClassTargetCreation,
   AttributionMovementCreation,
@@ -24,6 +25,7 @@ import type {
   ListedAsset,
   ListedAssetCreation,
   MovementRequest,
+  OrderPlan,
   Position,
   ProductClassification,
   ReverseSplitCreation,
@@ -31,6 +33,8 @@ import type {
   Strategy,
   StrategyCreation,
   StrategyEditionWithDiff,
+  StrategyWeight,
+  StrategyWeightCreation,
   TickerCatalogEntry,
   TickerChangeCreation,
   Trade,
@@ -273,6 +277,12 @@ export const api = {
       body: file,
     });
   },
+  strategyWeightHistory(): Promise<StrategyWeight[]> {
+    return request(`/strategies/weights`);
+  },
+  setStrategyWeight(strategyId: number, body: StrategyWeightCreation): Promise<StrategyWeight> {
+    return request(`/strategies/${strategyId}/weight`, json("POST", body));
+  },
 
   // --- attribution ---
   attributionSummary(assetId: number): Promise<AttributionSummary> {
@@ -283,5 +293,13 @@ export const api = {
     body: AttributionMovementCreation,
   ): Promise<unknown> {
     return request(`/listed-assets/${assetId}/attribution/movements`, json("POST", body));
+  },
+
+  // --- orders (Fase 3) ---
+  orderPlan(): Promise<OrderPlan> {
+    return request(`/orders/plan`);
+  },
+  applyTransfer(body: ApplyTransferRequest): Promise<void> {
+    return request(`/orders/transfers/apply`, json("POST", body));
   },
 };
