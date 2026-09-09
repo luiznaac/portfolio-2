@@ -43,6 +43,9 @@ export function Layout() {
             <NavLink to="/importar" className={linkClass}>
               Importar B3
             </NavLink>
+            <NavLink to="/imposto" className={linkClass}>
+              Imposto
+            </NavLink>
             <NavLink to="/upload" className={linkClass}>
               Extratos
             </NavLink>
