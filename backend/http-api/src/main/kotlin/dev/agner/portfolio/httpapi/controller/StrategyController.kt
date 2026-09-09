@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.strategy.InvalidStrategyIdException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyWeightCreation
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
@@ -33,11 +34,22 @@ class StrategyController(
                 call.respond(HttpStatusCode.Created, service.create(payload))
             }
 
+            get("/weights") {
+                call.respond(HttpStatusCode.OK, service.fetchWeightHistory())
+            }
+
             route("/{strategy_id}") {
                 get("/editions") {
                     val strategyId = call.strategyId()
 
                     call.respond(HttpStatusCode.OK, editionService.fetchEditions(strategyId))
+                }
+
+                post("/weight") {
+                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val payload = call.receive<StrategyWeightCreation>()
+
+                    call.respond(HttpStatusCode.Created, service.setWeight(payload.copy(strategyId = strategyId)))
                 }
 
                 // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly instead

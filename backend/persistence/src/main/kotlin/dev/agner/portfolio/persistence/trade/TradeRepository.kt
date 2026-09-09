@@ -22,6 +22,12 @@ class TradeRepository(
             .map { it.toModel() }
     }
 
+    override suspend fun fetchAll() = transaction {
+        TradeEntity.all()
+            .orderBy(TradeTable.date to SortOrder.ASC)
+            .map { it.toModel() }
+    }
+
     override suspend fun save(creation: TradeCreation) = transaction {
         TradeEntity.new {
             listedAsset = ListedAssetEntity.findById(creation.assetId)

@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.attribution.model.AttributionMovementCreation
 import dev.agner.portfolio.usecase.attribution.model.AttributionSummary
 import dev.agner.portfolio.usecase.attribution.model.StrategyBalance
 import dev.agner.portfolio.usecase.attribution.repository.IAttributionRepository
+import dev.agner.portfolio.usecase.commons.isZero
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
@@ -45,7 +46,7 @@ class AttributionService(
         return AttributionSummary(
             custodyQuantity = custody,
             balances = balances
-                .filterValues { it != BigDecimal.ZERO }
+                .filterValues { !it.isZero() }
                 .mapNotNull { (strategyId, quantity) ->
                     strategiesById[strategyId]?.let {
                         StrategyBalance(strategyId = strategyId, strategyName = it.name, quantity = quantity)
