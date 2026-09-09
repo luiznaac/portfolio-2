@@ -3,7 +3,7 @@ package dev.agner.portfolio.usecase.strategy.parser
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
 import kotlinx.datetime.LocalDate
 
-// Port for extracting a model-portfolio PDF (an XP report) into data. Format (stocks page 1 vs.
+// Port for extracting a broker's model-portfolio PDF into data. Format (stocks page 1 vs.
 // FIIs page 2) is detected from the table header, not passed in — see the implementation in
 // http-api, which is where the pdfbox dependency already lives (PdfConverter).
 interface IStrategyReportParser {

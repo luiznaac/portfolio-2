@@ -86,7 +86,7 @@ function StrategyPanel({ strategyId }: { strategyId: number }) {
   return (
     <div className="space-y-4">
       <label className="flex items-center gap-3 text-sm">
-        <span className="text-xs text-slate-500">Importar relatório da XP (PDF)</span>
+        <span className="text-xs text-slate-500">Importar relatório da corretora (PDF)</span>
         <input
           ref={fileInput}
           type="file"

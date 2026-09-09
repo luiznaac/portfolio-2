@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component
 import java.math.BigDecimal
 
 /**
- * Extracts an XP model-portfolio PDF's text (pdfbox — same dependency and technique as
- * [PdfConverter]) and regexes the target table out of it. Line-based, not position-based: the XP
+ * Extracts a broker model-portfolio PDF's text (pdfbox — same dependency and technique as
+ * [PdfConverter]) and regexes the target table out of it. Line-based, not position-based: the
  * report's real column layout (page 1 for stocks, page 2 for FIIs — see the plan's "Fases" §2)
  * has never been run through this — there was no sample PDF available when this was written, only
  * the plan's own description of the columns. Treat the regexes below as a documented best guess

@@ -45,7 +45,7 @@ export function Carteira() {
       </div>
 
       <p className="text-sm text-slate-400">
-        Cadastro e relatórios das carteiras XP ficam em{" "}
+        Cadastro e relatórios das carteiras modelo ficam em{" "}
         <Link to="/estrategias" className="text-accent-500 hover:underline">
           Estratégias
         </Link>

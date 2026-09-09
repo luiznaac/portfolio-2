@@ -38,7 +38,7 @@ class StrategyController(
                     call.respond(HttpStatusCode.OK, editionService.fetchEditions(strategyId))
                 }
 
-                // Raw PDF body, not JSON — the XP model-portfolio report. Read directly instead
+                // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly instead
                 // of going through ContentNegotiation, which already has a PDF converter
                 // registered for the brokerage-note upload flow (UploadController) that expects a
                 // different shape.

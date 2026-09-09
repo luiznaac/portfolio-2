@@ -15,10 +15,10 @@ import java.io.ByteArrayOutputStream
 import java.math.BigDecimal
 
 /**
- * There was no real XP report PDF available when this parser was written — these are synthetic
- * PDFs built from the plan's *description* of the layout, not a real sample. They confirm the
- * regex logic and the pdfbox extraction plumbing work; they cannot confirm the actual XP column
- * layout matches. Revisit against a real report at the first opportunity.
+ * There was no real broker report PDF available when this parser was written — these are
+ * synthetic PDFs built from the plan's *description* of the layout, not a real sample. They
+ * confirm the regex logic and the pdfbox extraction plumbing work; they cannot confirm the
+ * actual column layout matches. Revisit against a real report at the first opportunity.
  */
 class PdfBoxStrategyReportParserTest : DescribeSpec({
 
@@ -28,7 +28,7 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
 
         it("extracts ticker, weight and rating from a Companhia/Ticker/Peso/Rating/Preço-Alvo table") {
             val pdf = pdfOf(
-                "Carteira Top XP - Setembro/2026",
+                "Carteira Top - Setembro/2026",
                 "Companhia         Ticker   Peso     Rating    Preço-Alvo",
                 "Petrobras         PETR4    15,0%    COMPRA    R$ 45,00",
                 "Vale              VALE3    10,0%    NEUTRO    R$ 70,50",
@@ -68,20 +68,20 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
                 "Carteira Fundamentalista de FIIs - Setembro/2026",
                 "Peso %    Segmento     Ticker     Recomendacao   Nome",
                 "40,25%    Recebiveis   MCCI11     COMPRA         Mauá Capital",
-                "59,75%    Tijolo       XPML11     COMPRA         XP Malls",
+                "59,75%    Tijolo       VILG11     COMPRA         Vinci Logistica",
             )
 
             val result = parser.parse(pdf)
 
             result.targets.map { it.ticker to it.weight } shouldBe listOf(
                 "MCCI11" to BigDecimal("0.4025"),
-                "XPML11" to BigDecimal("0.5975"),
+                "VILG11" to BigDecimal("0.5975"),
             )
         }
 
         it("extracts a ticker whose root isn't pure letters, like B3's own B3SA3") {
             val pdf = pdfOf(
-                "Carteira Top XP - Setembro/2026",
+                "Carteira Top - Setembro/2026",
                 "Companhia   Ticker   Peso     Rating   Preco-Alvo",
                 "B3          B3SA3    20,0%    COMPRA   R$ 15,00",
                 "Petrobras   PETR4    80,0%    COMPRA   R$ 45,00",

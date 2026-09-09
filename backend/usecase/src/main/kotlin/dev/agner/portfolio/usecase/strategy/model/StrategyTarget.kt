@@ -2,7 +2,7 @@ package dev.agner.portfolio.usecase.strategy.model
 
 import java.math.BigDecimal
 
-// One row of an XP model-portfolio report: rating/targetPrice only ever come from the stock
+// One row of a broker model-portfolio report: rating/targetPrice only ever come from the stock
 // table (page 1) — the FII table (page 2) has no equivalent columns, so both stay nullable.
 data class StrategyTarget(
     val ticker: String,

@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
 /**
- * Imports an XP model-portfolio PDF into a new, immutable [dev.agner.portfolio.usecase.strategy.model.StrategyEdition]
+ * Imports a broker model-portfolio PDF into a new, immutable
+ * [dev.agner.portfolio.usecase.strategy.model.StrategyEdition]
  * and exposes the diff against the previous one. Hard validation before saving — a bad parse
  * (page-3 "Desempenho" table instead of page-1 targets, a truncated table) fails loudly instead
  * of silently corrupting a strategy's weights. See the plan's "Fases" §2.

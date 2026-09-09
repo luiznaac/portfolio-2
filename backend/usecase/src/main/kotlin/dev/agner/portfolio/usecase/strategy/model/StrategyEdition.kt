@@ -2,7 +2,7 @@ package dev.agner.portfolio.usecase.strategy.model
 
 import kotlinx.datetime.LocalDate
 
-// One imported XP report for a strategy, at a point in time (competência). Immutable once saved —
+// One imported broker report for a strategy, at a point in time (competência). Immutable once saved —
 // a corrected report is a new edition, never an overwrite, so the history (and the diff between
 // editions) stays intact. See StrategyEditionService.
 data class StrategyEdition(

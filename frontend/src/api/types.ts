@@ -287,10 +287,10 @@ export interface AllocationPlan {
   classes: ClassNode[];
 }
 
-// --- strategies (the XP model portfolios) ---
+// --- strategies (the broker's model portfolios) ---
 //
 // Minimal in Fase 1: registration only. Per-ticker weights (StrategyEdition/StrategyTarget,
-// parsed from the XP PDFs) arrive in Fase 2.
+// parsed from broker model-portfolio PDFs) arrive in Fase 2.
 
 export interface Strategy {
   id: number;
@@ -328,7 +328,7 @@ export interface AttributionSummary {
   unattributed_quantity: number;
 }
 
-// --- strategy editions (Fase 2: ingesting the XP model-portfolio PDFs) ---
+// --- strategy editions (Fase 2: ingesting broker model-portfolio PDFs) ---
 
 export interface StrategyTarget {
   ticker: string;
@@ -342,7 +342,7 @@ export interface StrategyEdition {
   id: number;
   strategy_id: number;
   reference_date: string; // the report's competência, normalized to the 1st of the month
-  changes_text?: string; // the XP "Estamos adicionando/removendo..." paragraph, verbatim
+  changes_text?: string; // the broker's "Estamos adicionando/removendo..." paragraph, verbatim
   targets: StrategyTarget[];
 }
 
