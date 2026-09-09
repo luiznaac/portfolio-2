@@ -9,7 +9,7 @@ import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.datetime
 
 object CapitalSnapshotTable : IntIdTable("capital_snapshot") {
-    val date = date("date")
+    val date = date("date").index()
     val externalBalance = decimal("external_balance", 14, 2)
     val plannedContribution = decimal("planned_contribution", 14, 2)
     val createdAt = datetime("created_at")

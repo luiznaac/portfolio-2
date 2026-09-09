@@ -25,6 +25,8 @@ object BondOrderTable : IntIdTable("bond_order") {
     val date = date("date")
     val amount = decimal("amount", 12, 2).nullable()
     val createdAt = datetime("created_at")
+
+    init { index(null, false, bondId, type) }
 }
 
 class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {

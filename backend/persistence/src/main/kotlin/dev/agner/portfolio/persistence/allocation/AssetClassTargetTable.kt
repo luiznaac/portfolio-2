@@ -14,6 +14,8 @@ object AssetClassTargetTable : IntIdTable("asset_class_target") {
     val weight = decimal("weight", 7, 4)
     val effectiveFrom = date("effective_from")
     val createdAt = datetime("created_at")
+
+    init { index(null, false, assetClass, effectiveFrom) }
 }
 
 class AssetClassTargetEntity(id: EntityID<Int>) : IntEntity(id) {

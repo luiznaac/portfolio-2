@@ -14,6 +14,8 @@ object FixedIncomeSubClassTargetTable : IntIdTable("fixed_income_subclass_target
     val weight = decimal("weight", 7, 4)
     val effectiveFrom = date("effective_from")
     val createdAt = datetime("created_at")
+
+    init { index(null, false, subClass, effectiveFrom) }
 }
 
 class FixedIncomeSubClassTargetEntity(id: EntityID<Int>) : IntEntity(id) {

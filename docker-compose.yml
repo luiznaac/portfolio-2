@@ -9,6 +9,9 @@
 # in production the database is a separate, externally provisioned container.
 # `backend/docker-compose.yml` is the DB-only file consumed by the integrationTest
 # module via Testcontainers; keep the two in sync.
+#
+# The schema is NOT seeded here: backend/persistence/src/main/resources/db/migration/V*.sql is
+# applied by Flyway from deploy/entrypoint.sh before the app starts.
 
 services:
   mysql:
@@ -20,7 +23,6 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./backend/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - portfolio-mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
