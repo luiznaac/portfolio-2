@@ -2,11 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.ts";
 import type {
   BondOrderCreation,
+  BonusCreation,
   CheckingAccountCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   IndexId,
+  ListedAssetCreation,
   MovementRequest,
+  ReverseSplitCreation,
+  SplitCreation,
+  TickerChangeCreation,
+  TradeCreation,
   UploadBroker,
   UploadProduct,
 } from "./types.ts";
@@ -19,6 +25,15 @@ export const keys = {
     ["checking-accounts", id, "positions"] as const,
   indexes: ["indexes"] as const,
   indexValues: (id: IndexId) => ["indexes", id, "values"] as const,
+  listedAssets: ["listed-assets"] as const,
+  listedAssetPositions: (id: number) =>
+    ["listed-assets", id, "positions"] as const,
+  trades: (assetId: number) => ["listed-assets", assetId, "trades"] as const,
+  corporateActions: (assetId: number) =>
+    ["listed-assets", assetId, "corporate-actions"] as const,
+  dividends: (assetId: number) =>
+    ["listed-assets", assetId, "dividends"] as const,
+  tickerCatalogSearch: (query: string) => ["ticker-catalog", query] as const,
 };
 
 // --- bonds ---
@@ -158,6 +173,113 @@ export function useHydrateIndex() {
 }
 
 // --- upload ---
+
+// --- listed assets ---
+
+export function useListedAssets() {
+  return useQuery({
+    queryKey: keys.listedAssets,
+    queryFn: () => api.listListedAssets(),
+  });
+}
+
+export function useListedAssetPositions(id: number) {
+  return useQuery({
+    queryKey: keys.listedAssetPositions(id),
+    queryFn: () => api.listedAssetPositions(id),
+  });
+}
+
+export function useCreateListedAsset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ListedAssetCreation) => api.createListedAsset(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.listedAssets }),
+  });
+}
+
+export function useConsolidateListedAsset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.consolidateListedAsset(id),
+    onSuccess: (_r, id) => {
+      qc.invalidateQueries({ queryKey: keys.listedAssetPositions(id) });
+      qc.invalidateQueries({ queryKey: keys.listedAssets });
+    },
+  });
+}
+
+export function useDividends(assetId: number) {
+  return useQuery({
+    queryKey: keys.dividends(assetId),
+    queryFn: () => api.listedAssetDividends(assetId),
+  });
+}
+
+// --- trades ---
+
+export function useTrades(assetId: number) {
+  return useQuery({
+    queryKey: keys.trades(assetId),
+    queryFn: () => api.listTrades(assetId),
+  });
+}
+
+export function useCreateTrade(assetId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TradeCreation) => api.createTrade(assetId, body),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: keys.trades(assetId) }),
+  });
+}
+
+// --- corporate actions ---
+
+export function useCorporateActions(assetId: number) {
+  return useQuery({
+    queryKey: keys.corporateActions(assetId),
+    queryFn: () => api.listCorporateActions(assetId),
+  });
+}
+
+export function useCreateCorporateAction(assetId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      body:
+        | ({ kind: "split" } & SplitCreation)
+        | ({ kind: "reverse-split" } & ReverseSplitCreation)
+        | ({ kind: "bonus" } & BonusCreation)
+        | ({ kind: "ticker-change" } & TickerChangeCreation),
+    ) => {
+      switch (body.kind) {
+        case "split":
+          return api.createSplit(assetId, body);
+        case "reverse-split":
+          return api.createReverseSplit(assetId, body);
+        case "bonus":
+          return api.createBonus(assetId, body);
+        case "ticker-change":
+          return api.createTickerChange(assetId, body);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.corporateActions(assetId) });
+      qc.invalidateQueries({ queryKey: keys.listedAssets });
+    },
+  });
+}
+
+// --- ticker catalog ---
+
+export function useTickerCatalogSearch(query: string) {
+  return useQuery({
+    queryKey: keys.tickerCatalogSearch(query),
+    queryFn: () => api.searchTickerCatalog(query),
+    enabled: query.trim().length >= 2,
+  });
+}
 
 export function useUploadXlsx() {
   const qc = useQueryClient();

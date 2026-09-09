@@ -108,3 +108,100 @@ export interface Position {
 
 export type UploadBroker = "kinvo" | "picpay";
 export type UploadProduct = "bond" | "checking-account";
+
+// --- listed assets (stocks, FIIs, ETFs, BDRs) ---
+//
+// AssetKind is a property of the paper (how it trades on B3), separate from any allocation
+// class (a user policy like "Ações" vs "Real State" in the CARTEIRA IDEAL spreadsheet) — the
+// backend intentionally doesn't conflate the two. See usecase/listedasset/model/AssetKind.kt.
+
+export type AssetKind = "STOCK" | "FII" | "ETF" | "BDR";
+
+export interface ListedAsset {
+  id: number;
+  ticker: string;
+  kind: AssetKind;
+  name: string;
+  b3_identifier: string; // trading name (stocks) or fund identifier without "11" (FIIs)
+}
+
+export interface ListedAssetCreation {
+  ticker: string;
+  kind: AssetKind;
+  name: string;
+  b3_identifier: string;
+}
+
+// A row of B3's ticker universe (stocks/FIIs/ETFs/BDRs), synced from brapi — powers the
+// search-as-you-type box on the asset registration screen so the user picks a ticker instead of
+// typing its company name and kind by hand.
+export interface TickerCatalogEntry {
+  ticker: string;
+  name: string;
+  kind: AssetKind;
+}
+
+// --- trades ---
+
+export interface Trade {
+  id: number;
+  asset_id: number;
+  date: string; // ISO date
+  quantity: number; // positive = buy, negative = sell
+  price: number;
+}
+
+export interface TradeCreation {
+  date: string; // ISO date
+  quantity: number;
+  price: number;
+}
+
+// --- corporate actions ---
+//
+// The domain model (CorporateAction) is sealed with no discriminator on the wire — same
+// "permissive GET response" pattern as BondOrder. Creation is one flat interface per type,
+// posted to its own route (POST .../corporate-actions/{split|reverse-split|bonus|ticker-change}).
+
+export type CorporateActionType = "SPLIT" | "REVERSE_SPLIT" | "BONUS" | "TICKER_CHANGE";
+
+export interface CorporateAction {
+  id: number;
+  asset_id: number;
+  date: string;
+  ratio?: number;
+  value_per_new_share?: number;
+  new_ticker?: string;
+}
+
+export interface SplitCreation {
+  date: string;
+  ratio: number;
+}
+
+export interface ReverseSplitCreation {
+  date: string;
+  ratio: number;
+}
+
+export interface BonusCreation {
+  date: string;
+  ratio: number;
+  value_per_new_share: number;
+}
+
+export interface TickerChangeCreation {
+  date: string;
+  new_ticker: string;
+}
+
+// --- dividends (declared gross per share, from B3 — see the plan's "de onde vêm os dados") ---
+
+export type DividendType = "DIVIDENDO" | "JCP" | "RENDIMENTO";
+
+export interface DividendDeclaration {
+  type: DividendType;
+  value_per_share: number;
+  ex_date: string;
+  payment_date?: string;
+}

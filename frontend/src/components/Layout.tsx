@@ -29,6 +29,9 @@ export function Layout() {
             <NavLink to="/checking-accounts/new" className={linkClass}>
               Nova conta
             </NavLink>
+            <NavLink to="/listed-assets/new" className={linkClass}>
+              Novo ativo
+            </NavLink>
             <NavLink to="/indexes" className={linkClass}>
               Índices
             </NavLink>
