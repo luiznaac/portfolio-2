@@ -5,9 +5,11 @@ import {
   keys,
   useBonds,
   useCheckingAccounts,
+  useListedAssets,
   useScheduleConsolidations,
 } from "../api/queries.ts";
 import type { Position } from "../api/types.ts";
+import { assetKindLabel } from "../i18n/assetKind.ts";
 import { Panel } from "../components/Panel.tsx";
 import { PortfolioSummary } from "../components/PortfolioSummary.tsx";
 import { PositionChart } from "../components/PositionChart.tsx";
@@ -18,6 +20,7 @@ import { lastPosition, mergePositions, sumTotals } from "../lib/positions.ts";
 export function Dashboard() {
   const bonds = useBonds();
   const accounts = useCheckingAccounts();
+  const listedAssets = useListedAssets();
   const schedule = useScheduleConsolidations();
 
   // Client-side aggregation: the backend has no whole-portfolio endpoint, so we
@@ -34,8 +37,14 @@ export function Dashboard() {
       queryFn: () => api.checkingAccountPositions(a.id),
     })),
   });
+  const listedAssetPositions = useQueries({
+    queries: (listedAssets.data ?? []).map((a) => ({
+      queryKey: keys.listedAssetPositions(a.id),
+      queryFn: () => api.listedAssetPositions(a.id),
+    })),
+  });
 
-  if (bonds.isLoading || accounts.isLoading)
+  if (bonds.isLoading || accounts.isLoading || listedAssets.isLoading)
     return <p className="text-slate-400">Carregando…</p>;
   if (bonds.error)
     return <p className="text-tax">Falha ao carregar: {String(bonds.error)}</p>;
@@ -43,6 +52,7 @@ export function Dashboard() {
   const allSeries: Position[][] = [
     ...bondPositions.map((q) => q.data ?? []),
     ...accountPositions.map((q) => q.data ?? []),
+    ...listedAssetPositions.map((q) => q.data ?? []),
   ];
   const merged = mergePositions(allSeries);
   const totals = sumTotals(allSeries.map(lastPosition));
@@ -72,7 +82,7 @@ export function Dashboard() {
         <PositionChart positions={merged} />
       </Panel>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <Panel title={`Títulos (${bonds.data?.length ?? 0})`}>
           <ProductList
             empty="Nenhum título. Cadastre um em “Novo título”."
@@ -92,6 +102,17 @@ export function Dashboard() {
               name: a.name,
               tag: a.index_id,
               position: lastPosition(accountPositions[i]?.data ?? []),
+            }))}
+          />
+        </Panel>
+        <Panel title={`Ativos listados (${listedAssets.data?.length ?? 0})`}>
+          <ProductList
+            empty="Nenhum ativo. Cadastre um em “Novo ativo”."
+            items={(listedAssets.data ?? []).map((a, i) => ({
+              to: `/listed-assets/${a.id}`,
+              name: `${a.ticker} · ${a.name}`,
+              tag: assetKindLabel(a.kind),
+              position: lastPosition(listedAssetPositions[i]?.data ?? []),
             }))}
           />
         </Panel>
