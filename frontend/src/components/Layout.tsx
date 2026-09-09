@@ -44,8 +44,11 @@ export function Layout() {
             <NavLink to="/indexes" className={linkClass}>
               Índices
             </NavLink>
+            <NavLink to="/importar" className={linkClass}>
+              Importar B3
+            </NavLink>
             <NavLink to="/upload" className={linkClass}>
-              Importar
+              Extratos
             </NavLink>
           </nav>
         </div>

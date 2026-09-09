@@ -445,3 +445,31 @@ export interface OrderPlan {
   transfer_suggestions: TransferSuggestion[];
   sale_ceiling: SaleCeiling;
 }
+
+// --- brokerage note import (Fase 4) ---
+
+// One parsed statement row, staged for review — nothing is persisted until POST
+// /notes/import/confirm. quantity is signed like Trade (positive buy, negative sell).
+// listed_asset_id is absent when the ticker couldn't be resolved to a registered asset.
+export interface ImportedTrade {
+  ticker: string;
+  listed_asset_id?: number;
+  date: string;
+  quantity: number;
+  price: number;
+  notional: number;
+  resolvable: boolean;
+  matches_plan: boolean;
+}
+
+export interface ImportPreview {
+  trades: ImportedTrade[];
+  unresolved_tickers: string[];
+}
+
+export interface ImportedTradeConfirmation {
+  ticker: string;
+  date: string;
+  quantity: number;
+  price: number;
+}

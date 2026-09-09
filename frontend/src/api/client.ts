@@ -16,6 +16,8 @@ import type {
   CorporateAction,
   DividendDeclaration,
   FixedIncomeSubClassTarget,
+  ImportedTradeConfirmation,
+  ImportPreview,
   FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
@@ -301,5 +303,17 @@ export const api = {
   },
   applyTransfer(body: ApplyTransferRequest): Promise<void> {
     return request(`/orders/transfers/apply`, json("POST", body));
+  },
+
+  // --- brokerage note import (Fase 4) ---
+  previewBrokerageNote(file: Blob): Promise<ImportPreview> {
+    return request(`/notes/import/preview`, {
+      method: "POST",
+      headers: { "Content-Type": XLSX_MIME },
+      body: file,
+    });
+  },
+  confirmBrokerageNote(trades: ImportedTradeConfirmation[]): Promise<Trade[]> {
+    return request(`/notes/import/confirm`, json("POST", trades));
   },
 };

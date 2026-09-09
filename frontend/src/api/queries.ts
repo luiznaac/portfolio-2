@@ -11,6 +11,7 @@ import type {
   FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  ImportedTradeConfirmation,
   IndexId,
   ListedAssetCreation,
   MovementRequest,
@@ -456,6 +457,22 @@ export function useApplyTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ApplyTransferRequest) => api.applyTransfer(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
+  });
+}
+
+// --- brokerage note import (Fase 4) ---
+
+export function usePreviewBrokerageNote() {
+  return useMutation({
+    mutationFn: (file: Blob) => api.previewBrokerageNote(file),
+  });
+}
+
+export function useConfirmBrokerageNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (trades: ImportedTradeConfirmation[]) => api.confirmBrokerageNote(trades),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
 }
