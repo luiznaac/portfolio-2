@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  useAttributionSummary,
   useConsolidateListedAsset,
   useCorporateActions,
   useCreateCorporateAction,
@@ -8,9 +9,11 @@ import {
   useDividends,
   useListedAssetPositions,
   useListedAssets,
+  useRecordAttributionMovement,
+  useStrategies,
   useTrades,
 } from "../api/queries.ts";
-import type { CorporateAction, Trade } from "../api/types.ts";
+import type { AttributionReason, CorporateAction, Trade } from "../api/types.ts";
 import { assetKindLabel } from "../i18n/assetKind.ts";
 import {
   CORPORATE_ACTION_KINDS,
@@ -99,6 +102,10 @@ export function ListedAssetPage() {
           </div>
         </Panel>
       </div>
+
+      <Panel title="Atribuição por estratégia">
+        <AttributionPanel assetId={id} />
+      </Panel>
 
       <Panel title="Proventos declarados (B3)">
         <DividendsList assetId={id} />
@@ -420,6 +427,143 @@ function DividendsList({ assetId }: { assetId: number }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const REASON_LABELS: Record<AttributionReason, string> = {
+  COMPRA: "Compra",
+  VENDA: "Venda",
+  TRANSFERENCIA: "Transferência",
+  AJUSTE: "Ajuste",
+};
+
+function AttributionPanel({ assetId }: { assetId: number }) {
+  const summary = useAttributionSummary(assetId);
+  const strategies = useStrategies();
+  const mutation = useRecordAttributionMovement(assetId);
+  const [strategyId, setStrategyId] = useState<number | "">("");
+  const [date, setDate] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [reason, setReason] = useState<AttributionReason>("COMPRA");
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (strategyId === "") return;
+    mutation.mutate(
+      { strategy_id: strategyId, date, quantity: Number(quantity), reason },
+      {
+        onSuccess: () => {
+          setDate("");
+          setQuantity("");
+        },
+      },
+    );
+  };
+
+  if (strategies.data && strategies.data.length === 0) {
+    return (
+      <p className="text-sm text-slate-500">
+        Cadastre uma estratégia em <Link to="/carteira" className="text-accent-500 hover:underline">Carteira</Link>{" "}
+        antes de atribuir custódia a ela.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {summary.data && (
+        <div className="space-y-2">
+          <p className="text-sm text-slate-300">
+            Custódia:{" "}
+            <span className="tabular-nums text-slate-100">{summary.data.custody_quantity}</span>
+            {" · "}Atribuído:{" "}
+            <span className="tabular-nums text-slate-100">{summary.data.attributed_quantity}</span>
+            {summary.data.unattributed_quantity !== 0 && (
+              <span className="ml-2 rounded bg-tax/20 px-1.5 py-0.5 text-xs text-tax">
+                {summary.data.unattributed_quantity > 0 ? "não atribuído" : "atribuído em excesso"}:{" "}
+                {Math.abs(summary.data.unattributed_quantity)}
+              </span>
+            )}
+          </p>
+          {summary.data.balances.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {summary.data.balances.map((b) => (
+                <li
+                  key={b.strategy_id}
+                  className="rounded bg-slate-800 px-2.5 py-1 text-sm text-slate-300"
+                >
+                  {b.strategy_name}: <span className="tabular-nums">{b.quantity}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          <span className="mb-1 block text-xs text-slate-500">Estratégia</span>
+          <select
+            required
+            value={strategyId}
+            onChange={(e) => setStrategyId(e.target.value ? Number(e.target.value) : "")}
+            className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-accent-500"
+          >
+            <option value="">Selecione…</option>
+            {(strategies.data ?? []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-xs text-slate-500">Tipo</span>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value as AttributionReason)}
+            className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-accent-500"
+          >
+            {(Object.keys(REASON_LABELS) as AttributionReason[]).map((r) => (
+              <option key={r} value={r}>
+                {REASON_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-xs text-slate-500">Data</span>
+          <input
+            type="date"
+            required
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-accent-500"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-xs text-slate-500">
+            Quantidade (negativo tira da estratégia)
+          </span>
+          <input
+            type="number"
+            step="any"
+            required
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            className="w-40 rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-accent-500"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="rounded-md bg-accent-500 px-3 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
+        >
+          {mutation.isPending ? "Salvando…" : "Registrar"}
+        </button>
+      </form>
+      {mutation.isError && <p className="text-sm text-tax">{String(mutation.error)}</p>}
     </div>
   );
 }

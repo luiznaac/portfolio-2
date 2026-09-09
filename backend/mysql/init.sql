@@ -162,3 +162,73 @@ CREATE TABLE ticker_catalog (
 
     INDEX (name)
 );
+
+-- Fase 1: the allocation engine (capital, class targets, per-strategy attribution).
+
+CREATE TABLE capital_snapshot (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    date DATE NOT NULL,
+    external_balance DECIMAL(14, 2) NOT NULL,
+    planned_contribution DECIMAL(14, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    INDEX (date)
+);
+
+-- Versioned by effective_from: changing a target is a dated fact, never an overwrite.
+CREATE TABLE asset_class_target (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    asset_class VARCHAR(20) NOT NULL,
+    weight DECIMAL(7, 4) NOT NULL,
+    effective_from DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    INDEX (asset_class, effective_from)
+);
+
+CREATE TABLE fixed_income_subclass_target (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sub_class VARCHAR(20) NOT NULL,
+    weight DECIMAL(7, 4) NOT NULL,
+    effective_from DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    INDEX (sub_class, effective_from)
+);
+
+-- AssetClass is user policy, not a product property (see AssetClass.kt) — this is the override
+-- map. A product with no row here uses AllocationService's default for its ProductType.
+CREATE TABLE product_classification (
+    product_type VARCHAR(20) NOT NULL,
+    product_id INT NOT NULL,
+    asset_class VARCHAR(20) NOT NULL,
+
+    PRIMARY KEY (product_type, product_id)
+);
+
+-- The XP model portfolios (Top, Dividendos, Dividendos Plus, Small Caps, Fundamentalista FII).
+-- Manual registration only in Fase 1; StrategyEdition/StrategyTarget (per-ticker weights parsed
+-- from the XP PDFs) arrive in Fase 2.
+CREATE TABLE strategy (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- How custody is split across strategies — decided by the user, never derived. Stored as signed
+-- movements so each strategy's history can be reconstructed, not just its current balance.
+CREATE TABLE attribution_movement (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    listed_asset_id INT NOT NULL,
+    strategy_id INT NOT NULL,
+    date DATE NOT NULL,
+    quantity DECIMAL(18, 8) NOT NULL,
+    reason VARCHAR(20) NOT NULL,
+    note VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+
+    FOREIGN KEY (listed_asset_id) REFERENCES listed_asset(id),
+    FOREIGN KEY (strategy_id) REFERENCES strategy(id),
+
+    INDEX (listed_asset_id, date)
+);

@@ -205,3 +205,125 @@ export interface DividendDeclaration {
   ex_date: string;
   payment_date?: string;
 }
+
+// --- allocation (Fase 1: the rebalancing engine) ---
+//
+// AssetClass is user policy, not a product property — distinct from AssetKind (STOCK/FII/ETF/BDR)
+// or the product_type used for classification overrides below. See usecase/allocation/model/AssetClass.kt.
+
+export type AssetClass = "ACOES" | "REAL_STATE" | "RENDA_FIXA" | "ALTERNATIVOS" | "CAIXA";
+export type FixedIncomeSubClass = "POS_FIXADO" | "PRE_FIXADO" | "INFLACAO";
+export type ProductType = "BOND" | "CHECKING_ACCOUNT" | "LISTED_ASSET";
+
+export interface CapitalSnapshot {
+  id: number;
+  date: string; // ISO date
+  external_balance: number;
+  planned_contribution: number;
+}
+
+export interface CapitalSnapshotCreation {
+  date: string;
+  external_balance: number;
+  planned_contribution: number;
+}
+
+// Versioned by effective_from — changing a target is a dated fact, never an overwrite.
+export interface AssetClassTarget {
+  id: number;
+  asset_class: AssetClass;
+  weight: number; // fraction, e.g. 0.15 for 15%
+  effective_from: string;
+}
+
+export interface AssetClassTargetCreation {
+  asset_class: AssetClass;
+  weight: number;
+  effective_from: string;
+}
+
+export interface FixedIncomeSubClassTarget {
+  id: number;
+  sub_class: FixedIncomeSubClass;
+  weight: number; // fraction of the RENDA_FIXA bucket, not of total capital
+  effective_from: string;
+}
+
+export interface FixedIncomeSubClassTargetCreation {
+  sub_class: FixedIncomeSubClass;
+  weight: number;
+  effective_from: string;
+}
+
+// Override map: a product with no entry here uses the backend's default for its ProductType
+// (BOND/CHECKING_ACCOUNT -> RENDA_FIXA, STOCK/ETF/BDR -> ACOES, FII -> REAL_STATE).
+export interface ProductClassification {
+  product_type: ProductType;
+  product_id: number;
+  asset_class: AssetClass;
+}
+
+export interface SubClassNode {
+  sub_class: FixedIncomeSubClass;
+  ideal_weight: number;
+  ideal: number;
+  current: number;
+  delta: number; // current - ideal
+}
+
+export interface ClassNode {
+  asset_class: AssetClass;
+  ideal_weight: number;
+  ideal: number;
+  current: number;
+  delta: number;
+  sub_classes: SubClassNode[]; // only populated for RENDA_FIXA until Fase 2
+}
+
+// GET /allocation/plan — Capital -> Classe -> Sub-classe (Renda Fixa only, for now). Ticker-level
+// detail needs per-strategy targets from Fase 2.
+export interface AllocationPlan {
+  capital: number;
+  classes: ClassNode[];
+}
+
+// --- strategies (the XP model portfolios) ---
+//
+// Minimal in Fase 1: registration only. Per-ticker weights (StrategyEdition/StrategyTarget,
+// parsed from the XP PDFs) arrive in Fase 2.
+
+export interface Strategy {
+  id: number;
+  name: string;
+}
+
+export interface StrategyCreation {
+  name: string;
+}
+
+// --- attribution (splitting custody across strategies — decided by the user, never derived) ---
+
+export type AttributionReason = "COMPRA" | "VENDA" | "TRANSFERENCIA" | "AJUSTE";
+
+export interface AttributionMovementCreation {
+  strategy_id: number;
+  date: string;
+  quantity: number; // signed, same convention as Trade
+  reason: AttributionReason;
+  note?: string;
+}
+
+export interface StrategyBalance {
+  strategy_id: number;
+  strategy_name: string;
+  quantity: number;
+}
+
+// GET /listed-assets/{id}/attribution — custody (fiscal truth) vs. the sum of what's been
+// attributed to strategies; unattributed_quantity is the explicit "not yet decided" bucket.
+export interface AttributionSummary {
+  custody_quantity: number;
+  balances: StrategyBalance[];
+  attributed_quantity: number;
+  unattributed_quantity: number;
+}
