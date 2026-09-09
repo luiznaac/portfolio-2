@@ -65,7 +65,7 @@ class ListedAssetConsolidator(
 
         val marketValue = (result.position.quantity * quote.price).defaultScale()
         val unrealizedGain = marketValue - result.position.totalCost
-        val taxRate = if (ctx.asset.kind == FII) BigDecimal("0.20") else BigDecimal("0.15")
+        val taxRate = if (ctx.asset.kind == FII) BigDecimal("0.15") else BigDecimal("0.20")
         val estimatedTax = if (unrealizedGain > BigDecimal.ZERO) {
             (unrealizedGain * taxRate).defaultScale()
         } else {
