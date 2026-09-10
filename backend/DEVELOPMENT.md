@@ -109,11 +109,22 @@ application  →  http-api  →  usecase  ←  persistence
   Multi-repository writes go inside `transaction.execute { }` so a partial failure can't leave two
   tables disagreeing.
 - **Format-specific parsing is a Strategy, chosen at runtime, and lives outside `usecase`.** Broker
-  file layouts vary by broker and even by report, so each layout is its own `@Component`
-  implementing a parser interface with a `shouldExecute(document): Boolean` predicate; a resolver
-  injects `List<TheParser>` and picks the first that claims the document (see
-  `http-api/.../strategyreport/`). Adding a layout is adding a class. The domain service receives
-  the already-parsed result (`ParsedStrategyReport`) and never sees bytes, a file, or a `Content-Type`.
+  file layouts vary by broker and even by desk, so each layout is its own `@Component` implementing
+  a parser interface with a `shouldExecute(document): Boolean` predicate; a resolver injects
+  `List<TheParser>`, sorts by `precedence`, and picks the first that claims the document (see
+  `http-api/.../strategyreport/` — three real XP layouts plus a permissive `GenericLineReportParser`
+  fallback). Adding a layout is adding a class. The domain service receives the already-parsed
+  result (`ParsedStrategyReport`) and never sees bytes, a file, or a `Content-Type`.
+- **Statement parsers are verified against real September 2026 files.** The B3 "Negociação de
+  Ativos" trade export and XP's three model-portfolio PDF layouts were confirmed against actual
+  exports; the fixtures in `strategyreport/` and `ApachePoiBrokerageNoteParserTest` reproduce what
+  pdfbox / POI extract from them, including the traps (sector weights printed before the ticker, a
+  page-3 performance table repeating every ticker, a 40-page FII deep-dive). The income /
+  "Movimentação" statement parser (`ApachePoiIncomeStatementParser`) has **not** yet seen a real
+  file — its column names are still a documented guess. One B3 convention the trade parser bakes
+  in: a fractional-market ticker (`ALUP11F`, "Mercado Fracionário") is the same paper as its
+  round-lot form (`ALUP11`) and is normalised to it — B3's class code is always numeric, so a
+  trailing `F` is unambiguous.
 
 ## How to implement a new feature (walkthrough)
 

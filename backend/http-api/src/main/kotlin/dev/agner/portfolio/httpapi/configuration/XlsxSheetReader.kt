@@ -84,7 +84,16 @@ class XlsxSheetReader private constructor(
     fun Row.requiredDecimal(header: String): BigDecimal {
         val cell = cell(header) ?: onError("Missing $header on row ${rowNum + 1}")
 
-        if (cell.cellType == CellType.NUMERIC) return cell.numericCellValue.toBigDecimal()
+        // BigDecimal.valueOf, not Double.toBigDecimal(): the latter is the exact-double constructor,
+        // so a price of 26.09 comes back as 26.09000000000000341… A whole number keeps scale 0.
+        if (cell.cellType == CellType.NUMERIC) {
+            val number = cell.numericCellValue
+            return if (number.isFinite() && number == Math.rint(number)) {
+                BigDecimal.valueOf(number.toLong())
+            } else {
+                BigDecimal.valueOf(number)
+            }
+        }
 
         val text = cell.stringValue()?.trim() ?: onError("Missing $header on row ${rowNum + 1}")
         return runCatching {

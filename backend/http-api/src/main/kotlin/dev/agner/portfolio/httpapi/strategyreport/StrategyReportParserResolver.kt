@@ -14,13 +14,15 @@ import org.springframework.stereotype.Component
  */
 @Component
 class StrategyReportParserResolver(
-    private val parsers: List<StrategyReportParser>,
+    parsers: List<StrategyReportParser>,
 ) {
+
+    private val parsers = parsers.sortedBy { it.precedence }
 
     fun parse(pdfBytes: ByteArray): ParsedStrategyReport {
         val document = StrategyReportDocument(extractText(pdfBytes))
 
-        val parser = parsers.firstOrNull { it.shouldExecute(document) }
+        val parser = this.parsers.firstOrNull { it.shouldExecute(document) }
             ?: throw StrategyReportParseException(
                 "No parser recognises this report's layout. Tried: $parserNames",
             )
