@@ -3,15 +3,24 @@ package dev.agner.portfolio.usecase.order.model
 import java.math.BigDecimal
 
 enum class OrderKind {
-    COMPRAR,
-    VENDER,
-    ZERAR, // no strategy wants this ticker anymore (ideal = 0), but custody > 0
-    ENTRADA_NOVA, // some strategy wants it (ideal > 0) and custody is currently 0
+    BUY,
+    SELL,
+
+    /** No strategy targets this ticker anymore (ideal = 0) but custody is still above zero. */
+    EXIT,
+
+    /** Some strategy targets it (ideal > 0) and custody is currently zero. */
+    NEW_ENTRY,
+    ;
+
+    val isSale: Boolean get() = this == SELL || this == EXIT
 }
 
-// One ticker's net order — already the residual left over after TransferMatcher's suggestions
-// are (hypothetically) applied, so quantity is the smallest trade that actually needs to happen.
-// contributions is informational: which strategies' deltas make up this net number.
+/**
+ * One ticker's net order — already the residual left after [dev.agner.portfolio.usecase.order.TransferMatcher]'s
+ * suggestions are (hypothetically) applied, so [quantity] is the smallest trade that actually has
+ * to happen. [contributions] is informational: which strategies' deltas make up the net number.
+ */
 data class Order(
     val listedAssetId: Int,
     val ticker: String,
@@ -21,15 +30,17 @@ data class Order(
     val notional: BigDecimal,
     val contributions: List<StrategyDelta>,
     // A trade already exists today for this ticker in the opposite direction — executing this
-    // order too would be a day trade (loses the sale-exemption, taxed at 20% instead). Flagged,
-    // never blocked — see the plan's "Fases" §3.
+    // order too would be a day trade (loses the sale exemption, taxed at 20% instead). Flagged,
+    // never blocked.
     val dayTradeRisk: Boolean,
 )
 
 data class StrategyDelta(
     val strategyId: Int,
     val strategyName: String,
-    // current (attributed) - ideal, in shares. Positive = this strategy is holding more than it
-    // should for this ticker; negative = less.
+    /**
+     * Current (attributed) minus ideal, in shares. Positive means this strategy holds more of the
+     * ticker than it should; negative, less.
+     */
     val delta: BigDecimal,
 )

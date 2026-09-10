@@ -25,7 +25,8 @@ object TransferProposalTable : IntIdTable("transfer_proposal") {
     val decidedAt = datetime("decided_at").nullable()
     val createdAt = datetime("created_at")
 
-    init { index(false, month, listedAsset, fromStrategy, toStrategy) }
+    // UNIQUE: reconcileProposal looks a pairing up by these four columns and assumes one row.
+    init { index("transfer_proposal_pairing", true, month, listedAsset, fromStrategy, toStrategy) }
 }
 
 class TransferProposalEntity(id: EntityID<Int>) : IntEntity(id) {

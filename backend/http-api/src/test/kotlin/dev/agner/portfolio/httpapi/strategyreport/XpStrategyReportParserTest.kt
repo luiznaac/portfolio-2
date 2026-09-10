@@ -1,4 +1,4 @@
-package dev.agner.portfolio.httpapi.configuration
+package dev.agner.portfolio.httpapi.strategyreport
 
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
 import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
@@ -20,9 +20,10 @@ import java.math.BigDecimal
  * confirm the regex logic and the pdfbox extraction plumbing work; they cannot confirm the
  * actual column layout matches. Revisit against a real report at the first opportunity.
  */
-class PdfBoxStrategyReportParserTest : DescribeSpec({
+class XpStrategyReportParserTest : DescribeSpec({
 
-    val parser = PdfBoxStrategyReportParser()
+    // Driven through the resolver so the test also covers format detection and PDF extraction.
+    val parser = StrategyReportParserResolver(listOf(XpStrategyReportParser()))
 
     describe("parsing a stock model-portfolio report") {
 

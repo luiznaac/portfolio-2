@@ -1,10 +1,10 @@
 package dev.agner.portfolio.usecase.brokeragenote
 
+import dev.agner.portfolio.usecase.PassThroughTransactionTemplate
 import dev.agner.portfolio.usecase.brokeragenote.model.ImportedTradeConfirmation
 import dev.agner.portfolio.usecase.brokeragenote.parser.BrokerageNoteParseException
 import dev.agner.portfolio.usecase.brokeragenote.parser.IBrokerageNoteParser
 import dev.agner.portfolio.usecase.brokeragenote.parser.ParsedTrade
-import dev.agner.portfolio.usecase.brokeragenote.parser.TradeSide
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.model.Order
@@ -14,6 +14,7 @@ import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import dev.agner.portfolio.usecase.trade.TradeService
 import dev.agner.portfolio.usecase.trade.model.Trade
 import dev.agner.portfolio.usecase.trade.model.TradeCreation
+import dev.agner.portfolio.usecase.trade.model.TradeSide
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -30,20 +31,26 @@ class BrokerageNoteServiceTest : StringSpec({
     val tradeService = mockk<TradeService>()
     val orderPlanService = mockk<OrderPlanService>()
 
-    val service = BrokerageNoteService(parser, listedAssetRepository, tradeService, orderPlanService)
+    val service = BrokerageNoteService(
+        parser,
+        listedAssetRepository,
+        tradeService,
+        orderPlanService,
+        PassThroughTransactionTemplate,
+    )
 
     val xlsxBytes = byteArrayOf(1, 2, 3)
     val date = LocalDate(2026, 9, 1)
 
-    "should resolve tickers, sign quantities and flag rows matching the current order plan" {
+    "should resolve tickers and flag rows matching the current order plan" {
         every { parser.parse(xlsxBytes) } returns listOf(
-            ParsedTrade(date, "PETR4", TradeSide.COMPRA, BigDecimal("100"), BigDecimal("35.50")),
-            ParsedTrade(date, "VALE3", TradeSide.VENDA, BigDecimal("10"), BigDecimal("70.00")),
+            ParsedTrade(date, "PETR4", TradeSide.BUY, BigDecimal("100"), BigDecimal("35.50")),
+            ParsedTrade(date, "VALE3", TradeSide.SELL, BigDecimal("10"), BigDecimal("70.00")),
         )
         coEvery { orderPlanService.computePlan() } returns OrderPlan(
             orders = listOf(
-                order(ticker = "PETR4", kind = OrderKind.COMPRAR),
-                order(ticker = "VALE3", kind = OrderKind.COMPRAR),
+                order(ticker = "PETR4", kind = OrderKind.BUY),
+                order(ticker = "VALE3", kind = OrderKind.BUY),
             ),
             transferProposals = emptyList(),
             saleCeiling = ceiling(),
@@ -53,16 +60,18 @@ class BrokerageNoteServiceTest : StringSpec({
 
         val preview = service.preview(xlsxBytes)
 
+        preview.trades[0].side shouldBe TradeSide.BUY
         preview.trades[0].quantity shouldBe BigDecimal("100")
         preview.trades[0].matchesPlan shouldBe true
-        preview.trades[1].quantity shouldBe BigDecimal("-10")
+        preview.trades[1].side shouldBe TradeSide.SELL
+        preview.trades[1].quantity shouldBe BigDecimal("10")
         preview.trades[1].matchesPlan shouldBe false
         preview.unresolvedTickers shouldBe emptyList()
     }
 
     "should flag a ticker that can't be resolved to a registered asset" {
         every { parser.parse(xlsxBytes) } returns listOf(
-            ParsedTrade(date, "NOVA11", TradeSide.COMPRA, BigDecimal("5"), BigDecimal("10.00")),
+            ParsedTrade(date, "NOVA11", TradeSide.BUY, BigDecimal("5"), BigDecimal("10.00")),
         )
         coEvery { orderPlanService.computePlan() } returns OrderPlan(emptyList(), emptyList(), ceiling())
         coEvery { listedAssetRepository.resolveIdByTicker("NOVA11", date) } returns null
@@ -81,13 +90,14 @@ class BrokerageNoteServiceTest : StringSpec({
 
     "confirm should create one trade per approved row" {
         coEvery { listedAssetRepository.resolveIdByTicker("PETR4", date) } returns 1
-        coEvery { tradeService.create(any()) } returns mockk<Trade>()
+        coEvery { tradeService.create(any(), any()) } returns mockk<Trade>()
 
         service.confirm(
             listOf(
                 ImportedTradeConfirmation(
                     ticker = "PETR4",
                     date = date,
+                    side = TradeSide.BUY,
                     quantity = BigDecimal("100"),
                     price = BigDecimal("35.50"),
                 ),
@@ -96,7 +106,13 @@ class BrokerageNoteServiceTest : StringSpec({
 
         coVerify {
             tradeService.create(
-                TradeCreation(assetId = 1, date = date, quantity = BigDecimal("100"), price = BigDecimal("35.50")),
+                1,
+                TradeCreation(
+                    date = date,
+                    side = TradeSide.BUY,
+                    quantity = BigDecimal("100"),
+                    price = BigDecimal("35.50"),
+                ),
             )
         }
     }
@@ -110,6 +126,7 @@ class BrokerageNoteServiceTest : StringSpec({
                     ImportedTradeConfirmation(
                         ticker = "NOVA11",
                         date = date,
+                        side = TradeSide.BUY,
                         quantity = BigDecimal("5"),
                         price = BigDecimal("10.00"),
                     ),

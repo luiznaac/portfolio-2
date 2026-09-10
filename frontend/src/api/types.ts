@@ -142,17 +142,24 @@ export interface TickerCatalogEntry {
 }
 
 // --- trades ---
+//
+// Which side a trade is, is carried by `side`, never by the sign of `quantity` — the domain
+// models Trade as a Buy/Sell sealed hierarchy, so quantity is always positive.
+
+export type TradeSide = "BUY" | "SELL";
 
 export interface Trade {
   id: number;
   asset_id: number;
   date: string; // ISO date
-  quantity: number; // positive = buy, negative = sell
+  side: TradeSide;
+  quantity: number; // always positive
   price: number;
 }
 
 export interface TradeCreation {
   date: string; // ISO date
+  side: TradeSide;
   quantity: number;
   price: number;
 }
@@ -195,9 +202,9 @@ export interface TickerChangeCreation {
   new_ticker: string;
 }
 
-// --- dividends (declared gross per share, from B3 — see the plan's "de onde vêm os dados") ---
+// --- dividends (declared gross per share, from B3) ---
 
-export type DividendType = "DIVIDENDO" | "JCP" | "RENDIMENTO";
+export type DividendType = "DIVIDEND" | "JCP" | "FUND_INCOME";
 
 export interface DividendDeclaration {
   type: DividendType;
@@ -206,13 +213,13 @@ export interface DividendDeclaration {
   payment_date?: string;
 }
 
-// --- allocation (Fase 1: the rebalancing engine) ---
+// --- allocation (the rebalancing engine) ---
 //
 // AssetClass is user policy, not a product property — distinct from AssetKind (STOCK/FII/ETF/BDR)
 // or the product_type used for classification overrides below. See usecase/allocation/model/AssetClass.kt.
 
-export type AssetClass = "ACOES" | "REAL_STATE" | "RENDA_FIXA" | "ALTERNATIVOS" | "CAIXA";
-export type FixedIncomeSubClass = "POS_FIXADO" | "PRE_FIXADO" | "INFLACAO";
+export type AssetClass = "STOCKS" | "REAL_ESTATE" | "FIXED_INCOME" | "ALTERNATIVES" | "CASH";
+export type FixedIncomeSubClass = "FLOATING_RATE" | "FIXED_RATE" | "INFLATION_LINKED";
 export type ProductType = "BOND" | "CHECKING_ACCOUNT" | "LISTED_ASSET";
 
 export interface CapitalSnapshot {
@@ -245,7 +252,7 @@ export interface AssetClassTargetCreation {
 export interface FixedIncomeSubClassTarget {
   id: number;
   sub_class: FixedIncomeSubClass;
-  weight: number; // fraction of the RENDA_FIXA bucket, not of total capital
+  weight: number; // fraction of the FIXED_INCOME bucket, not of total capital
   effective_from: string;
 }
 
@@ -256,7 +263,7 @@ export interface FixedIncomeSubClassTargetCreation {
 }
 
 // Override map: a product with no entry here uses the backend's default for its ProductType
-// (BOND/CHECKING_ACCOUNT -> RENDA_FIXA, STOCK/ETF/BDR -> ACOES, FII -> REAL_STATE).
+// (BOND/CHECKING_ACCOUNT -> FIXED_INCOME, STOCK/ETF/BDR -> STOCKS, FII -> REAL_ESTATE).
 export interface ProductClassification {
   product_type: ProductType;
   product_id: number;
@@ -277,11 +284,11 @@ export interface ClassNode {
   ideal: number;
   current: number;
   delta: number;
-  sub_classes: SubClassNode[]; // only populated for RENDA_FIXA until Fase 2
+  sub_classes: SubClassNode[]; // only populated for FIXED_INCOME
 }
 
 // GET /allocation/plan — Capital -> Classe -> Sub-classe (Renda Fixa only, for now). Ticker-level
-// detail needs per-strategy targets from Fase 2.
+// detail needs per-strategy targets, which the order engine resolves.
 export interface AllocationPlan {
   capital: number;
   classes: ClassNode[];
@@ -291,7 +298,7 @@ export interface AllocationPlan {
 //
 // assetClass says which class's ideal capital this strategy draws from (see StrategyWeight) — a
 // strategy belongs to exactly one class. Per-ticker weights (StrategyEdition/StrategyTarget,
-// parsed from broker model-portfolio PDFs) arrive via Fase 2's endpoints below.
+// parsed from broker model-portfolio PDFs) arrive via the strategy-edition endpoints below.
 
 export interface Strategy {
   id: number;
@@ -304,7 +311,7 @@ export interface StrategyCreation {
   asset_class: AssetClass;
 }
 
-// The strategy's own share of its AssetClass's ideal capital (e.g. within ACOES, Top=40%,
+// The strategy's own share of its AssetClass's ideal capital (e.g. within STOCKS, Top=40%,
 // Dividendos=30%) — versioned by effective_from, same convention as AssetClassTarget.
 export interface StrategyWeight {
   id: number;
@@ -320,7 +327,7 @@ export interface StrategyWeightCreation {
 
 // --- attribution (splitting custody across strategies — decided by the user, never derived) ---
 
-export type AttributionReason = "COMPRA" | "VENDA" | "TRANSFERENCIA" | "AJUSTE";
+export type AttributionReason = "BUY" | "SELL" | "TRANSFER" | "ADJUSTMENT";
 
 export interface AttributionMovementCreation {
   strategy_id: number;
@@ -345,7 +352,7 @@ export interface AttributionSummary {
   unattributed_quantity: number;
 }
 
-// --- strategy editions (Fase 2: ingesting broker model-portfolio PDFs) ---
+// --- strategy editions (ingesting broker model-portfolio PDFs) ---
 
 export interface StrategyTarget {
   ticker: string;
@@ -382,9 +389,9 @@ export interface StrategyEditionWithDiff {
   diff?: StrategyTargetDiff;
 }
 
-// --- orders (Fase 3: grouped orders + the R$20k sale-exemption ceiling) ---
+// --- orders (grouped orders + the monthly sale-exemption ceiling) ---
 
-export type OrderKind = "COMPRAR" | "VENDER" | "ZERAR" | "ENTRADA_NOVA";
+export type OrderKind = "BUY" | "SELL" | "EXIT" | "NEW_ENTRY";
 
 export interface StrategyDelta {
   strategy_id: number;
@@ -411,11 +418,11 @@ export interface Order {
 // Moving custody attribution between two strategies for the same ticker costs nothing — no
 // brokerage, no tax, doesn't touch the sale-exemption ceiling — versus selling from one strategy
 // and buying back for the other. Has a real lifecycle scoped to one month (competência):
-// PENDENTE -> APLICADA or REJEITADA. A rejection only holds for that month — next month the
+// PENDING -> APPLIED or REJECTED. A rejection only holds for that month — next month the
 // engine proposes fresh if the situation still calls for it. Approving and applying are the same
 // action here (POST /orders/transfers/{id}/approve) — there's no separate execution step for a
 // transfer the way there is for a real trade.
-export type TransferProposalStatus = "PENDENTE" | "APLICADA" | "REJEITADA";
+export type TransferProposalStatus = "PENDING" | "APPLIED" | "REJECTED";
 
 export interface TransferProposal {
   id: number;
@@ -442,7 +449,7 @@ export interface TransferSettings {
 
 // Stock sales (never FIIs — always taxed at 20%, no exemption) up to R$20,000/month are exempt
 // from capital-gains tax; the ceiling is on the amount *sold*, not the gain. month_sold includes
-// both already-executed trades this month and this plan's own pending SELL/ZERAR orders.
+// both already-executed trades this month and this plan's own pending SELL/EXIT orders.
 export interface SaleCeiling {
   month_sold: number;
   limit: number;
@@ -456,15 +463,16 @@ export interface OrderPlan {
   sale_ceiling: SaleCeiling;
 }
 
-// --- brokerage note import (Fase 4) ---
+// --- brokerage note import ---
 
 // One parsed statement row, staged for review — nothing is persisted until POST
-// /notes/import/confirm. quantity is signed like Trade (positive buy, negative sell).
+// /notes/import/confirm. quantity is positive and `side` says the direction, like Trade.
 // listed_asset_id is absent when the ticker couldn't be resolved to a registered asset.
 export interface ImportedTrade {
   ticker: string;
   listed_asset_id?: number;
   date: string;
+  side: TradeSide;
   quantity: number;
   price: number;
   notional: number;
@@ -480,11 +488,12 @@ export interface ImportPreview {
 export interface ImportedTradeConfirmation {
   ticker: string;
   date: string;
+  side: TradeSide;
   quantity: number;
   price: number;
 }
 
-// --- tax: capital gains + step-up (Fase 5) ---
+// --- tax: capital gains + step-up ---
 
 // One (month, asset group) bucket. is_fii mirrors Order.is_fii — FIIs have no sale exemption and
 // are always taxed at 20%; stocks/ETFs/BDRs share the R$20,000/month exemption at 15%.
@@ -515,10 +524,10 @@ export interface StepUpPlan {
   remaining_ceiling_after: number;
 }
 
-// --- income + monthly close (Fase 7) ---
+// --- income + monthly close ---
 
 // A DividendDeclaration turned into money for the position actually held on the ex-date. This is
-// "previsto", not "recebido" — see IncomeReconciliation for the two compared.
+// the expected amount, not the received one — see IncomeReconciliation for the two compared.
 export interface IncomeEvent {
   listed_asset_id: number;
   ticker: string;
@@ -543,11 +552,11 @@ export interface IncomeReconciliation {
   ticker: string;
   month: string;
   type: DividendType;
-  previsto: number;
-  recebido: number;
+  expected: number;
+  received: number;
 }
 
-export type MonthlyCloseStatus = "ABERTO" | "FECHADO";
+export type MonthlyCloseStatus = "OPEN" | "CLOSED";
 
 export interface MonthlyClose {
   id: number;

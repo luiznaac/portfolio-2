@@ -12,13 +12,29 @@ Two projects, one repo:
   `frontend/` (`npm --prefix frontend run <script>`). Details in
   [frontend/README.md](frontend/README.md).
 
-## Cross-cutting rule
+## Cross-cutting rules
+
+### The API contract is mirrored by hand
 
 `frontend/src/api/types.ts` is a hand-maintained mirror of the request/response DTOs that the
 controllers in `backend/http-api/.../controller/` serialize — Jackson is configured
 `SNAKE_CASE`, non-null, ISO dates in `backend/usecase/.../configuration/JsonMapper.kt`. Any
 change to a DTO on one side must update the other in the **same commit**. The backend has no
 generated schema; this mirror is the contract.
+
+### The code is in English
+
+Identifiers, enum constants, comments, log lines, exception messages, test names, commit messages
+and branch names are English throughout both projects — including Brazilian financial jargon, which
+gets its English name plus a gloss where the translation isn't obvious. Two exceptions:
+
+- **External data** stays verbatim: B3 column headers, regexes matching Portuguese PDFs, broker
+  labels. Those strings have to match something outside this repo.
+- **User-facing copy in `frontend/`** is pt-BR, because its user is. Enum keys crossing the API are
+  English; their pt-BR labels live in `frontend/src/i18n/`, never in the enum itself.
+
+See [backend/DEVELOPMENT.md](backend/DEVELOPMENT.md) for the backend specifics, including what to do
+when renaming an enum whose values are persisted as strings.
 
 ## Git workflow
 

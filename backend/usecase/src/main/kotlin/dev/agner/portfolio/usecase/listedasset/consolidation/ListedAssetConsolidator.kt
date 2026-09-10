@@ -24,9 +24,9 @@ import java.time.Clock
  * current position, price it, and persist a [ListedAssetPosition] the frontend charts unchanged.
  *
  * The `taxes` estimate here is deliberately naive — same-day-sale income tax on the unrealized
- * gain, ignoring the monthly R$20k stock exemption and loss carry-forward. Real tax planning
- * (StepUpPlanner) is Fase 5 of the plan; this is just enough to show "what redeeming today would
- * roughly cost", same spirit as Bond's IOF/Renda estimate.
+ * gain, ignoring the monthly stock exemption and loss carry-forward. Real tax planning lives in
+ * usecase/tax; this is just enough to show what redeeming today would roughly cost, the same
+ * spirit as the bond IOF/income-tax estimate.
  */
 @Component
 class ListedAssetConsolidator(

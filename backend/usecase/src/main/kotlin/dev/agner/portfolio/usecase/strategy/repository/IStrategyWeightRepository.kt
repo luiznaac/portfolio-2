@@ -11,5 +11,5 @@ interface IStrategyWeightRepository {
     /** The latest weight per strategyId with effectiveFrom on or before [date]. */
     suspend fun fetchCurrent(date: LocalDate): List<StrategyWeight>
 
-    suspend fun save(creation: StrategyWeightCreation): StrategyWeight
+    suspend fun save(strategyId: Int, creation: StrategyWeightCreation): StrategyWeight
 }

@@ -46,8 +46,8 @@ class BrapiTickerCatalogGateway(
     private companion object {
         const val PAGE_SIZE = 2000
 
-        // subType -> our AssetKind. brapi also has "unit"/"fi-infra"/"fi-agro"/"fip"/"fidc" —
-        // outside the plan's scope (stocks/FIIs/ETFs/BDRs only), so those are simply not fetched.
+        // subType -> our AssetKind. brapi also has "unit"/"fi-infra"/"fi-agro"/"fip"/"fidc", which
+        // this app doesn't track (stocks, FIIs, ETFs and BDRs only), so they are not fetched.
         val SUPPORTED_SUBTYPES = mapOf(
             "stock" to AssetKind.STOCK,
             "fii" to AssetKind.FII,

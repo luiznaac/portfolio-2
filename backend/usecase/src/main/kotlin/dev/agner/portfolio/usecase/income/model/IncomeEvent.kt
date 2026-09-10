@@ -6,10 +6,9 @@ import java.math.BigDecimal
 
 /**
  * A [dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration] turned into money for
- * *your* position: gross value at the quantity you actually held on the ex-date, minus the
- * withholding B3 doesn't apply for you — JCP has 15% IRRF retained at source, DIVIDENDO and
- * RENDIMENTO are tax-free for individuals. This is "previsto", not "recebido" — see
- * [dev.agner.portfolio.usecase.income.model.IncomeReconciliation] for the two compared.
+ * *your* position: gross value at the quantity actually held on the ex-date, minus the
+ * withholding B3 doesn't apply for you. This is the expected amount, not the received one — see
+ * [IncomeReconciliation] for the two compared.
  */
 data class IncomeEvent(
     val listedAssetId: Int,

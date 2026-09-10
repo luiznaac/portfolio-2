@@ -5,9 +5,8 @@ import java.math.BigDecimal
 
 /**
  * A fact about a listed asset that changes quantity and/or cost basis without being a trade.
- * See the plan's "Eventos corporativos" section for why position must be replayed from these
- * plus trades instead of stored as a running balance — this is what makes a late-discovered event
- * correctable by simply inserting it with the right date.
+ * Position is replayed from these plus trades rather than stored as a running balance, which is
+ * what makes a late-discovered event correctable by simply inserting it with the right date.
  */
 sealed class CorporateAction(
     open val id: Int,

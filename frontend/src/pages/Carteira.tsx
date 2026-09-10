@@ -177,7 +177,7 @@ function AllocationTree({
 function ClassTargetsPanel() {
   const targets = useClassTargets();
   const mutation = useSetClassTarget();
-  const [assetClass, setAssetClass] = useState<AssetClass>("ACOES");
+  const [assetClass, setAssetClass] = useState<AssetClass>("STOCKS");
   const [weightPct, setWeightPct] = useState("");
 
   const current = new Map<AssetClass, number>();
@@ -247,7 +247,7 @@ function ClassTargetsPanel() {
 function SubClassTargetsPanel() {
   const targets = useFixedIncomeSubClassTargets();
   const mutation = useSetFixedIncomeSubClassTarget();
-  const [subClass, setSubClass] = useState<FixedIncomeSubClass>("POS_FIXADO");
+  const [subClass, setSubClass] = useState<FixedIncomeSubClass>("FLOATING_RATE");
   const [weightPct, setWeightPct] = useState("");
 
   const current = new Map<FixedIncomeSubClass, number>();

@@ -2,7 +2,7 @@ package dev.agner.portfolio.httpapi.configuration
 
 import dev.agner.portfolio.usecase.brokeragenote.parser.BrokerageNoteParseException
 import dev.agner.portfolio.usecase.brokeragenote.parser.ParsedTrade
-import dev.agner.portfolio.usecase.brokeragenote.parser.TradeSide
+import dev.agner.portfolio.usecase.trade.model.TradeSide
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -37,14 +37,14 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
                 ParsedTrade(
                     date = LocalDate(2026, 9, 1),
                     ticker = "PETR4",
-                    side = TradeSide.COMPRA,
+                    side = TradeSide.BUY,
                     quantity = BigDecimal("100"),
                     price = BigDecimal("35.50"),
                 ),
                 ParsedTrade(
                     date = LocalDate(2026, 9, 2),
                     ticker = "VALE3",
-                    side = TradeSide.VENDA,
+                    side = TradeSide.SELL,
                     quantity = BigDecimal("50"),
                     price = BigDecimal("70.25"),
                 ),

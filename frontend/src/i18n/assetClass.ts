@@ -2,19 +2,19 @@
 import type { AssetClass, FixedIncomeSubClass } from "../api/types.ts";
 
 const CLASS_LABELS_PT: Record<AssetClass, string> = {
-  ACOES: "Ações",
-  REAL_STATE: "Real State",
-  RENDA_FIXA: "Renda Fixa",
-  ALTERNATIVOS: "Alternativos",
-  CAIXA: "Caixa",
+  STOCKS: "Ações",
+  REAL_ESTATE: "Real State",
+  FIXED_INCOME: "Renda Fixa",
+  ALTERNATIVES: "Alternativos",
+  CASH: "Caixa",
 };
 
 export const ASSET_CLASSES: AssetClass[] = [
-  "ACOES",
-  "REAL_STATE",
-  "RENDA_FIXA",
-  "ALTERNATIVOS",
-  "CAIXA",
+  "STOCKS",
+  "REAL_ESTATE",
+  "FIXED_INCOME",
+  "ALTERNATIVES",
+  "CASH",
 ];
 
 export function assetClassLabel(value: AssetClass): string {
@@ -22,15 +22,15 @@ export function assetClassLabel(value: AssetClass): string {
 }
 
 const SUBCLASS_LABELS_PT: Record<FixedIncomeSubClass, string> = {
-  POS_FIXADO: "Pós-fixado",
-  PRE_FIXADO: "Pré-fixado",
-  INFLACAO: "Inflação",
+  FLOATING_RATE: "Pós-fixado",
+  FIXED_RATE: "Pré-fixado",
+  INFLATION_LINKED: "Inflação",
 };
 
 export const FIXED_INCOME_SUBCLASSES: FixedIncomeSubClass[] = [
-  "POS_FIXADO",
-  "PRE_FIXADO",
-  "INFLACAO",
+  "FLOATING_RATE",
+  "FIXED_RATE",
+  "INFLATION_LINKED",
 ];
 
 export function fixedIncomeSubClassLabel(value: FixedIncomeSubClass): string {

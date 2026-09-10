@@ -30,28 +30,28 @@ class CorporateActionController(
                 val assetId = call.parameters["listed_asset_id"]!!.toInt()
                 val payload = call.receive<SplitCreation>()
 
-                call.respond(HttpStatusCode.Created, service.create(payload.copy(assetId = assetId)))
+                call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
 
             post("/reverse-split") {
                 val assetId = call.parameters["listed_asset_id"]!!.toInt()
                 val payload = call.receive<ReverseSplitCreation>()
 
-                call.respond(HttpStatusCode.Created, service.create(payload.copy(assetId = assetId)))
+                call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
 
             post("/bonus") {
                 val assetId = call.parameters["listed_asset_id"]!!.toInt()
                 val payload = call.receive<BonusCreation>()
 
-                call.respond(HttpStatusCode.Created, service.create(payload.copy(assetId = assetId)))
+                call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
 
             post("/ticker-change") {
                 val assetId = call.parameters["listed_asset_id"]!!.toInt()
                 val payload = call.receive<TickerChangeCreation>()
 
-                call.respond(HttpStatusCode.Created, service.create(payload.copy(assetId = assetId)))
+                call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
         }
     }

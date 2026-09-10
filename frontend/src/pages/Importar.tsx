@@ -31,7 +31,13 @@ export function Importar() {
 
   const doConfirm = () => {
     confirm.mutate(
-      selected.map((t) => ({ ticker: t.ticker, date: t.date, quantity: t.quantity, price: t.price })),
+      selected.map((t) => ({
+        ticker: t.ticker,
+        date: t.date,
+        side: t.side,
+        quantity: t.quantity,
+        price: t.price,
+      })),
     );
   };
 
@@ -147,7 +153,8 @@ function TradeRow({
           <span className="ml-1.5 rounded bg-yield/15 px-1 py-0.5 text-[10px] text-yield">no plano</span>
         )}
       </td>
-      <td className={`py-2 pr-4 text-right ${trade.quantity < 0 ? "text-accent-500" : "text-slate-200"}`}>
+      <td className={`py-2 pr-4 text-right ${trade.side === "SELL" ? "text-accent-500" : "text-slate-200"}`}>
+        {trade.side === "SELL" ? "−" : ""}
         {trade.quantity}
       </td>
       <td className="py-2 pr-4 text-right text-slate-200">{formatBRL(trade.price)}</td>

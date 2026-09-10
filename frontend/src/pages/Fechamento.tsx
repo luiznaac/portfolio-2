@@ -34,7 +34,7 @@ export function Fechamento() {
       <Panel
         title="Fechamento do mês"
         action={
-          monthlyClose.data?.status === "ABERTO" ? (
+          monthlyClose.data?.status === "OPEN" ? (
             <button
               onClick={() => closeMonth.mutate()}
               disabled={closeMonth.isPending}
@@ -49,8 +49,8 @@ export function Fechamento() {
         {monthlyClose.data && (
           <p className="text-sm text-slate-300">
             {monthlyClose.data.month.slice(0, 7)} está{" "}
-            <span className={monthlyClose.data.status === "FECHADO" ? "text-yield" : "text-accent-500"}>
-              {monthlyClose.data.status === "FECHADO" ? "fechado" : "aberto"}
+            <span className={monthlyClose.data.status === "CLOSED" ? "text-yield" : "text-accent-500"}>
+              {monthlyClose.data.status === "CLOSED" ? "fechado" : "aberto"}
             </span>
             {monthlyClose.data.closed_at && ` desde ${monthlyClose.data.closed_at.slice(0, 16).replace("T", " ")}`}.
           </p>
@@ -170,10 +170,10 @@ function ReconciliationRow({ row }: { row: IncomeReconciliation }) {
     <tr>
       <td className="py-2 pr-4 text-slate-300">{row.month.slice(0, 7)}</td>
       <td className="py-2 pr-4 text-slate-200">{row.ticker}</td>
-      <td className="py-2 pr-4 text-right text-slate-200">{formatBRL(row.previsto)}</td>
-      <td className="py-2 pr-4 text-right text-slate-200">{formatBRL(row.recebido)}</td>
-      <td className={`py-2 text-right ${row.recebido !== row.previsto ? "text-tax" : "text-slate-500"}`}>
-        {row.recebido === row.previsto ? "—" : formatBRL(row.recebido - row.previsto)}
+      <td className="py-2 pr-4 text-right text-slate-200">{formatBRL(row.expected)}</td>
+      <td className="py-2 pr-4 text-right text-slate-200">{formatBRL(row.received)}</td>
+      <td className={`py-2 text-right ${row.received !== row.expected ? "text-tax" : "text-slate-500"}`}>
+        {row.received === row.expected ? "—" : formatBRL(row.received - row.expected)}
       </td>
     </tr>
   );

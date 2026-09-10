@@ -60,10 +60,10 @@ class StepUpServiceTest : StringSpec({
     "should exclude FIIs from step-up candidates" {
         coEvery { listedAssetRepository.fetchAll() } returns listOf(stock, fii)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { tradeRepository.fetchByAssetId(2) } returns listOf(
-            Trade(2, 2, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(2, 2, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { quoteGateway.getQuote(stock) } returns Quote(BigDecimal("15.00"), LocalDate(2026, 9, 8), BRAPI)
 
@@ -75,8 +75,8 @@ class StepUpServiceTest : StringSpec({
     "should exclude a ticker already bought today, to avoid a day trade" {
         coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
-            Trade(2, 1, LocalDate(2026, 9, 8), BigDecimal("10"), BigDecimal("14.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(2, 1, LocalDate(2026, 9, 8), BigDecimal("10"), BigDecimal("14.00")),
         )
 
         val plan = service.plan()
@@ -92,7 +92,7 @@ class StepUpServiceTest : StringSpec({
         )
         coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { quoteGateway.getQuote(stock) } returns Quote(BigDecimal("20.00"), LocalDate(2026, 9, 8), BRAPI)
 

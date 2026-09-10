@@ -51,7 +51,7 @@ export function Estrategias() {
 function NewStrategyForm() {
   const mutation = useCreateStrategy();
   const [name, setName] = useState("");
-  const [assetClass, setAssetClass] = useState<AssetClass>("ACOES");
+  const [assetClass, setAssetClass] = useState<AssetClass>("STOCKS");
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

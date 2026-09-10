@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component
 import java.math.BigDecimal
 
 /**
- * Pure: ideal = weight × ideal_do_pai, current comes from already-aggregated positions passed
- * in, delta = current − ideal. Ticker-level detail (Ações/FIIs → Estratégia → Ticker) isn't
- * computed here yet — it needs per-strategy targets, which arrive in Fase 2.
+ * Pure: ideal = weight × the parent node's ideal, current comes from already-aggregated positions
+ * passed in, delta = current − ideal. Ticker-level detail belongs to the order engine, which is
+ * where per-strategy targets are resolved.
  */
 @Component
 class RebalanceCalculator {
@@ -34,7 +34,7 @@ class RebalanceCalculator {
             val ideal = (weight * capital).defaultScale()
             val current = (currentByClass[assetClass] ?: BigDecimal.ZERO).defaultScale()
 
-            val subClasses = if (assetClass == AssetClass.RENDA_FIXA) {
+            val subClasses = if (assetClass == AssetClass.FIXED_INCOME) {
                 FixedIncomeSubClass.entries.map { subClass ->
                     val subWeight = subClassWeights[subClass] ?: BigDecimal.ZERO
                     SubClassNode(

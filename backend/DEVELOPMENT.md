@@ -87,6 +87,33 @@ application  →  http-api  →  usecase  ←  persistence
   `BondCalculationResult`, `BondConsolidationContext`, `CheckingAccountConsolidationContext`) are
   used to pass structured intermediate state through multi-step calculations instead of long
   parameter lists — follow this shape for new multi-step domain logic.
+- **Model variants as algebraic data types, never as sentinel values.** When a value can be one of
+  several kinds, that is a `sealed class`/`sealed interface` with a `data class` per case, and
+  callers branch on it with an exhaustive `when` — never a sign convention, a magic number, a
+  nullable field that is only set for "some" cases, or a boolean pair. `Bond`, `BondOrder`,
+  `BondOrderStatement`, `CorporateAction`, `TaxIncidence` and `Trade` all follow this. Concretely:
+  `Trade` is `Trade.Buy`/`Trade.Sell` with a always-positive `quantity`, *not* one signed number —
+  the sign convention silently made "quantity zero" a sell and forced every consumer to re-derive
+  the direction. If the database column is still a single signed value, the repository is the one
+  place that translates (see `TradeTable.toModel`).
+- **A `*Creation` model never carries an owner id it doesn't own.** When the parent is addressed by
+  the URL path (`POST /listed-assets/{listed_asset_id}/trades`), the id is a **parameter** of the
+  service and repository call — `tradeService.create(assetId, creation)` — and is absent from the
+  data class. Do not add `val assetId: Int = 0` "because the controller overwrites it anyway": the
+  default is a lie the type system then enforces nowhere, `0` is a valid-looking id, and every
+  caller has to remember the `copy(...)`. `TradeCreation`, `CorporateActionCreation`,
+  `AttributionMovementCreation` and `StrategyWeightCreation` all follow the parameter form.
+- **Separate commands from queries.** A `GET` handler must not write. `OrderPlanService` splits
+  `computePlan()` (pure read, safe for previews and for any other service to call) from
+  `refreshPlan()` (persists newly matched transfer proposals and auto-applies the small ones).
+  Multi-repository writes go inside `transaction.execute { }` so a partial failure can't leave two
+  tables disagreeing.
+- **Format-specific parsing is a Strategy, chosen at runtime, and lives outside `usecase`.** Broker
+  file layouts vary by broker and even by report, so each layout is its own `@Component`
+  implementing a parser interface with a `shouldExecute(document): Boolean` predicate; a resolver
+  injects `List<TheParser>` and picks the first that claims the document (see
+  `http-api/.../strategyreport/`). Adding a layout is adding a class. The domain service receives
+  the already-parsed result (`ParsedStrategyReport`) and never sees bytes, a file, or a `Content-Type`.
 
 ## How to implement a new feature (walkthrough)
 
@@ -117,6 +144,28 @@ Example: adding a new consolidated product type (portfolio-2 already has `Produc
 Same Detekt setup as chameidor: `config/detekt/{config,format}.yml`, `maxIssues: 0`,
 `autoCorrect: true`, `MaximumLineLength: 120`, trailing commas mandatory, no wildcard imports,
 `allWarningsAsErrors = true`. Run `./gradlew detekt` before finishing a change.
+
+**The codebase is written in English.** Identifiers, enum constants, comments, KDoc, log lines,
+exception messages, test names, commit messages and branch names — all English, with no exceptions
+for domain jargon. Brazilian financial concepts get their English name plus a one-line gloss where
+the translation isn't obvious (`FixedIncomeSubClass.FLOATING_RATE`, "IRRF withheld at source");
+where there genuinely is no English term, keep the Portuguese one and say so in a comment (`JCP` —
+*Juros sobre Capital Próprio*). Two things are deliberately **not** translated:
+
+- **External data.** Strings that must match something outside this repo stay verbatim — B3's
+  column headers (`"Tipo de Movimentação"`), regexes matching Portuguese PDF text, broker labels.
+  They're data, not prose.
+- **Frontend UI copy.** `frontend/` renders in pt-BR for its user. Enum *keys* crossing the API are
+  English and the pt-BR label lives in `frontend/src/i18n/`, never in the enum itself.
+
+Renaming an enum whose values are persisted as strings (an Exposed `enumerationByName`, or a
+`varchar` read back through `valueOf`) needs a data migration rewriting the stored rows — see
+`V9__rename_enum_values_to_english.sql`.
+
+**Comments earn their place.** Explain *why* — a non-obvious rule, a deliberate simplification, a
+trap the next reader would fall into. Don't restate the code, don't number-reference an external
+planning document that won't be in the reader's hands, and don't leave "this is a guess" scaffolding
+lying around once it's verified.
 
 ## Testing
 

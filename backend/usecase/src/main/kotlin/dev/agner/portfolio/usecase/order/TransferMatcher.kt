@@ -4,7 +4,11 @@ import dev.agner.portfolio.usecase.commons.isZero
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 
-/** One pure match, before any persisted lifecycle — see [dev.agner.portfolio.usecase.order.model.TransferProposal] for the persisted shape OrderPlanService reconciles this against. */
+/**
+ * One pure match, before any persisted lifecycle — see
+ * [dev.agner.portfolio.usecase.order.model.TransferProposal] for the stored shape
+ * [OrderPlanService] reconciles this against.
+ */
 data class TransferMatch(
     val listedAssetId: Int,
     val ticker: String,
@@ -34,7 +38,6 @@ class TransferMatcher {
         val excess = deltasByStrategy.filterValues { it > BigDecimal.ZERO }
             .toList()
             .sortedByDescending { it.second }
-            .map { it.first to it.second }
             .toMutableList()
         val shortage = deltasByStrategy.filterValues { it < BigDecimal.ZERO }
             .toList()

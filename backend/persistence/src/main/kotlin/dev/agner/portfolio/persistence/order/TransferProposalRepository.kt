@@ -24,6 +24,10 @@ class TransferProposalRepository(
         TransferProposalEntity.find { TransferProposalTable.month eq month }.map { it.toModel() }
     }
 
+    override suspend fun fetchById(id: Int) = transaction {
+        TransferProposalEntity.findById(id)?.toModel()
+    }
+
     override suspend fun find(
         month: LocalDate,
         listedAssetId: Int,
@@ -50,7 +54,7 @@ class TransferProposalRepository(
                 ?: throw IllegalArgumentException("Strategy ${creation.toStrategyId} not found")
             proposedQuantity = creation.proposedQuantity
             appliedQuantity = null
-            status = TransferProposalStatus.PENDENTE
+            status = TransferProposalStatus.PENDING
             decidedAt = null
             createdAt = LocalDateTime.now(clock)
         }.toModel()

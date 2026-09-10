@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.income
 
+import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.isZero
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.income.model.AssetIncomeSummary
@@ -7,9 +8,11 @@ import dev.agner.portfolio.usecase.income.model.IncomeEvent
 import dev.agner.portfolio.usecase.income.model.IncomeReconciliation
 import dev.agner.portfolio.usecase.income.model.ReceivedIncome
 import dev.agner.portfolio.usecase.listedasset.gateway.IDividendGateway
+import dev.agner.portfolio.usecase.listedasset.model.DividendType
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.JCP
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
+import dev.agner.portfolio.usecase.tax.TaxRules
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import kotlinx.datetime.LocalDate
@@ -18,9 +21,9 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * Turns [dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration]s (declared, gross,
- * per share) into money for the position actually held on each ex-date, and reconciles that
- * "previsto" against what the monthly statement says actually landed. See the plan's Fase 7.
+ * Turns [dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration]s (declared, gross, per
+ * share) into money for the position actually held on each ex-date, and reconciles that expected
+ * amount against what the monthly statement says actually landed.
  */
 @Service
 class IncomeService(
@@ -47,7 +50,7 @@ class IncomeService(
             AssetIncomeSummary(
                 listedAssetId = asset.id,
                 ticker = asset.ticker,
-                totalNet = totalNet.setScale(2, RoundingMode.HALF_EVEN),
+                totalNet = totalNet.defaultScale(),
                 costBasis = costBasis,
                 yieldOnCost = if (costBasis.isZero()) {
                     BigDecimal.ZERO
@@ -58,26 +61,22 @@ class IncomeService(
         }.filter { !it.totalNet.isZero() || !it.costBasis.isZero() }
 
     suspend fun reconcile(received: List<ReceivedIncome>): List<IncomeReconciliation> {
-        val previstoByAsset = listedAssetRepository.fetchAll().associateWith { events(it) }
-
-        val previstoByKey = previstoByAsset.values.flatten()
-            .groupBy { Triple(it.ticker, monthOf(it.exDate), it.type) }
+        val expectedByKey = listedAssetRepository.fetchAll()
+            .flatMap { events(it) }
+            .groupBy { ReconciliationKey(it.ticker, monthOf(it.exDate), it.type) }
             .mapValues { (_, group) -> group.sumOf { it.netAmount } }
 
-        val recebidoByKey = received
-            .groupBy { Triple(it.ticker, monthOf(it.date), it.type) }
+        val receivedByKey = received
+            .groupBy { ReconciliationKey(it.ticker, monthOf(it.date), it.type) }
             .mapValues { (_, group) -> group.sumOf { it.amount } }
 
-        val keys = previstoByKey.keys + recebidoByKey.keys
-
-        return keys.map { (ticker, month, type) ->
-            val key = Triple(ticker, month, type)
+        return (expectedByKey.keys + receivedByKey.keys).map { key ->
             IncomeReconciliation(
-                ticker = ticker,
-                month = month,
-                type = type,
-                previsto = (previstoByKey[key] ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN),
-                recebido = (recebidoByKey[key] ?: BigDecimal.ZERO).setScale(2, RoundingMode.HALF_EVEN),
+                ticker = key.ticker,
+                month = key.month,
+                type = key.type,
+                expected = (expectedByKey[key] ?: BigDecimal.ZERO).defaultScale(),
+                received = (receivedByKey[key] ?: BigDecimal.ZERO).defaultScale(),
             )
         }.sortedWith(compareBy({ it.month }, { it.ticker }))
     }
@@ -95,11 +94,10 @@ class IncomeService(
                 corporateActions.filter { it.date <= declaration.exDate },
             ).position.quantity.coerceAtLeast(BigDecimal.ZERO)
 
-            val gross = (quantityHeld * declaration.valuePerShare).setScale(2, RoundingMode.HALF_EVEN)
-            val retained = if (declaration.type == JCP) {
-                (gross * JCP_WITHHOLDING).setScale(2, RoundingMode.HALF_EVEN)
-            } else {
-                BigDecimal.ZERO.setScale(2)
+            val gross = (quantityHeld * declaration.valuePerShare).defaultScale()
+            val retained = when (declaration.type) {
+                JCP -> (gross * TaxRules.JCP_WITHHOLDING_RATE).defaultScale()
+                DividendType.DIVIDEND, DividendType.FUND_INCOME -> BigDecimal.ZERO.defaultScale()
             }
 
             IncomeEvent(
@@ -118,7 +116,5 @@ class IncomeService(
 
     private fun monthOf(date: LocalDate) = LocalDate(date.year, date.month, 1)
 
-    private companion object {
-        val JCP_WITHHOLDING: BigDecimal = BigDecimal("0.15")
-    }
+    private data class ReconciliationKey(val ticker: String, val month: LocalDate, val type: DividendType)
 }

@@ -33,12 +33,12 @@ class CapitalGainsServiceTest : StringSpec({
 
         coEvery { listedAssetRepository.fetchAll() } returns listOf(stock, fii)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
-            Trade(2, 1, LocalDate(2026, 8, 15), BigDecimal("-100"), BigDecimal("12.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Sell(2, 1, LocalDate(2026, 8, 15), BigDecimal("100"), BigDecimal("12.00")),
         )
         coEvery { tradeRepository.fetchByAssetId(2) } returns listOf(
-            Trade(3, 2, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
-            Trade(4, 2, LocalDate(2026, 8, 15), BigDecimal("-100"), BigDecimal("11.00")),
+            Trade.Buy(3, 2, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Sell(4, 2, LocalDate(2026, 8, 15), BigDecimal("100"), BigDecimal("11.00")),
         )
         coEvery { corporateActionRepository.fetchByAssetId(any()) } returns emptyList()
 

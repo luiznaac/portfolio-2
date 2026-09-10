@@ -4,10 +4,10 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 enum class AttributionReason {
-    COMPRA,
-    VENDA,
-    TRANSFERENCIA,
-    AJUSTE,
+    BUY,
+    SELL,
+    TRANSFER,
+    ADJUSTMENT,
 }
 
 // Attribution is data the user enters, never derived — see AttributionService. Stored as signed
@@ -23,11 +23,12 @@ data class AttributionMovement(
     val note: String? = null,
 )
 
-// listedAssetId defaults to 0 because it's always overwritten from the URL path by the
-// controller (POST /listed-assets/{listed_asset_id}/attribution/movements) — the frontend never
-// sends it, same convention as TradeCreation.
+/**
+ * What the client sends to record a movement. The owning asset is *not* part of this shape — it
+ * comes from the URL path and is passed alongside it to
+ * [dev.agner.portfolio.usecase.attribution.AttributionService.recordMovement].
+ */
 data class AttributionMovementCreation(
-    val listedAssetId: Int = 0,
     val strategyId: Int,
     val date: LocalDate,
     val quantity: BigDecimal,

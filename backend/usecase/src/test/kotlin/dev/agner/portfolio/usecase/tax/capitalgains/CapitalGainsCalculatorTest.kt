@@ -96,7 +96,10 @@ class CapitalGainsCalculatorTest : StringSpec({
         result[1].lossCarriedForward shouldBe BigDecimal("0.00")
     }
 
-    "should keep a loss available even in an exempt month, for a later month to use" {
+    // An exempt month sits outside the regime in both directions: its gain isn't taxed, and its
+    // loss isn't compensable either. Receita Federal is explicit that losses realized in exempt
+    // sales cannot be offset against later gains.
+    "should not carry a loss forward out of an exempt month" {
         val sales = listOf(
             TaxableSale(
                 LocalDate(2026, 7, 5),
@@ -115,6 +118,32 @@ class CapitalGainsCalculatorTest : StringSpec({
         val result = calculator.calculate(sales)
 
         result[0].exempt shouldBe true
+        result[0].lossCarriedForward shouldBe BigDecimal("0.00")
+
+        result[1].lossCompensated shouldBe BigDecimal("0.00")
+        result[1].taxableGain shouldBe BigDecimal("2000.00")
+        result[1].taxDue shouldBe BigDecimal("300.00")
+    }
+
+    "should carry a loss forward out of a non-exempt month" {
+        val sales = listOf(
+            TaxableSale(
+                LocalDate(2026, 7, 5),
+                isFii = false,
+                proceeds = BigDecimal("25000"),
+                costBasis = BigDecimal("27000"),
+            ),
+            TaxableSale(
+                LocalDate(2026, 8, 5),
+                isFii = false,
+                proceeds = BigDecimal("30000"),
+                costBasis = BigDecimal("28000"),
+            ),
+        )
+
+        val result = calculator.calculate(sales)
+
+        result[0].exempt shouldBe false
         result[0].lossCarriedForward shouldBe BigDecimal("2000.00")
 
         result[1].lossCompensated shouldBe BigDecimal("2000.00")

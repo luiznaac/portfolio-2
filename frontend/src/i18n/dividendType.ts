@@ -2,9 +2,9 @@
 import type { DividendType } from "../api/types.ts";
 
 const LABELS_PT: Record<DividendType, string> = {
-  DIVIDENDO: "Dividendo",
+  DIVIDEND: "Dividendo",
   JCP: "JCP",
-  RENDIMENTO: "Rendimento",
+  FUND_INCOME: "Rendimento",
 };
 
 export function dividendTypeLabel(value: DividendType): string {

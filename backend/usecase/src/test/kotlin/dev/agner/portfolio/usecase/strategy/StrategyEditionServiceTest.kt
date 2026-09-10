@@ -3,7 +3,6 @@ package dev.agner.portfolio.usecase.strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyEdition
 import dev.agner.portfolio.usecase.strategy.model.StrategyEditionCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
-import dev.agner.portfolio.usecase.strategy.parser.IStrategyReportParser
 import dev.agner.portfolio.usecase.strategy.parser.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyEditionRepository
@@ -13,16 +12,14 @@ import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 class StrategyEditionServiceTest : StringSpec({
     val repository = mockk<IStrategyEditionRepository>(relaxed = true)
-    val parser = mockk<IStrategyReportParser>()
     val diffCalculator = StrategyDiffCalculator()
-    val service = StrategyEditionService(repository, parser, diffCalculator)
+    val service = StrategyEditionService(repository, diffCalculator)
 
     val validTargets = listOf(
         StrategyTarget("PETR4", BigDecimal("0.60")),
@@ -33,12 +30,11 @@ class StrategyEditionServiceTest : StringSpec({
     beforeTest { clearAllMocks() }
 
     "should save a valid parsed report as a new edition" {
-        every { parser.parse(any()) } returns
-            ParsedStrategyReport(referenceDate, "changelog", validTargets)
+        val report = ParsedStrategyReport(referenceDate, "changelog", validTargets)
         val saved = StrategyEdition(1, strategyId = 5, referenceDate, "changelog", validTargets)
         coEvery { repository.save(any()) } returns saved
 
-        val result = service.importReport(5, byteArrayOf(1))
+        val result = service.importReport(5, report)
 
         result shouldBe saved
         coVerify {
@@ -54,24 +50,22 @@ class StrategyEditionServiceTest : StringSpec({
     }
 
     "should reject a report with no targets" {
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, emptyList())
+        val report = ParsedStrategyReport(referenceDate, null, emptyList())
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "should reject a report with a non-B3 ticker" {
-        every { parser.parse(any()) } returns
-            ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("NOTATICKER", BigDecimal("1.0"))))
+        val report = ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("NOTATICKER", BigDecimal("1.0"))))
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
     }
 
     "should reject a report whose weights don't sum to ~100%" {
-        every { parser.parse(any()) } returns
-            ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("PETR4", BigDecimal("0.50"))))
+        val report = ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("PETR4", BigDecimal("0.50"))))
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
     }
 
     "should accept weights within tolerance of 100%" {
@@ -79,10 +73,10 @@ class StrategyEditionServiceTest : StringSpec({
             StrategyTarget("PETR4", BigDecimal("0.601")),
             StrategyTarget("VALE3", BigDecimal("0.40")),
         )
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, nearly100)
+        val report = ParsedStrategyReport(referenceDate, null, nearly100)
         coEvery { repository.save(any()) } returns StrategyEdition(1, 5, referenceDate, null, nearly100)
 
-        service.importReport(5, byteArrayOf(1))
+        service.importReport(5, report)
 
         coVerify { repository.save(any()) }
     }

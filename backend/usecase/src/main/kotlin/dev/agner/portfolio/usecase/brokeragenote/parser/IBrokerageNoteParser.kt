@@ -1,18 +1,19 @@
 package dev.agner.portfolio.usecase.brokeragenote.parser
 
+import dev.agner.portfolio.usecase.trade.model.TradeSide
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-// Port for extracting the B3 "Negociação de Ativos" XLSX export into trades. Implementation lives
-// in http-api (ApachePoiBrokerageNoteParser), where the poi dependency already lives (XlsxConverter).
-// No sample export was available while writing this — column names/format are a best-effort guess
-// from B3's public documentation of the report, flagged here so it's easy to find and correct once
-// a real file surfaces. See the plan's "Fases" §4.
+/**
+ * Port for extracting the B3 "Negociação de Ativos" statement export into trades. Implemented in
+ * `http-api`, where the POI dependency already lives.
+ *
+ * No sample export was available while this was written — the column names the implementation
+ * looks for are a best-effort reading of B3's own documentation, not verified against a real file.
+ */
 interface IBrokerageNoteParser {
     fun parse(xlsxBytes: ByteArray): List<ParsedTrade>
 }
-
-enum class TradeSide { COMPRA, VENDA }
 
 data class ParsedTrade(
     val date: LocalDate,

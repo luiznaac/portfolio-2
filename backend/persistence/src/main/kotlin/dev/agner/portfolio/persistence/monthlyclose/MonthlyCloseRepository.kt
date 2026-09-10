@@ -27,7 +27,7 @@ class MonthlyCloseRepository(
         MonthlyCloseEntity.find { MonthlyCloseTable.month eq month }.firstOrNull()?.toModel()
             ?: MonthlyCloseEntity.new {
                 this.month = month
-                status = MonthlyCloseStatus.ABERTO
+                status = MonthlyCloseStatus.OPEN
                 closedAt = null
                 createdAt = LocalDateTime.now(clock)
             }.toModel()
@@ -37,9 +37,9 @@ class MonthlyCloseRepository(
         val entity = MonthlyCloseEntity.find { MonthlyCloseTable.month eq month }.firstOrNull()
             ?: throw IllegalStateException("Month $month was never opened")
 
-        require(entity.status == MonthlyCloseStatus.ABERTO) { "Month $month is already fechado" }
+        require(entity.status == MonthlyCloseStatus.OPEN) { "Month $month is already closed" }
 
-        entity.status = MonthlyCloseStatus.FECHADO
+        entity.status = MonthlyCloseStatus.CLOSED
         entity.closedAt = LocalDateTime.now(clock)
         entity.toModel()
     }

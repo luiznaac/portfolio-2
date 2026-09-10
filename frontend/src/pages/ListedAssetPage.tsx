@@ -13,7 +13,7 @@ import {
   useStrategies,
   useTrades,
 } from "../api/queries.ts";
-import type { AttributionReason, CorporateAction, Trade } from "../api/types.ts";
+import type { AttributionReason, CorporateAction, Trade, TradeSide } from "../api/types.ts";
 import { assetKindLabel } from "../i18n/assetKind.ts";
 import {
   CORPORATE_ACTION_KINDS,
@@ -120,16 +120,15 @@ export function ListedAssetPage() {
 
 function TradeForm({ assetId }: { assetId: number }) {
   const mutation = useCreateTrade(assetId);
-  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [side, setSide] = useState<TradeSide>("BUY");
   const [date, setDate] = useState("");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const qty = Math.abs(Number(quantity));
     mutation.mutate(
-      { date, quantity: side === "buy" ? qty : -qty, price: Number(price) },
+      { date, side, quantity: Math.abs(Number(quantity)), price: Number(price) },
       {
         onSuccess: () => {
           setDate("");
@@ -143,7 +142,7 @@ function TradeForm({ assetId }: { assetId: number }) {
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
       <div className="flex gap-2">
-        {(["buy", "sell"] as const).map((s) => (
+        {(["BUY", "SELL"] as const).map((s) => (
           <button
             key={s}
             type="button"
@@ -154,7 +153,7 @@ function TradeForm({ assetId }: { assetId: number }) {
                 : "bg-slate-800 text-slate-400 hover:text-slate-200"
             }`}
           >
-            {s === "buy" ? "Compra" : "Venda"}
+            {s === "BUY" ? "Compra" : "Venda"}
           </button>
         ))}
       </div>
@@ -228,12 +227,10 @@ function TradesList({ assetId }: { assetId: number }) {
           {rows.map((t: Trade) => (
             <tr key={t.id}>
               <td className="py-2 pr-4 text-slate-400">{formatDate(t.date)}</td>
-              <td className={`py-2 pr-4 ${t.quantity >= 0 ? "text-yield" : "text-tax"}`}>
-                {t.quantity >= 0 ? "Compra" : "Venda"}
+              <td className={`py-2 pr-4 ${t.side === "BUY" ? "text-yield" : "text-tax"}`}>
+                {t.side === "BUY" ? "Compra" : "Venda"}
               </td>
-              <td className="py-2 pr-4 text-right text-slate-200">
-                {Math.abs(t.quantity)}
-              </td>
+              <td className="py-2 pr-4 text-right text-slate-200">{t.quantity}</td>
               <td className="py-2 text-right text-slate-200">{formatBRL(t.price)}</td>
             </tr>
           ))}
@@ -432,10 +429,10 @@ function DividendsList({ assetId }: { assetId: number }) {
 }
 
 const REASON_LABELS: Record<AttributionReason, string> = {
-  COMPRA: "Compra",
-  VENDA: "Venda",
-  TRANSFERENCIA: "Transferência",
-  AJUSTE: "Ajuste",
+  BUY: "Compra",
+  SELL: "Venda",
+  TRANSFER: "Transferência",
+  ADJUSTMENT: "Ajuste",
 };
 
 function AttributionPanel({ assetId }: { assetId: number }) {
@@ -445,7 +442,7 @@ function AttributionPanel({ assetId }: { assetId: number }) {
   const [strategyId, setStrategyId] = useState<number | "">("");
   const [date, setDate] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [reason, setReason] = useState<AttributionReason>("COMPRA");
+  const [reason, setReason] = useState<AttributionReason>("BUY");
 
   const submit = (e: FormEvent) => {
     e.preventDefault();

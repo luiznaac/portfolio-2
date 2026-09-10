@@ -18,8 +18,14 @@ class OrderController(
 
     override fun routes(): RouteDefinition = {
         route("/orders") {
+            // GET only reads: transfer proposals come back as stored. Creating newly matched ones,
+            // refreshing their quantity and auto-applying the small ones is the refresh command.
             get("/plan") {
                 call.respond(HttpStatusCode.OK, planService.computePlan())
+            }
+
+            post("/plan/refresh") {
+                call.respond(HttpStatusCode.OK, planService.refreshPlan())
             }
 
             route("/transfers") {

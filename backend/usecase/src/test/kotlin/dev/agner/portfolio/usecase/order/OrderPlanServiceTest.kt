@@ -1,8 +1,9 @@
 package dev.agner.portfolio.usecase.order
 
+import dev.agner.portfolio.usecase.PassThroughTransactionTemplate
 import dev.agner.portfolio.usecase.allocation.AllocationService
 import dev.agner.portfolio.usecase.allocation.model.AllocationPlan
-import dev.agner.portfolio.usecase.allocation.model.AssetClass.ACOES
+import dev.agner.portfolio.usecase.allocation.model.AssetClass.STOCKS
 import dev.agner.portfolio.usecase.allocation.model.ClassNode
 import dev.agner.portfolio.usecase.attribution.AttributionService
 import dev.agner.portfolio.usecase.attribution.model.AttributionSummary
@@ -13,12 +14,12 @@ import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.model.Quote
 import dev.agner.portfolio.usecase.listedasset.model.QuoteSource.BRAPI
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
-import dev.agner.portfolio.usecase.order.model.OrderKind.COMPRAR
-import dev.agner.portfolio.usecase.order.model.OrderKind.VENDER
+import dev.agner.portfolio.usecase.order.model.OrderKind.BUY
+import dev.agner.portfolio.usecase.order.model.OrderKind.SELL
 import dev.agner.portfolio.usecase.order.model.TransferProposal
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APLICADA
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.REJEITADA
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APPLIED
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDING
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.REJECTED
 import dev.agner.portfolio.usecase.order.model.TransferSettings
 import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
 import dev.agner.portfolio.usecase.order.repository.ITransferSettingsRepository
@@ -69,10 +70,11 @@ class OrderPlanServiceTest : StringSpec({
         TransferMatcher(),
         transferProposalRepository,
         transferSettingsRepository,
+        PassThroughTransactionTemplate,
         clock,
     )
 
-    val top = Strategy(id = 1, name = "Top", assetClass = ACOES)
+    val top = Strategy(id = 1, name = "Top", assetClass = STOCKS)
     val petr4 = ListedAsset(id = 10, ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS")
     val vale3 = ListedAsset(id = 11, ticker = "VALE3", kind = STOCK, name = "Vale", b3Identifier = "VALE")
     val today = LocalDate.parse("2026-09-15")
@@ -84,6 +86,7 @@ class OrderPlanServiceTest : StringSpec({
         coEvery { tradeRepository.fetchByAssetId(any()) } returns emptyList()
         coEvery { tradeRepository.fetchAll() } returns emptyList()
         coEvery { transferSettingsRepository.fetch() } returns TransferSettings(BigDecimal.ZERO)
+        coEvery { transferProposalRepository.fetchByMonth(any()) } returns emptyList()
     }
 
     fun edition(strategyId: Int, targets: List<StrategyTarget>) = StrategyEditionWithDiff(
@@ -97,7 +100,7 @@ class OrderPlanServiceTest : StringSpec({
             listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
         coEvery { allocationService.currentPlan() } returns AllocationPlan(
             capital = BigDecimal("10000.00"),
-            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+            classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
         )
         coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
             edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")), StrategyTarget("VALE3", BigDecimal("0.5")))),
@@ -117,12 +120,12 @@ class OrderPlanServiceTest : StringSpec({
         val plan = service.computePlan()
 
         val petrOrder = plan.orders.single { it.ticker == "PETR4" }
-        petrOrder.kind shouldBe VENDER
+        petrOrder.kind shouldBe SELL
         petrOrder.quantity shouldBe BigDecimal("50")
         petrOrder.notional shouldBe BigDecimal("2500.00")
 
         val valeOrder = plan.orders.single { it.ticker == "VALE3" }
-        valeOrder.kind shouldBe COMPRAR
+        valeOrder.kind shouldBe BUY
         valeOrder.quantity shouldBe BigDecimal("100")
 
         plan.transferProposals shouldBe emptyList()
@@ -136,7 +139,7 @@ class OrderPlanServiceTest : StringSpec({
             listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
         coEvery { allocationService.currentPlan() } returns AllocationPlan(
             capital = BigDecimal("10000.00"),
-            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+            classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
         )
         // Target matches custody exactly (100 shares) so this ticker generates no order of its
         // own — isolates the ceiling meter to just the already-executed trade below.
@@ -150,7 +153,7 @@ class OrderPlanServiceTest : StringSpec({
             balances = listOf(StrategyBalance(1, "Top", BigDecimal("100"))),
         )
         coEvery { tradeRepository.fetchAll() } returns listOf(
-            Trade(1, 10, LocalDate.parse("2026-09-05"), BigDecimal("-500"), BigDecimal("45.00")),
+            Trade.Sell(1, 10, LocalDate.parse("2026-09-05"), BigDecimal("500"), BigDecimal("45.00")),
         )
 
         val plan = service.computePlan()
@@ -167,7 +170,7 @@ class OrderPlanServiceTest : StringSpec({
             listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
         coEvery { allocationService.currentPlan() } returns AllocationPlan(
             capital = BigDecimal("10000.00"),
-            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+            classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
         )
         coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
             edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
@@ -179,8 +182,8 @@ class OrderPlanServiceTest : StringSpec({
             balances = listOf(StrategyBalance(1, "Top", BigDecimal("150"))),
         )
         // A buy already happened today — the planned order here will be a sell (150 > ideal 100)
-        coEvery { tradeRepository.fetchByAssetId(10) } returns listOf(
-            Trade(2, 10, LocalDate.parse("2026-09-15"), BigDecimal("10"), BigDecimal("50.00")),
+        coEvery { tradeRepository.fetchAll() } returns listOf(
+            Trade.Buy(2, 10, LocalDate.parse("2026-09-15"), BigDecimal("10"), BigDecimal("50.00")),
         )
 
         val plan = service.computePlan()
@@ -189,7 +192,7 @@ class OrderPlanServiceTest : StringSpec({
     }
 
     "should create a new pending transfer proposal for a fresh excess/shortage pairing" {
-        val div = Strategy(id = 2, name = "Dividendos", assetClass = ACOES)
+        val div = Strategy(id = 2, name = "Dividendos", assetClass = STOCKS)
         coEvery { strategyService.fetchAll() } returns listOf(top, div)
         coEvery { strategyWeightRepository.fetchCurrent(any()) } returns listOf(
             StrategyWeight(1, 1, BigDecimal("0.2500"), LocalDate.parse("2026-01-01")),
@@ -197,7 +200,7 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { allocationService.currentPlan() } returns AllocationPlan(
             capital = BigDecimal("20000.00"),
-            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
+            classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
         )
         coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
             edition(1, listOf(StrategyTarget("PETR4", BigDecimal("1.0")))),
@@ -228,18 +231,18 @@ class OrderPlanServiceTest : StringSpec({
             toStrategyName = "Dividendos",
             proposedQuantity = BigDecimal("50"),
             appliedQuantity = null,
-            status = PENDENTE,
+            status = PENDING,
             decidedAt = null,
         )
         coEvery { transferProposalRepository.save(any()) } returns saved
 
-        val plan = service.computePlan()
+        val plan = service.refreshPlan()
 
         plan.transferProposals shouldBe listOf(saved)
     }
 
     "should not resurrect a transfer proposal rejected earlier this month" {
-        val div = Strategy(id = 2, name = "Dividendos", assetClass = ACOES)
+        val div = Strategy(id = 2, name = "Dividendos", assetClass = STOCKS)
         coEvery { strategyService.fetchAll() } returns listOf(top, div)
         coEvery { strategyWeightRepository.fetchCurrent(any()) } returns listOf(
             StrategyWeight(1, 1, BigDecimal("0.2500"), LocalDate.parse("2026-01-01")),
@@ -247,7 +250,7 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { allocationService.currentPlan() } returns AllocationPlan(
             capital = BigDecimal("20000.00"),
-            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
+            classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
         )
         coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
             edition(1, listOf(StrategyTarget("PETR4", BigDecimal("1.0")))),
@@ -275,17 +278,17 @@ class OrderPlanServiceTest : StringSpec({
             toStrategyName = "Dividendos",
             proposedQuantity = BigDecimal("50"),
             appliedQuantity = null,
-            status = REJEITADA,
+            status = REJECTED,
             decidedAt = kotlinx.datetime.LocalDateTime.parse("2026-09-10T10:00:00"),
         )
 
-        val plan = service.computePlan()
+        val plan = service.refreshPlan()
 
         plan.transferProposals shouldBe emptyList()
     }
 
     "should auto-apply a transfer under the configured threshold instead of leaving it pending" {
-        val div = Strategy(id = 2, name = "Dividendos", assetClass = ACOES)
+        val div = Strategy(id = 2, name = "Dividendos", assetClass = STOCKS)
         coEvery { strategyService.fetchAll() } returns listOf(top, div)
         coEvery { strategyWeightRepository.fetchCurrent(any()) } returns listOf(
             StrategyWeight(1, 1, BigDecimal("0.2500"), LocalDate.parse("2026-01-01")),
@@ -293,7 +296,7 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { allocationService.currentPlan() } returns AllocationPlan(
             capital = BigDecimal("20000.00"),
-            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
+            classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
         )
         coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
             edition(1, listOf(StrategyTarget("PETR4", BigDecimal("1.0")))),
@@ -324,31 +327,31 @@ class OrderPlanServiceTest : StringSpec({
             toStrategyName = "Dividendos",
             proposedQuantity = BigDecimal("2"),
             appliedQuantity = null,
-            status = PENDENTE,
+            status = PENDING,
             decidedAt = null,
         )
         coEvery { transferProposalRepository.save(any()) } returns saved
-        coEvery { attributionService.recordMovement(any()) } returns mockk()
+        coEvery { attributionService.recordMovement(any(), any()) } returns mockk()
         coEvery { transferProposalRepository.decide(9, any(), any(), any()) } returns saved.copy(
-            status = APLICADA,
+            status = APPLIED,
             appliedQuantity = BigDecimal("2"),
         )
 
-        val plan = service.computePlan()
+        val plan = service.refreshPlan()
 
         plan.transferProposals shouldBe emptyList()
-        io.mockk.coVerify(exactly = 2) { attributionService.recordMovement(any()) }
+        io.mockk.coVerify(exactly = 2) { attributionService.recordMovement(any(), any()) }
         io.mockk.coVerify {
             transferProposalRepository.decide(
                 9,
-                APLICADA,
+                APPLIED,
                 BigDecimal("2"),
                 any(),
             )
         }
     }
 
-    "approveTransfer should apply the movements and mark the proposal APLICADA" {
+    "approveTransfer should apply the movements and mark the proposal APPLIED" {
         val pending = TransferProposal(
             id = 4,
             month = LocalDate.parse("2026-09-01"),
@@ -360,20 +363,20 @@ class OrderPlanServiceTest : StringSpec({
             toStrategyName = "Dividendos",
             proposedQuantity = BigDecimal("9"),
             appliedQuantity = null,
-            status = PENDENTE,
+            status = PENDING,
             decidedAt = null,
         )
-        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns listOf(pending)
-        coEvery { attributionService.recordMovement(any()) } returns mockk()
+        coEvery { transferProposalRepository.fetchById(4) } returns pending
+        coEvery { attributionService.recordMovement(any(), any()) } returns mockk()
         coEvery {
-            transferProposalRepository.decide(4, APLICADA, BigDecimal("5"), any())
+            transferProposalRepository.decide(4, APPLIED, BigDecimal("5"), any())
         } returns
-            pending.copy(status = APLICADA, appliedQuantity = BigDecimal("5"))
+            pending.copy(status = APPLIED, appliedQuantity = BigDecimal("5"))
 
         val result = service.approveTransfer(4, BigDecimal("5"))
 
-        result.status shouldBe APLICADA
-        io.mockk.coVerify(exactly = 2) { attributionService.recordMovement(any()) }
+        result.status shouldBe APPLIED
+        io.mockk.coVerify(exactly = 2) { attributionService.recordMovement(any(), any()) }
     }
 
     "approveTransfer should reject a quantity greater than proposed" {
@@ -388,17 +391,17 @@ class OrderPlanServiceTest : StringSpec({
             toStrategyName = "Dividendos",
             proposedQuantity = BigDecimal("9"),
             appliedQuantity = null,
-            status = PENDENTE,
+            status = PENDING,
             decidedAt = null,
         )
-        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns listOf(pending)
+        coEvery { transferProposalRepository.fetchById(4) } returns pending
 
         io.kotest.assertions.throwables.shouldThrow<IllegalArgumentException> {
             service.approveTransfer(4, BigDecimal("50"))
         }
     }
 
-    "rejectTransfer should mark the proposal REJEITADA without touching attribution" {
+    "rejectTransfer should mark the proposal REJECTED without touching attribution" {
         val pending = TransferProposal(
             id = 4,
             month = LocalDate.parse("2026-09-01"),
@@ -410,18 +413,18 @@ class OrderPlanServiceTest : StringSpec({
             toStrategyName = "Dividendos",
             proposedQuantity = BigDecimal("9"),
             appliedQuantity = null,
-            status = PENDENTE,
+            status = PENDING,
             decidedAt = null,
         )
-        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns listOf(pending)
+        coEvery { transferProposalRepository.fetchById(4) } returns pending
         coEvery {
-            transferProposalRepository.decide(4, REJEITADA, null, any())
+            transferProposalRepository.decide(4, REJECTED, null, any())
         } returns
-            pending.copy(status = REJEITADA)
+            pending.copy(status = REJECTED)
 
         val result = service.rejectTransfer(4)
 
-        result.status shouldBe REJEITADA
-        io.mockk.coVerify(exactly = 0) { attributionService.recordMovement(any()) }
+        result.status shouldBe REJECTED
+        io.mockk.coVerify(exactly = 0) { attributionService.recordMovement(any(), any()) }
     }
 })

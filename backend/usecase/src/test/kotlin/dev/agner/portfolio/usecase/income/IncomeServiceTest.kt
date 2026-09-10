@@ -5,7 +5,7 @@ import dev.agner.portfolio.usecase.income.model.ReceivedIncome
 import dev.agner.portfolio.usecase.listedasset.gateway.IDividendGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration
-import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDENDO
+import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDEND
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.JCP
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
@@ -38,13 +38,13 @@ class IncomeServiceTest : StringSpec({
     "should size the event by the quantity held on the ex-date, not the current quantity" {
         coEvery { listedAssetRepository.fetchById(1) } returns petr4
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
             // bought after the ex-date — shouldn't count toward this dividend
-            Trade(2, 1, LocalDate(2026, 9, 1), BigDecimal("50"), BigDecimal("30.00")),
+            Trade.Buy(2, 1, LocalDate(2026, 9, 1), BigDecimal("50"), BigDecimal("30.00")),
         )
         coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
         coEvery { dividendGateway.getDividends(petr4) } returns listOf(
-            DividendDeclaration(DIVIDENDO, BigDecimal("2.00"), LocalDate(2026, 6, 1), LocalDate(2026, 6, 15)),
+            DividendDeclaration(DIVIDEND, BigDecimal("2.00"), LocalDate(2026, 6, 1), LocalDate(2026, 6, 15)),
         )
 
         val events = service.eventsForAsset(1)
@@ -53,7 +53,7 @@ class IncomeServiceTest : StringSpec({
             dev.agner.portfolio.usecase.income.model.IncomeEvent(
                 listedAssetId = 1,
                 ticker = "PETR4",
-                type = DIVIDENDO,
+                type = DIVIDEND,
                 exDate = LocalDate(2026, 6, 1),
                 paymentDate = LocalDate(2026, 6, 15),
                 quantityHeld = BigDecimal("100"),
@@ -64,10 +64,10 @@ class IncomeServiceTest : StringSpec({
         )
     }
 
-    "should withhold 15% for JCP but nothing for DIVIDENDO" {
+    "should withhold 15% for JCP but nothing for DIVIDEND" {
         coEvery { listedAssetRepository.fetchById(1) } returns petr4
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
         coEvery { dividendGateway.getDividends(petr4) } returns listOf(
@@ -86,7 +86,7 @@ class IncomeServiceTest : StringSpec({
         coEvery { tradeRepository.fetchByAssetId(1) } returns emptyList()
         coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
         coEvery { dividendGateway.getDividends(petr4) } returns listOf(
-            DividendDeclaration(DIVIDENDO, BigDecimal("2.00"), LocalDate(2026, 6, 1), null),
+            DividendDeclaration(DIVIDEND, BigDecimal("2.00"), LocalDate(2026, 6, 1), null),
         )
 
         service.eventsForAsset(1) shouldBe emptyList()
@@ -95,15 +95,15 @@ class IncomeServiceTest : StringSpec({
     "should reconcile previsto against recebido by ticker, month and type" {
         coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
-            Trade(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
         coEvery { dividendGateway.getDividends(petr4) } returns listOf(
-            DividendDeclaration(DIVIDENDO, BigDecimal("2.00"), LocalDate(2026, 6, 1), null),
+            DividendDeclaration(DIVIDEND, BigDecimal("2.00"), LocalDate(2026, 6, 1), null),
         )
 
         val received = listOf(
-            ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDENDO, BigDecimal("199.50")),
+            ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDEND, BigDecimal("199.50")),
         )
 
         val result = service.reconcile(received)
@@ -112,9 +112,9 @@ class IncomeServiceTest : StringSpec({
             dev.agner.portfolio.usecase.income.model.IncomeReconciliation(
                 ticker = "PETR4",
                 month = LocalDate(2026, 6, 1),
-                type = DIVIDENDO,
-                previsto = BigDecimal("200.00"),
-                recebido = BigDecimal("199.50"),
+                type = DIVIDEND,
+                expected = BigDecimal("200.00"),
+                received = BigDecimal("199.50"),
             ),
         )
         result[0].matches shouldBe false

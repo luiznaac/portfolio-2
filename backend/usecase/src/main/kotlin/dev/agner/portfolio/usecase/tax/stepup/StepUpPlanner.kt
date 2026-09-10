@@ -1,7 +1,6 @@
 package dev.agner.portfolio.usecase.tax.stepup
 
 import dev.agner.portfolio.usecase.commons.defaultScale
-import dev.agner.portfolio.usecase.commons.isZero
 import dev.agner.portfolio.usecase.commons.nextDay
 import dev.agner.portfolio.usecase.commons.toMondayIfWeekend
 import dev.agner.portfolio.usecase.tax.stepup.model.StepUpPlan
@@ -25,8 +24,7 @@ data class StepUpCandidate(
  * realize the most exempt gain per real sold — i.e. sorted by unit gain ratio, not by total gain,
  * since the constraint is on notional sold, not on gain. Whole shares only (can't sell a
  * fraction), so this is an integer knapsack approximated greedily rather than solved exactly —
- * good enough for a handful of tickers, not claimed optimal. See the plan's Fase 5
- * "Planejador de venda-e-recompra".
+ * good enough for a handful of tickers, and not claimed optimal.
  */
 @Component
 class StepUpPlanner {
@@ -41,11 +39,14 @@ class StepUpPlanner {
         val rebuyDate = today.nextDay().toMondayIfWeekend()
 
         for (candidate in ordered) {
-            if (budget.isZero()) continue
+            // <= 0, not isZero(): notional is rounded to two places, so a whole-share fill can
+            // overshoot the budget by cents and leave it slightly negative. Guarding on zero alone
+            // would then let a negative maxByBudget through as a negative suggested quantity.
+            if (budget <= BigDecimal.ZERO) continue
 
             val maxByBudget = budget.divide(candidate.currentPrice, 0, RoundingMode.DOWN)
             val quantity = candidate.quantity.min(maxByBudget)
-            if (quantity.isZero()) continue
+            if (quantity <= BigDecimal.ZERO) continue
 
             val notional = (quantity * candidate.currentPrice).defaultScale()
             val realizedGain = (quantity * (candidate.currentPrice - candidate.averagePrice)).defaultScale()
