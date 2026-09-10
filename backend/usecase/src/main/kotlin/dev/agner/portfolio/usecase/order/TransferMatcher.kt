@@ -1,9 +1,19 @@
 package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.commons.isZero
-import dev.agner.portfolio.usecase.order.model.TransferSuggestion
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
+
+/** One pure match, before any persisted lifecycle — see [dev.agner.portfolio.usecase.order.model.TransferProposal] for the persisted shape OrderPlanService reconciles this against. */
+data class TransferMatch(
+    val listedAssetId: Int,
+    val ticker: String,
+    val fromStrategyId: Int,
+    val fromStrategyName: String,
+    val toStrategyId: Int,
+    val toStrategyName: String,
+    val quantity: BigDecimal,
+)
 
 /**
  * Pure: given each strategy's delta (current − ideal, in shares) for one ticker, greedily pairs
@@ -20,7 +30,7 @@ class TransferMatcher {
         ticker: String,
         deltasByStrategy: Map<Int, BigDecimal>,
         strategyNames: Map<Int, String>,
-    ): List<TransferSuggestion> {
+    ): List<TransferMatch> {
         val excess = deltasByStrategy.filterValues { it > BigDecimal.ZERO }
             .toList()
             .sortedByDescending { it.second }
@@ -32,7 +42,7 @@ class TransferMatcher {
             .map { it.first to it.second.abs() }
             .toMutableList()
 
-        val suggestions = mutableListOf<TransferSuggestion>()
+        val matches = mutableListOf<TransferMatch>()
         var e = 0
         var s = 0
         while (e < excess.size && s < shortage.size) {
@@ -40,7 +50,7 @@ class TransferMatcher {
             val (toId, toRemaining) = shortage[s]
             val quantity = minOf(fromRemaining, toRemaining)
 
-            suggestions += TransferSuggestion(
+            matches += TransferMatch(
                 listedAssetId = listedAssetId,
                 ticker = ticker,
                 fromStrategyId = fromId,
@@ -56,6 +66,6 @@ class TransferMatcher {
             if (shortage[s].second.isZero()) s++
         }
 
-        return suggestions
+        return matches
     }
 }

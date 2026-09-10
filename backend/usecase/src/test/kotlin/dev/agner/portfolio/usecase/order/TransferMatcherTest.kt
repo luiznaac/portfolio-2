@@ -1,6 +1,5 @@
 package dev.agner.portfolio.usecase.order
 
-import dev.agner.portfolio.usecase.order.model.TransferSuggestion
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import java.math.BigDecimal
@@ -15,7 +14,7 @@ class TransferMatcherTest : StringSpec({
         val suggestions = matcher.match(1, "ORVR3", deltas, names)
 
         suggestions shouldBe listOf(
-            TransferSuggestion(
+            TransferMatch(
                 listedAssetId = 1,
                 ticker = "ORVR3",
                 fromStrategyId = 1,

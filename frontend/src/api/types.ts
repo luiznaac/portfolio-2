@@ -410,24 +410,34 @@ export interface Order {
 
 // Moving custody attribution between two strategies for the same ticker costs nothing — no
 // brokerage, no tax, doesn't touch the sale-exemption ceiling — versus selling from one strategy
-// and buying back for the other. Computed fresh every time the plan is requested; POST
-// /orders/transfers/apply executes one directly (no separate approve/reject lifecycle).
-export interface TransferSuggestion {
+// and buying back for the other. Has a real lifecycle scoped to one month (competência):
+// PENDENTE -> APLICADA or REJEITADA. A rejection only holds for that month — next month the
+// engine proposes fresh if the situation still calls for it. Approving and applying are the same
+// action here (POST /orders/transfers/{id}/approve) — there's no separate execution step for a
+// transfer the way there is for a real trade.
+export type TransferProposalStatus = "PENDENTE" | "APLICADA" | "REJEITADA";
+
+export interface TransferProposal {
+  id: number;
+  month: string;
   listed_asset_id: number;
   ticker: string;
   from_strategy_id: number;
   from_strategy_name: string;
   to_strategy_id: number;
   to_strategy_name: string;
-  quantity: number;
+  proposed_quantity: number;
+  applied_quantity: number | null;
+  status: TransferProposalStatus;
+  decided_at: string | null;
 }
 
-export interface ApplyTransferRequest {
-  listed_asset_id: number;
-  from_strategy_id: number;
-  to_strategy_id: number;
-  quantity: number;
-  date: string;
+export interface ApproveTransferRequest {
+  quantity?: number;
+}
+
+export interface TransferSettings {
+  auto_approval_threshold: number;
 }
 
 // Stock sales (never FIIs — always taxed at 20%, no exemption) up to R$20,000/month are exempt
@@ -442,7 +452,7 @@ export interface SaleCeiling {
 
 export interface OrderPlan {
   orders: Order[];
-  transfer_suggestions: TransferSuggestion[];
+  transfer_proposals: TransferProposal[];
   sale_ceiling: SaleCeiling;
 }
 

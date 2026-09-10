@@ -1,5 +1,12 @@
-import { useApplyTransfer, useOrderPlan } from "../api/queries.ts";
-import type { Order, OrderKind, TransferSuggestion } from "../api/types.ts";
+import { useState } from "react";
+import {
+  useApproveTransfer,
+  useOrderPlan,
+  useRejectTransfer,
+  useSetTransferSettings,
+  useTransferSettings,
+} from "../api/queries.ts";
+import type { Order, OrderKind, TransferProposal } from "../api/types.ts";
 import { Panel } from "../components/Panel.tsx";
 import { formatBRL } from "../lib/money.ts";
 
@@ -24,7 +31,7 @@ export function Ordens() {
   if (plan.error) return <p className="text-tax">Falha ao carregar: {String(plan.error)}</p>;
   if (!plan.data) return null;
 
-  const { orders, transfer_suggestions: transfers, sale_ceiling: ceiling } = plan.data;
+  const { orders, transfer_proposals: transfers, sale_ceiling: ceiling } = plan.data;
 
   return (
     <div className="space-y-6">
@@ -54,15 +61,17 @@ export function Ordens() {
         </div>
       </Panel>
 
-      {transfers.length > 0 && (
-        <Panel title={`Transferências sugeridas (${transfers.length})`}>
+      <Panel title="Transferências entre estratégias" action={<AutoApprovalSetting />}>
+        {transfers.length === 0 ? (
+          <p className="text-sm text-slate-500">Nenhuma transferência pendente este mês.</p>
+        ) : (
           <ul className="divide-y divide-white/5">
-            {transfers.map((t, i) => (
-              <TransferRow key={`${t.ticker}-${t.from_strategy_id}-${t.to_strategy_id}-${i}`} transfer={t} />
+            {transfers.map((t) => (
+              <TransferRow key={t.id} transfer={t} />
             ))}
           </ul>
-        </Panel>
-      )}
+        )}
+      </Panel>
 
       <Panel title={`Lista de ordens (${orders.length})`} action={<ExportButton orders={orders} />}>
         {orders.length === 0 ? (
@@ -92,18 +101,61 @@ export function Ordens() {
   );
 }
 
-function TransferRow({ transfer }: { transfer: TransferSuggestion }) {
-  const mutation = useApplyTransfer();
+function AutoApprovalSetting() {
+  const settings = useTransferSettings();
+  const mutation = useSetTransferSettings();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
 
-  const apply = () => {
-    mutation.mutate({
-      listed_asset_id: transfer.listed_asset_id,
-      from_strategy_id: transfer.from_strategy_id,
-      to_strategy_id: transfer.to_strategy_id,
-      quantity: transfer.quantity,
-      date: new Date().toISOString().slice(0, 10),
-    });
-  };
+  if (!settings.data) return null;
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => {
+          setValue(String(settings.data.auto_approval_threshold));
+          setEditing(true);
+        }}
+        className="text-xs text-slate-500 transition-colors hover:text-slate-300"
+      >
+        auto-aprovar até {formatBRL(settings.data.auto_approval_threshold)}
+      </button>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        mutation.mutate(Number(value), { onSuccess: () => setEditing(false) });
+      }}
+      className="flex items-center gap-2"
+    >
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-24 rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-xs text-slate-100 outline-none focus:border-accent-500"
+      />
+      <button
+        type="submit"
+        disabled={mutation.isPending}
+        className="rounded-md bg-accent-500 px-2 py-1 text-xs font-medium text-slate-950 disabled:opacity-50"
+      >
+        Salvar
+      </button>
+    </form>
+  );
+}
+
+function TransferRow({ transfer }: { transfer: TransferProposal }) {
+  const approve = useApproveTransfer();
+  const reject = useRejectTransfer();
+  const [quantity, setQuantity] = useState(String(transfer.proposed_quantity));
+
+  const busy = approve.isPending || reject.isPending;
 
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
@@ -111,15 +163,34 @@ function TransferRow({ transfer }: { transfer: TransferSuggestion }) {
       <span className="text-slate-400">
         {transfer.from_strategy_name} → {transfer.to_strategy_name}
       </span>
-      <span className="tabular-nums text-slate-300">{transfer.quantity} cotas</span>
-      <button
-        onClick={apply}
-        disabled={mutation.isPending}
-        className="ml-auto rounded-md bg-accent-500 px-3 py-1 text-xs font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
-      >
-        {mutation.isPending ? "Aplicando…" : "Aplicar"}
-      </button>
-      {mutation.isError && <p className="w-full text-xs text-tax">{String(mutation.error)}</p>}
+      <input
+        type="number"
+        min="0"
+        max={transfer.proposed_quantity}
+        value={quantity}
+        onChange={(e) => setQuantity(e.target.value)}
+        className="w-20 rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-xs tabular-nums text-slate-100 outline-none focus:border-accent-500"
+      />
+      <span className="text-xs text-slate-500">de {transfer.proposed_quantity} propostas</span>
+      <div className="ml-auto flex gap-2">
+        <button
+          onClick={() => reject.mutate(transfer.id)}
+          disabled={busy}
+          className="rounded-md bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:text-white disabled:opacity-50"
+        >
+          Rejeitar
+        </button>
+        <button
+          onClick={() => approve.mutate({ id: transfer.id, body: { quantity: Number(quantity) } })}
+          disabled={busy}
+          className="rounded-md bg-accent-500 px-3 py-1 text-xs font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
+        >
+          {approve.isPending ? "Aprovando…" : "Aprovar"}
+        </button>
+      </div>
+      {(approve.isError || reject.isError) && (
+        <p className="w-full text-xs text-tax">{String(approve.error ?? reject.error)}</p>
+      )}
     </li>
   );
 }
