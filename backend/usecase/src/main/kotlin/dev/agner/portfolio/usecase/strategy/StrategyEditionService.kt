@@ -56,9 +56,12 @@ class StrategyEditionService(
             throw StrategyReportParseException("Not B3 tickers: $invalidTickers")
         }
 
+        // Weights are fractions (0.05 for 5%), same convention as AssetClassTarget. The report is
+        // the broker's model portfolio, so the rows must add up to the whole portfolio exactly —
+        // after the parser's scale normalization the sum has to be 1, with no rounding slack.
         val totalWeight = parsed.targets.sumOf { it.weight }
-        if (totalWeight !in WEIGHT_TOLERANCE) {
-            throw StrategyReportParseException("Target weights sum to $totalWeight (fraction), expected ~1.0")
+        if (totalWeight.compareTo(BigDecimal.ONE) != 0) {
+            throw StrategyReportParseException("Target weights sum to $totalWeight (fraction), expected exactly 1.0")
         }
 
         return parsed
@@ -68,9 +71,5 @@ class StrategyEditionService(
         // 4 alphanumeric root chars (not always pure letters — B3's own ticker is "B3SA3") plus
         // a 1-2 digit class suffix, with at least one letter overall so a bare number can't pass.
         val TICKER_PATTERN = Regex("^(?=.*[A-Z])[A-Z0-9]{4}\\d{1,2}$")
-
-        // weight is a fraction (0.05 for 5%), same convention as AssetClassTarget — allow a
-        // little slack since PDF tables round individual rows.
-        val WEIGHT_TOLERANCE = BigDecimal("0.99")..BigDecimal("1.01")
     }
 }

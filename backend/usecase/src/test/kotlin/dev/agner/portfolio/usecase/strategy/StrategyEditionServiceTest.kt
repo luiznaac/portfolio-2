@@ -68,21 +68,29 @@ class StrategyEditionServiceTest : StringSpec({
         shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
     }
 
-    "should reject a report whose weights don't sum to ~100%" {
+    "should reject a report whose weights sum below 100%" {
         every { parser.parse(any()) } returns
             ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("PETR4", BigDecimal("0.50"))))
 
         shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        coVerify(exactly = 0) { repository.save(any()) }
     }
 
-    "should accept weights within tolerance of 100%" {
-        val nearly100 = listOf(
+    "should reject a report whose weights sum above 100%" {
+        val above100 = listOf(
             StrategyTarget("PETR4", BigDecimal("0.601")),
             StrategyTarget("VALE3", BigDecimal("0.40")),
         )
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, nearly100)
+        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, above100)
+
+        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        coVerify(exactly = 0) { repository.save(any()) }
+    }
+
+    "should accept weights that sum exactly to 100%" {
+        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, validTargets)
         coEvery { repository.exists(5, referenceDate) } returns false
-        coEvery { repository.save(any()) } returns StrategyEdition(1, 5, referenceDate, null, nearly100)
+        coEvery { repository.save(any()) } returns StrategyEdition(1, 5, referenceDate, null, validTargets)
 
         service.importReport(5, byteArrayOf(1))
 
