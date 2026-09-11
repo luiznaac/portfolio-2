@@ -2,17 +2,14 @@ package dev.agner.portfolio.httpapi.configuration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.controller.ControllerTemplate
+import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.disgustingLocalDateFormat
 import dev.agner.portfolio.usecase.commons.logger
-import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
-import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
-import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import dev.agner.portfolio.usecase.upload.model.UploadOrder
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
-import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.JacksonConverter
 import io.ktor.server.application.install
 import io.ktor.server.engine.EmbeddedServer
@@ -33,6 +30,7 @@ import org.springframework.context.annotation.Configuration
 class KtorConfig(
     private val routes: Set<ControllerTemplate>,
     private val mapper: ObjectMapper,
+    private val domainExceptionStatusMapper: DomainExceptionStatusMapper,
     @Value("\${ktor.wait}") wait: Boolean,
     @Value("\${ktor.port}") port: Int,
 ) {
@@ -66,33 +64,13 @@ class KtorConfig(
             }
 
             install(StatusPages) {
-                exception<StrategyReportParseException> { call, cause ->
+                exception<DomainException> { call, cause ->
                     call.respond(
-                        HttpStatusCode.BadRequest,
+                        domainExceptionStatusMapper.statusFor(cause),
                         ApiError(
-                            error = "strategy-report-invalid",
-                            message = "The strategy report is invalid",
-                            detail = cause.message ?: "The report could not be parsed or validated",
-                        ),
-                    )
-                }
-                exception<StrategyNotFoundException> { call, cause ->
-                    call.respond(
-                        HttpStatusCode.NotFound,
-                        ApiError(
-                            error = "strategy-not-found",
-                            message = "Strategy not found",
-                            detail = cause.message ?: "The requested strategy does not exist",
-                        ),
-                    )
-                }
-                exception<StrategyEditionAlreadyExistsException> { call, cause ->
-                    call.respond(
-                        HttpStatusCode.Conflict,
-                        ApiError(
-                            error = "strategy-edition-duplicate",
-                            message = "Strategy edition already exists",
-                            detail = cause.message ?: "An edition for this strategy and reference date already exists",
+                            error = cause.error,
+                            message = cause.userMessage,
+                            detail = cause.detail,
                         ),
                     )
                 }

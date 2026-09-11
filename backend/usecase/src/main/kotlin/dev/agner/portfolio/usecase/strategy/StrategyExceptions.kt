@@ -1,6 +1,17 @@
 package dev.agner.portfolio.usecase.strategy
 
-class StrategyNotFoundException(strategyId: Int) : RuntimeException("Strategy with ID $strategyId not found")
+import dev.agner.portfolio.usecase.commons.DomainException
+
+class StrategyNotFoundException(strategyId: Int) :
+    DomainException(
+        error = "strategy-not-found",
+        userMessage = "Strategy not found",
+        detail = "Strategy with ID $strategyId not found",
+    )
 
 class StrategyEditionAlreadyExistsException(strategyId: Int, referenceDate: String) :
-    RuntimeException("Strategy $strategyId already has an edition for $referenceDate")
+    DomainException(
+        error = "strategy-edition-duplicate",
+        userMessage = "Strategy edition already exists",
+        detail = "Strategy $strategyId already has an edition for $referenceDate",
+    )
