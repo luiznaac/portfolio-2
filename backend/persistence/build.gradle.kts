@@ -19,7 +19,7 @@ dependencies {
     implementation(libs.flyway.mysql)
 }
 
-// Authoring half of the migration workflow (backend/CLAUDE.md §7). Diffs the Exposed tables in
+// Authoring half of the migration workflow (backend/AGENTS.md). Diffs the Exposed tables in
 // migration/MigrationScripts.kt against a local database into src/main/resources/db/migration/.
 //
 //   docker compose -f docker-compose.yml up -d mysql

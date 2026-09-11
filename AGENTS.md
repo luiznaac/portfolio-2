@@ -1,4 +1,4 @@
-# DEVELOPMENT.md — portfolio-2 monorepo
+# AGENTS.md — portfolio-2 monorepo
 
 Development guidelines for anyone (human, agent, or tool) working in this repository.
 
@@ -7,7 +7,7 @@ Two projects, one repo:
 - **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name
   `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`).
   Architecture, conventions and rules for evolving it are in
-  [backend/DEVELOPMENT.md](backend/DEVELOPMENT.md) — read that before touching `backend/`.
+  [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
 - **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from
   `frontend/` (`npm --prefix frontend run <script>`). Details in
   [frontend/README.md](frontend/README.md).
@@ -42,7 +42,7 @@ is the MySQL-only file consumed by the `integrationTest` module via Testcontaine
 MySQL definitions in sync. The schema comes from
 `backend/persistence/src/main/resources/db/migration/V*.sql`, applied by Flyway (`bin/migrate` in
 the image) from `deploy/entrypoint.sh` before the app starts — see
-[backend/DEVELOPMENT.md](backend/DEVELOPMENT.md) §7.
+[backend/AGENTS.md](backend/AGENTS.md).
 
 `.github/workflows/ci.yml` runs `backend` (Gradle `clean build`) and `frontend`
 (`npm ci && typecheck && build`) jobs on every push to master and every PR. Its `publish` job
