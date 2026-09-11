@@ -100,6 +100,17 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
 
             shouldThrow<StrategyReportParseException> { parser.parse(pdf) }
         }
+
+        it("stops changes text at the next table header") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Estamos adicionando PETR4.",
+                "Desempenho",
+                "PETR4 100,0%",
+            )
+
+            parser.parse(pdf).changesText shouldBe "Estamos adicionando PETR4."
+        }
     }
 })
 

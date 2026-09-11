@@ -54,7 +54,11 @@ class PdfBoxStrategyReportParser : IStrategyReportParser {
         if (start < 0) return null
 
         return lines.drop(start)
-            .takeWhile { it.isNotBlank() }
+            .takeWhile { line ->
+                line.isNotBlank() && !TABLE_HEADER_MARKERS.any { marker ->
+                    line.contains(marker, ignoreCase = true)
+                }
+            }
             .joinToString(" ") { it.trim() }
             .trim()
             .ifBlank { null }
@@ -83,6 +87,7 @@ class PdfBoxStrategyReportParser : IStrategyReportParser {
         val WEIGHT = Regex("""(\d{1,3}(?:,\d+)?)\s*%""")
         val TARGET_PRICE = Regex("""R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})""")
         val RATING = Regex("""\b(COMPRA|NEUTRO|VENDA)\b""")
+        val TABLE_HEADER_MARKERS = listOf("desempenho", "companhia", "ticker", "peso", "segmento")
         val COMPETENCIA = Regex(
             """(?i)\b(janeiro|fevereiro|março|marco|abril|maio|junho|julho""" +
                 """|agosto|setembro|outubro|novembro|dezembro)[/\s]+(\d{2}|\d{4})\b""",
