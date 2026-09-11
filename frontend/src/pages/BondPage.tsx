@@ -1,18 +1,13 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  useBondPositions,
-  useBonds,
-  useConsolidate,
-  useCreateBondOrder,
-} from "../api/queries.ts";
+import { useBondPositions, useBonds, useConsolidate, useCreateBondOrder } from "../api/queries.ts";
 import type { BondOrderType } from "../api/types.ts";
-import { bondOrderTypeLabel } from "../i18n/bondOrderType.ts";
 import { Panel } from "../components/Panel.tsx";
 import { PositionChart } from "../components/PositionChart.tsx";
 import { PositionsTable } from "../components/PositionsTable.tsx";
-import { formatBRL } from "../lib/money.ts";
+import { bondOrderTypeLabel } from "../i18n/bondOrderType.ts";
 import { formatDate } from "../lib/format.ts";
+import { formatBRL } from "../lib/money.ts";
 import { lastPosition } from "../lib/positions.ts";
 
 const ORDER_TYPES: BondOrderType[] = ["BUY", "SELL", "FULL_REDEMPTION", "MATURITY"];
@@ -29,7 +24,10 @@ export function BondPage() {
   if (!bond)
     return (
       <p className="text-slate-400">
-        Título não encontrado. <Link to="/" className="text-accent-500 hover:underline">Voltar</Link>
+        Título não encontrado.{" "}
+        <Link to="/" className="text-accent-500 hover:underline">
+          Voltar
+        </Link>
       </p>
     );
 
@@ -41,11 +39,12 @@ export function BondPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-100">{bond.name}</h1>
           <p className="mt-0.5 text-sm text-slate-400">
-            {bond.index_id ? `Pós-fixado · ${bond.index_id}` : "Prefixado"} ·
-            taxa {bond.value} · vence {formatDate(bond.maturity_date)}
+            {bond.index_id ? `Pós-fixado · ${bond.index_id}` : "Prefixado"} · taxa {bond.value} ·
+            vence {formatDate(bond.maturity_date)}
           </p>
         </div>
         <button
+          type="button"
           onClick={() => consolidate.mutate({ kind: "bond", id })}
           disabled={consolidate.isPending}
           className="rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
@@ -142,12 +141,8 @@ function OrderForm({ bondId }: { bondId: number }) {
       >
         {mutation.isPending ? "Salvando…" : "Adicionar"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm text-tax">{String(mutation.error)}</p>
-      )}
-      {mutation.isSuccess && (
-        <p className="w-full text-sm text-yield">Lançamento criado.</p>
-      )}
+      {mutation.isError && <p className="w-full text-sm text-tax">{String(mutation.error)}</p>}
+      {mutation.isSuccess && <p className="w-full text-sm text-yield">Lançamento criado.</p>}
     </form>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useAttributionSummary,
@@ -14,18 +14,18 @@ import {
   useTrades,
 } from "../api/queries.ts";
 import type { AttributionReason, CorporateAction, Trade } from "../api/types.ts";
-import { assetKindLabel } from "../i18n/assetKind.ts";
-import {
-  CORPORATE_ACTION_KINDS,
-  corporateActionKindLabel,
-  type CorporateActionKind,
-} from "../i18n/corporateActionType.ts";
-import { dividendTypeLabel } from "../i18n/dividendType.ts";
 import { Panel } from "../components/Panel.tsx";
 import { PositionChart } from "../components/PositionChart.tsx";
 import { PositionsTable } from "../components/PositionsTable.tsx";
-import { formatBRL } from "../lib/money.ts";
+import { assetKindLabel } from "../i18n/assetKind.ts";
+import {
+  CORPORATE_ACTION_KINDS,
+  type CorporateActionKind,
+  corporateActionKindLabel,
+} from "../i18n/corporateActionType.ts";
+import { dividendTypeLabel } from "../i18n/dividendType.ts";
 import { formatDate } from "../lib/format.ts";
+import { formatBRL } from "../lib/money.ts";
 import { lastPosition } from "../lib/positions.ts";
 
 export function ListedAssetPage() {
@@ -54,13 +54,12 @@ export function ListedAssetPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-100">
             {asset.ticker}{" "}
-            <span className="text-sm font-normal text-slate-500">
-              {assetKindLabel(asset.kind)}
-            </span>
+            <span className="text-sm font-normal text-slate-500">{assetKindLabel(asset.kind)}</span>
           </h1>
           <p className="mt-0.5 text-sm text-slate-400">{asset.name}</p>
         </div>
         <button
+          type="button"
           onClick={() => consolidate.mutate(id)}
           disabled={consolidate.isPending}
           className="rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
@@ -68,9 +67,7 @@ export function ListedAssetPage() {
           {consolidate.isPending ? "Consolidando…" : "Consolidar"}
         </button>
       </div>
-      {consolidate.isError && (
-        <p className="text-sm text-tax">{String(consolidate.error)}</p>
-      )}
+      {consolidate.isError && <p className="text-sm text-tax">{String(consolidate.error)}</p>}
 
       {last && (
         <p className="text-sm text-slate-300">
@@ -199,9 +196,7 @@ function TradeForm({ assetId }: { assetId: number }) {
       >
         {mutation.isPending ? "Salvando…" : "Adicionar"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm text-tax">{String(mutation.error)}</p>
-      )}
+      {mutation.isError && <p className="w-full text-sm text-tax">{String(mutation.error)}</p>}
     </form>
   );
 }
@@ -231,9 +226,7 @@ function TradesList({ assetId }: { assetId: number }) {
               <td className={`py-2 pr-4 ${t.quantity >= 0 ? "text-yield" : "text-tax"}`}>
                 {t.quantity >= 0 ? "Compra" : "Venda"}
               </td>
-              <td className="py-2 pr-4 text-right text-slate-200">
-                {Math.abs(t.quantity)}
-              </td>
+              <td className="py-2 pr-4 text-right text-slate-200">{Math.abs(t.quantity)}</td>
               <td className="py-2 text-right text-slate-200">{formatBRL(t.price)}</td>
             </tr>
           ))}
@@ -306,9 +299,7 @@ function CorporateActionForm({ assetId }: { assetId: number }) {
 
         {NEEDS_RATIO.has(kind) && (
           <label className="text-sm">
-            <span className="mb-1 block text-xs text-slate-500">
-              Proporção (novas por antiga)
-            </span>
+            <span className="mb-1 block text-xs text-slate-500">Proporção (novas por antiga)</span>
             <input
               type="number"
               step="any"
@@ -323,9 +314,7 @@ function CorporateActionForm({ assetId }: { assetId: number }) {
 
         {kind === "bonus" && (
           <label className="text-sm">
-            <span className="mb-1 block text-xs text-slate-500">
-              Valor por ação nova (R$)
-            </span>
+            <span className="mb-1 block text-xs text-slate-500">Valor por ação nova (R$)</span>
             <input
               type="number"
               step="0.01"
@@ -367,8 +356,7 @@ function CorporateActionsList({ assetId }: { assetId: number }) {
   const actions = useCorporateActions(assetId);
   const rows = [...(actions.data ?? [])].reverse();
 
-  if (rows.length === 0)
-    return <p className="text-sm text-slate-500">Nenhum evento registrado.</p>;
+  if (rows.length === 0) return <p className="text-sm text-slate-500">Nenhum evento registrado.</p>;
 
   return (
     <ul className="divide-y divide-white/5 text-sm">
@@ -384,7 +372,8 @@ function CorporateActionsList({ assetId }: { assetId: number }) {
 
 function describeCorporateAction(a: CorporateAction): string {
   if (a.new_ticker) return `Troca de ticker → ${a.new_ticker}`;
-  if (a.value_per_new_share != null) return `Bonificação (${a.ratio}× a ${formatBRL(a.value_per_new_share)})`;
+  if (a.value_per_new_share != null)
+    return `Bonificação (${a.ratio}× a ${formatBRL(a.value_per_new_share)})`;
   if (a.ratio != null && a.ratio >= 1) return `Desdobramento ${a.ratio}×`;
   if (a.ratio != null) return `Grupamento ${1 / a.ratio}×`;
   return "Evento societário";
@@ -416,9 +405,7 @@ function DividendsList({ assetId }: { assetId: number }) {
           {rows.map((d, i) => (
             <tr key={`${d.ex_date}-${i}`}>
               <td className="py-2 pr-4 text-slate-300">{dividendTypeLabel(d.type)}</td>
-              <td className="py-2 pr-4 text-right text-yield">
-                {formatBRL(d.value_per_share)}
-              </td>
+              <td className="py-2 pr-4 text-right text-yield">{formatBRL(d.value_per_share)}</td>
               <td className="py-2 pr-4 text-slate-400">{formatDate(d.ex_date)}</td>
               <td className="py-2 text-slate-400">
                 {d.payment_date ? formatDate(d.payment_date) : "—"}
@@ -464,7 +451,10 @@ function AttributionPanel({ assetId }: { assetId: number }) {
   if (strategies.data && strategies.data.length === 0) {
     return (
       <p className="text-sm text-slate-500">
-        Cadastre uma estratégia em <Link to="/carteira" className="text-accent-500 hover:underline">Carteira</Link>{" "}
+        Cadastre uma estratégia em{" "}
+        <Link to="/carteira" className="text-accent-500 hover:underline">
+          Carteira
+        </Link>{" "}
         antes de atribuir custódia a ela.
       </p>
     );

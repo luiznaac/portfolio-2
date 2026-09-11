@@ -9,8 +9,7 @@ export function Indexes() {
   const indexes = useIndexes();
 
   if (indexes.isLoading) return <p className="text-slate-400">Carregando…</p>;
-  if (indexes.error)
-    return <p className="text-tax">Falha ao carregar: {String(indexes.error)}</p>;
+  if (indexes.error) return <p className="text-tax">Falha ao carregar: {String(indexes.error)}</p>;
 
   return (
     <div className="space-y-6">
@@ -35,6 +34,7 @@ function IndexCard({ id }: { id: IndexId }) {
       title={id}
       action={
         <button
+          type="button"
           onClick={() => hydrate.mutate(id)}
           disabled={hydrate.isPending}
           className="rounded-md bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:text-white disabled:opacity-50"
@@ -58,9 +58,7 @@ function IndexCard({ id }: { id: IndexId }) {
         )}
       </dl>
       {hydrate.isSuccess && (
-        <p className="mt-2 text-xs text-yield">
-          +{hydrate.data.count} valores importados.
-        </p>
+        <p className="mt-2 text-xs text-yield">+{hydrate.data.count} valores importados.</p>
       )}
     </Panel>
   );
@@ -79,14 +77,15 @@ function Sparkline({ values, color }: { values: IndexValue[]; color: string }) {
       .join(" ");
   }, [values]);
 
-  if (!points)
-    return <p className="mt-2 text-xs text-slate-600">Sem série ainda.</p>;
+  if (!points) return <p className="mt-2 text-xs text-slate-600">Sem série ainda.</p>;
 
   return (
     <svg
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       className="mt-2 h-16 w-full"
+      role="img"
+      aria-label="Série histórica do índice"
     >
       <polyline
         points={points}
