@@ -203,8 +203,9 @@ changes without a matching migration (or vice versa), this test fails.
 ```
 
 Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the repo root (or
-`npm run db`) — MySQL 9.4.0 only, database `portfolio`, seeded from `backend/mysql/init.sql` —
-then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`,
+`npm run db`) — MySQL 9.4.0 only, database `portfolio`, empty — run
+`./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database
+migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`,
 `MYSQL_USER=root`, `MYSQL_PASSWORD=`. If you need scheduled-job registration to actually fire,
 also run chameidor locally on port `8081`.
 
