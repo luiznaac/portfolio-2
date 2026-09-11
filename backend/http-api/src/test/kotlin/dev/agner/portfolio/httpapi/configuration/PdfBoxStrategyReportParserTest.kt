@@ -121,12 +121,50 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
         it("stops changes text at the next table header") {
             val pdf = pdfOf(
                 "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso",
+                "Petrobras   PETR4    100,0%",
+                "",
                 "Estamos adicionando PETR4.",
+                "Desempenho",
+                "PETR4 10,0%",
+            )
+
+            val result = parser.parse(pdf)
+
+            result.changesText shouldBe "Estamos adicionando PETR4."
+            result.targets.map { it.ticker to it.weight } shouldBe listOf("PETR4" to BigDecimal("1.0000"))
+        }
+
+        it("ignores a Desempenho section and reads only the stock and FII portfolio tables") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso",
+                "Petrobras   PETR4    60,0%",
+                "Vale        VALE3    40,0%",
+                "",
+                "Peso %    Segmento     Ticker     Recomendacao",
+                "100,0%    Recebiveis   MCCI11     COMPRA",
+                "",
+                "Desempenho",
+                "PETR4    10,0%",
+                "XXXX4    90,0%",
+            )
+
+            parser.parse(pdf).targets.map { it.ticker to it.weight } shouldBe listOf(
+                "PETR4" to BigDecimal("0.6000"),
+                "VALE3" to BigDecimal("0.4000"),
+                "MCCI11" to BigDecimal("1.0000"),
+            )
+        }
+
+        it("throws when the report has no recognizable portfolio table") {
+            val pdf = pdfOf(
+                "Relatorio Top - Setembro/2026",
                 "Desempenho",
                 "PETR4 100,0%",
             )
 
-            parser.parse(pdf).changesText shouldBe "Estamos adicionando PETR4."
+            shouldThrow<StrategyReportParseException> { parser.parse(pdf) }
         }
     }
 })

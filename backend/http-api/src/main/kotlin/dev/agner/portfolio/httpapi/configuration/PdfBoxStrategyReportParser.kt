@@ -26,13 +26,48 @@ class PdfBoxStrategyReportParser : IStrategyReportParser {
             val text = PDFTextStripper().getText(document)
             val lines = text.lines()
 
+            val portfolioLines = portfolioSectionLines(lines)
+            if (portfolioLines.isEmpty()) {
+                throw StrategyReportParseException("Could not find a portfolio table in the report")
+            }
+
             ParsedStrategyReport(
                 referenceDate = extractReferenceDate(text)
                     ?: throw StrategyReportParseException("Could not find a competência (month/year) in the report"),
                 changesText = extractChangesText(lines),
-                targets = extractTargets(lines),
+                targets = extractTargets(portfolioLines),
             )
         }
+
+    // The report carries more than one numeric table: the stock and FII portfolio tables, and the
+    // page-3 "Desempenho" performance table, whose rows can also carry tickers and weights. Anchor
+    // extraction to the portfolio table headers so a performance row can never be read as a
+    // target (the previous implementation matched a ticker anywhere in the whole text).
+    private fun portfolioSectionLines(lines: List<String>): List<String> {
+        val section = mutableListOf<String>()
+        var insideSection = false
+
+        lines.forEach { line ->
+            when {
+                isPortfolioHeader(line) -> {
+                    insideSection = true
+                    section += line
+                }
+                insideSection && isSectionBoundary(line) -> insideSection = false
+                insideSection -> section += line
+            }
+        }
+
+        return section
+    }
+
+    private fun isPortfolioHeader(line: String): Boolean {
+        val normalized = line.lowercase()
+        return normalized.contains("ticker") && normalized.contains("peso")
+    }
+
+    private fun isSectionBoundary(line: String): Boolean =
+        line.isBlank() || SECTION_END_MARKERS.any { line.contains(it, ignoreCase = true) }
 
     private fun extractTargets(lines: List<String>): List<StrategyTarget> =
         lines.mapNotNull { line ->
@@ -88,6 +123,10 @@ class PdfBoxStrategyReportParser : IStrategyReportParser {
         val WEIGHT = Regex("""(\d{1,3}(?:,\d+)?)\s*%""")
         val TARGET_PRICE = Regex("""R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})""")
         val RATING = Regex("""\b(COMPRA|NEUTRO|VENDA)\b""")
+
+        // Stops the target section at the changelog paragraph and the page-3 performance table.
+        val SECTION_END_MARKERS = listOf("desempenho", "estamos")
+
         val TABLE_HEADER_MARKERS = listOf("desempenho")
         val COMPETENCIA = Regex(
             """(?i)\b(janeiro|fevereiro|março|marco|abril|maio|junho|julho""" +
