@@ -18,7 +18,7 @@ class StrategyDiffCalculator {
             exited = before.filter { it.ticker !in afterByTicker },
             changed = after.mapNotNull { current ->
                 val previous = beforeByTicker[current.ticker] ?: return@mapNotNull null
-                if (previous.weight == current.weight) {
+                if (previous == current) {
                     null
                 } else {
                     StrategyTargetChange(ticker = current.ticker, before = previous, after = current)

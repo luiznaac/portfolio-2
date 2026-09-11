@@ -58,6 +58,13 @@ class StrategyDiffCalculatorTest : StringSpec({
         diff.changed shouldBe emptyList()
     }
 
+    "should detect rating and target price changes" {
+        val before = listOf(StrategyTarget("PETR4", BigDecimal("0.10"), "COMPRA", BigDecimal("40.00")))
+        val after = listOf(StrategyTarget("PETR4", BigDecimal("0.10"), "NEUTRO", BigDecimal("45.00")))
+
+        calculator.diff(before, after).changed.map { it.ticker } shouldBe listOf("PETR4")
+    }
+
     "should handle the first edition (nothing before) as everything entering" {
         val after = listOf(
             StrategyTarget("PETR4", BigDecimal("0.10")),
