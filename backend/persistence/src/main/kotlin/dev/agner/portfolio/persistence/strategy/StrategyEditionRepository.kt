@@ -1,17 +1,17 @@
 package dev.agner.portfolio.persistence.strategy
 
 import dev.agner.portfolio.usecase.commons.now
+import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.model.StrategyEdition
 import dev.agner.portfolio.usecase.strategy.model.StrategyEditionCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
-import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyEditionRepository
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
@@ -46,7 +46,8 @@ class StrategyEditionRepository(
 
     override suspend fun save(creation: StrategyEditionCreation): StrategyEdition = transaction {
         val entity = StrategyEditionEntity.new {
-            strategy = StrategyEntity.findById(creation.strategyId) ?: throw StrategyNotFoundException(creation.strategyId)
+            strategy = StrategyEntity.findById(creation.strategyId)
+                ?: throw StrategyNotFoundException(creation.strategyId)
             referenceDate = creation.referenceDate
             changesText = creation.changesText
             createdAt = LocalDateTime.now(clock)

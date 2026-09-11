@@ -5,10 +5,10 @@ import dev.agner.portfolio.httpapi.controller.ControllerTemplate
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.disgustingLocalDateFormat
 import dev.agner.portfolio.usecase.commons.logger
-import dev.agner.portfolio.usecase.upload.model.UploadOrder
 import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
 import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
+import dev.agner.portfolio.usecase.upload.model.UploadOrder
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -20,10 +20,10 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.engine.stop
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.statuspages.exception
 import io.ktor.server.response.respond
-import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.routing.routing
 import kotlinx.datetime.LocalDate
 import org.springframework.beans.factory.annotation.Value
