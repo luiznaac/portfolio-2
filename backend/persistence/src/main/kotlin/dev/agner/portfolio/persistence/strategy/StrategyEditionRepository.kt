@@ -10,6 +10,8 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalDate
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
@@ -24,9 +26,13 @@ class StrategyEditionRepository(
         val editions = StrategyEditionEntity.find { StrategyEditionTable.strategy eq strategyId }
             .orderBy(StrategyEditionTable.referenceDate to SortOrder.ASC)
             .toList()
-        val targetsByEditionId = StrategyTargetEntity.find {
-            StrategyTargetTable.strategyEdition inList editions.map { it.id }
-        }.groupBy { it.strategyEdition.id }
+        val targetsByEditionId = if (editions.isEmpty()) {
+            emptyMap()
+        } else {
+            StrategyTargetEntity.find {
+                StrategyTargetTable.strategyEdition inList editions.map { it.id }
+            }.groupBy { it.strategyEdition.id.value }
+        }
 
         editions.map { it.toModel(targetsByEditionId[it.id.value].orEmpty().map(StrategyTargetEntity::toModel)) }
     }
