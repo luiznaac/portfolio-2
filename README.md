@@ -27,7 +27,7 @@ tax, without you doing the math by hand.
 This is a monorepo:
 
 - **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module). See
-  [backend/CLAUDE.md](backend/CLAUDE.md).
+  [backend/AGENTS.md](backend/AGENTS.md).
 - **`frontend/`** — the React + Vite + Tailwind SPA that consumes the HTTP API. See
   [frontend/README.md](frontend/README.md).
 - repo root — combined `Dockerfile` / `docker-compose.yml`, `deploy/` templates, and a
@@ -83,7 +83,7 @@ npm run check                             # both, from the repo root
   `components/`, `lib/`, `i18n/`.
 - `deploy/` — nginx + supervisord templates for the combined Docker image.
 
-See [CLAUDE.md](CLAUDE.md) for the monorepo overview and [backend/CLAUDE.md](backend/CLAUDE.md)
+See [AGENTS.md](AGENTS.md) for the monorepo overview and [backend/AGENTS.md](backend/AGENTS.md)
 for backend architecture and conventions.
 
 ## Related project

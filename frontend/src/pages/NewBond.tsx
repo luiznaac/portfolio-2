@@ -1,9 +1,17 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  type FormEvent,
+  type ReactElement,
+  type ReactNode,
+  cloneElement,
+  isValidElement,
+  useId,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateBond } from "../api/queries.ts";
 import type { IndexId } from "../api/types.ts";
-import { INDEX_IDS } from "../i18n/indexId.ts";
 import { Panel } from "../components/Panel.tsx";
+import { INDEX_IDS } from "../i18n/indexId.ts";
 
 export function NewBond() {
   const navigate = useNavigate();
@@ -55,9 +63,7 @@ export function NewBond() {
             />
           </Field>
 
-          <Field
-            label={kind === "fixed" ? "Taxa anual (%)" : "Percentual do índice (%)"}
-          >
+          <Field label={kind === "fixed" ? "Taxa anual (%)" : "Percentual do índice (%)"}>
             <input
               type="number"
               step="0.01"
@@ -101,9 +107,7 @@ export function NewBond() {
           >
             {mutation.isPending ? "Criando…" : "Criar título"}
           </button>
-          {mutation.isError && (
-            <p className="text-sm text-tax">{String(mutation.error)}</p>
-          )}
+          {mutation.isError && <p className="text-sm text-tax">{String(mutation.error)}</p>}
         </form>
       </Panel>
     </div>
@@ -111,10 +115,15 @@ export function NewBond() {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const fieldId = useId();
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-xs text-slate-500">{label}</span>
-      {children}
-    </label>
+    <div className="block text-sm">
+      <label htmlFor={fieldId} className="mb-1 block text-xs text-slate-500">
+        {label}
+      </label>
+      {isValidElement(children)
+        ? cloneElement(children as ReactElement<{ id?: string }>, { id: fieldId })
+        : children}
+    </div>
   );
 }

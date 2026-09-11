@@ -12,12 +12,8 @@ export function Layout() {
       <header className="border-b border-white/10 bg-slate-900/60 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-4">
           <NavLink to="/" className="mr-3 flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight text-yield">
-              ▚
-            </span>
-            <span className="text-sm font-semibold tracking-wide text-slate-300">
-              portfolio
-            </span>
+            <span className="text-lg font-semibold tracking-tight text-yield">▚</span>
+            <span className="text-sm font-semibold tracking-wide text-slate-300">portfolio</span>
           </NavLink>
           <nav className="flex items-center gap-1">
             <NavLink to="/" end className={linkClass}>

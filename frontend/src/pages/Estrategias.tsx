@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import {
   useCreateStrategy,
   useStrategies,
@@ -7,8 +7,8 @@ import {
 } from "../api/queries.ts";
 import type { StrategyTarget } from "../api/types.ts";
 import { Panel } from "../components/Panel.tsx";
-import { formatBRL, formatRatio } from "../lib/money.ts";
 import { formatDate } from "../lib/format.ts";
+import { formatBRL, formatRatio } from "../lib/money.ts";
 
 export function Estrategias() {
   const strategies = useStrategies();
@@ -108,20 +108,24 @@ function StrategyPanel({ strategyId }: { strategyId: number }) {
                 <span className="text-sm font-medium text-slate-100">
                   {formatDate(edition.reference_date)}
                 </span>
-                <span className="text-xs text-slate-500">
-                  {edition.targets.length} tickers
-                </span>
+                <span className="text-xs text-slate-500">{edition.targets.length} tickers</span>
               </div>
 
               {diff && (
                 <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
                   {diff.entered.map((t) => (
-                    <span key={`in-${t.ticker}`} className="rounded bg-yield/15 px-1.5 py-0.5 text-yield">
+                    <span
+                      key={`in-${t.ticker}`}
+                      className="rounded bg-yield/15 px-1.5 py-0.5 text-yield"
+                    >
                       + {t.ticker} {formatRatio(t.weight)}
                     </span>
                   ))}
                   {diff.exited.map((t) => (
-                    <span key={`out-${t.ticker}`} className="rounded bg-tax/15 px-1.5 py-0.5 text-tax">
+                    <span
+                      key={`out-${t.ticker}`}
+                      className="rounded bg-tax/15 px-1.5 py-0.5 text-tax"
+                    >
                       − {t.ticker}
                     </span>
                   ))}

@@ -1,16 +1,18 @@
-# CLAUDE.md — portfolio-2 monorepo
+# AGENTS.md — portfolio-2 monorepo
+
+Development guidelines for anyone (human, agent, or tool) working in this repository.
 
 Two projects, one repo:
 
 - **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name
-  `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`). Its
-  architecture, conventions and the rules for evolving it are in
-  [backend/CLAUDE.md](backend/CLAUDE.md) — read that before touching `backend/`.
+  `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`).
+  Architecture, conventions and rules for evolving it are in
+  [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
 - **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from
   `frontend/` (`npm --prefix frontend run <script>`). Details in
   [frontend/README.md](frontend/README.md).
 
-## The one cross-cutting rule
+## Cross-cutting rule
 
 `frontend/src/api/types.ts` is a hand-maintained mirror of the request/response DTOs that the
 controllers in `backend/http-api/.../controller/` serialize — Jackson is configured
@@ -20,15 +22,17 @@ generated schema; this mirror is the contract.
 
 ## Git workflow
 
-**AI agents: never commit directly to `master`.** Always create a feature branch and open a PR,
-even for a small or "obviously safe" change.
+**Do not commit directly to `master`.** Always create a feature branch and open a PR,
+even for a small or "obviously safe" change. This applies to all contributors.
 
 ## Tooling
 
 Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`,
 `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate -- -Pname=V5__x`,
 `npm run up`). It has no dependencies and is not a real package.
-`.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`).
+`.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`),
+and carries `no-commit-to-branch` — the "don't commit to master" rule above is enforced there,
+not merely stated.
 
 ## Docker
 
@@ -40,7 +44,7 @@ is the MySQL-only file consumed by the `integrationTest` module via Testcontaine
 MySQL definitions in sync. The schema comes from
 `backend/persistence/src/main/resources/db/migration/V*.sql`, applied by Flyway (`bin/migrate` in
 the image) from `deploy/entrypoint.sh` before the app starts — see
-[backend/CLAUDE.md](backend/CLAUDE.md) §7.
+[backend/AGENTS.md](backend/AGENTS.md).
 
 `.github/workflows/ci.yml` runs `backend` (Gradle `clean build`) and `frontend`
 (`npm ci && typecheck && build`) jobs on every push to master and every PR. Its `publish` job

@@ -10,8 +10,8 @@
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
 
   --color-principal: #38bdf8; /* sky   — invested principal            */
-  --color-yield: #34d399;     /* emerald — accrued yield / gains        */
-  --color-tax: #fb7185;       /* rose  — taxes owed on redemption       */
+  --color-yield: #34d399; /* emerald — accrued yield / gains        */
+  --color-tax: #fb7185; /* rose  — taxes owed on redemption       */
 
   --color-accent-500: #f59e0b; /* amber — primary actions               */
   --color-accent-600: #d97706;
