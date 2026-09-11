@@ -69,18 +69,58 @@ class PdfBoxStrategyReportParser : IStrategyReportParser {
     private fun isSectionBoundary(line: String): Boolean =
         line.isBlank() || SECTION_END_MARKERS.any { line.contains(it, ignoreCase = true) }
 
-    private fun extractTargets(lines: List<String>): List<StrategyTarget> =
-        lines.mapNotNull { line ->
-            val ticker = findTicker(line) ?: return@mapNotNull null
-            val weightPct = WEIGHT.find(line)?.groupValues?.get(1)?.toBrDecimal() ?: return@mapNotNull null
+    // Identifying a target line and reading its weight are separate concerns: a line that carries
+    // a ticker but no readable weight is a parse failure worth reporting, not a line to silently
+    // drop (which used to surface to the user as a generic "No targets found in report").
+    private fun extractTargets(lines: List<String>): List<StrategyTarget> {
+        val targets = mutableListOf<StrategyTarget>()
+        val failures = mutableListOf<String>()
+        var weightColumn: Int? = null
 
-            StrategyTarget(
+        lines.forEachIndexed { index, line ->
+            if (isPortfolioHeader(line)) {
+                weightColumn = line.split(COLUMN_SEPARATOR)
+                    .map(String::trim)
+                    .filter(String::isNotEmpty)
+                    .indexOfFirst { it.contains("peso", ignoreCase = true) }
+                    .takeIf { it >= 0 }
+                return@forEachIndexed
+            }
+
+            val ticker = findTicker(line) ?: return@forEachIndexed
+            val weightPct = extractWeightPct(line, weightColumn)
+            if (weightPct == null) {
+                failures += "line ${index + 1} (\"${line.trim()}\"): could not read a weight for $ticker"
+                return@forEachIndexed
+            }
+
+            targets += StrategyTarget(
                 ticker = ticker,
                 weight = weightPct.divide(BigDecimal(100), 4, java.math.RoundingMode.HALF_EVEN),
                 rating = RATING.find(line)?.value,
                 targetPrice = TARGET_PRICE.find(line)?.groupValues?.get(1)?.toBrDecimal(),
             )
         }
+
+        if (failures.isNotEmpty()) {
+            throw StrategyReportParseException("Could not read target weights: ${failures.joinToString("; ")}")
+        }
+
+        return targets
+    }
+
+    // The weight usually carries the "%" suffix, but not always: the stock and FII tables order
+    // their columns differently and some rows print the value bare. When the suffix is missing,
+    // fall back to the column the current table header labels as "peso".
+    private fun extractWeightPct(line: String, weightColumn: Int?): BigDecimal? {
+        WEIGHT.find(line)?.groupValues?.get(1)?.let { return it.toBrDecimal() }
+
+        val cell = weightColumn
+            ?.let { line.split(COLUMN_SEPARATOR).map(String::trim).filter(String::isNotEmpty).getOrNull(it) }
+            ?: return null
+
+        return BARE_DECIMAL.find(cell)?.groupValues?.get(1)?.toBrDecimal()
+    }
 
     // "Estamos adicionando ORVR3... removendo CEAB3..." — the changelog paragraph the plan calls
     // out as worth keeping verbatim. Collected as every consecutive non-blank line starting from
@@ -121,6 +161,8 @@ class PdfBoxStrategyReportParser : IStrategyReportParser {
     private companion object {
         val TICKER_CANDIDATE = Regex("""\b[A-Z0-9]{4}\d{1,2}\b""")
         val WEIGHT = Regex("""(\d{1,3}(?:,\d+)?)\s*%""")
+        val BARE_DECIMAL = Regex("""(\d{1,3}(?:,\d+)?)""")
+        val COLUMN_SEPARATOR = Regex("""\s{2,}""")
         val TARGET_PRICE = Regex("""R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})""")
         val RATING = Regex("""\b(COMPRA|NEUTRO|VENDA)\b""")
 

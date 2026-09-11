@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.datetime.LocalDate
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
@@ -94,6 +95,43 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
                 "MCCI11" to BigDecimal("0.4025"),
                 "VILG11" to BigDecimal("0.5975"),
             )
+        }
+
+        it("reads an FII weight from the header column even when the row has no % suffix") {
+            val pdf = pdfOf(
+                "Carteira Fundamentalista de FIIs - Setembro/2026",
+                "Peso %    Segmento     Ticker     Recomendacao   Nome",
+                "40,25    Recebiveis   MCCI11     COMPRA         Mauá Capital",
+                "59,75    Tijolo       VILG11     COMPRA         Vinci Logistica",
+            )
+
+            parser.parse(pdf).targets.map { it.ticker to it.weight } shouldBe listOf(
+                "MCCI11" to BigDecimal("0.4025"),
+                "VILG11" to BigDecimal("0.5975"),
+            )
+        }
+
+        it("reports the offending line when a ticker row has no readable weight") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso     Rating",
+                "Petrobras   PETR4    COMPRA",
+            )
+
+            val error = shouldThrow<StrategyReportParseException> { parser.parse(pdf) }
+
+            error.detail shouldContain "Petrobras   PETR4    COMPRA"
+            error.detail shouldContain "PETR4"
+        }
+
+        it("returns no targets when the portfolio table has no data rows") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso",
+                "",
+            )
+
+            parser.parse(pdf).targets shouldBe emptyList()
         }
 
         it("extracts a ticker whose root isn't pure letters, like B3's own B3SA3") {
