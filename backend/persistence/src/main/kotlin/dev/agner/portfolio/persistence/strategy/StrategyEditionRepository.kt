@@ -4,8 +4,10 @@ import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.strategy.model.StrategyEdition
 import dev.agner.portfolio.usecase.strategy.model.StrategyEditionCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
+import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyEditionRepository
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalDate
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.batchInsert
@@ -19,15 +21,26 @@ class StrategyEditionRepository(
 ) : IStrategyEditionRepository {
 
     override suspend fun fetchByStrategyId(strategyId: Int): List<StrategyEdition> = transaction {
-        StrategyEditionEntity.find { StrategyEditionTable.strategy eq strategyId }
+        val editions = StrategyEditionEntity.find { StrategyEditionTable.strategy eq strategyId }
             .orderBy(StrategyEditionTable.referenceDate to SortOrder.ASC)
-            .map { it.toModel() }
+            .toList()
+        val targetsByEditionId = StrategyTargetEntity.find {
+            StrategyTargetTable.strategyEdition inList editions.map { it.id }
+        }.groupBy { it.strategyEdition.id }
+
+        editions.map { it.toModel(targetsByEditionId[it.id.value].orEmpty().map(StrategyTargetEntity::toModel)) }
+    }
+
+    override suspend fun exists(strategyId: Int, referenceDate: LocalDate): Boolean = transaction {
+        StrategyEditionEntity.find {
+            (StrategyEditionTable.strategy eq strategyId) and
+                (StrategyEditionTable.referenceDate eq referenceDate)
+        }.any()
     }
 
     override suspend fun save(creation: StrategyEditionCreation): StrategyEdition = transaction {
         val entity = StrategyEditionEntity.new {
-            strategy = StrategyEntity.findById(creation.strategyId)
-                ?: throw IllegalArgumentException("Strategy with ID ${creation.strategyId} not found")
+            strategy = StrategyEntity.findById(creation.strategyId) ?: throw StrategyNotFoundException(creation.strategyId)
             referenceDate = creation.referenceDate
             changesText = creation.changesText
             createdAt = LocalDateTime.now(clock)
@@ -43,12 +56,6 @@ class StrategyEditionRepository(
 
         entity.toModel(creation.targets)
     }
-}
-
-private fun StrategyEditionEntity.toModel(): StrategyEdition {
-    val targets = StrategyTargetEntity.find { StrategyTargetTable.strategyEdition eq id }
-        .map { it.toModel() }
-    return toModel(targets)
 }
 
 private fun StrategyEditionEntity.toModel(targets: List<StrategyTarget>) = StrategyEdition(
