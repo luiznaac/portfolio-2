@@ -63,6 +63,23 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
             )
         }
 
+        it("parses the same bytes repeatedly, closing each document after extraction") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso     Rating    Preco-Alvo",
+                "Petrobras   PETR4    100,0%   COMPRA    R$ 45,00",
+                "Estamos adicionando PETR4.",
+            )
+
+            val first = parser.parse(pdf)
+            val second = parser.parse(pdf)
+
+            first shouldBe second
+            first.referenceDate shouldBe LocalDate(2026, 9, 1)
+            first.changesText shouldBe "Estamos adicionando PETR4."
+            first.targets.map { it.ticker to it.weight } shouldBe listOf("PETR4" to BigDecimal("1.0000"))
+        }
+
         it("extracts ticker and weight from a FII Peso/Segmento/Ticker/Recomendação/Nome table without rating") {
             val pdf = pdfOf(
                 "Carteira Fundamentalista de FIIs - Setembro/2026",

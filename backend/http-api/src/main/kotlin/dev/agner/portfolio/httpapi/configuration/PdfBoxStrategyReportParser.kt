@@ -21,17 +21,18 @@ import java.math.BigDecimal
 @Component
 class PdfBoxStrategyReportParser : IStrategyReportParser {
 
-    override fun parse(pdfBytes: ByteArray): ParsedStrategyReport {
-        val text = PDFTextStripper().getText(Loader.loadPDF(pdfBytes))
-        val lines = text.lines()
+    override fun parse(pdfBytes: ByteArray): ParsedStrategyReport =
+        Loader.loadPDF(pdfBytes).use { document ->
+            val text = PDFTextStripper().getText(document)
+            val lines = text.lines()
 
-        return ParsedStrategyReport(
-            referenceDate = extractReferenceDate(text)
-                ?: throw StrategyReportParseException("Could not find a competência (month/year) in the report"),
-            changesText = extractChangesText(lines),
-            targets = extractTargets(lines),
-        )
-    }
+            ParsedStrategyReport(
+                referenceDate = extractReferenceDate(text)
+                    ?: throw StrategyReportParseException("Could not find a competência (month/year) in the report"),
+                changesText = extractChangesText(lines),
+                targets = extractTargets(lines),
+            )
+        }
 
     private fun extractTargets(lines: List<String>): List<StrategyTarget> =
         lines.mapNotNull { line ->
