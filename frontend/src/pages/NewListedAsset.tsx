@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateListedAsset, useTickerCatalogSearch } from "../api/queries.ts";
 import type { TickerCatalogEntry } from "../api/types.ts";
-import { assetKindLabel } from "../i18n/assetKind.ts";
 import { Panel } from "../components/Panel.tsx";
+import { assetKindLabel } from "../i18n/assetKind.ts";
 import { useDebouncedValue } from "../lib/useDebouncedValue.ts";
 
 // Trading name that B3's own dividend endpoint expects (see B3DividendGateway.kt) isn't part of
@@ -52,9 +52,7 @@ export function NewListedAsset() {
         <form onSubmit={submit} className="space-y-4">
           <div className="relative">
             <label className="block text-sm">
-              <span className="mb-1 block text-xs text-slate-500">
-                Ticker ou nome da empresa
-              </span>
+              <span className="mb-1 block text-xs text-slate-500">Ticker ou nome da empresa</span>
               <input
                 autoComplete="off"
                 placeholder="ex.: PETR4, MXRF11, VALE3…"
@@ -127,9 +125,7 @@ export function NewListedAsset() {
               >
                 {mutation.isPending ? "Criando…" : "Cadastrar ativo"}
               </button>
-              {mutation.isError && (
-                <p className="text-sm text-tax">{String(mutation.error)}</p>
-              )}
+              {mutation.isError && <p className="text-sm text-tax">{String(mutation.error)}</p>}
             </>
           )}
         </form>
