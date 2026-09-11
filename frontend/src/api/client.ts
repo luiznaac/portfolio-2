@@ -47,6 +47,8 @@ const PDF_MIME = "application/pdf";
 export class ApiError extends Error {
   constructor(
     readonly status: number,
+    readonly code: string | undefined,
+    readonly detail: string | undefined,
     message: string,
   ) {
     super(message);
@@ -63,21 +65,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : { "Content-Type": "application/json", ...init?.headers },
   });
   if (!res.ok) {
-    let detail = res.statusText;
+    let message = res.statusText;
+    let code: string | undefined;
+    let detail: string | undefined;
     try {
       const text = await res.text();
       if (text) {
         try {
           const body = JSON.parse(text);
-          detail = body.detail ?? body.message ?? text;
+          code = body.error;
+          detail = body.detail;
+          message = body.message ?? body.detail ?? text;
         } catch {
-          detail = text;
+          message = text;
         }
       }
     } catch {
       /* body already consumed / unavailable */
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, code, detail, message);
   }
   if (res.status === 204) return undefined as T;
   const text = await res.text();

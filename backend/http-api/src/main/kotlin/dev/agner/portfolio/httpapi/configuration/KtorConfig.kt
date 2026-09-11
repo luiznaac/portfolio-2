@@ -67,13 +67,34 @@ class KtorConfig(
 
             install(StatusPages) {
                 exception<StrategyReportParseException> { call, cause ->
-                    call.respond(HttpStatusCode.BadRequest, ApiError(cause.message ?: "Invalid strategy report"))
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiError(
+                            error = "strategy-report-invalid",
+                            message = "The strategy report is invalid",
+                            detail = cause.message ?: "The report could not be parsed or validated",
+                        ),
+                    )
                 }
                 exception<StrategyNotFoundException> { call, cause ->
-                    call.respond(HttpStatusCode.NotFound, ApiError(cause.message ?: "Strategy not found"))
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        ApiError(
+                            error = "strategy-not-found",
+                            message = "Strategy not found",
+                            detail = cause.message ?: "The requested strategy does not exist",
+                        ),
+                    )
                 }
                 exception<StrategyEditionAlreadyExistsException> { call, cause ->
-                    call.respond(HttpStatusCode.Conflict, ApiError(cause.message ?: "Edition already exists"))
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        ApiError(
+                            error = "strategy-edition-duplicate",
+                            message = "Strategy edition already exists",
+                            detail = cause.message ?: "An edition for this strategy and reference date already exists",
+                        ),
+                    )
                 }
             }
 
@@ -92,6 +113,10 @@ class KtorConfig(
     fun stop() = server.stop(0, 0)
 }
 
-private data class ApiError(val message: String)
+private data class ApiError(
+    val error: String,
+    val message: String,
+    val detail: String,
+)
 
 private fun String.sanitizeCurrency() = replace(".", "").replace(",", ".")

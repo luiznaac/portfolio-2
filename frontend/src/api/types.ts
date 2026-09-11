@@ -14,6 +14,12 @@
 
 export type IndexId = "IPCA" | "CDI" | "SELIC";
 
+export interface ApiErrorResponse {
+  error: string;
+  message: string;
+  detail: string;
+}
+
 export type BondOrderType =
   | "BUY"
   | "SELL"
