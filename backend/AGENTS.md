@@ -1,9 +1,9 @@
-# DEVELOPMENT.md — portfolio-2 backend (Gradle root project name: `portfolio`)
+# AGENTS.md — portfolio-2 backend (Gradle root project name: `portfolio`)
 
 Development guidelines for anyone (human, agent, or tool) working in `backend/`. This is the most
 mature and actively developed project in the `luiznaac` personal family — treat its conventions as
 the reference implementation of the shared Ktor+Spring+Exposed architecture; when
-[chameidor](../../chameidor/DEVELOPMENT.md) and this repo disagree on a convention, this one is
+[chameidor](../../chameidor/AGENTS.md) and this repo disagree on a convention, this one is
 more likely to be the up-to-date version.
 
 > This repo is a monorepo: `backend/` (this Gradle project) + `frontend/` (a React SPA that
@@ -29,14 +29,14 @@ fixed-income market:
   `IOFIncidenceCalculator`/`RendaIncidenceCalculator`.
 - **Reporting** — generates XLSX/PDF statements and uploads them.
 - **Scheduling** — registers its own periodic consolidation/reporting jobs with
-  **[chameidor](../../chameidor/DEVELOPMENT.md)** (a separate service in this same family) via
+  **[chameidor](../../chameidor/AGENTS.md)** (a separate service in this same family) via
   `ChameidorGateway`, instead of running its own scheduler.
 
 ## Architecture
 
 Same layered multi-module shape and wiring model as chameidor — read
-[chameidor/DEVELOPMENT.md §2](../../chameidor/DEVELOPMENT.md) first if you haven't; it is not repeated in full
-here. Summary:
+[chameidor/AGENTS.md](../../chameidor/AGENTS.md)'s "Runtime wiring model" first if you haven't; it
+is not repeated in full here. Summary:
 
 ```
 application  →  http-api  →  usecase  ←  persistence
@@ -44,7 +44,8 @@ application  →  http-api  →  usecase  ←  persistence
 ```
 
 - **`usecase`** — all domain logic and models, organized **by business feature, not by technical
-  layer** (see §3). Depends on nothing but Kotlin/`kotlinx-*`/Spring DI annotations.
+  layer** (see "Design principles" below). Depends on nothing but Kotlin/`kotlinx-*`/Spring DI
+  annotations.
 - **`persistence`** — Exposed-backed implementations of the `usecase` repository interfaces
   (bond, checking account, index), plus `TransactionService`.
 - **`gateway`** — outbound integrations: `BacenGateway` (BACEN index rates API),
@@ -88,29 +89,15 @@ application  →  http-api  →  usecase  ←  persistence
   used to pass structured intermediate state through multi-step calculations instead of long
   parameter lists — follow this shape for new multi-step domain logic.
 
-## How to implement a new feature (walkthrough)
+## How to implement a new feature
 
-Example: adding a new consolidated product type (portfolio-2 already has `ProductType` in
-`consolidation/` as an extension point for this).
-
-1. **Create a feature package** under `usecase/src/main/kotlin/dev/agner/portfolio/usecase/<feature>/`
-   with `model/` for domain types and `repository/`/`gateway/` for ports, following the `bond/` or
-   `checkingaccount/` package as a template.
-2. **Define repository/gateway interfaces** (`I<Name>Repository`) in the feature package.
-3. **Write the service(s)**. If the feature involves non-trivial math, split a pure calculator
-   (like `BondCalculator`) from an orchestrating service (like `BondConsolidationService`).
-4. **Register with `ProductConsolidator`/`ConsolidationService`** in `consolidation/` if the new
-   feature should participate in overall portfolio consolidation, following how bonds/checking
-   accounts are wired in there.
-5. **Implement persistence** in `persistence/src/main/kotlin/dev/agner/portfolio/persistence/<feature>/`
-   with an Exposed `Table`, `Entity`, and `@Component class <Name>Repository : I<Name>Repository`.
-   If the feature needs a new table or column, write the migration for it too — see §7.
-6. **Expose HTTP endpoints** in `http-api/.../controller/` as a `@Component class
-   <Name>Controller(...) : ControllerTemplate` — no manual registration needed, same as chameidor.
-7. **Add tests**: unit tests for the calculator/service in `usecase`'s `src/test/kotlin`
-   (use/extend `testFixtures` helpers — `BasicHelpers.kt`, `BondConsolidationHelpers.kt`,
-   `TaxHelpers.kt` — instead of duplicating test data builders), and an `http-api` test if you add
-   response conversion logic (see `XlsxConverterTest`).
+Same shape as chameidor (model in `usecase` → port → service → Exposed persistence → Ktor
+controller, no manual registration), with two portfolio-2-specific additions: create the feature
+as its own top-level `usecase` package (see "Design principles"), and register it with
+`ProductConsolidator`/`ConsolidationService` in `consolidation/` if it should participate in
+overall portfolio consolidation (`ProductType` is the existing extension point for this). Reuse
+`testFixtures` helpers (`BasicHelpers.kt`, `BondConsolidationHelpers.kt`, `TaxHelpers.kt`) instead
+of hand-rolling test data. Full generic walkthrough: salgadinhos' `kotlin-hexagonal-feature` skill.
 
 ## Code style
 
@@ -146,36 +133,16 @@ no more `mysql/init.sql`. Two tools, each doing one half of the job:
   before the app starts. Not from the Spring context: `KtorConfig` blocks the main thread for the
   process's entire lifetime (`ktor.wait: true`), so nothing hooked into Spring's lifecycle would
   run before the server starts accepting requests anyway. A failed migration aborts the container
-  instead of serving traffic against a stale schema. `baselineOnMigrate` means a database that
-  already has some of the tables gets stamped at V1 rather than having it re-applied — **V1
-  deliberately only covers the 7 tables production had when migrations were introduced** (`index`,
-  `index_value`, `checking_account`, `bond`, `bond_order`, `bond_order_statement`,
-  `bond_order_position`); everything added since (`listed_asset` and its family in V2, the Fase 1
-  allocation-engine tables in V3) is a real migration that Flyway actually runs against
-  production, not something baselining could silently skip. Keep this shape for future baseline
-  changes: **V1 (or whichever version you baseline at) must never describe more than what
-  production already has** — anything extra in it would never actually get created there.
-  V4 widens two columns that were already wider in the Exposed `Table` objects than what
-  production physically has — that ALTER runs for real on production (V1 is invisible to it) and
-  is a no-op on any database that went through V1 directly.
-- One residual, harmless divergence from baselining: production's original 7 tables keep their
-  physical `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` columns and MySQL's auto-generated FK constraint
-  names (`bond_ibfk_1`, …) forever, since V1's own `CREATE TABLE` statements never run against
-  them — only freshly-created databases get Exposed's `DATETIME(6)` / `fk_..._id` naming. Harmless
-  because every repository sets `createdAt` explicitly (see `TaskRepository`-style patterns) and
-  because a constraint's name has no behavioral effect — but don't be surprised if you inspect
-  production's schema and see it doesn't byte-for-byte match what `MigrationSchemaTest` (below)
-  guards.
+  instead of serving traffic against a stale schema.
 
-Changing a table:
+**Before touching `V1` (or adding a new baseline) or debugging a schema mismatch against
+production, read [`../docs/migrations.md`](../docs/migrations.md)** — the baseline only covers the
+7 tables production had when migrations were introduced, and there's a specific, easy-to-violate
+rule for what a baseline version may and may not describe.
 
-1. Edit the `Table` object in `persistence/.../<feature>/` (or add it to `allTables` if it's new).
-2. Point `MYSQL_HOST`/`MYSQL_USER`/`MYSQL_PASSWORD` at a database already migrated to head, then
-   `./gradlew :persistence:generateMigrationScript -Pname=V5__add_something` (or
-   `npm run db:generate -- -Pname=V5__add_something` from the repo root). Review the generated
-   `.sql` before committing — the diff is mechanical and won't know a rename is a rename rather
-   than a drop-and-add.
-3. `./gradlew :persistence:migrate` (or `npm run db:migrate`) to apply it locally.
+Changing a table: edit the `Table` object, then `./gradlew :persistence:generateMigrationScript
+-Pname=V5__add_something` (review the generated SQL — mechanical, won't detect a rename), then
+`./gradlew :persistence:migrate` locally. Full steps: salgadinhos' `kotlin-db-migration` skill.
 
 `integrationTest/.../tests/MigrationSchemaTest.kt` is the guard: `DockerComposeExtension`
 migrates the compose-provided MySQL to head before any spec runs, and this test asserts
@@ -230,7 +197,7 @@ even for a small or "obviously safe" change — no exceptions.
 
 ## Related repositories
 
-Uses [chameidor](../../chameidor/DEVELOPMENT.md) as its scheduling backend and was generated from the same
-[environments/kotlin](../../environments/DEVELOPMENT.md) template. If you introduce a new cross-cutting
+Uses [chameidor](../../chameidor/AGENTS.md) as its scheduling backend and was generated from the same
+[environments/kotlin](../../environments/AGENTS.md) template. If you introduce a new cross-cutting
 convention here that should also apply to chameidor or the template, call it out explicitly rather
 than letting the three silently drift apart.

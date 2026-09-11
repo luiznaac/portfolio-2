@@ -3,7 +3,7 @@
 -- ./gradlew :persistence:generateMigrationScript against those Exposed *Table objects, not
 -- hand-written. `listed_asset`/`trade`/... and the allocation-engine tables were added to the
 -- Exposed model well after this schema shipped, so they're deliberately NOT here — see V2 and V3
--- (backend/CLAUDE.md §7). The three seed rows are the fixed set of Brazilian rate indices this
+-- (backend/AGENTS.md). The three seed rows are the fixed set of Brazilian rate indices this
 -- app knows about (see IndexId).
 
 CREATE TABLE IF NOT EXISTS `index` (id VARCHAR(10) PRIMARY KEY, created_at DATETIME(6) NOT NULL);
