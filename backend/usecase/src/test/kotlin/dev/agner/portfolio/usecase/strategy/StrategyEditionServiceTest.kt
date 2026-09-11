@@ -37,6 +37,7 @@ class StrategyEditionServiceTest : StringSpec({
             ParsedStrategyReport(referenceDate, "changelog", validTargets)
         val saved = StrategyEdition(1, strategyId = 5, referenceDate, "changelog", validTargets)
         coEvery { repository.save(any()) } returns saved
+        coEvery { repository.exists(5, referenceDate) } returns false
 
         val result = service.importReport(5, byteArrayOf(1))
 
@@ -80,11 +81,20 @@ class StrategyEditionServiceTest : StringSpec({
             StrategyTarget("VALE3", BigDecimal("0.40")),
         )
         every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, nearly100)
+        coEvery { repository.exists(5, referenceDate) } returns false
         coEvery { repository.save(any()) } returns StrategyEdition(1, 5, referenceDate, null, nearly100)
 
         service.importReport(5, byteArrayOf(1))
 
         coVerify { repository.save(any()) }
+    }
+
+    "should reject a duplicate reference date" {
+        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, validTargets)
+        coEvery { repository.exists(5, referenceDate) } returns true
+
+        shouldThrow<StrategyEditionAlreadyExistsException> { service.importReport(5, byteArrayOf(1)) }
+        coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "fetchEditions should attach a diff to every edition but the first" {

@@ -24,17 +24,19 @@ class StrategyEditionService(
     private val diffCalculator: StrategyDiffCalculator,
 ) {
 
-    suspend fun importReport(strategyId: Int, pdfBytes: ByteArray) =
+    suspend fun importReport(strategyId: Int, pdfBytes: ByteArray) = validate(parser.parse(pdfBytes)).let {
+        if (repository.exists(strategyId, it.referenceDate)) {
+            throw StrategyEditionAlreadyExistsException(strategyId, it.referenceDate.toString())
+        }
         repository.save(
-            validate(parser.parse(pdfBytes)).let {
-                StrategyEditionCreation(
-                    strategyId = strategyId,
-                    referenceDate = it.referenceDate,
-                    changesText = it.changesText,
-                    targets = it.targets,
-                )
-            },
+            StrategyEditionCreation(
+                strategyId = strategyId,
+                referenceDate = it.referenceDate,
+                changesText = it.changesText,
+                targets = it.targets,
+            ),
         )
+    }
 
     suspend fun fetchEditions(strategyId: Int): List<StrategyEditionWithDiff> {
         val editions = repository.fetchByStrategyId(strategyId)

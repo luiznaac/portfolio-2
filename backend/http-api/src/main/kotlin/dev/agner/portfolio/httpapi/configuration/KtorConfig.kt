@@ -6,6 +6,9 @@ import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.disgustingLocalDateFormat
 import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.upload.model.UploadOrder
+import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
+import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
+import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -16,6 +19,9 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.engine.stop
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.statuspages.exception
+import io.ktor.server.response.respond
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.routing.routing
 import kotlinx.datetime.LocalDate
@@ -58,6 +64,18 @@ class KtorConfig(
                 register(ContentType.Application.Pdf, PdfConverter())
             }
 
+            install(StatusPages) {
+                exception<StrategyReportParseException> { call, cause ->
+                    call.respond(HttpStatusCode.BadRequest, ApiError(cause.message ?: "Invalid strategy report"))
+                }
+                exception<StrategyNotFoundException> { call, cause ->
+                    call.respond(HttpStatusCode.NotFound, ApiError(cause.message ?: "Strategy not found"))
+                }
+                exception<StrategyEditionAlreadyExistsException> { call, cause ->
+                    call.respond(HttpStatusCode.Conflict, ApiError(cause.message ?: "Edition already exists"))
+                }
+            }
+
             install(CORS) {
                 allowMethod(HttpMethod.Options)
                 allowMethod(HttpMethod.Put)
@@ -72,5 +90,7 @@ class KtorConfig(
 
     fun stop() = server.stop(0, 0)
 }
+
+private data class ApiError(val message: String)
 
 private fun String.sanitizeCurrency() = replace(".", "").replace(",", ".")
