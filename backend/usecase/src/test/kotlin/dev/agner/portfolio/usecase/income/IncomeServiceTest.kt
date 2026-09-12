@@ -15,7 +15,9 @@ import dev.agner.portfolio.usecase.trade.model.Trade
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.clearMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
@@ -35,6 +37,12 @@ class IncomeServiceTest : StringSpec({
     )
 
     val petr4 = ListedAsset(1, "PETR4", AssetKind.STOCK, "Petrobras", "PETROBRAS")
+
+    beforeTest {
+        // Each test stubs its own behavior; clearing keeps the exact-count verifies scoped to one
+        // test instead of counting calls recorded by the tests before it.
+        clearMocks(listedAssetRepository, tradeRepository, corporateActionRepository, dividendGateway)
+    }
 
     "should size the event by the quantity held on the ex-date, not the current quantity" {
         coEvery { listedAssetRepository.fetchById(1) } returns petr4
@@ -176,5 +184,23 @@ class IncomeServiceTest : StringSpec({
                 recebido = BigDecimal("100.00"),
             ),
         )
+    }
+
+    "should fetch each asset's trades and corporate actions once in summary" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { dividendGateway.getDividends(petr4) } returns listOf(
+            DividendDeclaration(DIVIDENDO, BigDecimal("2.00"), LocalDate(2026, 6, 1), LocalDate(2026, 6, 15)),
+        )
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
+
+        val result = service.summary()
+
+        result.single().totalNet shouldBe BigDecimal("200.00")
+        result.single().costBasis shouldBe BigDecimal("1000.00")
+        coVerify(exactly = 1) { tradeRepository.fetchByAssetId(1) }
+        coVerify(exactly = 1) { corporateActionRepository.fetchByAssetId(1) }
     }
 })
