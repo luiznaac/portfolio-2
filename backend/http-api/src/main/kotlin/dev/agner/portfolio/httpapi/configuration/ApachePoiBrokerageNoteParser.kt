@@ -7,11 +7,13 @@ import dev.agner.portfolio.usecase.brokeragenote.parser.TradeSide
 import kotlinx.datetime.LocalDate
 import org.apache.poi.ss.usermodel.Cell
 import org.apache.poi.ss.usermodel.CellType
+import org.apache.poi.ss.usermodel.DataFormatter
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
 import java.math.BigDecimal
+import java.util.Locale
 
 /**
  * Reads the B3 "Negociação de Ativos" XLSX export (Área do Investidor → Extrato → Negociação de
@@ -29,13 +31,18 @@ class ApachePoiBrokerageNoteParser : IBrokerageNoteParser {
     override fun parse(xlsxBytes: ByteArray): List<ParsedTrade> =
         WorkbookFactory.create(ByteArrayInputStream(xlsxBytes)).use { workbook ->
             val sheet = workbook.getSheetAt(0)
+            // DataFormatter is not thread-safe and this parser is a singleton, so build one per
+            // parse call. It renders numeric cells with their own display format, which matters for
+            // B3's numeric Quantidade/Preço/date cells — numericCellValue.toString() ignores the
+            // format and would read "35,50" as "355".
+            val formatter = DataFormatter(Locale.forLanguageTag("pt-BR"))
             val headerRow = sheet.getRow(0)
                 ?: throw BrokerageNoteParseException("Empty spreadsheet")
             // Use the cell's real column index, not its position in the iteration: POI's row
             // iterator skips physically absent cells, so a spacer column would otherwise shift
             // every subsequent header onto the wrong column.
             val columnIndexByHeader = headerRow.mapNotNull { cell ->
-                cell.stringValue()?.trim()?.let { header -> header to cell.columnIndex }
+                cell.stringValue(formatter)?.trim()?.let { header -> header to cell.columnIndex }
             }.toMap()
 
             val missing = REQUIRED_COLUMNS.filterNot { it in columnIndexByHeader }
@@ -44,22 +51,26 @@ class ApachePoiBrokerageNoteParser : IBrokerageNoteParser {
             }
 
             sheet.drop(1)
-                .filter { row -> row.any { it.stringValue()?.isNotBlank() == true } }
-                .map { row -> parseRow(row, columnIndexByHeader) }
+                .filter { row -> row.any { it.stringValue(formatter)?.isNotBlank() == true } }
+                .map { row -> parseRow(row, columnIndexByHeader, formatter) }
         }
 
-    private fun parseRow(row: Row, columnIndexByHeader: Map<String, Int>): ParsedTrade {
+    private fun parseRow(
+        row: Row,
+        columnIndexByHeader: Map<String, Int>,
+        formatter: DataFormatter,
+    ): ParsedTrade {
         fun cell(header: String): Cell? = columnIndexByHeader[header]?.let { row.getCell(it) }
 
-        val dateText = cell(COLUMN_DATE)?.stringValue()
+        val dateText = cell(COLUMN_DATE)?.stringValue(formatter)
             ?: throw BrokerageNoteParseException("Missing $COLUMN_DATE on row ${row.rowNum + 1}")
-        val sideText = cell(COLUMN_SIDE)?.stringValue()?.trim()?.uppercase()
+        val sideText = cell(COLUMN_SIDE)?.stringValue(formatter)?.trim()?.uppercase()
             ?: throw BrokerageNoteParseException("Missing $COLUMN_SIDE on row ${row.rowNum + 1}")
-        val ticker = cell(COLUMN_TICKER)?.stringValue()?.trim()
+        val ticker = cell(COLUMN_TICKER)?.stringValue(formatter)?.trim()
             ?: throw BrokerageNoteParseException("Missing $COLUMN_TICKER on row ${row.rowNum + 1}")
-        val quantityText = cell(COLUMN_QUANTITY)?.stringValue()
+        val quantityText = cell(COLUMN_QUANTITY)?.stringValue(formatter)
             ?: throw BrokerageNoteParseException("Missing $COLUMN_QUANTITY on row ${row.rowNum + 1}")
-        val priceText = cell(COLUMN_PRICE)?.stringValue()
+        val priceText = cell(COLUMN_PRICE)?.stringValue(formatter)
             ?: throw BrokerageNoteParseException("Missing $COLUMN_PRICE on row ${row.rowNum + 1}")
 
         val side = when {
@@ -92,11 +103,11 @@ class ApachePoiBrokerageNoteParser : IBrokerageNoteParser {
             throw BrokerageNoteParseException("Unrecognized number '$this' on row ${rowNum + 1}")
         }
 
-    private fun Cell.stringValue(): String? = when (cellType) {
+    private fun Cell.stringValue(formatter: DataFormatter): String? = when (cellType) {
         CellType.STRING -> stringCellValue
-        CellType.NUMERIC -> numericCellValue.toString()
+        CellType.NUMERIC -> formatter.formatCellValue(this)
         CellType.BLANK -> null
-        else -> toString()
+        else -> formatter.formatCellValue(this)
     }
 
     private companion object {

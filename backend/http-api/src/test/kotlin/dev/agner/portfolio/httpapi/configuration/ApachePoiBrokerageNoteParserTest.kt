@@ -75,6 +75,23 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
             )
         }
 
+        it("renders numeric quantity, price and date cells with the cell's own format") {
+            // 2026-09-01 as an Excel serial, built from the epoch day so the assertion does not
+            // depend on the JVM default timezone.
+            val dateSerial = (java.time.LocalDate.of(2026, 9, 1).toEpochDay() + 25569).toDouble()
+            val xlsx = xlsxWithNumericCells(dateSerial = dateSerial, quantity = 100.0, price = 35.5)
+
+            parser.parse(xlsx) shouldBe listOf(
+                ParsedTrade(
+                    date = LocalDate(2026, 9, 1),
+                    ticker = "PETR4",
+                    side = TradeSide.COMPRA,
+                    quantity = BigDecimal("100"),
+                    price = BigDecimal("35.50"),
+                ),
+            )
+        }
+
         it("skips blank trailing rows") {
             val xlsx = xlsxOf(
                 listOf("Data do Negócio", "Tipo de Movimentação", "Código de Negociação", "Quantidade", "Preço"),
@@ -120,5 +137,44 @@ private fun xlsxOf(vararg rows: List<String?>): ByteArray {
 
     val out = ByteArrayOutputStream()
     workbook.write(out)
+    return out.toByteArray()
+}
+
+private fun xlsxWithNumericCells(dateSerial: Double, quantity: Double, price: Double): ByteArray {
+    val workbook = XSSFWorkbook()
+    val sheet = workbook.createSheet("Negociação de Ativos")
+    val dateStyle = workbook.createCellStyle().apply {
+        dataFormat = workbook.createDataFormat().getFormat("dd/MM/yyyy")
+    }
+    val quantityStyle = workbook.createCellStyle().apply {
+        dataFormat = workbook.createDataFormat().getFormat("0")
+    }
+    val priceStyle = workbook.createCellStyle().apply {
+        dataFormat = workbook.createDataFormat().getFormat("#,##0.00")
+    }
+
+    val header = sheet.createRow(0)
+    listOf("Data do Negócio", "Tipo de Movimentação", "Código de Negociação", "Quantidade", "Preço")
+        .forEachIndexed { index, value -> header.createCell(index).setCellValue(value) }
+
+    val row = sheet.createRow(1)
+    row.createCell(0).apply {
+        setCellValue(dateSerial)
+        cellStyle = dateStyle
+    }
+    row.createCell(1).setCellValue("Compra")
+    row.createCell(2).setCellValue("PETR4")
+    row.createCell(3).apply {
+        setCellValue(quantity)
+        cellStyle = quantityStyle
+    }
+    row.createCell(4).apply {
+        setCellValue(price)
+        cellStyle = priceStyle
+    }
+
+    val out = ByteArrayOutputStream()
+    workbook.write(out)
+    workbook.close()
     return out.toByteArray()
 }
