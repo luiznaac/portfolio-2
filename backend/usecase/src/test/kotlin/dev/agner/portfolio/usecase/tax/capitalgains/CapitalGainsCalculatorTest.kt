@@ -14,6 +14,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 10),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("19000"),
                 costBasis = BigDecimal("15000"),
             ),
@@ -42,6 +43,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 10),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("26549.84"),
                 costBasis = BigDecimal("20000.00"),
             ),
@@ -60,6 +62,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 10),
                 isFii = true,
                 isDayTrade = false,
+                exemptible = false,
                 proceeds = BigDecimal("5000"),
                 costBasis = BigDecimal("4000"),
             ),
@@ -78,6 +81,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 7, 5),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("25000"),
                 costBasis = BigDecimal("28000"),
             ),
@@ -85,6 +89,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 5),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("25000"),
                 costBasis = BigDecimal("20000"),
             ),
@@ -107,6 +112,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 7, 5),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("10000"),
                 costBasis = BigDecimal("12000"),
             ),
@@ -114,6 +120,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 5),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("30000"),
                 costBasis = BigDecimal("28000"),
             ),
@@ -134,6 +141,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 7, 5),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("10000"),
                 costBasis = BigDecimal("12000"),
             ),
@@ -141,6 +149,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 5),
                 isFii = true,
                 isDayTrade = false,
+                exemptible = false,
                 proceeds = BigDecimal("5000"),
                 costBasis = BigDecimal("4000"),
             ),
@@ -159,6 +168,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 10),
                 isFii = false,
                 isDayTrade = false,
+                exemptible = true,
                 proceeds = BigDecimal("19000"),
                 costBasis = BigDecimal("15000"),
             ),
@@ -166,6 +176,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 10),
                 isFii = false,
                 isDayTrade = true,
+                exemptible = true,
                 proceeds = BigDecimal("5000"),
                 costBasis = BigDecimal("4500"),
             ),
@@ -184,6 +195,7 @@ class CapitalGainsCalculatorTest : StringSpec({
                 LocalDate(2026, 8, 10),
                 isFii = false,
                 isDayTrade = true,
+                exemptible = true,
                 proceeds = BigDecimal("5000"),
                 costBasis = BigDecimal("4000"),
             ),
@@ -191,6 +203,52 @@ class CapitalGainsCalculatorTest : StringSpec({
 
         val result = calculator.calculate(sales)
 
+        result[0].taxableGain shouldBe BigDecimal("1000.00")
+        result[0].taxDue shouldBe BigDecimal("150.00")
+    }
+
+    "should tax an ETF or BDR month at 15% even when proceeds stay under the ceiling" {
+        val sales = listOf(
+            TaxableSale(
+                LocalDate(2026, 8, 10),
+                isFii = false,
+                isDayTrade = false,
+                exemptible = false,
+                proceeds = BigDecimal("19000"),
+                costBasis = BigDecimal("15000"),
+            ),
+        )
+
+        val result = calculator.calculate(sales)
+
+        result[0].exempt shouldBe false
+        result[0].taxableGain shouldBe BigDecimal("4000.00")
+        result[0].taxDue shouldBe BigDecimal("600.00")
+    }
+
+    "should exempt the stock sales of a month while taxing its ETF sales" {
+        val sales = listOf(
+            TaxableSale(
+                LocalDate(2026, 8, 10),
+                isFii = false,
+                isDayTrade = false,
+                exemptible = true,
+                proceeds = BigDecimal("15000"),
+                costBasis = BigDecimal("12000"),
+            ),
+            TaxableSale(
+                LocalDate(2026, 8, 10),
+                isFii = false,
+                isDayTrade = false,
+                exemptible = false,
+                proceeds = BigDecimal("10000"),
+                costBasis = BigDecimal("9000"),
+            ),
+        )
+
+        val result = calculator.calculate(sales)
+
+        result[0].exempt shouldBe true
         result[0].taxableGain shouldBe BigDecimal("1000.00")
         result[0].taxDue shouldBe BigDecimal("150.00")
     }

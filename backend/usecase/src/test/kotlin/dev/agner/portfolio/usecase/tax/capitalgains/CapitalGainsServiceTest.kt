@@ -63,9 +63,8 @@ class CapitalGainsServiceTest : StringSpec({
         val result = service.monthlyReport()
 
         val month = result.single()
-        // The only sale is a day trade: its R$1.200,00 proceeds do not consume the R$20k ceiling,
-        // but its gain stays taxable.
-        month.exempt shouldBe true
+        // The only sale is a day trade: nothing is exemption-eligible, and its gain stays taxable.
+        month.exempt shouldBe false
         month.taxableGain shouldBe BigDecimal("200.00")
         month.taxDue shouldBe BigDecimal("30.00")
     }

@@ -47,6 +47,8 @@ class StepUpServiceTest : StringSpec({
 
     val stock = ListedAsset(1, "PETR4", AssetKind.STOCK, "Petrobras", "PETROBRAS")
     val fii = ListedAsset(2, "MXRF11", AssetKind.FII, "Maxi Renda", "MXRF")
+    val etf = ListedAsset(3, "IVVB11", AssetKind.ETF, "S&P 500", "IVVB")
+    val bdr = ListedAsset(4, "AAPL34", AssetKind.BDR, "Apple", "AAPL")
 
     beforeTest {
         every { clock.instant() } returns Instant.parse("2026-09-08T12:00:00Z")
@@ -59,13 +61,19 @@ class StepUpServiceTest : StringSpec({
         coEvery { corporateActionRepository.fetchByAssetId(any()) } returns emptyList()
     }
 
-    "should exclude FIIs from step-up candidates" {
-        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock, fii)
+    "should consider only stocks for step-up candidates" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock, fii, etf, bdr)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
             Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { tradeRepository.fetchByAssetId(2) } returns listOf(
             Trade(2, 2, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { tradeRepository.fetchByAssetId(3) } returns listOf(
+            Trade(3, 3, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { tradeRepository.fetchByAssetId(4) } returns listOf(
+            Trade(4, 4, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
         )
         coEvery { quoteGateway.getQuote(stock) } returns Quote(BigDecimal("15.00"), LocalDate(2026, 9, 8), BRAPI)
 

@@ -11,6 +11,9 @@ data class TaxableSale(
     val date: LocalDate,
     val isFii: Boolean,
     val isDayTrade: Boolean,
+    // Only STOCK sales are eligible for the R$20k monthly exemption: ETFs and BDRs are always
+    // taxed at 15%, FIIs at 20%.
+    val exemptible: Boolean,
     val proceeds: BigDecimal,
     val costBasis: BigDecimal,
 ) {
@@ -22,10 +25,13 @@ data class TaxableSale(
  * same lot-derived-from-replay spirit as [dev.agner.portfolio.usecase.trade.AveragePriceCalculator],
  * just one level up. Two independent buckets (stocks/ETFs/BDRs vs. FIIs — [MonthlyCapitalGain.isFii]),
  * each carrying its own loss forward, because Brazilian tax law never lets a stock loss offset a
- * FII gain or vice versa. The R$20k monthly exemption only covers non-day-trade sales: day-trade
- * proceeds never count toward the ceiling and a day-trade gain never lands in the exempt bucket.
- * Day-trade gains are still taxed in the 15% bucket here — the special 20% day-trade rate is left
- * for a later pass (see [dev.agner.portfolio.usecase.order.model.Order.dayTradeRisk]).
+ * FII gain or vice versa.
+ *
+ * The R$20k monthly exemption covers STOCK sales only ([TaxableSale.exemptible]) and never
+ * day-trade sales: day-trade proceeds do not count toward the ceiling and a day-trade gain never
+ * lands in the exempt bucket. ETFs and BDRs are always taxed at 15%, FIIs at 20%. Day-trade gains
+ * are still taxed in the 15% bucket — the special 20% day-trade rate is left for a later pass (see
+ * [dev.agner.portfolio.usecase.order.model.Order.dayTradeRisk]).
  */
 @Component
 class CapitalGainsCalculator {
@@ -58,11 +64,12 @@ class CapitalGainsCalculator {
         return monthGroups.map { (month, sales) ->
             val proceeds = sales.sumOf { it.proceeds }
             val grossGain = sales.sumOf { it.gain }
-            val swingProceeds = sales.filter { !it.isDayTrade }.sumOf { it.proceeds }
-            val exempt = !isFii && swingProceeds <= EXEMPTION_LIMIT
-            // When the month is exempt, only the day-trade remainder is taxed; otherwise the whole
-            // gross gain is. Either way a day-trade gain never ends up tax-free.
-            val gainToTax = if (exempt) sales.filter { it.isDayTrade }.sumOf { it.gain } else grossGain
+            val exemptibleSales = sales.filter { it.exemptible && !it.isDayTrade }
+            val exemptibleProceeds = exemptibleSales.sumOf { it.proceeds }
+            val exempt = !isFii && exemptibleSales.isNotEmpty() && exemptibleProceeds <= EXEMPTION_LIMIT
+            // Only the stock sales under the ceiling are exempt; every other gain in the bucket
+            // (day trades, ETFs/BDRs, and the whole bucket once the ceiling is blown) is taxed.
+            val gainToTax = grossGain - if (exempt) exemptibleSales.sumOf { it.gain } else BigDecimal.ZERO
 
             val (compensation, taxable) = when {
                 gainToTax <= BigDecimal.ZERO -> BigDecimal.ZERO to BigDecimal.ZERO

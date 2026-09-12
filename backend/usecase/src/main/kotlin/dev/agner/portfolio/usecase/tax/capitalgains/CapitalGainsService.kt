@@ -12,8 +12,8 @@ import java.math.BigDecimal
 /**
  * Orchestrates [CapitalGainsCalculator]: replays every asset's trades + corporate actions into
  * realized sales (same [AveragePriceCalculator] the custody/position screens use), tags each sale
- * stock-or-FII and flags same-day (day-trade) sales, and hands the flattened list to the pure
- * calculator.
+ * with its asset kind — the FII bucket and whether it is exemption-eligible (only STOCK is) — and
+ * flags same-day (day-trade) sales, and hands the flattened list to the pure calculator.
  */
 @Service
 class CapitalGainsService(
@@ -41,6 +41,7 @@ class CapitalGainsService(
                     date = gain.date,
                     isFii = asset.kind == AssetKind.FII,
                     isDayTrade = gain.date in boughtDates,
+                    exemptible = asset.kind == AssetKind.STOCK,
                     proceeds = gain.proceeds,
                     costBasis = gain.costBasis,
                 )

@@ -17,9 +17,10 @@ import java.time.Clock
 
 /**
  * Orchestrates [StepUpPlanner]: builds one candidate per stock position with an unrealized gain,
- * excluding FIIs (no exemption to maximize) and anything already bought today (selling it would
- * be a day trade — same risk [dev.agner.portfolio.usecase.order.OrderPlanService] flags), and
- * feeds it the month's remaining sale-exemption ceiling.
+ * excluding non-stocks (only [AssetKind.STOCK] sales have the R$20k exemption to maximize — FIIs,
+ * ETFs and BDRs are always taxed) and anything already bought today (selling it would be a day
+ * trade — same risk [dev.agner.portfolio.usecase.order.OrderPlanService] flags), and feeds it the
+ * month's remaining sale-exemption ceiling.
  *
  * The order plan's own pending sells are netted out first: a ticker the plan already sells only
  * enters with the quantity the plan does not cover, so the two lists never propose the same shares
@@ -45,7 +46,7 @@ class StepUpService(
             .associate { it.listedAssetId to it.quantity }
 
         val candidates = listedAssetRepository.fetchAll()
-            .filter { it.kind != AssetKind.FII }
+            .filter { it.kind == AssetKind.STOCK }
             .mapNotNull { asset ->
                 val trades = tradeRepository.fetchByAssetId(asset.id)
                 val boughtToday = trades.any { it.date == today && it.quantity > BigDecimal.ZERO }
