@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.brokeragenote.parser.BrokerageNoteParseExcept
 import dev.agner.portfolio.usecase.brokeragenote.parser.IBrokerageNoteParser
 import dev.agner.portfolio.usecase.brokeragenote.parser.TradeSide
 import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.model.OrderKind
@@ -37,7 +38,16 @@ class BrokerageNoteService(
             throw BrokerageNoteParseException("No trades found in statement")
         }
 
-        val plannedSideByTicker = orderPlanService.computePlan().orders.associate { it.ticker to it.kind }
+        // matchesPlan is informational and never blocks confirmation, so a quote-gateway hiccup
+        // while computing the plan must not turn a fully parseable statement into a failed preview:
+        // degrade every row to "doesn't match" instead. computePlan() is suspend, so runCatching
+        // can't be used here.
+        val plannedSideByTicker = try {
+            orderPlanService.computePlan().orders.associate { it.ticker to it.kind }
+        } catch (e: Exception) {
+            logger().warn("Could not compute order plan for preview; matchesPlan degraded to false", e)
+            emptyMap()
+        }
 
         val trades = parsed.map { row ->
             val assetId = listedAssetRepository.resolveIdByTicker(row.ticker, row.date)
