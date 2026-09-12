@@ -49,6 +49,17 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
             result.single().amount.compareTo(BigDecimal("199.5")) shouldBe 0
         }
 
+        it("keeps the real column index when a header column is physically absent") {
+            val xlsx = xlsxOf(
+                listOf("Data", null, "Movimentação", "Produto", "Valor da Operação"),
+                listOf("15/06/2026", null, "Dividendo", "PETR4", "199,50"),
+            )
+
+            parser.parse(xlsx) shouldBe listOf(
+                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDENDO, BigDecimal("199.50")),
+            )
+        }
+
         it("fails loudly when a required column is missing") {
             val xlsx = xlsxOf(
                 listOf("Data", "Produto", "Valor da Operação"),
@@ -60,13 +71,17 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
     }
 })
 
-private fun xlsxOf(vararg rows: List<String>): ByteArray {
+private fun xlsxOf(vararg rows: List<String?>): ByteArray {
     val workbook = XSSFWorkbook()
     val sheet = workbook.createSheet("Movimentação")
 
     rows.forEachIndexed { rowIndex, values ->
         val row = sheet.createRow(rowIndex)
-        values.forEachIndexed { cellIndex, value -> row.createCell(cellIndex).setCellValue(value) }
+        // A null entry leaves the column absent instead of writing an empty string, reproducing a
+        // B3 export where a spacer column carries no header.
+        values.forEachIndexed { cellIndex, value ->
+            if (value != null) row.createCell(cellIndex).setCellValue(value)
+        }
     }
 
     val out = ByteArrayOutputStream()

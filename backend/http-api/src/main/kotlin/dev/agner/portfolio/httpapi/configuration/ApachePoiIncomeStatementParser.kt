@@ -37,9 +37,12 @@ class ApachePoiIncomeStatementParser : IIncomeStatementParser {
             val formatter = DataFormatter(Locale.forLanguageTag("pt-BR"))
             val headerRow = sheet.getRow(0)
                 ?: throw IncomeStatementParseException("Empty spreadsheet")
-            val columnIndexByHeader = headerRow.mapNotNull { it.stringValue(formatter)?.trim() }
-                .withIndex()
-                .associate { (i, header) -> header to i }
+            // Use the cell's real column index, not its position in the iteration: POI's row
+            // iterator skips physically absent cells, so a spacer column would otherwise shift
+            // every subsequent header onto the wrong column.
+            val columnIndexByHeader = headerRow.mapNotNull { cell ->
+                cell.stringValue(formatter)?.trim()?.let { header -> header to cell.columnIndex }
+            }.toMap()
 
             val missing = REQUIRED_COLUMNS.filterNot { it in columnIndexByHeader }
             if (missing.isNotEmpty()) {
