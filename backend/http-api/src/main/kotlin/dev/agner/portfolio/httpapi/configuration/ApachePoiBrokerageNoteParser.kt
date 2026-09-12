@@ -26,23 +26,24 @@ import java.math.BigDecimal
 @Component
 class ApachePoiBrokerageNoteParser : IBrokerageNoteParser {
 
-    override fun parse(xlsxBytes: ByteArray): List<ParsedTrade> {
-        val sheet = WorkbookFactory.create(ByteArrayInputStream(xlsxBytes)).getSheetAt(0)
-        val headerRow = sheet.getRow(0)
-            ?: throw BrokerageNoteParseException("Empty spreadsheet")
-        val columnIndexByHeader = headerRow.mapNotNull { it.stringValue()?.trim() }
-            .withIndex()
-            .associate { (i, header) -> header to i }
+    override fun parse(xlsxBytes: ByteArray): List<ParsedTrade> =
+        WorkbookFactory.create(ByteArrayInputStream(xlsxBytes)).use { workbook ->
+            val sheet = workbook.getSheetAt(0)
+            val headerRow = sheet.getRow(0)
+                ?: throw BrokerageNoteParseException("Empty spreadsheet")
+            val columnIndexByHeader = headerRow.mapNotNull { it.stringValue()?.trim() }
+                .withIndex()
+                .associate { (i, header) -> header to i }
 
-        val missing = REQUIRED_COLUMNS.filterNot { it in columnIndexByHeader }
-        if (missing.isNotEmpty()) {
-            throw BrokerageNoteParseException("Missing expected columns: $missing")
+            val missing = REQUIRED_COLUMNS.filterNot { it in columnIndexByHeader }
+            if (missing.isNotEmpty()) {
+                throw BrokerageNoteParseException("Missing expected columns: $missing")
+            }
+
+            sheet.drop(1)
+                .filter { row -> row.any { it.stringValue()?.isNotBlank() == true } }
+                .map { row -> parseRow(row, columnIndexByHeader) }
         }
-
-        return sheet.drop(1)
-            .filter { row -> row.any { it.stringValue()?.isNotBlank() == true } }
-            .map { row -> parseRow(row, columnIndexByHeader) }
-    }
 
     private fun parseRow(row: Row, columnIndexByHeader: Map<String, Int>): ParsedTrade {
         fun cell(header: String): Cell? = columnIndexByHeader[header]?.let { row.getCell(it) }
