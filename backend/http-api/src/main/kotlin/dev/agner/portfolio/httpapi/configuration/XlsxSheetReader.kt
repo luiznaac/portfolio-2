@@ -35,6 +35,8 @@ class XlsxSheetReader private constructor(
         /**
          * Opens the first sheet and indexes its header row. [onError] turns a failure into the
          * caller's own parse exception, so this class stays independent of which domain uses it.
+         * A failure while reading the header closes the workbook before propagating, so a bad
+         * upload (the common case) doesn't leak the file handle it never got a reader for.
          */
         fun open(
             xlsxBytes: ByteArray,
@@ -42,20 +44,25 @@ class XlsxSheetReader private constructor(
             onError: (String) -> Nothing,
         ): XlsxSheetReader {
             val workbook = WorkbookFactory.create(ByteArrayInputStream(xlsxBytes))
-            val sheet = workbook.getSheetAt(0)
-            val headerRow = sheet.getRow(0) ?: onError("Empty spreadsheet")
+            try {
+                val sheet = workbook.getSheetAt(0)
+                val headerRow = sheet.getRow(0) ?: onError("Empty spreadsheet")
 
-            // Use the cell's real column index, not its position in the iteration: POI's row
-            // iterator skips physically absent cells, so a spacer column would otherwise shift
-            // every subsequent header onto the wrong column.
-            val columnIndexByHeader = headerRow.mapNotNull { cell ->
-                cell.stringValue()?.trim()?.let { header -> header to cell.columnIndex }
-            }.toMap()
+                // Use the cell's real column index, not its position in the iteration: POI's row
+                // iterator skips physically absent cells, so a spacer column would otherwise shift
+                // every subsequent header onto the wrong column.
+                val columnIndexByHeader = headerRow.mapNotNull { cell ->
+                    cell.stringValue()?.trim()?.let { header -> header to cell.columnIndex }
+                }.toMap()
 
-            val missing = requiredColumns.filterNot { it in columnIndexByHeader }
-            if (missing.isNotEmpty()) onError("Missing expected columns: $missing")
+                val missing = requiredColumns.filterNot { it in columnIndexByHeader }
+                if (missing.isNotEmpty()) onError("Missing expected columns: $missing")
 
-            return XlsxSheetReader(workbook, sheet, columnIndexByHeader, onError)
+                return XlsxSheetReader(workbook, sheet, columnIndexByHeader, onError)
+            } catch (e: Throwable) {
+                workbook.close()
+                throw e
+            }
         }
 
         private fun Cell.stringValue(): String? = when (cellType) {
