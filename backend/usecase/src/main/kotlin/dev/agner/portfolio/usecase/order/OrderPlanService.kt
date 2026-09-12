@@ -325,7 +325,7 @@ class OrderPlanService(
         val monthStart = LocalDate(today.year, today.month, 1)
         val kindByAssetId = listedAssets.associate { it.id to it.kind }
 
-        val settledStockSales = tradeRepository.fetchAll()
+        val settledStockSales = tradeRepository.fetchByDateRange(monthStart, today)
             .filter { it.date in monthStart..today && it.quantity < BigDecimal.ZERO }
             .filter { kindByAssetId[it.assetId] == AssetKind.STOCK }
             .sumOf { it.quantity.abs() * it.price }

@@ -73,7 +73,7 @@ class OrderPlanServiceTest : StringSpec({
         every { clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         every { clock.zone } returns ZoneOffset.UTC
         coEvery { tradeRepository.fetchByAssetId(any()) } returns emptyList()
-        coEvery { tradeRepository.fetchAll() } returns emptyList()
+        coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns emptyList()
     }
 
     fun edition(strategyId: Int, targets: List<StrategyTarget>) = StrategyEditionWithDiff(
@@ -138,7 +138,7 @@ class OrderPlanServiceTest : StringSpec({
             custodyQuantity = BigDecimal("100"),
             balances = listOf(StrategyBalance(1, "Top", BigDecimal("100"))),
         )
-        coEvery { tradeRepository.fetchAll() } returns listOf(
+        coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns listOf(
             Trade(1, 10, LocalDate.parse("2026-09-05"), BigDecimal("-500"), BigDecimal("45.00")),
         )
 
