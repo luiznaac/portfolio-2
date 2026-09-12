@@ -84,7 +84,7 @@ class MonthlyCloseServiceTest : StringSpec({
             ),
         )
 
-        shouldThrow<IllegalArgumentException> { service.close() }
+        shouldThrow<PendingTransferProposalsException> { service.close() }
     }
 
     "driftAlert should flag only classes whose drift exceeds the threshold" {

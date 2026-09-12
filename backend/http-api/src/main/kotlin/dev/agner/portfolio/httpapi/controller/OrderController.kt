@@ -39,14 +39,14 @@ class OrderController(
 
                 route("/{transfer_id}") {
                     post("/approve") {
-                        val id = call.parameters["transfer_id"]!!.toInt()
+                        val id = call.requiredInt("transfer_id")
                         val payload = call.receive<ApproveTransferRequest>()
 
                         call.respond(HttpStatusCode.OK, planService.approveTransfer(id, payload.quantity))
                     }
 
                     post("/reject") {
-                        val id = call.parameters["transfer_id"]!!.toInt()
+                        val id = call.requiredInt("transfer_id")
 
                         call.respond(HttpStatusCode.OK, planService.rejectTransfer(id))
                     }

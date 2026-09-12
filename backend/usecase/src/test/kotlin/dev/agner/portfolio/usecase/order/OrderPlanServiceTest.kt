@@ -862,8 +862,38 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns listOf(pending)
 
-        io.kotest.assertions.throwables.shouldThrow<IllegalArgumentException> {
+        io.kotest.assertions.throwables.shouldThrow<InvalidTransferQuantityException> {
             service.approveTransfer(4, BigDecimal("50"))
+        }
+    }
+
+    "approveTransfer should surface a domain error for an unknown proposal" {
+        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns emptyList()
+
+        io.kotest.assertions.throwables.shouldThrow<TransferProposalNotFoundException> {
+            service.approveTransfer(99, BigDecimal("5"))
+        }
+    }
+
+    "approveTransfer should surface a domain error for a non-pending proposal" {
+        val applied = TransferProposal(
+            id = 4,
+            month = LocalDate.parse("2026-09-01"),
+            listedAssetId = 10,
+            ticker = "PETR4",
+            fromStrategyId = 1,
+            fromStrategyName = "Top",
+            toStrategyId = 2,
+            toStrategyName = "Dividendos",
+            proposedQuantity = BigDecimal("9"),
+            appliedQuantity = BigDecimal("9"),
+            status = APLICADA,
+            decidedAt = null,
+        )
+        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns listOf(applied)
+
+        io.kotest.assertions.throwables.shouldThrow<TransferProposalNotPendingException> {
+            service.approveTransfer(4, BigDecimal("5"))
         }
     }
 

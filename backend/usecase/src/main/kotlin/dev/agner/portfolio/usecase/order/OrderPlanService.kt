@@ -183,11 +183,11 @@ class OrderPlanService(
 
     suspend fun approveTransfer(id: Int, quantity: BigDecimal?): TransferProposal {
         val proposal = requireProposal(id)
-        require(proposal.status == PENDENTE) { "Transfer proposal $id is not pending" }
+        if (proposal.status != PENDENTE) throw TransferProposalNotPendingException(id, proposal.status)
 
         val approvedQuantity = quantity ?: proposal.proposedQuantity
-        require(approvedQuantity > BigDecimal.ZERO && approvedQuantity <= proposal.proposedQuantity) {
-            "Approved quantity must be between 0 and ${proposal.proposedQuantity}"
+        if (approvedQuantity <= BigDecimal.ZERO || approvedQuantity > proposal.proposedQuantity) {
+            throw InvalidTransferQuantityException(approvedQuantity, proposal.proposedQuantity)
         }
 
         applyTransfer(proposal, approvedQuantity)
@@ -196,7 +196,7 @@ class OrderPlanService(
 
     suspend fun rejectTransfer(id: Int): TransferProposal {
         val proposal = requireProposal(id)
-        require(proposal.status == PENDENTE) { "Transfer proposal $id is not pending" }
+        if (proposal.status != PENDENTE) throw TransferProposalNotPendingException(id, proposal.status)
 
         return transferProposalRepository.decide(id, REJEITADA, null, LocalDateTime.now(clock))
     }
@@ -284,7 +284,7 @@ class OrderPlanService(
 
     private suspend fun requireProposal(id: Int): TransferProposal =
         transferProposalRepository.fetchByMonth(monthOf(LocalDate.today(clock))).find { it.id == id }
-            ?: error("Transfer proposal $id not found for the current month")
+            ?: throw TransferProposalNotFoundException(id)
 
     private fun monthOf(date: LocalDate) = LocalDate(date.year, date.month, 1)
 

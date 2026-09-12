@@ -37,7 +37,7 @@ class MonthlyCloseService(
     // that might still change.
     suspend fun close(): MonthlyClose {
         val pending = orderPlanService.transfersForMonth().count { it.status == PENDENTE }
-        require(pending == 0) { "Cannot close the month with $pending pending transfer proposal(s)" }
+        if (pending > 0) throw PendingTransferProposalsException(pending)
 
         return repository.close(currentMonth())
     }
