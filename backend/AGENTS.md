@@ -192,9 +192,6 @@ MySQL-only file used by `integrationTest` (via Testcontainers) and by plain back
   Feature branches are named after the domain concept (`bond-full-redemption`,
   `checking-account`, `yield-service`).
 
-**Do not commit directly to `master`.** Always create a feature branch and open a PR,
-even for a small or "obviously safe" change — no exceptions.
-
 ## Related repositories
 
 Uses [chameidor](../../chameidor/AGENTS.md) as its scheduling backend and was generated from the same

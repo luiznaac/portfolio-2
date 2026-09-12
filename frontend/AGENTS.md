@@ -30,7 +30,4 @@ npm run build         # tsc -b && vite build
 - **`components/DivergentBar.tsx`/`PositionChart.tsx`** are the allocation/position visualizations
   — check `lib/positions.ts` for the shared data-shaping logic before adding a new chart.
 
-## Git
-
-**Do not commit directly to `master`.** Always create a feature branch and open a PR, even for a
-small or "obviously safe" change. This applies to all contributors.
+Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
