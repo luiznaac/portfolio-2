@@ -36,6 +36,11 @@ class MonthlyCloseService(
     // rejected -> the full buy+sell), so closing with one still undecided would lock in a plan
     // that might still change.
     suspend fun close(): MonthlyClose {
+        // Recompute the matches first: the reconciliation auto-rejects a PENDENTE whose pairing
+        // disappeared, so only proposals that are still live can block the close. Counting
+        // transfersForMonth() alone would keep counting stranded rows forever.
+        orderPlanService.reconcileTransfers()
+
         val pending = orderPlanService.transfersForMonth().count { it.status == PENDENTE }
         if (pending > 0) throw PendingTransferProposalsException(pending)
 

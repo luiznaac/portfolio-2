@@ -10,6 +10,8 @@ import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.ABERTO
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.FECHADO
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.OrderPlan
+import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -39,6 +41,11 @@ class MonthlyCloseServiceTest : StringSpec({
         every { clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         every { clock.zone } returns ZoneOffset.UTC
         coEvery { orderPlanService.transfersForMonth() } returns emptyList()
+        coEvery { orderPlanService.reconcileTransfers() } returns OrderPlan(
+            orders = emptyList(),
+            transferProposals = emptyList(),
+            saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
+        )
     }
 
     "current should open the current month" {
@@ -55,6 +62,9 @@ class MonthlyCloseServiceTest : StringSpec({
         val result = service.close()
 
         result.status shouldBe FECHADO
+        // The stranded-pending expiry runs before counting, so a month whose leftovers were
+        // auto-rejected closes even though transfersForMonth() might have rows.
+        coVerify(exactly = 1) { orderPlanService.reconcileTransfers() }
         coVerify(exactly = 1) { repository.close(month) }
         coVerify(exactly = 0) { repository.open(any()) }
     }

@@ -93,7 +93,23 @@ class OrderPlanService(
     private val clock: Clock,
 ) {
 
-    suspend fun computePlan(): OrderPlan {
+    suspend fun computePlan(): OrderPlan = reconcileTransfers()
+
+    /**
+     * Recomputes the month's plan and expires the proposals that no longer pair with anything.
+     *
+     * `computePlan` delegates here unchanged. The extra pass exists because `reconcileProposal` is
+     * only reached for the current matches: once a price or capital change (or a manual attribution
+     * movement) removes a pairing, a previously-`PENDENTE` row would never be touched again — it
+     * would keep coming back from `transfersForMonth()` and block `MonthlyCloseService.close()`
+     * forever, with no route for the user to reject it. So every `PENDENTE` of the month that the
+     * matcher did not return this run is auto-rejected. `REJEITADA`/`APLICADA` rows are left alone,
+     * since a decision already made stands for the whole competência.
+     *
+     * `MonthlyCloseService.close()` calls this (not just `transfersForMonth()`) so the close counts
+     * only live proposals, not stranded ones.
+     */
+    suspend fun reconcileTransfers(): OrderPlan {
         val today = LocalDate.today(clock)
         val month = monthOf(today)
         val strategies = strategyService.fetchAll()
@@ -123,6 +139,7 @@ class OrderPlanService(
 
         val orders = mutableListOf<Order>()
         val pendingProposals = mutableListOf<TransferProposal>()
+        val liveProposalIds = mutableSetOf<Int>()
         val threshold = transferSettingsRepository.fetch().autoApprovalThreshold
 
         for (ticker in tickersToInspect) {
@@ -153,6 +170,7 @@ class OrderPlanService(
                 val matches = transferMatcher.match(asset.id, asset.ticker, deltaByStrategy)
                 for (match in matches) {
                     reconcileProposal(month, match, quote?.price, threshold, strategyNames)?.let {
+                        liveProposalIds += it.id
                         pendingProposals += it
                     }
                 }
@@ -168,6 +186,15 @@ class OrderPlanService(
                 today = today,
             )
             if (order != null) orders += order
+        }
+
+        // A PENDENTE the matcher did not return this run is stranded: its pairing disappeared, so
+        // there is no path to approve or reject it any more. Expire it now (a rejection stands for
+        // the month) so it stops coming back from transfersForMonth() and blocking the close.
+        val stranded = transferProposalRepository.fetchByMonth(month)
+            .filter { it.status == PENDENTE && it.id !in liveProposalIds }
+        for (proposal in stranded) {
+            transferProposalRepository.decide(proposal.id, REJEITADA, null, LocalDateTime.now(clock))
         }
 
         return OrderPlan(

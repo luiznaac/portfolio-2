@@ -88,6 +88,9 @@ class OrderPlanServiceTest : StringSpec({
         coEvery { tradeRepository.fetchByAssetId(any()) } returns emptyList()
         coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns emptyList()
         coEvery { transferSettingsRepository.fetch() } returns TransferSettings(BigDecimal.ZERO)
+        // Every computePlan() now reconciles the month's existing proposals; tests that care stub
+        // a non-empty month on top of this default.
+        coEvery { transferProposalRepository.fetchByMonth(any()) } returns emptyList()
     }
 
     fun edition(strategyId: Int, targets: List<StrategyTarget>) = StrategyEditionWithDiff(
@@ -258,6 +261,32 @@ class OrderPlanServiceTest : StringSpec({
         val plan = service.computePlan()
 
         plan.transferProposals shouldBe listOf(saved)
+        // A pairing the matcher still returns is live: it must not be auto-rejected.
+        io.mockk.coVerify(exactly = 0) { transferProposalRepository.decide(any(), any(), any(), any()) }
+    }
+
+    "should auto-reject a pending proposal whose pairing no longer matches" {
+        coEvery { strategyService.fetchAll() } returns emptyList()
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns emptyList()
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal.ZERO,
+            classes = emptyList(),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns emptyList()
+        // A proposal left over from a pairing that has since disappeared (price/capital change or
+        // manual attribution movement): the matcher will not return it, so it must be expired.
+        val stranded = proposal(2, "Dividendos", "50")
+        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns
+            listOf(stranded)
+        coEvery { transferProposalRepository.decide(any(), any(), any(), any()) } returns
+            stranded.copy(status = REJEITADA)
+
+        val plan = service.computePlan()
+
+        plan.transferProposals shouldBe emptyList()
+        io.mockk.coVerify(exactly = 1) {
+            transferProposalRepository.decide(2, REJEITADA, null, any())
+        }
     }
 
     "should keep a pending proposal whose quantity is numerically equal but scaled differently" {
