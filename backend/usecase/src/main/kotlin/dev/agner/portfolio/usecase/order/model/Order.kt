@@ -22,7 +22,8 @@ data class Order(
     val contributions: List<StrategyDelta>,
     // A trade already exists today for this ticker in the opposite direction — executing this
     // order too would be a day trade (loses the sale-exemption, taxed at 20% instead). Flagged,
-    // never blocked — see the plan's "Fases" §3.
+    // never blocked — see the plan's "Fases" §3. Day-trade proceeds never consume the R$20k
+    // exemption, so the sale-exemption meter excludes day-trade orders (see SaleCeiling).
     val dayTradeRisk: Boolean,
 )
 

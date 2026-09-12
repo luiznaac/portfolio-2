@@ -452,6 +452,91 @@ class OrderPlanServiceTest : StringSpec({
         plan.saleCeiling.monthSold shouldBe BigDecimal.ZERO
     }
 
+    "should exclude a day-trade-flagged order from the exemption meter" {
+        coEvery { strategyService.fetchAll() } returns listOf(top)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns
+            listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("10000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+        )
+        coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("150"),
+            balances = listOf(StrategyBalance(1, "Top", BigDecimal("150"))),
+        )
+        // A buy already happened today, so the planned sell (150 > ideal 100) is a day trade —
+        // taxed at 20% regardless, so its notional must not eat the R$20k exemption.
+        coEvery { tradeRepository.fetchByAssetId(10) } returns listOf(
+            Trade(2, 10, LocalDate.parse("2026-09-15"), BigDecimal("10"), BigDecimal("50.00")),
+        )
+
+        val plan = service.computePlan()
+
+        plan.orders.single().dayTradeRisk shouldBe true
+        plan.saleCeiling.monthSold shouldBe BigDecimal.ZERO
+    }
+
+    "should exclude a same-day buy+sell ledger pair from the exemption meter" {
+        coEvery { strategyService.fetchAll() } returns listOf(top)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns
+            listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("10000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+        )
+        coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("100"),
+            balances = listOf(StrategyBalance(1, "Top", BigDecimal("100"))),
+        )
+        // A 100-share buy and a 100-share sell on the same day: the sell is the day-trade half of
+        // the pair, so it never consumes the exemption.
+        coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns listOf(
+            Trade(5, 10, LocalDate.parse("2026-09-10"), BigDecimal("100"), BigDecimal("40.00")),
+            Trade(6, 10, LocalDate.parse("2026-09-10"), BigDecimal("-100"), BigDecimal("60.00")),
+        )
+
+        val plan = service.computePlan()
+
+        plan.saleCeiling.monthSold shouldBe BigDecimal.ZERO
+    }
+
+    "should keep counting a swing sell (no same-day buy) toward the exemption meter" {
+        coEvery { strategyService.fetchAll() } returns listOf(top)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns
+            listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("10000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+        )
+        coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("100"),
+            balances = listOf(StrategyBalance(1, "Top", BigDecimal("100"))),
+        )
+        coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns listOf(
+            Trade(7, 10, LocalDate.parse("2026-09-05"), BigDecimal("200"), BigDecimal("40.00")),
+            Trade(8, 10, LocalDate.parse("2026-09-12"), BigDecimal("-100"), BigDecimal("60.00")),
+        )
+
+        val plan = service.computePlan()
+
+        plan.saleCeiling.monthSold shouldBe BigDecimal("6000.00")
+    }
+
     "should not plan for an unregistered ticker and should not crash on it" {
         coEvery { strategyService.fetchAll() } returns listOf(top)
         coEvery { strategyWeightRepository.fetchCurrent(any()) } returns

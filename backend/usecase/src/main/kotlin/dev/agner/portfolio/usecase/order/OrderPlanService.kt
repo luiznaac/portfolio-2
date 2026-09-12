@@ -312,6 +312,12 @@ class OrderPlanService(
      * registered stock: a sale of an asset the app does not know about still counts toward the
      * ceiling, which can only understate headroom, never overstate it — the safe direction.
      *
+     * **Day trades are excluded on purpose too.** A same-day buy+sell (or a planned SELL/FULL_EXIT
+     * already flagged [Order.dayTradeRisk]) is taxed at 20% regardless and never consumes the
+     * monthly exemption, so counting it would show less headroom than actually remains. The planned
+     * side filters on the flag; the ledger side drops any sell whose assetId+date also saw a buy,
+     * which is the same-day definition the flag itself uses.
+     *
      * `remaining` floors at zero so a blown ceiling reads as "nothing left" instead of a negative
      * allowance; whether the ceiling is actually blown is derived by the consumer from
      * `monthSold > limit`. The limit is fixed at R$20k because that is the statutory monthly
@@ -325,13 +331,18 @@ class OrderPlanService(
         val monthStart = LocalDate(today.year, today.month, 1)
         val kindByAssetId = listedAssets.associate { it.id to it.kind }
 
-        val settledStockSales = tradeRepository.fetchByDateRange(monthStart, today)
+        val trades = tradeRepository.fetchByDateRange(monthStart, today)
+        val boughtOn = trades.filter { it.quantity > BigDecimal.ZERO }
+            .mapTo(mutableSetOf()) { it.assetId to it.date }
+        val settledStockSales = trades
             .filter { it.date in monthStart..today && it.quantity < BigDecimal.ZERO }
             .filter { kindByAssetId[it.assetId] != AssetKind.FII }
+            .filter { (it.assetId to it.date) !in boughtOn }
             .sumOf { it.quantity.abs() * it.price }
 
         val plannedStockSales = orders
             .filter { !it.isFii && (it.kind == OrderKind.SELL || it.kind == OrderKind.FULL_EXIT) }
+            .filter { !it.dayTradeRisk }
             .sumOf { it.notional }
 
         val monthSold = settledStockSales + plannedStockSales
