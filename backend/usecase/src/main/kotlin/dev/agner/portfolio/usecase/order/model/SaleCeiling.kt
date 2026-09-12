@@ -10,5 +10,4 @@ data class SaleCeiling(
     val monthSold: BigDecimal,
     val limit: BigDecimal,
     val remaining: BigDecimal,
-    val exceeded: Boolean,
 )

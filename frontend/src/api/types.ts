@@ -443,7 +443,6 @@ export interface SaleCeiling {
   month_sold: number;
   limit: number;
   remaining: number;
-  exceeded: boolean;
 }
 
 export interface OrderPlan {

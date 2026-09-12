@@ -25,6 +25,7 @@ export function Ordens() {
   if (!plan.data) return null;
 
   const { orders, transfer_suggestions: transfers, sale_ceiling: ceiling } = plan.data;
+  const exceeded = ceiling.month_sold > ceiling.limit;
 
   return (
     <div className="space-y-6">
@@ -34,7 +35,7 @@ export function Ordens() {
         <div className="space-y-2">
           <div className="h-3 overflow-hidden rounded-full bg-slate-800">
             <div
-              className={`h-full ${ceiling.exceeded ? "bg-tax" : "bg-accent-500"}`}
+              className={`h-full ${exceeded ? "bg-tax" : "bg-accent-500"}`}
               style={{ width: `${Math.min(100, (ceiling.month_sold / ceiling.limit) * 100)}%` }}
             />
           </div>
@@ -42,7 +43,7 @@ export function Ordens() {
             Vendido no mês:{" "}
             <span className="tabular-nums text-slate-100">{formatBRL(ceiling.month_sold)}</span>
             {" · "}
-            {ceiling.exceeded ? (
+            {exceeded ? (
               <span className="text-tax">teto estourado — ganho vira tributável a 15%</span>
             ) : (
               <>

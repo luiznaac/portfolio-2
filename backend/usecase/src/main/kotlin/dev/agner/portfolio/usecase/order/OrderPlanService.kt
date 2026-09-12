@@ -313,8 +313,9 @@ class OrderPlanService(
      * blind spot of the same family as the unregistered-ticker gap in [computePlan].
      *
      * `remaining` floors at zero so a blown ceiling reads as "nothing left" instead of a negative
-     * allowance, while [SaleCeiling.exceeded] keeps the fact. The limit is fixed at R$20k because
-     * that is the statutory monthly ceiling in force for Brazilian stocks, not a tunable.
+     * allowance; whether the ceiling is actually blown is derived by the consumer from
+     * `monthSold > limit`. The limit is fixed at R$20k because that is the statutory monthly
+     * ceiling in force for Brazilian stocks, not a tunable.
      */
     private suspend fun saleCeiling(
         today: LocalDate,
@@ -337,6 +338,6 @@ class OrderPlanService(
         val limit = BigDecimal("20000.00")
         val remaining = (limit - monthSold).max(BigDecimal.ZERO)
 
-        return SaleCeiling(monthSold = monthSold, limit = limit, remaining = remaining, exceeded = monthSold > limit)
+        return SaleCeiling(monthSold = monthSold, limit = limit, remaining = remaining)
     }
 }
