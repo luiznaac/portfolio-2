@@ -114,6 +114,7 @@ class StrategyEditionServiceTest : StringSpec({
             null,
             listOf(StrategyTarget("PETR4", BigDecimal("0.60")), StrategyTarget("ITUB4", BigDecimal("0.40"))),
         )
+        coEvery { repository.strategyExists(5) } returns true
         coEvery { repository.fetchByStrategyId(5) } returns listOf(edition1, edition2)
 
         val result = service.fetchEditions(5)
@@ -122,5 +123,19 @@ class StrategyEditionServiceTest : StringSpec({
         result[0].diff shouldBe null
         result[1].diff?.entered shouldBe listOf(StrategyTarget("ITUB4", BigDecimal("0.40")))
         result[1].diff?.exited shouldBe listOf(StrategyTarget("VALE3", BigDecimal("0.40")))
+    }
+
+    "fetchEditions should throw when the strategy doesn't exist" {
+        coEvery { repository.strategyExists(99) } returns false
+
+        shouldThrow<StrategyNotFoundException> { service.fetchEditions(99) }
+        coVerify(exactly = 0) { repository.fetchByStrategyId(any()) }
+    }
+
+    "fetchEditions should return an empty list when the strategy exists without editions" {
+        coEvery { repository.strategyExists(5) } returns true
+        coEvery { repository.fetchByStrategyId(5) } returns emptyList()
+
+        service.fetchEditions(5) shouldBe emptyList()
     }
 })

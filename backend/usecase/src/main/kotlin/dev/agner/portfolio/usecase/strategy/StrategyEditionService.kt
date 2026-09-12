@@ -39,6 +39,10 @@ class StrategyEditionService(
     }
 
     suspend fun fetchEditions(strategyId: Int): List<StrategyEditionWithDiff> {
+        if (!repository.strategyExists(strategyId)) {
+            throw StrategyNotFoundException(strategyId)
+        }
+
         val editions = repository.fetchByStrategyId(strategyId)
         return editions.mapIndexed { i, edition ->
             val diff = if (i == 0) null else diffCalculator.diff(editions[i - 1].targets, edition.targets)

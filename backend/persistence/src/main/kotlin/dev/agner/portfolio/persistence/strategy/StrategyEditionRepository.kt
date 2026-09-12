@@ -37,6 +37,10 @@ class StrategyEditionRepository(
         editions.map { it.toModel(targetsByEditionId[it.id.value].orEmpty().map(StrategyTargetEntity::toModel)) }
     }
 
+    override suspend fun strategyExists(strategyId: Int): Boolean = transaction {
+        StrategyEntity.findById(strategyId) != null
+    }
+
     override suspend fun exists(strategyId: Int, referenceDate: LocalDate): Boolean = transaction {
         StrategyEditionEntity.find {
             (StrategyEditionTable.strategy eq strategyId) and

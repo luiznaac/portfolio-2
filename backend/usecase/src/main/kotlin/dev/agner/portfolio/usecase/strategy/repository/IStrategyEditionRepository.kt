@@ -9,6 +9,9 @@ interface IStrategyEditionRepository {
     /** Oldest first — callers that need the diff chain rely on this order. */
     suspend fun fetchByStrategyId(strategyId: Int): List<StrategyEdition>
 
+    /** Distinguishes "strategy missing" (404) from "strategy exists with no editions" (empty list). */
+    suspend fun strategyExists(strategyId: Int): Boolean
+
     suspend fun exists(strategyId: Int, referenceDate: LocalDate): Boolean
 
     suspend fun save(creation: StrategyEditionCreation): StrategyEdition

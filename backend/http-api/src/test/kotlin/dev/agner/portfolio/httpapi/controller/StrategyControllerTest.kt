@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.configuration.DefaultDomainExceptionStatusMapper
 import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
+import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -23,6 +24,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 
@@ -80,6 +82,40 @@ class StrategyControllerTest : DescribeSpec({
                 payload.get("error").asText() shouldBe "invalid-strategy-id"
                 payload.get("detail").asText() shouldContain "<missing>"
                 coVerify(exactly = 0) { editionService.fetchEditions(any()) }
+            }
+        }
+    }
+
+    describe("fetching editions") {
+
+        it("returns 404 when the strategy does not exist") {
+            val service = mockk<StrategyService>(relaxed = true)
+            val editionService = mockk<StrategyEditionService>()
+            coEvery { editionService.fetchEditions(99) } throws StrategyNotFoundException(99)
+
+            testApplication {
+                application { installController(StrategyController(service, editionService)) }
+
+                val response = client.get("/strategies/99/editions")
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.NotFound
+                payload.get("error").asText() shouldBe "strategy-not-found"
+            }
+        }
+
+        it("returns 200 with an empty list when the strategy has no editions") {
+            val service = mockk<StrategyService>(relaxed = true)
+            val editionService = mockk<StrategyEditionService>(relaxed = true)
+            coEvery { editionService.fetchEditions(5) } returns emptyList()
+
+            testApplication {
+                application { installController(StrategyController(service, editionService)) }
+
+                val response = client.get("/strategies/5/editions")
+
+                response.status shouldBe HttpStatusCode.OK
+                response.bodyAsText() shouldBe "[]"
             }
         }
     }
