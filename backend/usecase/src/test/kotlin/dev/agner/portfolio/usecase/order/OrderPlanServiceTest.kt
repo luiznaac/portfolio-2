@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.attribution.AttributionService
 import dev.agner.portfolio.usecase.attribution.model.AttributionSummary
 import dev.agner.portfolio.usecase.attribution.model.StrategyBalance
 import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
+import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.STOCK
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.model.Quote
@@ -390,6 +391,65 @@ class OrderPlanServiceTest : StringSpec({
             it.kind shouldBe BUY
             it.quantity shouldBe BigDecimal("20")
         }
+    }
+
+    "should count a sale of an unregistered asset toward the ceiling" {
+        coEvery { strategyService.fetchAll() } returns listOf(top)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns
+            listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("10000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+        )
+        coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("100"),
+            balances = listOf(StrategyBalance(1, "Top", BigDecimal("100"))),
+        )
+        // A sell of an asset with no registered kind: without a kind to look up it cannot be
+        // proven to be a FII, so the conservative reading is to count it (understates headroom).
+        coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns listOf(
+            Trade(3, 999, LocalDate.parse("2026-09-05"), BigDecimal("-100"), BigDecimal("60.00")),
+        )
+
+        val plan = service.computePlan()
+
+        plan.saleCeiling.monthSold shouldBe BigDecimal("6000.00")
+    }
+
+    "should not count a sale of a registered FII toward the ceiling" {
+        val fii = ListedAsset(id = 12, ticker = "KNCR11", kind = AssetKind.FII, name = "KNCR", b3Identifier = "KNCR")
+        coEvery { strategyService.fetchAll() } returns listOf(top)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns
+            listOf(StrategyWeight(1, 1, BigDecimal("1.0000"), LocalDate.parse("2026-01-01")))
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("10000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+        )
+        coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4, fii)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("100"),
+            balances = listOf(StrategyBalance(1, "Top", BigDecimal("100"))),
+        )
+        coEvery { attributionService.summarize(12) } returns AttributionSummary(
+            custodyQuantity = BigDecimal.ZERO,
+            balances = emptyList(),
+        )
+        coEvery { tradeRepository.fetchByDateRange(any(), any()) } returns listOf(
+            Trade(4, 12, LocalDate.parse("2026-09-05"), BigDecimal("-100"), BigDecimal("60.00")),
+        )
+
+        val plan = service.computePlan()
+
+        plan.saleCeiling.monthSold shouldBe BigDecimal.ZERO
     }
 
     "should not plan for an unregistered ticker and should not crash on it" {

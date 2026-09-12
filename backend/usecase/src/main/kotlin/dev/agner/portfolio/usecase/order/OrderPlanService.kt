@@ -308,9 +308,9 @@ class OrderPlanService(
      *
      * **FIIs are excluded on purpose.** They have no exemption at all and are always taxed, so
      * counting them here would understate how much of the ceiling the stocks have really eaten. The
-     * ledger side is filtered by the asset's registered [AssetKind.STOCK] for the same reason, which
-     * means a sale of an asset that is not registered lands on neither side of the meter — a known
-     * blind spot of the same family as the unregistered-ticker gap in [computePlan].
+     * ledger side therefore drops only known FIIs (by registered kind) rather than requiring a
+     * registered stock: a sale of an asset the app does not know about still counts toward the
+     * ceiling, which can only understate headroom, never overstate it — the safe direction.
      *
      * `remaining` floors at zero so a blown ceiling reads as "nothing left" instead of a negative
      * allowance; whether the ceiling is actually blown is derived by the consumer from
@@ -327,7 +327,7 @@ class OrderPlanService(
 
         val settledStockSales = tradeRepository.fetchByDateRange(monthStart, today)
             .filter { it.date in monthStart..today && it.quantity < BigDecimal.ZERO }
-            .filter { kindByAssetId[it.assetId] == AssetKind.STOCK }
+            .filter { kindByAssetId[it.assetId] != AssetKind.FII }
             .sumOf { it.quantity.abs() * it.price }
 
         val plannedStockSales = orders
