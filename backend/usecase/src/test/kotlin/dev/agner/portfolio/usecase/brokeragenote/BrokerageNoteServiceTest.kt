@@ -82,6 +82,21 @@ class BrokerageNoteServiceTest : StringSpec({
         preview.unresolvedTickers shouldBe listOf("NOVA11")
     }
 
+    "should degrade matchesPlan instead of failing when the order plan can't be computed" {
+        every { parser.parse(xlsxBytes) } returns listOf(
+            ParsedTrade(date, "PETR4", TradeSide.BUY, BigDecimal("100"), BigDecimal("35.50")),
+            ParsedTrade(date, "NOVA11", TradeSide.BUY, BigDecimal("5"), BigDecimal("10.00")),
+        )
+        coEvery { orderPlanService.computePlan() } throws RuntimeException("quote gateway down")
+        coEvery { listedAssetRepository.resolveIdByTicker("PETR4", date) } returns 1
+        coEvery { listedAssetRepository.resolveIdByTicker("NOVA11", date) } returns null
+
+        val preview = service.preview(xlsxBytes)
+
+        preview.trades.all { !it.matchesPlan } shouldBe true
+        preview.unresolvedTickers shouldBe listOf("NOVA11")
+    }
+
     "should fail loudly when the statement has no trades" {
         every { parser.parse(xlsxBytes) } returns emptyList()
 
