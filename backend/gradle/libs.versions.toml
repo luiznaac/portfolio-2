@@ -21,6 +21,7 @@ ktor-cors = { module="io.ktor:ktor-server-cors", version.ref = "ktor"}
 ktor-status-pages = { module="io.ktor:ktor-server-status-pages", version.ref = "ktor"}
 ktor-content-negotiation = { module="io.ktor:ktor-server-content-negotiation", version.ref = "ktor"}
 ktor-jackson = { module="io.ktor:ktor-serialization-jackson", version.ref = "ktor"}
+ktor-server-test-host = { module="io.ktor:ktor-server-test-host", version.ref = "ktor"}
 ktor-client-core = { module="io.ktor:ktor-client-core", version.ref = "ktor"}
 ktor-client-cio = { module="io.ktor:ktor-client-cio", version.ref = "ktor"}
 ktor-client-content-negotiation = { module="io.ktor:ktor-client-content-negotiation", version.ref = "ktor"}
@@ -47,6 +48,8 @@ jackson-kotlin = { module="com.fasterxml.jackson.module:jackson-module-kotlin", 
 jackson-jsr310 = { module="com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref="jackson" }
 
 apache-poi = { module="org.apache.poi:poi-ooxml", version="5.4.1" }
+
+caffeine = { module="com.github.ben-manes.caffeine:caffeine", version="3.2.4" }
 
 # Test dependencies
 kotest-assertions-core = { module="io.kotest:kotest-assertions-core", version.ref="kotest" }

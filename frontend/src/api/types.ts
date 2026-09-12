@@ -14,6 +14,12 @@
 
 export type IndexId = "IPCA" | "CDI" | "SELIC";
 
+export interface ApiErrorResponse {
+  error: string;
+  message: string;
+  detail: string;
+}
+
 export type BondOrderType =
   | "BUY"
   | "SELL"
@@ -384,7 +390,7 @@ export interface StrategyEditionWithDiff {
 
 // --- orders (Fase 3: grouped orders + the R$20k sale-exemption ceiling) ---
 
-export type OrderKind = "COMPRAR" | "VENDER" | "ZERAR" | "ENTRADA_NOVA";
+export type OrderKind = "BUY" | "SELL" | "FULL_EXIT" | "NEW_ENTRY";
 
 export interface StrategyDelta {
   strategy_id: number;
@@ -404,7 +410,8 @@ export interface Order {
   notional: number;
   contributions: StrategyDelta[];
   // A trade already exists today for this ticker in the opposite direction — this order would be
-  // a day trade (loses the sale exemption, taxed at 20% instead). Flagged, never blocked.
+  // a day trade (loses the sale exemption, taxed at 20% instead). Flagged, never blocked. Day-trade
+  // proceeds never consume the R$20k exemption, so the sale-exemption meter excludes these orders.
   day_trade_risk: boolean;
 }
 
@@ -442,12 +449,12 @@ export interface TransferSettings {
 
 // Stock sales (never FIIs — always taxed at 20%, no exemption) up to R$20,000/month are exempt
 // from capital-gains tax; the ceiling is on the amount *sold*, not the gain. month_sold includes
-// both already-executed trades this month and this plan's own pending SELL/ZERAR orders.
+// both already-executed trades this month and this plan's own pending SELL/FULL_EXIT orders;
+// day trades (see Order.day_trade_risk) never consume the exemption and are excluded.
 export interface SaleCeiling {
   month_sold: number;
   limit: number;
   remaining: number;
-  exceeded: boolean;
 }
 
 export interface OrderPlan {

@@ -6,8 +6,9 @@ import java.math.BigDecimal
 /**
  * One (month, asset group) bucket of the capital-gains ledger. [isFii] mirrors
  * [dev.agner.portfolio.usecase.order.model.Order.isFii] — FIIs have no sale exemption and are
- * always taxed at 20%; everything else (stocks, ETFs, BDRs) shares the R$20,000/month exemption
- * and the 15% rate. [month] is always the first day of the month.
+ * always taxed at 20%. Everything else (stocks, ETFs, BDRs) shares the 15% rate, but only stocks
+ * get the R$20,000/month exemption: [exempt] is true only for a month whose stock sales stayed
+ * under the ceiling (day-trade sales never count). [month] is always the first day of the month.
  */
 data class MonthlyCapitalGain(
     val month: LocalDate,

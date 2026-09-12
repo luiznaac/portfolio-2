@@ -39,9 +39,7 @@ class MonthlyCloseService(
         val pending = orderPlanService.transfersForMonth().count { it.status == PENDENTE }
         require(pending == 0) { "Cannot close the month with $pending pending transfer proposal(s)" }
 
-        val month = currentMonth()
-        repository.open(month)
-        return repository.close(month)
+        return repository.close(currentMonth())
     }
 
     suspend fun driftAlert(thresholdPP: BigDecimal = DEFAULT_THRESHOLD_PP): List<DriftAlert> {
