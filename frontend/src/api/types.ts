@@ -295,16 +295,33 @@ export interface AllocationPlan {
 
 // --- strategies (the broker's model portfolios) ---
 //
-// Minimal in Fase 1: registration only. Per-ticker weights (StrategyEdition/StrategyTarget,
-// parsed from broker model-portfolio PDFs) arrive in Fase 2.
+// assetClass says which class's ideal capital this strategy draws from (see StrategyWeight) — a
+// strategy belongs to exactly one class. Per-ticker weights (StrategyEdition/StrategyTarget,
+// parsed from broker model-portfolio PDFs) arrive via Fase 2's endpoints below.
 
 export interface Strategy {
   id: number;
   name: string;
+  asset_class: AssetClass;
 }
 
 export interface StrategyCreation {
   name: string;
+  asset_class: AssetClass;
+}
+
+// The strategy's own share of its AssetClass's ideal capital (e.g. within ACOES, Top=40%,
+// Dividendos=30%) — versioned by effective_from, same convention as AssetClassTarget.
+export interface StrategyWeight {
+  id: number;
+  strategy_id: number;
+  weight: number;
+  effective_from: string;
+}
+
+export interface StrategyWeightCreation {
+  weight: number;
+  effective_from: string;
 }
 
 // --- attribution (splitting custody across strategies — decided by the user, never derived) ---
@@ -369,4 +386,68 @@ export interface StrategyTargetDiff {
 export interface StrategyEditionWithDiff {
   edition: StrategyEdition;
   diff?: StrategyTargetDiff;
+}
+
+// --- orders (Fase 3: grouped orders + the R$20k sale-exemption ceiling) ---
+
+export type OrderKind = "BUY" | "SELL" | "FULL_EXIT" | "NEW_ENTRY";
+
+export interface StrategyDelta {
+  strategy_id: number;
+  strategy_name: string;
+  // current (attributed) - ideal, in shares. Positive = holding more than it should; negative = less.
+  delta: number;
+}
+
+// One ticker's net order — already the residual after transfer_suggestions are applied, so
+// quantity is the smallest trade that actually needs to happen.
+export interface Order {
+  listed_asset_id: number;
+  ticker: string;
+  is_fii: boolean;
+  kind: OrderKind;
+  quantity: number;
+  notional: number;
+  contributions: StrategyDelta[];
+  // A trade already exists today for this ticker in the opposite direction — this order would be
+  // a day trade (loses the sale exemption, taxed at 20% instead). Flagged, never blocked. Day-trade
+  // proceeds never consume the R$20k exemption, so the sale-exemption meter excludes these orders.
+  day_trade_risk: boolean;
+}
+
+// Moving custody attribution between two strategies for the same ticker costs nothing — no
+// brokerage, no tax, doesn't touch the sale-exemption ceiling — versus selling from one strategy
+// and buying back for the other. Computed fresh every time the plan is requested; POST
+// /orders/transfers/apply executes one directly (no separate approve/reject lifecycle).
+// Strategy names are resolved on screen from the ids (see Ordens.tsx), not carried here.
+export interface TransferSuggestion {
+  listed_asset_id: number;
+  ticker: string;
+  from_strategy_id: number;
+  to_strategy_id: number;
+  quantity: number;
+}
+
+export interface ApplyTransferRequest {
+  listed_asset_id: number;
+  from_strategy_id: number;
+  to_strategy_id: number;
+  quantity: number;
+  date: string;
+}
+
+// Stock sales (never FIIs — always taxed at 20%, no exemption) up to R$20,000/month are exempt
+// from capital-gains tax; the ceiling is on the amount *sold*, not the gain. month_sold includes
+// both already-executed trades this month and this plan's own pending SELL/FULL_EXIT orders;
+// day trades (see Order.day_trade_risk) never consume the exemption and are excluded.
+export interface SaleCeiling {
+  month_sold: number;
+  limit: number;
+  remaining: number;
+}
+
+export interface OrderPlan {
+  orders: Order[];
+  transfer_suggestions: TransferSuggestion[];
+  sale_ceiling: SaleCeiling;
 }

@@ -15,10 +15,3 @@ class StrategyEditionAlreadyExistsException(strategyId: Int, referenceDate: Stri
         userMessage = "Strategy edition already exists",
         detail = "Strategy $strategyId already has an edition for $referenceDate",
     )
-
-class InvalidStrategyIdException(received: String?) :
-    DomainException(
-        error = "invalid-strategy-id",
-        userMessage = "Invalid strategy id",
-        detail = "Received strategy id: ${received ?: "<missing>"}",
-    )

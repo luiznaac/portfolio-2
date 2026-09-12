@@ -24,6 +24,7 @@ class StrategyRepository(
     override suspend fun save(creation: StrategyCreation) = transaction {
         StrategyEntity.new {
             name = creation.name
+            assetClass = creation.assetClass.name
             createdAt = LocalDateTime.now(clock)
         }.toModel()
     }

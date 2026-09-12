@@ -85,3 +85,9 @@ fun LocalDate.toMondayIfWeekend() = when (dayOfWeek) {
 fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() } }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
+
+// BigDecimal.equals() is scale-sensitive (0 != 0.00000000, even though compareTo() says they're
+// equal) — comparing a computed value against BigDecimal.ZERO with == silently misses "zero at a
+// different scale" and, worse, can loop forever on a decrement that never satisfies ==. Use this
+// instead of `== BigDecimal.ZERO` / `!= BigDecimal.ZERO` anywhere the value's scale isn't fixed.
+fun BigDecimal.isZero() = signum() == 0

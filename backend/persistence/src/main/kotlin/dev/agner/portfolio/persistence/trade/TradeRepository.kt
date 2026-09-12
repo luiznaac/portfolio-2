@@ -4,9 +4,13 @@ import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.trade.model.TradeCreation
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -18,6 +22,12 @@ class TradeRepository(
 
     override suspend fun fetchByAssetId(assetId: Int) = transaction {
         TradeEntity.find { TradeTable.listedAsset eq assetId }
+            .orderBy(TradeTable.date to SortOrder.ASC)
+            .map { it.toModel() }
+    }
+
+    override suspend fun fetchByDateRange(start: LocalDate, end: LocalDate) = transaction {
+        TradeEntity.find { (TradeTable.date greaterEq start) and (TradeTable.date lessEq end) }
             .orderBy(TradeTable.date to SortOrder.ASC)
             .map { it.toModel() }
     }

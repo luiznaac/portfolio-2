@@ -1,11 +1,10 @@
 package dev.agner.portfolio.httpapi.controller
 
-import dev.agner.portfolio.usecase.strategy.InvalidStrategyIdException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyWeightCreation
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
@@ -33,11 +32,22 @@ class StrategyController(
                 call.respond(HttpStatusCode.Created, service.create(payload))
             }
 
+            get("/weights") {
+                call.respond(HttpStatusCode.OK, service.fetchWeightHistory())
+            }
+
             route("/{strategy_id}") {
                 get("/editions") {
                     val strategyId = call.strategyId()
 
                     call.respond(HttpStatusCode.OK, editionService.fetchEditions(strategyId))
+                }
+
+                post("/weight") {
+                    val strategyId = call.strategyId()
+                    val payload = call.receive<StrategyWeightCreation>()
+
+                    call.respond(HttpStatusCode.Created, service.setWeight(strategyId, payload))
                 }
 
                 // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly instead
@@ -54,9 +64,3 @@ class StrategyController(
         }
     }
 }
-
-// Client-driven path parsing: an absent or non-numeric segment must surface as the domain error
-// (mapped to 400) instead of a NumberFormatException/KotlinNullPointerException 500.
-internal fun ApplicationCall.strategyId(): Int =
-    parameters["strategy_id"]?.toIntOrNull()
-        ?: throw InvalidStrategyIdException(parameters["strategy_id"])
