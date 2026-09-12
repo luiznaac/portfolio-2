@@ -8,6 +8,8 @@ import dev.agner.portfolio.usecase.listedasset.model.Quote
 import dev.agner.portfolio.usecase.listedasset.model.QuoteSource.BRAPI
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.Order
+import dev.agner.portfolio.usecase.order.model.OrderKind
 import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
@@ -99,5 +101,43 @@ class StepUpServiceTest : StringSpec({
         val plan = service.plan()
 
         plan.suggestions[0].quantity shouldBe BigDecimal("25")
+    }
+
+    "should discount the quantity already planned to sell from the step-up candidate" {
+        coEvery { orderPlanService.computePlan() } returns OrderPlan(
+            orders = listOf(
+                Order(1, "PETR4", false, OrderKind.SELL, BigDecimal("40"), BigDecimal("600.00"), emptyList(), false),
+            ),
+            transferSuggestions = emptyList(),
+            saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { quoteGateway.getQuote(stock) } returns Quote(BigDecimal("15.00"), LocalDate(2026, 9, 8), BRAPI)
+
+        val plan = service.plan()
+
+        plan.suggestions.single().quantity shouldBe BigDecimal("60")
+    }
+
+    "should skip a ticker whose whole position is already covered by a planned sell" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+
+        for (kind in listOf(OrderKind.SELL, OrderKind.FULL_EXIT)) {
+            coEvery { orderPlanService.computePlan() } returns OrderPlan(
+                orders = listOf(
+                    Order(1, "PETR4", false, kind, BigDecimal("100"), BigDecimal("1500.00"), emptyList(), false),
+                ),
+                transferSuggestions = emptyList(),
+                saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
+            )
+
+            service.plan().suggestions shouldBe emptyList()
+        }
     }
 })

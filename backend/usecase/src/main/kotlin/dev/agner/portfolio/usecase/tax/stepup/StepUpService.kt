@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.OrderKind
 import dev.agner.portfolio.usecase.tax.stepup.model.StepUpPlan
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
@@ -19,6 +20,10 @@ import java.time.Clock
  * excluding FIIs (no exemption to maximize) and anything already bought today (selling it would
  * be a day trade — same risk [dev.agner.portfolio.usecase.order.OrderPlanService] flags), and
  * feeds it the month's remaining sale-exemption ceiling.
+ *
+ * The order plan's own pending sells are netted out first: a ticker the plan already sells only
+ * enters with the quantity the plan does not cover, so the two lists never propose the same shares
+ * twice (see [plan]).
  */
 @Service
 class StepUpService(
@@ -34,7 +39,10 @@ class StepUpService(
 
     suspend fun plan(): StepUpPlan {
         val today = LocalDate.today(clock)
-        val remainingCeiling = orderPlanService.computePlan().saleCeiling.remaining
+        val orderPlan = orderPlanService.computePlan()
+        val plannedSells = orderPlan.orders
+            .filter { it.kind == OrderKind.SELL || it.kind == OrderKind.FULL_EXIT }
+            .associate { it.listedAssetId to it.quantity }
 
         val candidates = listedAssetRepository.fetchAll()
             .filter { it.kind != AssetKind.FII }
@@ -45,19 +53,21 @@ class StepUpService(
 
                 val corporateActions = corporateActionRepository.fetchByAssetId(asset.id)
                 val position = averagePriceCalculator.calculate(trades, corporateActions).position
-                if (position.quantity <= BigDecimal.ZERO) return@mapNotNull null
+                val planned = plannedSells[asset.id] ?: BigDecimal.ZERO
+                val quantity = position.quantity - planned
+                if (quantity <= BigDecimal.ZERO) return@mapNotNull null
 
                 val quote = quoteGateway.getQuote(asset) ?: return@mapNotNull null
 
                 StepUpCandidate(
                     listedAssetId = asset.id,
                     ticker = asset.ticker,
-                    quantity = position.quantity,
+                    quantity = quantity,
                     averagePrice = position.averagePrice,
                     currentPrice = quote.price,
                 )
             }
 
-        return planner.plan(candidates, remainingCeiling, today)
+        return planner.plan(candidates, orderPlan.saleCeiling.remaining, today)
     }
 }
