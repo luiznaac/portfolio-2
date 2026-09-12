@@ -55,4 +55,52 @@ class TransferMatcherTest : StringSpec({
 
         suggestions.single().quantity shouldBe BigDecimal("5")
     }
+
+    "should conserve the total across suggestions — every unit taken is a unit given" {
+        val deltas = mapOf(1 to BigDecimal("7"), 2 to BigDecimal("5"), 3 to BigDecimal("-9"))
+
+        val suggestions = matcher.match(1, "VALE3", deltas, names)
+
+        val moved = suggestions.sumOf { it.quantity }
+        moved shouldBe BigDecimal("9")
+        // One side runs dry: 7 + 5 = 12 of excess against 9 of shortage, so 3 stays excess and no
+        // suggestion may exceed what the donor actually had.
+        suggestions.filter { it.fromStrategyId == 1 }.sumOf { it.quantity } shouldBe BigDecimal("7")
+        suggestions.all { it.quantity > BigDecimal.ZERO } shouldBe true
+    }
+
+    "should drain every strategy when excess and shortage are exact mirror images" {
+        val deltas = mapOf(1 to BigDecimal("6"), 2 to BigDecimal("4"), 3 to BigDecimal("-4"), 4 to BigDecimal("-6"))
+
+        val suggestions = matcher.match(1, "ITSA4", deltas, names)
+
+        suggestions.sumOf { it.quantity } shouldBe BigDecimal("10")
+        // Largest donor pairs with largest receiver: strategy 1's +6 goes to strategy 4's −6, and
+        // strategy 2's +4 to strategy 3's −4. Accrued per strategy as it applies — donating
+        // subtracts, receiving adds — every delta is worked off exactly, so the ticker needs no
+        // trade at all once the transfers are booked.
+        suggestions.map { Triple(it.fromStrategyId, it.toStrategyId, it.quantity) } shouldBe listOf(
+            Triple(1, 4, BigDecimal("6")),
+            Triple(2, 3, BigDecimal("4")),
+        )
+        val applied = suggestions
+            .flatMap { listOf(it.fromStrategyId to -it.quantity, it.toStrategyId to it.quantity) }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, moves) -> moves.sumOf { it } }
+        applied shouldBe mapOf(
+            1 to BigDecimal("-6"),
+            2 to BigDecimal("-4"),
+            3 to BigDecimal("4"),
+            4 to BigDecimal("6"),
+        )
+    }
+
+    "should ignore a zero delta when pairing" {
+        val deltas = mapOf(1 to BigDecimal("5"), 2 to BigDecimal("0"), 3 to BigDecimal("-5"))
+
+        val suggestions = matcher.match(1, "PETR4", deltas, names)
+
+        suggestions.single().fromStrategyId shouldBe 1
+        suggestions.single().toStrategyId shouldBe 3
+    }
 })
