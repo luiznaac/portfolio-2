@@ -1,5 +1,6 @@
 package dev.agner.portfolio.integrationTest.tests
 
+import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.allocation.model.AssetClass.ACOES
@@ -17,13 +18,16 @@ import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.every
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
+import java.time.Instant
 
 @IntegrationTest
 class TransferTransactionTest : StringSpec({
 
     "applying a transfer persists both movements in one transaction" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         val strategyRepository = getBean<IStrategyRepository>()
         val listedAssetRepository = getBean<IListedAssetRepository>()
         val attributionRepository = getBean<IAttributionRepository>()
@@ -55,11 +59,12 @@ class TransferTransactionTest : StringSpec({
         val balances = attributionRepository.fetchByAssetId(asset.id)
             .groupBy { it.strategyId }
             .mapValues { (_, movements) -> movements.sumOf { it.quantity } }
-        balances[fromStrategy.id] shouldBe BigDecimal("60")
-        balances[toStrategy.id] shouldBe BigDecimal("40")
+        balances[fromStrategy.id] shouldBe BigDecimal("60.00000000")
+        balances[toStrategy.id] shouldBe BigDecimal("40.00000000")
     }
 
     "an unknown to-strategy returns StrategyNotFoundException and writes nothing" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         val strategyRepository = getBean<IStrategyRepository>()
         val listedAssetRepository = getBean<IListedAssetRepository>()
         val attributionRepository = getBean<IAttributionRepository>()
@@ -92,10 +97,11 @@ class TransferTransactionTest : StringSpec({
         val balances = attributionRepository.fetchByAssetId(asset.id)
             .groupBy { it.strategyId }
             .mapValues { (_, movements) -> movements.sumOf { it.quantity } }
-        balances[fromStrategy.id] shouldBe BigDecimal("100")
+        balances[fromStrategy.id] shouldBe BigDecimal("100.00000000")
     }
 
     "a failed second save rolls back the first movement" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         val strategyRepository = getBean<IStrategyRepository>()
         val listedAssetRepository = getBean<IListedAssetRepository>()
         val attributionRepository = getBean<IAttributionRepository>()
