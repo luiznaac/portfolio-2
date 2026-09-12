@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.allocation.model.AssetClass.ACOES
 import dev.agner.portfolio.usecase.attribution.model.AttributionMovementCreation
 import dev.agner.portfolio.usecase.attribution.model.AttributionReason
 import dev.agner.portfolio.usecase.attribution.repository.IAttributionRepository
+import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.STOCK
 import dev.agner.portfolio.usecase.listedasset.model.ListedAssetCreation
@@ -114,10 +115,39 @@ class TransferProposalTransactionTest : StringSpec({
                     ),
                 )
                 // The status write targets an unknown proposal; the whole execute must roll back.
-                proposalRepository.decide(999_999, APLICADA, BigDecimal("40"), LocalDateTime.now())
+                proposalRepository.decide(999_999, APLICADA, BigDecimal("40"), LocalDateTime.now(ClockMock.clock))
             }
         }
 
         attributionRepository.fetchByAssetId(asset.id) shouldBe emptyList()
+    }
+
+    "saving the same pairing twice returns the existing proposal and leaves one row" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
+        val strategyRepository = getBean<IStrategyRepository>()
+        val listedAssetRepository = getBean<IListedAssetRepository>()
+        val proposalRepository = getBean<ITransferProposalRepository>()
+
+        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
+        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = ACOES))
+        val asset = listedAssetRepository.save(
+            ListedAssetCreation(ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS"),
+        )
+        val creation = TransferProposalCreation(
+            month = LocalDate.parse("2026-09-01"),
+            listedAssetId = asset.id,
+            ticker = "PETR4",
+            fromStrategyId = fromStrategy.id,
+            fromStrategyName = fromStrategy.name,
+            toStrategyId = toStrategy.id,
+            toStrategyName = toStrategy.name,
+            proposedQuantity = BigDecimal("40"),
+        )
+
+        val first = proposalRepository.save(creation)
+        val second = proposalRepository.save(creation)
+
+        second.id shouldBe first.id
+        proposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")).size shouldBe 1
     }
 })

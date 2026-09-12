@@ -25,7 +25,9 @@ object TransferProposalTable : IntIdTable("transfer_proposal") {
     val decidedAt = datetime("decided_at").nullable()
     val createdAt = datetime("created_at")
 
-    init { index(false, month, listedAsset, fromStrategy, toStrategy) }
+    // One pairing per month: a rejection is never recreated, so the check-then-insert in
+    // TransferProposalRepository.save relies on this unique constraint to close its race.
+    init { uniqueIndex(month, listedAsset, fromStrategy, toStrategy) }
 }
 
 class TransferProposalEntity(id: EntityID<Int>) : IntEntity(id) {
