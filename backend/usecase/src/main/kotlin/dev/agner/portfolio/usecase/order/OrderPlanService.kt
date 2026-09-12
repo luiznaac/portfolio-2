@@ -234,7 +234,10 @@ class OrderPlanService(
                 ),
             )
 
-            existing.status == PENDENTE && existing.proposedQuantity != match.quantity ->
+            // `compareTo`, not `!=`: `BigDecimal.equals` is scale-sensitive, and the column
+            // (18,8) reads back at scale 8 while a computed match can arrive at scale 0, so `!=`
+            // would refresh the quantity on every plan computation even when the value is the same.
+            existing.status == PENDENTE && existing.proposedQuantity.compareTo(match.quantity) != 0 ->
                 transferProposalRepository.updateProposedQuantity(existing.id, match.quantity)
 
             else -> existing

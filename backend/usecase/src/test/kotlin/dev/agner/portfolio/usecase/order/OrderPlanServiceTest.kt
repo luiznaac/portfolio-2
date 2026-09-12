@@ -260,6 +260,56 @@ class OrderPlanServiceTest : StringSpec({
         plan.transferProposals shouldBe listOf(saved)
     }
 
+    "should keep a pending proposal whose quantity is numerically equal but scaled differently" {
+        val div = Strategy(id = 2, name = "Dividendos", assetClass = ACOES)
+        coEvery { strategyService.fetchAll() } returns listOf(top, div)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns listOf(
+            StrategyWeight(1, 1, BigDecimal("0.2500"), LocalDate.parse("2026-01-01")),
+            StrategyWeight(2, 2, BigDecimal("0.2500"), LocalDate.parse("2026-01-01")),
+        )
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("20000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("20000.00"), BigDecimal("20000.00"))),
+        )
+        coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("1.0")))),
+        )
+        coEvery { strategyEditionService.fetchEditions(2) } returns listOf(
+            edition(2, listOf(StrategyTarget("PETR4", BigDecimal("1.0")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("200"),
+            balances = listOf(
+                StrategyBalance(1, "Top", BigDecimal("150")),
+                StrategyBalance(2, "Dividendos", BigDecimal("50")),
+            ),
+        )
+        // The DB reads back scale 8; the computed match arrives at scale 0. Same value, so the
+        // proposal must be returned as-is instead of being "refreshed" on every read.
+        val existing = TransferProposal(
+            id = 8,
+            month = LocalDate.parse("2026-09-01"),
+            listedAssetId = 10,
+            ticker = "PETR4",
+            fromStrategyId = 1,
+            fromStrategyName = "Top",
+            toStrategyId = 2,
+            toStrategyName = "Dividendos",
+            proposedQuantity = BigDecimal("50.00000000"),
+            appliedQuantity = null,
+            status = PENDENTE,
+            decidedAt = null,
+        )
+        coEvery { transferProposalRepository.find(any(), 10, 1, 2) } returns existing
+
+        val plan = service.computePlan()
+
+        plan.transferProposals shouldBe listOf(existing)
+        io.mockk.coVerify(exactly = 0) { transferProposalRepository.updateProposedQuantity(any(), any()) }
+    }
+
     "should not resurrect a transfer proposal rejected earlier this month" {
         val div = Strategy(id = 2, name = "Dividendos", assetClass = ACOES)
         coEvery { strategyService.fetchAll() } returns listOf(top, div)
