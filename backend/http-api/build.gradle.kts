@@ -14,4 +14,5 @@ dependencies {
     implementation("org.apache.pdfbox:pdfbox:3.0.6")
 
     testImplementation(libs.bundles.testDependencies)
+    testImplementation(libs.ktor.server.test.host)
 }
