@@ -106,9 +106,12 @@ application  →  http-api  →  usecase  ←  persistence
   `AttributionMovementCreation` and `StrategyWeightCreation` all follow the parameter form.
 - **Separate commands from queries.** A `GET` handler must not write. `OrderPlanService` splits
   `computePlan()` (pure read, safe for previews and for any other service to call) from
-  `refreshPlan()` (persists newly matched transfer proposals and auto-applies the small ones).
-  Multi-repository writes go inside `transaction.execute { }` so a partial failure can't leave two
-  tables disagreeing.
+  `refreshPlan()` (persists newly matched transfer proposals and auto-applies the small ones). At
+  the HTTP boundary that split is observable: `GET /orders/plan` only returns the stored proposals,
+  `POST /orders/plan/refresh` is the route that reconciles the month, and `MonthlyCloseService.close()`
+  calls `refreshPlan()` internally — so a client should refresh before closing a fresh month, or the
+  close can create the proposals it then blocks on. Multi-repository writes go inside
+  `transaction.execute { }` so a partial failure can't leave two tables disagreeing.
 - **Format-specific parsing is a Strategy, chosen at runtime, and lives outside `usecase`.** Broker
   file layouts vary by broker and even by desk, so each layout is its own `@Component` implementing
   a parser interface with a `shouldExecute(document): Boolean` predicate; a resolver injects
