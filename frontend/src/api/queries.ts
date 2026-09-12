@@ -42,6 +42,7 @@ export const keys = {
   fixedIncomeSubClassTargets: ["allocation", "fixed-income-subclass-targets"] as const,
   classifications: ["allocation", "classifications"] as const,
   strategies: ["strategies"] as const,
+  strategyEditions: (strategyId: number) => ["strategies", strategyId, "editions"] as const,
   attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
 };
 
@@ -376,6 +377,21 @@ export function useCreateStrategy() {
   return useMutation({
     mutationFn: (body: StrategyCreation) => api.createStrategy(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.strategies }),
+  });
+}
+
+export function useStrategyEditions(strategyId: number) {
+  return useQuery({
+    queryKey: keys.strategyEditions(strategyId),
+    queryFn: () => api.listStrategyEditions(strategyId),
+  });
+}
+
+export function useUploadStrategyReport(strategyId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: Blob) => api.uploadStrategyReport(strategyId, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.strategyEditions(strategyId) }),
   });
 }
 

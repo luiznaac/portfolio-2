@@ -4,6 +4,7 @@ import { BondPage } from "./pages/BondPage.tsx";
 import { Carteira } from "./pages/Carteira.tsx";
 import { CheckingAccountPage } from "./pages/CheckingAccountPage.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { Estrategias } from "./pages/Estrategias.tsx";
 import { Indexes } from "./pages/Indexes.tsx";
 import { ListedAssetPage } from "./pages/ListedAssetPage.tsx";
 import { NewBond } from "./pages/NewBond.tsx";
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
       { path: "listed-assets/new", element: <NewListedAsset /> },
       { path: "listed-assets/:id", element: <ListedAssetPage /> },
       { path: "carteira", element: <Carteira /> },
+      { path: "estrategias", element: <Estrategias /> },
       { path: "indexes", element: <Indexes /> },
       { path: "upload", element: <Upload /> },
     ],

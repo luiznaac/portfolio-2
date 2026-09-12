@@ -2,6 +2,7 @@ package dev.agner.portfolio.httpapi.configuration
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.controller.ControllerTemplate
+import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.disgustingLocalDateFormat
 import dev.agner.portfolio.usecase.commons.logger
@@ -17,6 +18,9 @@ import io.ktor.server.engine.stop
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.statuspages.exception
+import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
 import kotlinx.datetime.LocalDate
 import org.springframework.beans.factory.annotation.Value
@@ -26,6 +30,7 @@ import org.springframework.context.annotation.Configuration
 class KtorConfig(
     private val routes: Set<ControllerTemplate>,
     private val mapper: ObjectMapper,
+    private val domainExceptionStatusMapper: DomainExceptionStatusMapper,
     @Value("\${ktor.wait}") wait: Boolean,
     @Value("\${ktor.port}") port: Int,
 ) {
@@ -58,6 +63,19 @@ class KtorConfig(
                 register(ContentType.Application.Pdf, PdfConverter())
             }
 
+            install(StatusPages) {
+                exception<DomainException> { call, cause ->
+                    call.respond(
+                        domainExceptionStatusMapper.statusFor(cause),
+                        ApiError(
+                            error = cause.error,
+                            message = cause.userMessage,
+                            detail = cause.detail,
+                        ),
+                    )
+                }
+            }
+
             install(CORS) {
                 allowMethod(HttpMethod.Options)
                 allowMethod(HttpMethod.Put)
@@ -72,5 +90,11 @@ class KtorConfig(
 
     fun stop() = server.stop(0, 0)
 }
+
+private data class ApiError(
+    val error: String,
+    val message: String,
+    val detail: String,
+)
 
 private fun String.sanitizeCurrency() = replace(".", "").replace(",", ".")

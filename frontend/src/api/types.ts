@@ -14,6 +14,12 @@
 
 export type IndexId = "IPCA" | "CDI" | "SELIC";
 
+export interface ApiErrorResponse {
+  error: string;
+  message: string;
+  detail: string;
+}
+
 export type BondOrderType =
   | "BUY"
   | "SELL"
@@ -287,10 +293,10 @@ export interface AllocationPlan {
   classes: ClassNode[];
 }
 
-// --- strategies (the XP model portfolios) ---
+// --- strategies (the broker's model portfolios) ---
 //
 // Minimal in Fase 1: registration only. Per-ticker weights (StrategyEdition/StrategyTarget,
-// parsed from the XP PDFs) arrive in Fase 2.
+// parsed from broker model-portfolio PDFs) arrive in Fase 2.
 
 export interface Strategy {
   id: number;
@@ -326,4 +332,41 @@ export interface AttributionSummary {
   balances: StrategyBalance[];
   attributed_quantity: number;
   unattributed_quantity: number;
+}
+
+// --- strategy editions (Fase 2: ingesting broker model-portfolio PDFs) ---
+
+export interface StrategyTarget {
+  ticker: string;
+  weight: number; // fraction, e.g. 0.05 for 5%
+  rating?: string; // stock reports only (COMPRA/NEUTRO/VENDA) — FII reports have no equivalent
+  target_price?: number;
+}
+
+// One imported report, immutable — a corrected report is a new edition, never an overwrite.
+export interface StrategyEdition {
+  id: number;
+  strategy_id: number;
+  reference_date: string; // the report's competência, normalized to the 1st of the month
+  changes_text?: string; // the broker's "Estamos adicionando/removendo..." paragraph, verbatim
+  targets: StrategyTarget[];
+}
+
+export interface StrategyTargetChange {
+  ticker: string;
+  before: StrategyTarget;
+  after: StrategyTarget;
+}
+
+export interface StrategyTargetDiff {
+  entered: StrategyTarget[];
+  exited: StrategyTarget[]; // keeps the weight it had before leaving, not a "current" weight
+  changed: StrategyTargetChange[];
+}
+
+// GET /strategies/{id}/editions — diff is omitted (not null) for a strategy's first edition,
+// which has no prior edition to compare against.
+export interface StrategyEditionWithDiff {
+  edition: StrategyEdition;
+  diff?: StrategyTargetDiff;
 }
