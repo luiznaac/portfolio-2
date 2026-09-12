@@ -349,6 +349,49 @@ class OrderPlanServiceTest : StringSpec({
         plan.transferSuggestions.all { it.fromStrategyId == 1 } shouldBe true
     }
 
+    "should emit a transfer suggestion and a residual net order together for the same ticker" {
+        val dividendos = Strategy(id = 2, name = "Dividendos", assetClass = ACOES)
+        coEvery { strategyService.fetchAll() } returns listOf(top, dividendos)
+        coEvery { strategyWeightRepository.fetchCurrent(any()) } returns listOf(
+            StrategyWeight(1, 1, BigDecimal("0.5"), LocalDate.parse("2026-01-01")),
+            StrategyWeight(2, 2, BigDecimal("0.5"), LocalDate.parse("2026-01-01")),
+        )
+        coEvery { allocationService.currentPlan() } returns AllocationPlan(
+            capital = BigDecimal("10000.00"),
+            classes = listOf(ClassNode(ACOES, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
+        )
+        // Each strategy is owed R$5,000 at R$50.00 = 100 shares, so 200 in total — but the books
+        // only say 180. Top is 30 over its ideal, Dividendos 50 short: a free transfer covers the
+        // first 30, and the remaining 20 shares are still missing from the portfolio as a whole.
+        coEvery { strategyEditionService.fetchEditions(any()) } returns listOf(
+            edition(1, listOf(StrategyTarget("PETR4", BigDecimal("1.0")))),
+        )
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
+        coEvery { attributionService.summarize(10) } returns AttributionSummary(
+            custodyQuantity = BigDecimal("180"),
+            balances = listOf(
+                StrategyBalance(1, "Top", BigDecimal("130")),
+                StrategyBalance(2, "Dividendos", BigDecimal("50")),
+            ),
+        )
+
+        val plan = service.computePlan()
+
+        plan.transferSuggestions.single().let {
+            it.listedAssetId shouldBe 10
+            it.ticker shouldBe "PETR4"
+            it.fromStrategyId shouldBe 1
+            it.toStrategyId shouldBe 2
+            it.quantity shouldBe BigDecimal("30")
+        }
+        plan.orders.single().let {
+            it.ticker shouldBe "PETR4"
+            it.kind shouldBe BUY
+            it.quantity shouldBe BigDecimal("20")
+        }
+    }
+
     "should not plan for an unregistered ticker and should not crash on it" {
         coEvery { strategyService.fetchAll() } returns listOf(top)
         coEvery { strategyWeightRepository.fetchCurrent(any()) } returns
