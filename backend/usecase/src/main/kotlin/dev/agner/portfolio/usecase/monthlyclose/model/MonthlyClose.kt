@@ -4,15 +4,11 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 
 enum class MonthlyCloseStatus {
-    ABERTO,
-    FECHADO,
+    OPEN,
+    CLOSED,
 }
 
-/**
- * The month's close as a tiny state machine — ABERTO until you explicitly [MonthlyCloseStatus.FECHADO]
- * it. [month] is always the first day of the month. See the plan's Fase 7 "o fechamento como
- * objeto".
- */
+/** The month's close as a tiny state machine. [month] is always the first day of the month. */
 data class MonthlyClose(
     val id: Int,
     val month: LocalDate,

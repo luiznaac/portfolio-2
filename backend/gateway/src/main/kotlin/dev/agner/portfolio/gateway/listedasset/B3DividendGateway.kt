@@ -3,7 +3,10 @@ package dev.agner.portfolio.gateway.listedasset
 import com.fasterxml.jackson.annotation.JsonProperty
 import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
 import dev.agner.portfolio.usecase.listedasset.gateway.IDividendGateway
+import dev.agner.portfolio.usecase.listedasset.model.AssetKind.BDR
+import dev.agner.portfolio.usecase.listedasset.model.AssetKind.ETF
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.FII
+import dev.agner.portfolio.usecase.listedasset.model.AssetKind.STOCK
 import dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration
 import dev.agner.portfolio.usecase.listedasset.model.DividendType
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
@@ -17,11 +20,12 @@ import org.springframework.stereotype.Service
 import java.util.Base64
 
 /**
- * Proventos straight from B3's public endpoints — free, no token, source of origin. brapi charges
- * for this (see the plan); B3 doesn't, for both stocks and FIIs, so it's the primary here rather
- * than a fallback. Values returned are gross per share: JCP still has 15% withheld at source,
- * dividendo/rendimento are tax-free for individuals — reconciling declared vs. received is left to
- * the brokerage-note import (Fase 4 of the plan), not done here.
+ * Distributions straight from B3's public endpoints — free, no token, and the source of origin for
+ * both stocks and funds, which is why this is the primary gateway rather than a fallback.
+ *
+ * Values are gross per share: JCP still has IRRF withheld at source, dividends and fund income are
+ * tax-free for individuals. Reconciling declared against received is
+ * [dev.agner.portfolio.usecase.income.IncomeService]'s job, not this gateway's.
  */
 @Service
 class B3DividendGateway(
@@ -29,10 +33,9 @@ class B3DividendGateway(
     @param:Value("\${gateways.b3.host}") private val host: String,
 ) : IDividendGateway {
 
-    override suspend fun getDividends(asset: ListedAsset) = if (asset.kind == FII) {
-        getFundDividends(asset)
-    } else {
-        getStockDividends(asset)
+    override suspend fun getDividends(asset: ListedAsset) = when (asset.kind) {
+        FII -> getFundDividends(asset)
+        STOCK, ETF, BDR -> getStockDividends(asset)
     }
 
     private suspend fun getStockDividends(asset: ListedAsset): List<DividendDeclaration> {
@@ -85,8 +88,8 @@ private fun String.parseB3Date() = brazilianLocalDateFormat.parse(this)
 
 private fun String.toDividendType() = when {
     contains("JRS", ignoreCase = true) || equals("JCP", ignoreCase = true) -> DividendType.JCP
-    contains("DIVIDENDO", ignoreCase = true) -> DividendType.DIVIDENDO
-    else -> DividendType.RENDIMENTO
+    contains("DIVIDENDO", ignoreCase = true) -> DividendType.DIVIDEND
+    else -> DividendType.FUND_INCOME
 }
 
 /**

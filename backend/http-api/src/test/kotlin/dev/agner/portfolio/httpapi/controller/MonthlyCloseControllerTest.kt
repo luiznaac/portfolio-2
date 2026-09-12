@@ -42,7 +42,7 @@ class MonthlyCloseControllerTest : DescribeSpec({
                 response.status shouldBe HttpStatusCode.Conflict
                 payload.get("error").asText() shouldBe "monthly-close-already-closed"
                 payload.get("message").asText() shouldBe "This month is already closed"
-                payload.get("detail").asText() shouldBe "Month 2026-09-01 is already fechado"
+                payload.get("detail").asText() shouldBe "Month 2026-09-01 is already closed"
             }
         }
     }

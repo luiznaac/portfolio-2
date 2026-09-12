@@ -6,7 +6,7 @@ import dev.agner.portfolio.usecase.monthlyclose.model.DriftAlert
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyClose
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDING
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -14,10 +14,8 @@ import java.math.RoundingMode
 import java.time.Clock
 
 /**
- * The month's close as a state machine (ABERTO -> FECHADO) plus a drift check against the current
- * allocation plan. No scheduling here — the plan calls for a chameidor reminder job, but that
- * needs chameidor running, which isn't part of this repo's local setup; wiring the job is left
- * for a later pass. This is on-demand only: call [driftAlert] whenever you want to check.
+ * The month's close as a state machine (OPEN -> CLOSED) plus a drift check against the current
+ * allocation plan. On demand only — there is no scheduler here.
  */
 @Service
 class MonthlyCloseService(
@@ -31,17 +29,18 @@ class MonthlyCloseService(
 
     suspend fun history(): List<MonthlyClose> = repository.fetchAll()
 
-    // "Não dá para fechar as ordens do mês com proposta pendente" — the plan's ritual (§7). A
-    // transfer proposal changes what the order list looks like (approved -> smaller net trade,
-    // rejected -> the full buy+sell), so closing with one still undecided would lock in a plan
-    // that might still change.
+    /**
+     * A transfer proposal changes what the order list looks like — approved means a smaller net
+     * trade, rejected means the full buy and sell — so closing with one still undecided would lock
+     * in a plan that might still change.
+     */
     suspend fun close(): MonthlyClose {
-        // Recompute the matches first: the reconciliation auto-rejects a PENDENTE whose pairing
-        // disappeared, so only proposals that are still live can block the close. Counting
+        // Recompute the matches first: the reconciliation auto-rejects a PENDING proposal whose
+        // pairing disappeared, so only proposals that are still live can block the close. Counting
         // transfersForMonth() alone would keep counting stranded rows forever.
-        orderPlanService.reconcileTransfers()
+        orderPlanService.refreshPlan()
 
-        val pending = orderPlanService.transfersForMonth().count { it.status == PENDENTE }
+        val pending = orderPlanService.transfersForMonth().count { it.status == PENDING }
         if (pending > 0) throw PendingTransferProposalsException(pending)
 
         return repository.close(currentMonth())

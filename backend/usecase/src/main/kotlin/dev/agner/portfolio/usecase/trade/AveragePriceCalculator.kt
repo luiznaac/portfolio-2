@@ -15,9 +15,8 @@ import java.math.RoundingMode
 
 /**
  * Pure replay of trades and corporate actions into a current [Position] and the [RealizedGain]s
- * along the way. Never fed a running balance — see the plan's "Eventos corporativos" section for
- * why: a corporate action discovered late is simply inserted with its real date and everything
- * downstream recalculates, instead of requiring a manual balance correction.
+ * along the way. Never fed a running balance: a corporate action discovered late is inserted with
+ * its real date and everything downstream recalculates, instead of requiring a manual correction.
  *
  * Cost basis uses the weighted-average method, as required by Brazilian tax law (Receita Federal),
  * never FIFO/LIFO.
@@ -66,27 +65,28 @@ class AveragePriceCalculator {
                 totalCost.divide(quantity, 6, RoundingMode.HALF_EVEN)
             }
 
-        fun apply(trade: Trade): Accumulator = if (trade.quantity > BigDecimal.ZERO) {
-            copy(
+        fun apply(trade: Trade): Accumulator = when (trade) {
+            is Trade.Buy -> copy(
                 quantity = quantity + trade.quantity,
                 totalCost = totalCost + trade.quantity * trade.price,
             )
-        } else {
-            val soldQuantity = trade.quantity.negate()
-            val costBasis = (soldQuantity * averagePrice).setScale(2, RoundingMode.HALF_EVEN)
-            val proceeds = (soldQuantity * trade.price).setScale(2, RoundingMode.HALF_EVEN)
 
-            copy(
-                quantity = quantity + trade.quantity,
-                totalCost = totalCost - costBasis,
-                gains = gains + RealizedGain(
-                    tradeId = trade.id,
-                    date = trade.date,
-                    quantity = soldQuantity,
-                    proceeds = proceeds,
-                    costBasis = costBasis,
-                ),
-            )
+            is Trade.Sell -> {
+                val costBasis = (trade.quantity * averagePrice).setScale(2, RoundingMode.HALF_EVEN)
+                val proceeds = (trade.quantity * trade.price).setScale(2, RoundingMode.HALF_EVEN)
+
+                copy(
+                    quantity = quantity - trade.quantity,
+                    totalCost = totalCost - costBasis,
+                    gains = gains + RealizedGain(
+                        tradeId = trade.id,
+                        date = trade.date,
+                        quantity = trade.quantity,
+                        proceeds = proceeds,
+                        costBasis = costBasis,
+                    ),
+                )
+            }
         }
 
         fun apply(action: CorporateAction): Accumulator = when (action) {

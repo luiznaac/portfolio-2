@@ -22,10 +22,9 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * Live quote from brapi.dev (free tier, token-gated — see the plan's "de onde vêm os dados").
- * No fallback to the COTAHIST daily file yet: that's noted as fast-follow work in the plan: for
- * now a missing quote simply fails consolidation for that asset rather than silently pricing off
- * a stale value.
+ * Live quote from brapi.dev (free tier, token-gated). There is no fallback to B3's COTAHIST daily
+ * file yet: a missing quote fails consolidation for that asset rather than silently pricing off a
+ * stale value.
  *
  * That "never price off a stale value" rule has one deliberate exception: [getQuote] memoizes a
  * fetched quote for [QUOTE_CACHE_TTL], so a request chaining two quote consumers (e.g.

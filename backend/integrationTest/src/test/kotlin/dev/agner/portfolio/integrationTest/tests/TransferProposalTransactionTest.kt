@@ -3,7 +3,7 @@ package dev.agner.portfolio.integrationTest.tests
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.getBean
-import dev.agner.portfolio.usecase.allocation.model.AssetClass.ACOES
+import dev.agner.portfolio.usecase.allocation.model.AssetClass.STOCKS
 import dev.agner.portfolio.usecase.attribution.model.AttributionMovementCreation
 import dev.agner.portfolio.usecase.attribution.model.AttributionReason
 import dev.agner.portfolio.usecase.attribution.repository.IAttributionRepository
@@ -14,7 +14,7 @@ import dev.agner.portfolio.usecase.listedasset.model.ListedAssetCreation
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.model.TransferProposalCreation
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APLICADA
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APPLIED
 import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
@@ -42,18 +42,18 @@ class TransferProposalTransactionTest : StringSpec({
         val proposalRepository = getBean<ITransferProposalRepository>()
         val planService = getBean<OrderPlanService>()
 
-        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
-        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = ACOES))
+        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = STOCKS))
+        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = STOCKS))
         val asset = listedAssetRepository.save(
             ListedAssetCreation(ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS"),
         )
         attributionRepository.save(
+            asset.id,
             AttributionMovementCreation(
-                listedAssetId = asset.id,
                 strategyId = fromStrategy.id,
                 date = LocalDate.parse("2026-09-01"),
                 quantity = BigDecimal("100"),
-                reason = AttributionReason.COMPRA,
+                reason = AttributionReason.BUY,
             ),
         )
         val proposal = proposalRepository.save(
@@ -71,13 +71,13 @@ class TransferProposalTransactionTest : StringSpec({
 
         val result = planService.approveTransfer(proposal.id, null)
 
-        result.status shouldBe APLICADA
+        result.status shouldBe APPLIED
         val balances = attributionRepository.fetchByAssetId(asset.id)
             .groupBy { it.strategyId }
             .mapValues { (_, movements) -> movements.sumOf { it.quantity } }
         balances[fromStrategy.id] shouldBe BigDecimal("60.00000000")
         balances[toStrategy.id] shouldBe BigDecimal("40.00000000")
-        proposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")).single().status shouldBe APLICADA
+        proposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")).single().status shouldBe APPLIED
     }
 
     "a failure on the status write rolls back both movements" {
@@ -88,8 +88,8 @@ class TransferProposalTransactionTest : StringSpec({
         val proposalRepository = getBean<ITransferProposalRepository>()
         val transaction = getBean<ITransactionTemplate>()
 
-        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
-        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = ACOES))
+        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = STOCKS))
+        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = STOCKS))
         val asset = listedAssetRepository.save(
             ListedAssetCreation(ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS"),
         )
@@ -97,25 +97,25 @@ class TransferProposalTransactionTest : StringSpec({
         shouldThrow<IllegalArgumentException> {
             transaction.execute {
                 attributionRepository.save(
+                    asset.id,
                     AttributionMovementCreation(
-                        listedAssetId = asset.id,
                         strategyId = fromStrategy.id,
                         date = LocalDate.parse("2026-09-15"),
                         quantity = BigDecimal("-40"),
-                        reason = AttributionReason.TRANSFERENCIA,
+                        reason = AttributionReason.TRANSFER,
                     ),
                 )
                 attributionRepository.save(
+                    asset.id,
                     AttributionMovementCreation(
-                        listedAssetId = asset.id,
                         strategyId = toStrategy.id,
                         date = LocalDate.parse("2026-09-15"),
                         quantity = BigDecimal("40"),
-                        reason = AttributionReason.TRANSFERENCIA,
+                        reason = AttributionReason.TRANSFER,
                     ),
                 )
                 // The status write targets an unknown proposal; the whole execute must roll back.
-                proposalRepository.decide(999_999, APLICADA, BigDecimal("40"), LocalDateTime.now(ClockMock.clock))
+                proposalRepository.decide(999_999, APPLIED, BigDecimal("40"), LocalDateTime.now(ClockMock.clock))
             }
         }
 
@@ -128,8 +128,8 @@ class TransferProposalTransactionTest : StringSpec({
         val listedAssetRepository = getBean<IListedAssetRepository>()
         val proposalRepository = getBean<ITransferProposalRepository>()
 
-        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
-        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = ACOES))
+        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = STOCKS))
+        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = STOCKS))
         val asset = listedAssetRepository.save(
             ListedAssetCreation(ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS"),
         )

@@ -5,21 +5,22 @@ import kotlinx.datetime.LocalDateTime
 import java.math.BigDecimal
 
 /**
- * The plan's fuller design (see the PR description that once simplified this away): a transfer
- * suggestion with a real lifecycle — `PENDENTE -> APLICADA` or `REJEITADA` — scoped to one
- * [month] (competência). Rejecting one is only valid for that month: next month the engine
- * proposes fresh, since a rejection three months running is a signal the target is wrong, not
- * that a permanent blacklist is missing. Approving and applying are collapsed into one action
- * here (see [OrderPlanService]/[TransferProposalRepository][dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository]) —
- * there's no separate execution step for a transfer the way there is for a real trade, so a
- * distinct APROVADA-but-not-yet-APLICADA state would carry no behavior of its own.
+ * `PENDING -> APPLIED | REJECTED`. Approving and applying are one action: unlike a real trade, a
+ * transfer has no separate execution step, so an APPROVED-but-not-yet-APPLIED state would carry
+ * no behaviour of its own.
  */
 enum class TransferProposalStatus {
-    PENDENTE,
-    APLICADA,
-    REJEITADA,
+    PENDING,
+    APPLIED,
+    REJECTED,
 }
 
+/**
+ * A suggestion to move shares of one ticker between two strategies, scoped to one [month].
+ * Rejecting one only holds for that month — next month the engine proposes afresh, since a
+ * rejection three months running is a signal the target is wrong rather than a missing permanent
+ * blacklist.
+ */
 data class TransferProposal(
     val id: Int,
     val month: LocalDate,
@@ -47,9 +48,8 @@ data class TransferProposalCreation(
 )
 
 /**
- * Transfers under this notional apply themselves without asking — "um valor configurável:
- * transferências abaixo dele são aplicadas sozinhas, acima sempre perguntam" from the plan.
- * Starts at zero (everything goes through the user) until raised.
+ * Transfers whose notional falls at or below this threshold apply themselves without asking;
+ * anything above it always goes to the user. Starts at zero, i.e. everything is asked.
  */
 data class TransferSettings(
     val autoApprovalThreshold: BigDecimal,

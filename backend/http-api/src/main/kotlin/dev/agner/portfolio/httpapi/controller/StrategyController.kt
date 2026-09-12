@@ -1,5 +1,6 @@
 package dev.agner.portfolio.httpapi.controller
 
+import dev.agner.portfolio.httpapi.strategyreport.StrategyReportParserResolver
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component
 class StrategyController(
     private val service: StrategyService,
     private val editionService: StrategyEditionService,
+    private val parserResolver: StrategyReportParserResolver,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -50,15 +52,16 @@ class StrategyController(
                     call.respond(HttpStatusCode.Created, service.setWeight(strategyId, payload))
                 }
 
-                // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly instead
-                // of going through ContentNegotiation, which already has a PDF converter
-                // registered for the brokerage-note upload flow (UploadController) that expects a
-                // different shape.
+                // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly
+                // instead of going through ContentNegotiation, whose PDF converter is registered
+                // for the upload flow and expects a different shape. Parsing happens here so the
+                // domain only ever receives the extracted report.
                 post("/reports") {
                     val strategyId = call.strategyId()
                     val pdfBytes = call.receiveChannel().toByteArray()
+                    val report = parserResolver.parse(pdfBytes)
 
-                    call.respond(HttpStatusCode.Created, editionService.importReport(strategyId, pdfBytes))
+                    call.respond(HttpStatusCode.Created, editionService.importReport(strategyId, report))
                 }
             }
         }

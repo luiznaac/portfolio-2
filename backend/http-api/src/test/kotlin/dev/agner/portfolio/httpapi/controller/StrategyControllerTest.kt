@@ -2,6 +2,7 @@ package dev.agner.portfolio.httpapi.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.configuration.DefaultDomainExceptionStatusMapper
+import dev.agner.portfolio.httpapi.strategyreport.StrategyReportParserResolver
 import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.configuration.JsonMapper
 import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
@@ -33,6 +34,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 
 class StrategyControllerTest : DescribeSpec({
+    val parserResolver = mockk<StrategyReportParserResolver>(relaxed = true)
 
     describe("strategy id path parameter") {
 
@@ -41,7 +43,7 @@ class StrategyControllerTest : DescribeSpec({
             val editionService = mockk<StrategyEditionService>(relaxed = true)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.get("/strategies/abc/editions")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -59,7 +61,7 @@ class StrategyControllerTest : DescribeSpec({
             val editionService = mockk<StrategyEditionService>(relaxed = true)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.post("/strategies/abc/reports")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -77,7 +79,7 @@ class StrategyControllerTest : DescribeSpec({
             val editionService = mockk<StrategyEditionService>(relaxed = true)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 // The real route never matches without an id segment (Ktor answers 404), so this
                 // exercises the helper's null branch through the same StatusPages mapping.
@@ -101,7 +103,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.setWeight(5, any()) } returns mockk(relaxed = true)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.post("/strategies/5/weight") {
                     contentType(ContentType.Application.Json)
@@ -118,7 +120,7 @@ class StrategyControllerTest : DescribeSpec({
             val editionService = mockk<StrategyEditionService>(relaxed = true)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.post("/strategies/abc/weight") {
                     contentType(ContentType.Application.Json)
@@ -140,7 +142,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.setWeight(99, any()) } throws StrategyNotFoundException(99)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.post("/strategies/99/weight") {
                     contentType(ContentType.Application.Json)
@@ -162,7 +164,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { editionService.fetchEditions(99) } throws StrategyNotFoundException(99)
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.get("/strategies/99/editions")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -178,7 +180,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { editionService.fetchEditions(5) } returns emptyList()
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.get("/strategies/5/editions")
 
@@ -197,7 +199,7 @@ class StrategyControllerTest : DescribeSpec({
                 StrategyEditionAlreadyExistsException(5, "2026-09-01")
 
             testApplication {
-                application { installController(StrategyController(service, editionService)) }
+                application { installController(StrategyController(service, editionService, parserResolver)) }
 
                 val response = client.post("/strategies/5/reports") {
                     setBody(byteArrayOf(1, 2, 3))

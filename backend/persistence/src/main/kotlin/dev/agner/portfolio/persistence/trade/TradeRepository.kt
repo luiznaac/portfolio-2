@@ -3,6 +3,7 @@ package dev.agner.portfolio.persistence.trade
 import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.trade.model.TradeCreation
+import dev.agner.portfolio.usecase.trade.model.TradeSide
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -32,12 +33,15 @@ class TradeRepository(
             .map { it.toModel() }
     }
 
-    override suspend fun save(creation: TradeCreation) = transaction {
+    override suspend fun save(assetId: Int, creation: TradeCreation) = transaction {
         TradeEntity.new {
-            listedAsset = ListedAssetEntity.findById(creation.assetId)
-                ?: throw IllegalArgumentException("Listed asset with ID ${creation.assetId} not found")
+            listedAsset = ListedAssetEntity.findById(assetId)
+                ?: throw IllegalArgumentException("Listed asset with ID $assetId not found")
             date = creation.date
-            quantity = creation.quantity
+            quantity = when (creation.side) {
+                TradeSide.BUY -> creation.quantity
+                TradeSide.SELL -> creation.quantity.negate()
+            }
             price = creation.price
             createdAt = LocalDateTime.now(clock)
         }.toModel()

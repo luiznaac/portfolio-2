@@ -10,9 +10,9 @@ import dev.agner.portfolio.usecase.order.TransferProposalNotFoundException
 import dev.agner.portfolio.usecase.order.TransferProposalNotPendingException
 import dev.agner.portfolio.usecase.order.model.TransferProposal
 import dev.agner.portfolio.usecase.order.model.TransferProposalStatus
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APLICADA
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE
-import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.REJEITADA
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APPLIED
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDING
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.REJECTED
 import dev.agner.portfolio.usecase.order.model.TransferSettings
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -97,7 +97,7 @@ class OrderControllerTest : DescribeSpec({
 
         it("passes the explicit quantity to approveTransfer") {
             val planService = mockk<OrderPlanService>(relaxed = true)
-            coEvery { planService.approveTransfer(any(), any()) } returns proposal(APLICADA)
+            coEvery { planService.approveTransfer(any(), any()) } returns proposal(APPLIED)
 
             testApplication {
                 application { installController(OrderController(planService)) }
@@ -114,7 +114,7 @@ class OrderControllerTest : DescribeSpec({
 
         it("passes a null quantity when the body carries none") {
             val planService = mockk<OrderPlanService>(relaxed = true)
-            coEvery { planService.approveTransfer(any(), null) } returns proposal(APLICADA)
+            coEvery { planService.approveTransfer(any(), null) } returns proposal(APPLIED)
 
             testApplication {
                 application { installController(OrderController(planService)) }
@@ -131,7 +131,7 @@ class OrderControllerTest : DescribeSpec({
 
         it("delegates reject to rejectTransfer") {
             val planService = mockk<OrderPlanService>(relaxed = true)
-            coEvery { planService.rejectTransfer(any()) } returns proposal(REJEITADA)
+            coEvery { planService.rejectTransfer(any()) } returns proposal(REJECTED)
 
             testApplication {
                 application { installController(OrderController(planService)) }
@@ -168,7 +168,7 @@ class OrderControllerTest : DescribeSpec({
         it("returns 409 when the proposal is not pending") {
             val planService = mockk<OrderPlanService>(relaxed = true)
             coEvery { planService.approveTransfer(any(), any()) } throws
-                TransferProposalNotPendingException(7, APLICADA)
+                TransferProposalNotPendingException(7, APPLIED)
 
             testApplication {
                 application { installController(OrderController(planService)) }
@@ -234,7 +234,7 @@ private fun proposal(status: TransferProposalStatus) = TransferProposal(
     toStrategyId = 2,
     toStrategyName = "Dividendos",
     proposedQuantity = BigDecimal("5"),
-    appliedQuantity = if (status == PENDENTE) null else BigDecimal("5"),
+    appliedQuantity = if (status == PENDING) null else BigDecimal("5"),
     status = status,
     decidedAt = null,
 )

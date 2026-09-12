@@ -7,5 +7,5 @@ class MonthlyCloseAlreadyClosedException(month: LocalDate) :
     DomainException(
         error = "monthly-close-already-closed",
         userMessage = "This month is already closed",
-        detail = "Month $month is already fechado",
+        detail = "Month $month is already closed",
     )

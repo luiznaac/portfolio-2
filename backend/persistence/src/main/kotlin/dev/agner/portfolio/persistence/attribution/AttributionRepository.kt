@@ -23,10 +23,10 @@ class AttributionRepository(
             .map { it.toModel() }
     }
 
-    override suspend fun save(creation: AttributionMovementCreation) = transaction {
+    override suspend fun save(assetId: Int, creation: AttributionMovementCreation) = transaction {
         AttributionMovementEntity.new {
-            listedAsset = ListedAssetEntity.findById(creation.listedAssetId)
-                ?: throw IllegalArgumentException("Listed asset with ID ${creation.listedAssetId} not found")
+            listedAsset = ListedAssetEntity.findById(assetId)
+                ?: throw IllegalArgumentException("Listed asset with ID $assetId not found")
             strategy = StrategyEntity.findById(creation.strategyId)
                 ?: throw IllegalArgumentException("Strategy with ID ${creation.strategyId} not found")
             date = creation.date

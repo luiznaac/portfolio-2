@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.model.OrderKind
 import dev.agner.portfolio.usecase.tax.stepup.model.StepUpPlan
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
+import dev.agner.portfolio.usecase.trade.model.Trade
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
@@ -49,7 +50,7 @@ class StepUpService(
             .filter { it.kind == AssetKind.STOCK }
             .mapNotNull { asset ->
                 val trades = tradeRepository.fetchByAssetId(asset.id)
-                val boughtToday = trades.any { it.date == today && it.quantity > BigDecimal.ZERO }
+                val boughtToday = trades.any { it.date == today && it is Trade.Buy }
                 if (boughtToday) return@mapNotNull null
 
                 val corporateActions = corporateActionRepository.fetchByAssetId(asset.id)

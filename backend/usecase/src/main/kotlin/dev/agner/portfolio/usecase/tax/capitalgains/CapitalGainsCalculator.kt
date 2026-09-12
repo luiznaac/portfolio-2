@@ -1,10 +1,11 @@
 package dev.agner.portfolio.usecase.tax.capitalgains
 
+import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.tax.TaxRules
 import dev.agner.portfolio.usecase.tax.capitalgains.model.MonthlyCapitalGain
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
-import java.math.RoundingMode
 
 /** One realized sale, already stripped of which ticker it was — all this calculator needs. */
 data class TaxableSale(
@@ -21,11 +22,11 @@ data class TaxableSale(
 }
 
 /**
- * Pure: replays realized sales into the monthly gain/loss ledger the plan's Fase 5 calls for —
- * same lot-derived-from-replay spirit as [dev.agner.portfolio.usecase.trade.AveragePriceCalculator],
- * just one level up. Two independent buckets (stocks/ETFs/BDRs vs. FIIs — [MonthlyCapitalGain.isFii]),
- * each carrying its own loss forward, because Brazilian tax law never lets a stock loss offset a
- * FII gain or vice versa.
+ * Pure: replays realized sales into a monthly gain/loss ledger — same lot-derived-from-replay
+ * spirit as [dev.agner.portfolio.usecase.trade.AveragePriceCalculator], just one level up. Two
+ * independent buckets (stocks/ETFs/BDRs vs. FIIs — [MonthlyCapitalGain.isFii]), each carrying its
+ * own loss forward, because Brazilian tax law never lets a stock loss offset a FII gain or vice
+ * versa.
  *
  * The R$20k monthly exemption covers STOCK sales only ([TaxableSale.exemptible]) and never
  * day-trade sales: day-trade proceeds do not count toward the ceiling and a day-trade gain never
@@ -50,10 +51,10 @@ class CapitalGainsCalculator {
      * with the loss balance left by earlier ones.
      *
      * Losses only enter that balance from months that actually owed tax (`!exempt`): the R$20k
-     * exemption is evaluated month by month, so a month at or under the ceiling has no tax apurado
-     * and its loss has no future compensation to reduce — it does not carry. Within a taxed month
-     * the negative result still reduces that same month's gain, since `grossGain` nets it before
-     * any carryforward is computed.
+     * exemption is evaluated month by month, so a month at or under the ceiling has no tax due and
+     * its loss has no future compensation to reduce — it does not carry. Within a taxed month the
+     * negative result still reduces that same month's gain, since `grossGain` nets it before any
+     * carryforward is computed.
      */
     private fun replay(
         isFii: Boolean,
@@ -66,7 +67,8 @@ class CapitalGainsCalculator {
             val grossGain = sales.sumOf { it.gain }
             val exemptibleSales = sales.filter { it.exemptible && !it.isDayTrade }
             val exemptibleProceeds = exemptibleSales.sumOf { it.proceeds }
-            val exempt = !isFii && exemptibleSales.isNotEmpty() && exemptibleProceeds <= EXEMPTION_LIMIT
+            val exempt = !isFii && exemptibleSales.isNotEmpty() &&
+                exemptibleProceeds <= TaxRules.MONTHLY_STOCK_SALE_EXEMPTION
             // Only the stock sales under the ceiling are exempt; every other gain in the bucket
             // (day trades, ETFs/BDRs, and the whole bucket once the ceiling is blown) is taxed.
             val gainToTax = grossGain - if (exempt) exemptibleSales.sumOf { it.gain } else BigDecimal.ZERO
@@ -85,27 +87,21 @@ class CapitalGainsCalculator {
                 carriedLoss - compensation
             }
 
-            val rate = if (isFii) FII_RATE else STOCK_RATE
+            val rate = if (isFii) TaxRules.FII_CAPITAL_GAINS_RATE else TaxRules.STOCK_CAPITAL_GAINS_RATE
 
             MonthlyCapitalGain(
                 month = month,
                 isFii = isFii,
-                proceeds = proceeds.setScale(2, RoundingMode.HALF_EVEN),
-                grossGain = grossGain.setScale(2, RoundingMode.HALF_EVEN),
+                proceeds = proceeds.defaultScale(),
+                grossGain = grossGain.defaultScale(),
                 exempt = exempt,
-                lossCompensated = compensation.setScale(2, RoundingMode.HALF_EVEN),
-                taxableGain = taxable.setScale(2, RoundingMode.HALF_EVEN),
-                taxDue = (taxable * rate).setScale(2, RoundingMode.HALF_EVEN),
-                lossCarriedForward = carriedLoss.setScale(2, RoundingMode.HALF_EVEN),
+                lossCompensated = compensation.defaultScale(),
+                taxableGain = taxable.defaultScale(),
+                taxDue = (taxable * rate).defaultScale(),
+                lossCarriedForward = carriedLoss.defaultScale(),
             )
         }
     }
 
     private fun monthOf(date: LocalDate) = LocalDate(date.year, date.month, 1)
-
-    private companion object {
-        val EXEMPTION_LIMIT: BigDecimal = BigDecimal("20000.00")
-        val STOCK_RATE: BigDecimal = BigDecimal("0.15")
-        val FII_RATE: BigDecimal = BigDecimal("0.20")
-    }
 }

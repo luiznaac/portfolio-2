@@ -15,7 +15,7 @@ class TransferProposalNotPendingException(id: Int, status: TransferProposalStatu
     DomainException(
         error = "transfer-proposal-not-pending",
         userMessage = "Transfer proposal is not pending",
-        detail = "Transfer proposal $id is $status, not PENDENTE",
+        detail = "Transfer proposal $id is $status, not PENDING",
     )
 
 class InvalidTransferQuantityException(approved: BigDecimal, proposed: BigDecimal) :

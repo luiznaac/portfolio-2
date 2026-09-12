@@ -31,11 +31,11 @@ class MonthlyCloseRepository(
     override suspend fun close(month: LocalDate) = transaction {
         val entity = findOrCreate(month)
 
-        if (entity.status == MonthlyCloseStatus.FECHADO) {
+        if (entity.status == MonthlyCloseStatus.CLOSED) {
             throw MonthlyCloseAlreadyClosedException(month)
         }
 
-        entity.status = MonthlyCloseStatus.FECHADO
+        entity.status = MonthlyCloseStatus.CLOSED
         entity.closedAt = LocalDateTime.now(clock)
         entity.toModel()
     }
@@ -46,7 +46,7 @@ class MonthlyCloseRepository(
         MonthlyCloseEntity.find { MonthlyCloseTable.month eq month }.firstOrNull()
             ?: MonthlyCloseEntity.new {
                 this.month = month
-                status = MonthlyCloseStatus.ABERTO
+                status = MonthlyCloseStatus.OPEN
                 closedAt = null
                 createdAt = LocalDateTime.now(clock)
             }

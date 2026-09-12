@@ -2,12 +2,12 @@ package dev.agner.portfolio.usecase.monthlyclose
 
 import dev.agner.portfolio.usecase.allocation.AllocationService
 import dev.agner.portfolio.usecase.allocation.model.AllocationPlan
-import dev.agner.portfolio.usecase.allocation.model.AssetClass.ACOES
-import dev.agner.portfolio.usecase.allocation.model.AssetClass.RENDA_FIXA
+import dev.agner.portfolio.usecase.allocation.model.AssetClass.FIXED_INCOME
+import dev.agner.portfolio.usecase.allocation.model.AssetClass.STOCKS
 import dev.agner.portfolio.usecase.allocation.model.ClassNode
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyClose
-import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.ABERTO
-import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.FECHADO
+import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.CLOSED
+import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.OPEN
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.model.OrderPlan
@@ -32,7 +32,12 @@ class MonthlyCloseServiceTest : StringSpec({
     val orderPlanService = mockk<OrderPlanService>()
     val clock = mockk<Clock>()
 
-    val service = MonthlyCloseService(repository, allocationService, orderPlanService, clock)
+    val service = MonthlyCloseService(
+        repository,
+        allocationService,
+        orderPlanService,
+        clock,
+    )
 
     beforeTest {
         // Each test stubs its own behavior; clearing keeps the exact-count verifies scoped to one
@@ -41,7 +46,7 @@ class MonthlyCloseServiceTest : StringSpec({
         every { clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         every { clock.zone } returns ZoneOffset.UTC
         coEvery { orderPlanService.transfersForMonth() } returns emptyList()
-        coEvery { orderPlanService.reconcileTransfers() } returns OrderPlan(
+        coEvery { orderPlanService.refreshPlan() } returns OrderPlan(
             orders = emptyList(),
             transferProposals = emptyList(),
             saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
@@ -49,7 +54,7 @@ class MonthlyCloseServiceTest : StringSpec({
     }
 
     "current should open the current month" {
-        val open = MonthlyClose(1, LocalDate(2026, 9, 1), ABERTO, null)
+        val open = MonthlyClose(1, LocalDate(2026, 9, 1), OPEN, null)
         coEvery { repository.open(LocalDate(2026, 9, 1)) } returns open
 
         service.current() shouldBe open
@@ -57,14 +62,14 @@ class MonthlyCloseServiceTest : StringSpec({
 
     "close should close the current month through a single repository call" {
         val month = LocalDate(2026, 9, 1)
-        coEvery { repository.close(month) } returns MonthlyClose(1, month, FECHADO, null)
+        coEvery { repository.close(month) } returns MonthlyClose(1, month, CLOSED, null)
 
         val result = service.close()
 
-        result.status shouldBe FECHADO
+        result.status shouldBe CLOSED
         // The stranded-pending expiry runs before counting, so a month whose leftovers were
         // auto-rejected closes even though transfersForMonth() might have rows.
-        coVerify(exactly = 1) { orderPlanService.reconcileTransfers() }
+        coVerify(exactly = 1) { orderPlanService.refreshPlan() }
         coVerify(exactly = 1) { repository.close(month) }
         coVerify(exactly = 0) { repository.open(any()) }
     }
@@ -89,7 +94,7 @@ class MonthlyCloseServiceTest : StringSpec({
                 toStrategyName = "Small Caps",
                 proposedQuantity = BigDecimal("9"),
                 appliedQuantity = null,
-                status = dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE,
+                status = dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDING,
                 decidedAt = null,
             ),
         )
@@ -102,14 +107,14 @@ class MonthlyCloseServiceTest : StringSpec({
             capital = BigDecimal("100000"),
             classes = listOf(
                 // 2pp drift — under the 5pp default threshold
-                ClassNode(ACOES, BigDecimal("0.60"), BigDecimal("60000"), BigDecimal("62000")),
+                ClassNode(STOCKS, BigDecimal("0.60"), BigDecimal("60000"), BigDecimal("62000")),
                 // 10pp drift — over threshold
-                ClassNode(RENDA_FIXA, BigDecimal("0.30"), BigDecimal("30000"), BigDecimal("20000")),
+                ClassNode(FIXED_INCOME, BigDecimal("0.30"), BigDecimal("30000"), BigDecimal("20000")),
             ),
         )
 
         val alerts = service.driftAlert()
 
-        alerts.map { it.assetClass } shouldBe listOf(RENDA_FIXA)
+        alerts.map { it.assetClass } shouldBe listOf(FIXED_INCOME)
     }
 })

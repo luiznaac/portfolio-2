@@ -2,7 +2,7 @@ package dev.agner.portfolio.httpapi.configuration
 
 import dev.agner.portfolio.usecase.income.model.ReceivedIncome
 import dev.agner.portfolio.usecase.income.parser.IncomeStatementParseException
-import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDENDO
+import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDEND
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.JCP
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
@@ -34,7 +34,7 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
             val result = parser.parse(xlsx)
 
             result shouldBe listOf(
-                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDENDO, BigDecimal("199.50")),
+                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDEND, BigDecimal("199.50")),
                 ReceivedIncome(LocalDate(2026, 6, 15), "ITUB4", JCP, BigDecimal("85.00")),
             )
         }
@@ -56,7 +56,7 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
             )
 
             parser.parse(xlsx) shouldBe listOf(
-                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDENDO, BigDecimal("199.50")),
+                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDEND, BigDecimal("199.50")),
             )
         }
 

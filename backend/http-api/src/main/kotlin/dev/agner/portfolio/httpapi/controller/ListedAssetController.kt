@@ -48,7 +48,7 @@ class ListedAssetController(
                     val assetId = call.requiredInt("listed_asset_id")
                     val payload = call.receive<TradeCreation>()
 
-                    call.respond(HttpStatusCode.Created, tradeService.create(payload.copy(assetId = assetId)))
+                    call.respond(HttpStatusCode.Created, tradeService.create(assetId, payload))
                 }
 
                 post("/consolidate") {

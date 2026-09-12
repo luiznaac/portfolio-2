@@ -29,11 +29,23 @@ class TradeEntity(id: EntityID<Int>) : IntEntity(id) {
     var price by TradeTable.price
     var createdAt by TradeTable.createdAt
 
-    fun toModel() = Trade(
-        id = id.value,
-        assetId = listedAsset.id.value,
-        date = date,
-        quantity = quantity,
-        price = price,
-    )
+    // The column is one signed number; the domain is a Buy/Sell ADT. This is the only place that
+    // translates between the two — see Trade.
+    fun toModel(): Trade = if (quantity.signum() >= 0) {
+        Trade.Buy(
+            id = id.value,
+            assetId = listedAsset.id.value,
+            date = date,
+            quantity = quantity,
+            price = price,
+        )
+    } else {
+        Trade.Sell(
+            id = id.value,
+            assetId = listedAsset.id.value,
+            date = date,
+            quantity = quantity.negate(),
+            price = price,
+        )
+    }
 }

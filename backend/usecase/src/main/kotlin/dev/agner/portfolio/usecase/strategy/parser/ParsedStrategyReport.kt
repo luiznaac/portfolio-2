@@ -4,12 +4,11 @@ import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
 import kotlinx.datetime.LocalDate
 
-// Port for extracting a broker's model-portfolio PDF into data. The concrete parser is line-based
-// and recognizes both stock and FII rows; the PDF dependency stays in http-api.
-interface IStrategyReportParser {
-    fun parse(pdfBytes: ByteArray): ParsedStrategyReport
-}
-
+/**
+ * A broker model-portfolio report already turned into data. The domain never sees the PDF: the
+ * `http-api` adapter picks a parser for the file it was given and hands
+ * [dev.agner.portfolio.usecase.strategy.StrategyEditionService] this shape.
+ */
 data class ParsedStrategyReport(
     val referenceDate: LocalDate,
     val changesText: String?,

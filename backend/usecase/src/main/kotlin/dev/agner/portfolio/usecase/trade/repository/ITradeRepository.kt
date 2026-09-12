@@ -11,5 +11,5 @@ interface ITradeRepository {
     /** Every trade in [start, end], inclusive — for the sale-exemption ceiling meter (usecase/order). */
     suspend fun fetchByDateRange(start: LocalDate, end: LocalDate): List<Trade>
 
-    suspend fun save(creation: TradeCreation): Trade
+    suspend fun save(assetId: Int, creation: TradeCreation): Trade
 }
