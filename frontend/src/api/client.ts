@@ -312,9 +312,6 @@ export const api = {
   orderPlan(): Promise<OrderPlan> {
     return request("/orders/plan");
   },
-  transfersForMonth(): Promise<TransferProposal[]> {
-    return request("/orders/transfers");
-  },
   approveTransfer(id: number, body: ApproveTransferRequest): Promise<TransferProposal> {
     return request(`/orders/transfers/${id}/approve`, json("POST", body));
   },

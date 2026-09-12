@@ -49,7 +49,6 @@ export const keys = {
   strategyWeights: ["strategies", "weights"] as const,
   attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
   orderPlan: ["orders", "plan"] as const,
-  transfersForMonth: ["orders", "transfers"] as const,
   transferSettings: ["orders", "transfers", "settings"] as const,
   monthlyCapitalGains: ["tax", "capital-gains"] as const,
   stepUpPlan: ["tax", "step-up-plan"] as const,
@@ -449,18 +448,11 @@ export function useOrderPlan() {
   return useQuery({ queryKey: keys.orderPlan, queryFn: () => api.orderPlan() });
 }
 
-export function useTransfersForMonth() {
-  return useQuery({ queryKey: keys.transfersForMonth, queryFn: () => api.transfersForMonth() });
-}
-
 export function useApproveTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: { id: number; body: ApproveTransferRequest }) => api.approveTransfer(args.id, args.body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.orderPlan });
-      qc.invalidateQueries({ queryKey: keys.transfersForMonth });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
 }
 
@@ -468,10 +460,7 @@ export function useRejectTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api.rejectTransfer(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.orderPlan });
-      qc.invalidateQueries({ queryKey: keys.transfersForMonth });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
 }
 
