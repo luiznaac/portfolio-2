@@ -5,7 +5,13 @@ import dev.agner.portfolio.usecase.strategy.model.StrategyTargetChange
 import dev.agner.portfolio.usecase.strategy.model.StrategyTargetDiff
 import org.springframework.stereotype.Component
 
-/** Pure: what changed between two consecutive editions' target lists, by ticker. */
+/**
+ * Pure: what changed between two consecutive editions' target lists, by ticker.
+ *
+ * Precondition: each list holds at most one entry per ticker. [associateBy] would silently keep
+ * the last occurrence otherwise, so duplicates are rejected upstream in
+ * [StrategyEditionService.validate] before this calculator runs.
+ */
 @Component
 class StrategyDiffCalculator {
 

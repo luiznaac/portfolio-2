@@ -10,6 +10,7 @@ import dev.agner.portfolio.usecase.strategy.repository.IStrategyEditionRepositor
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -66,6 +67,19 @@ class StrategyEditionServiceTest : StringSpec({
             ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("NOTATICKER", BigDecimal("1.0"))))
 
         shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+    }
+
+    "should reject a report with a duplicated ticker even when the weights sum to 100%" {
+        val duplicated = listOf(
+            StrategyTarget("PETR4", BigDecimal("0.50")),
+            StrategyTarget("PETR4", BigDecimal("0.50")),
+        )
+        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, duplicated)
+
+        val error = shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+
+        error.detail shouldContain "PETR4"
+        coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "should reject a report whose weights sum below 100%" {

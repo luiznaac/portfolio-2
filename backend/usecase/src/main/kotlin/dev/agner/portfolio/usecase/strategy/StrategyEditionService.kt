@@ -60,6 +60,16 @@ class StrategyEditionService(
             throw StrategyReportParseException("Not B3 tickers: $invalidTickers")
         }
 
+        // A repeated ticker is a parse artifact (the same row read twice, or a performance table
+        // mixed into the portfolio one). Reject it before the diff calculator, whose associateBy
+        // would otherwise hide the earlier occurrence.
+        val duplicatedTickers = parsed.targets.groupingBy(StrategyTarget::ticker).eachCount()
+            .filterValues { it > 1 }
+            .keys
+        if (duplicatedTickers.isNotEmpty()) {
+            throw StrategyReportParseException("Duplicated target tickers: $duplicatedTickers")
+        }
+
         // Weights are fractions (0.05 for 5%), same convention as AssetClassTarget. The report is
         // the broker's model portfolio, so the rows must add up to the whole portfolio exactly —
         // after the parser's scale normalization the sum has to be 1, with no rounding slack.
