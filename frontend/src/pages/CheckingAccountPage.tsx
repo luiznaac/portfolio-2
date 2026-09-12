@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useCheckingAccountPositions,
@@ -9,8 +9,8 @@ import {
 import { Panel } from "../components/Panel.tsx";
 import { PositionChart } from "../components/PositionChart.tsx";
 import { PositionsTable } from "../components/PositionsTable.tsx";
-import { formatBRL } from "../lib/money.ts";
 import { formatDate, formatPeriod } from "../lib/format.ts";
+import { formatBRL } from "../lib/money.ts";
 import { lastPosition } from "../lib/positions.ts";
 
 type MovementKind = "deposit" | "withdraw" | "full-withdraw";
@@ -52,6 +52,7 @@ export function CheckingAccountPage() {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => consolidate.mutate({ kind: "checking-account", id })}
           disabled={consolidate.isPending}
           className="rounded-md bg-accent-500 px-3 py-1.5 text-sm font-medium text-slate-950 transition-colors hover:bg-accent-600 disabled:opacity-50"
@@ -147,12 +148,8 @@ function MovementForm({ accountId }: { accountId: number }) {
       >
         {mutation.isPending ? "Salvando…" : "Registrar"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm text-tax">{String(mutation.error)}</p>
-      )}
-      {mutation.isSuccess && (
-        <p className="w-full text-sm text-yield">Movimentação registrada.</p>
-      )}
+      {mutation.isError && <p className="w-full text-sm text-tax">{String(mutation.error)}</p>}
+      {mutation.isSuccess && <p className="w-full text-sm text-yield">Movimentação registrada.</p>}
     </form>
   );
 }

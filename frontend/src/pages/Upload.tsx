@@ -1,4 +1,12 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  type FormEvent,
+  type ReactElement,
+  type ReactNode,
+  cloneElement,
+  isValidElement,
+  useId,
+  useState,
+} from "react";
 import { useBonds, useCheckingAccounts, useUploadXlsx } from "../api/queries.ts";
 import type { UploadBroker, UploadProduct } from "../api/types.ts";
 import { Panel } from "../components/Panel.tsx";
@@ -98,9 +106,7 @@ export function Upload() {
             {mutation.isPending ? "Enviando…" : "Importar"}
           </button>
 
-          {mutation.isError && (
-            <p className="text-sm text-tax">{String(mutation.error)}</p>
-          )}
+          {mutation.isError && <p className="text-sm text-tax">{String(mutation.error)}</p>}
           {mutation.isSuccess && (
             <p className="text-sm text-yield">
               {mutation.data.length} lançamento(s) processado(s).
@@ -113,10 +119,15 @@ export function Upload() {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const fieldId = useId();
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-xs text-slate-500">{label}</span>
-      {children}
-    </label>
+    <div className="block text-sm">
+      <label htmlFor={fieldId} className="mb-1 block text-xs text-slate-500">
+        {label}
+      </label>
+      {isValidElement(children)
+        ? cloneElement(children as ReactElement<{ id?: string }>, { id: fieldId })
+        : children}
+    </div>
   );
 }

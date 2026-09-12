@@ -13,11 +13,9 @@ data class StrategyWeight(
     val effectiveFrom: LocalDate,
 )
 
-// strategyId defaults to 0 because it's always overwritten from the URL path by the controller
-// (POST /strategies/{strategy_id}/weight) — the frontend never sends it, same convention as
-// TradeCreation/AttributionMovementCreation.
+// The strategy is taken from the URL path (POST /strategies/{strategy_id}/weight), not from the
+// payload — the frontend never sends it, same convention as TradeCreation/AttributionMovementCreation.
 data class StrategyWeightCreation(
-    val strategyId: Int = 0,
     val weight: BigDecimal,
     val effectiveFrom: LocalDate,
 )

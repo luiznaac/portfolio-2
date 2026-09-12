@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { Position } from "../api/types.ts";
-import { formatBRLCompact } from "../lib/money.ts";
 import { formatDate } from "../lib/format.ts";
+import { formatBRLCompact } from "../lib/money.ts";
 
 /**
  * Net portfolio value over time — `principal + yield - taxes` per date, drawn as
@@ -33,8 +33,7 @@ export function PositionChart({ positions }: { positions: Position[] }) {
     };
   }, [positions]);
 
-  if (!chart)
-    return <p className="text-sm text-slate-500">Sem posições consolidadas ainda.</p>;
+  if (!chart) return <p className="text-sm text-slate-500">Sem posições consolidadas ainda.</p>;
 
   return (
     <div>
@@ -42,6 +41,8 @@ export function PositionChart({ positions }: { positions: Position[] }) {
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         className="h-40 w-full"
+        role="img"
+        aria-label="Evolução do patrimônio líquido"
       >
         <polygon points={chart.area} fill="var(--color-yield)" fillOpacity="0.12" />
         <polyline

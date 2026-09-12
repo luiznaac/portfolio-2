@@ -4,11 +4,11 @@ import java.math.BigDecimal
 
 // Stock sales (never FIIs — they have no exemption, always taxed at 20%) up to R$20,000/month
 // are exempt from capital-gains tax; the ceiling is on the amount *sold*, not the gain. monthSold
-// includes both already-executed trades this month and this plan's own pending SELL/ZERAR orders,
-// so the meter reflects what would happen if the whole plan were executed today.
+// includes both already-executed trades this month and this plan's own pending SELL/FULL_EXIT
+// orders, so the meter reflects what would happen if the whole plan were executed today. Day
+// trades never consume the exemption and are excluded from both sides (see Order.dayTradeRisk).
 data class SaleCeiling(
     val monthSold: BigDecimal,
     val limit: BigDecimal,
     val remaining: BigDecimal,
-    val exceeded: Boolean,
 )

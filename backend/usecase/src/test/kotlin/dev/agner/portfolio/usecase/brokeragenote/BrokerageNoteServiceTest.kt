@@ -42,8 +42,8 @@ class BrokerageNoteServiceTest : StringSpec({
         )
         coEvery { orderPlanService.computePlan() } returns OrderPlan(
             orders = listOf(
-                order(ticker = "PETR4", kind = OrderKind.COMPRAR),
-                order(ticker = "VALE3", kind = OrderKind.COMPRAR),
+                order(ticker = "PETR4", kind = OrderKind.BUY),
+                order(ticker = "VALE3", kind = OrderKind.BUY),
             ),
             transferSuggestions = emptyList(),
             saleCeiling = ceiling(),
@@ -134,5 +134,4 @@ private fun ceiling() = SaleCeiling(
     monthSold = BigDecimal.ZERO,
     limit = BigDecimal("20000.00"),
     remaining = BigDecimal("20000.00"),
-    exceeded = false,
 )

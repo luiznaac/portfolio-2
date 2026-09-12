@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.datetime.LocalDate
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
@@ -63,6 +64,23 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
             )
         }
 
+        it("parses the same bytes repeatedly, closing each document after extraction") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso     Rating    Preco-Alvo",
+                "Petrobras   PETR4    100,0%   COMPRA    R$ 45,00",
+                "Estamos adicionando PETR4.",
+            )
+
+            val first = parser.parse(pdf)
+            val second = parser.parse(pdf)
+
+            first shouldBe second
+            first.referenceDate shouldBe LocalDate(2026, 9, 1)
+            first.changesText shouldBe "Estamos adicionando PETR4."
+            first.targets.map { it.ticker to it.weight } shouldBe listOf("PETR4" to BigDecimal("1.0000"))
+        }
+
         it("extracts ticker and weight from a FII Peso/Segmento/Ticker/Recomendação/Nome table without rating") {
             val pdf = pdfOf(
                 "Carteira Fundamentalista de FIIs - Setembro/2026",
@@ -77,6 +95,43 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
                 "MCCI11" to BigDecimal("0.4025"),
                 "VILG11" to BigDecimal("0.5975"),
             )
+        }
+
+        it("reads an FII weight from the header column even when the row has no % suffix") {
+            val pdf = pdfOf(
+                "Carteira Fundamentalista de FIIs - Setembro/2026",
+                "Peso %    Segmento     Ticker     Recomendacao   Nome",
+                "40,25    Recebiveis   MCCI11     COMPRA         Mauá Capital",
+                "59,75    Tijolo       VILG11     COMPRA         Vinci Logistica",
+            )
+
+            parser.parse(pdf).targets.map { it.ticker to it.weight } shouldBe listOf(
+                "MCCI11" to BigDecimal("0.4025"),
+                "VILG11" to BigDecimal("0.5975"),
+            )
+        }
+
+        it("reports the offending line when a ticker row has no readable weight") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso     Rating",
+                "Petrobras   PETR4    COMPRA",
+            )
+
+            val error = shouldThrow<StrategyReportParseException> { parser.parse(pdf) }
+
+            error.detail shouldContain "Petrobras   PETR4    COMPRA"
+            error.detail shouldContain "PETR4"
+        }
+
+        it("returns no targets when the portfolio table has no data rows") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso",
+                "",
+            )
+
+            parser.parse(pdf).targets shouldBe emptyList()
         }
 
         it("extracts a ticker whose root isn't pure letters, like B3's own B3SA3") {
@@ -96,6 +151,55 @@ class PdfBoxStrategyReportParserTest : DescribeSpec({
             val pdf = pdfOf(
                 "Companhia   Ticker   Peso",
                 "Petrobras   PETR4    100,0%",
+            )
+
+            shouldThrow<StrategyReportParseException> { parser.parse(pdf) }
+        }
+
+        it("stops changes text at the next table header") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso",
+                "Petrobras   PETR4    100,0%",
+                "",
+                "Estamos adicionando PETR4.",
+                "Desempenho",
+                "PETR4 10,0%",
+            )
+
+            val result = parser.parse(pdf)
+
+            result.changesText shouldBe "Estamos adicionando PETR4."
+            result.targets.map { it.ticker to it.weight } shouldBe listOf("PETR4" to BigDecimal("1.0000"))
+        }
+
+        it("ignores a Desempenho section and reads only the stock and FII portfolio tables") {
+            val pdf = pdfOf(
+                "Carteira Top - Setembro/2026",
+                "Companhia   Ticker   Peso",
+                "Petrobras   PETR4    60,0%",
+                "Vale        VALE3    40,0%",
+                "",
+                "Peso %    Segmento     Ticker     Recomendacao",
+                "100,0%    Recebiveis   MCCI11     COMPRA",
+                "",
+                "Desempenho",
+                "PETR4    10,0%",
+                "XXXX4    90,0%",
+            )
+
+            parser.parse(pdf).targets.map { it.ticker to it.weight } shouldBe listOf(
+                "PETR4" to BigDecimal("0.6000"),
+                "VALE3" to BigDecimal("0.4000"),
+                "MCCI11" to BigDecimal("1.0000"),
+            )
+        }
+
+        it("throws when the report has no recognizable portfolio table") {
+            val pdf = pdfOf(
+                "Relatorio Top - Setembro/2026",
+                "Desempenho",
+                "PETR4 100,0%",
             )
 
             shouldThrow<StrategyReportParseException> { parser.parse(pdf) }

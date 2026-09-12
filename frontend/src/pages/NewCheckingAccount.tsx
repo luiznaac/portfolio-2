@@ -1,9 +1,17 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  type FormEvent,
+  type ReactElement,
+  type ReactNode,
+  cloneElement,
+  isValidElement,
+  useId,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateCheckingAccount } from "../api/queries.ts";
 import type { IndexId } from "../api/types.ts";
-import { INDEX_IDS } from "../i18n/indexId.ts";
 import { Panel } from "../components/Panel.tsx";
+import { INDEX_IDS } from "../i18n/indexId.ts";
 
 /** years + months -> ISO-8601 period ("P2Y", "P1Y6M", "P0D"). */
 function toPeriod(years: number, months: number): string {
@@ -96,9 +104,7 @@ export function NewCheckingAccount() {
           >
             {mutation.isPending ? "Criando…" : "Criar conta"}
           </button>
-          {mutation.isError && (
-            <p className="text-sm text-tax">{String(mutation.error)}</p>
-          )}
+          {mutation.isError && <p className="text-sm text-tax">{String(mutation.error)}</p>}
         </form>
       </Panel>
     </div>
@@ -106,10 +112,15 @@ export function NewCheckingAccount() {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const fieldId = useId();
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-xs text-slate-500">{label}</span>
-      {children}
-    </label>
+    <div className="block text-sm">
+      <label htmlFor={fieldId} className="mb-1 block text-xs text-slate-500">
+        {label}
+      </label>
+      {isValidElement(children)
+        ? cloneElement(children as ReactElement<{ id?: string }>, { id: fieldId })
+        : children}
+    </div>
   );
 }

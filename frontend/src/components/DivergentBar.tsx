@@ -24,11 +24,7 @@ export function DivergentBar({
         <div className="absolute left-1/2 top-0 h-full w-px bg-slate-600" />
         <div
           className={`absolute top-0 h-full rounded-sm ${isExcess ? "bg-accent-500" : "bg-principal"}`}
-          style={
-            isExcess
-              ? { left: "50%", width: `${pct}%` }
-              : { right: "50%", width: `${pct}%` }
-          }
+          style={isExcess ? { left: "50%", width: `${pct}%` } : { right: "50%", width: `${pct}%` }}
         />
       </div>
       <span

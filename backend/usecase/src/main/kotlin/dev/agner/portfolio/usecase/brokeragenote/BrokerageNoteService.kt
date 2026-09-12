@@ -77,8 +77,8 @@ class BrokerageNoteService(
         }
 
     private fun matchesPlan(plannedKind: OrderKind?, side: TradeSide): Boolean = when (plannedKind) {
-        OrderKind.COMPRAR, OrderKind.ENTRADA_NOVA -> side == TradeSide.COMPRA
-        OrderKind.VENDER, OrderKind.ZERAR -> side == TradeSide.VENDA
+        OrderKind.BUY, OrderKind.NEW_ENTRY -> side == TradeSide.COMPRA
+        OrderKind.SELL, OrderKind.FULL_EXIT -> side == TradeSide.VENDA
         null -> false
     }
 }

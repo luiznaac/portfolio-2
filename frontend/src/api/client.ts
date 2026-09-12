@@ -16,11 +16,11 @@ import type {
   CorporateAction,
   DividendDeclaration,
   FixedIncomeSubClassTarget,
-  ImportedTradeConfirmation,
-  ImportPreview,
   FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  ImportedTradeConfirmation,
+  ImportPreview,
   Index,
   IndexId,
   IndexValue,
@@ -47,13 +47,14 @@ import type {
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
-const XLSX_MIME =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const PDF_MIME = "application/pdf";
 
 export class ApiError extends Error {
   constructor(
     readonly status: number,
+    readonly code: string | undefined,
+    readonly detail: string | undefined,
     message: string,
   ) {
     super(message);
@@ -70,21 +71,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : { "Content-Type": "application/json", ...init?.headers },
   });
   if (!res.ok) {
-    let detail = res.statusText;
+    let message = res.statusText;
+    let code: string | undefined;
+    let detail: string | undefined;
     try {
       const text = await res.text();
       if (text) {
         try {
           const body = JSON.parse(text);
-          detail = body.detail ?? body.message ?? text;
+          code = body.error;
+          detail = body.detail;
+          message = body.message ?? body.detail ?? text;
         } catch {
-          detail = text;
+          message = text;
         }
       }
     } catch {
       /* body already consumed / unavailable */
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, code, detail, message);
   }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -99,13 +104,13 @@ const json = (method: string, body?: unknown): RequestInit => ({
 export const api = {
   // --- bonds ---
   listBonds(): Promise<Bond[]> {
-    return request(`/bonds`);
+    return request("/bonds");
   },
   createFixedBond(body: FixedRateBondCreation): Promise<Bond> {
-    return request(`/bonds/fixed`, json("POST", body));
+    return request("/bonds/fixed", json("POST", body));
   },
   createFloatingBond(body: FloatingRateBondCreation): Promise<Bond> {
-    return request(`/bonds/floating`, json("POST", body));
+    return request("/bonds/floating", json("POST", body));
   },
   consolidateBond(id: number): Promise<void> {
     return request(`/bonds/${id}/consolidate`, json("POST"));
@@ -117,15 +122,15 @@ export const api = {
     return request(`/bonds/${id}/positions/last`);
   },
   createBondOrder(body: BondOrderCreation): Promise<BondOrder> {
-    return request(`/bonds/orders`, json("POST", body));
+    return request("/bonds/orders", json("POST", body));
   },
 
   // --- checking accounts ---
   listCheckingAccounts(): Promise<CheckingAccount[]> {
-    return request(`/checking-accounts`);
+    return request("/checking-accounts");
   },
   createCheckingAccount(body: CheckingAccountCreation): Promise<CheckingAccount> {
-    return request(`/checking-accounts`, json("POST", body));
+    return request("/checking-accounts", json("POST", body));
   },
   deposit(id: number, body: MovementRequest): Promise<unknown> {
     return request(`/checking-accounts/${id}/deposit`, json("POST", body));
@@ -148,7 +153,7 @@ export const api = {
 
   // --- indexes ---
   listIndexes(): Promise<Index[]> {
-    return request(`/indexes`);
+    return request("/indexes");
   },
   indexValues(indexId: IndexId): Promise<IndexValue[]> {
     return request(`/indexes/${indexId.toLowerCase()}/values`);
@@ -159,7 +164,7 @@ export const api = {
 
   // --- consolidation ---
   scheduleConsolidations(): Promise<Record<string, unknown>> {
-    return request(`/consolidations/schedule`, json("POST"));
+    return request("/consolidations/schedule", json("POST"));
   },
 
   // --- upload: POST the broker's raw .xlsx export ---
@@ -178,15 +183,15 @@ export const api = {
 
   // --- health ---
   health(): Promise<unknown> {
-    return request(`/health`);
+    return request("/health");
   },
 
   // --- listed assets (stocks, FIIs, ETFs, BDRs) ---
   listListedAssets(): Promise<ListedAsset[]> {
-    return request(`/listed-assets`);
+    return request("/listed-assets");
   },
   createListedAsset(body: ListedAssetCreation): Promise<ListedAsset> {
-    return request(`/listed-assets`, json("POST", body));
+    return request("/listed-assets", json("POST", body));
   },
   consolidateListedAsset(id: number): Promise<void> {
     return request(`/listed-assets/${id}/consolidate`, json("POST"));
@@ -233,41 +238,41 @@ export const api = {
 
   // --- allocation ---
   allocationPlan(): Promise<AllocationPlan> {
-    return request(`/allocation/plan`);
+    return request("/allocation/plan");
   },
   capitalSnapshots(): Promise<CapitalSnapshot[]> {
-    return request(`/allocation/capital-snapshots`);
+    return request("/allocation/capital-snapshots");
   },
   recordCapitalSnapshot(body: CapitalSnapshotCreation): Promise<CapitalSnapshot> {
-    return request(`/allocation/capital-snapshots`, json("POST", body));
+    return request("/allocation/capital-snapshots", json("POST", body));
   },
   classTargets(): Promise<AssetClassTarget[]> {
-    return request(`/allocation/class-targets`);
+    return request("/allocation/class-targets");
   },
   setClassTarget(body: AssetClassTargetCreation): Promise<AssetClassTarget> {
-    return request(`/allocation/class-targets`, json("POST", body));
+    return request("/allocation/class-targets", json("POST", body));
   },
   fixedIncomeSubClassTargets(): Promise<FixedIncomeSubClassTarget[]> {
-    return request(`/allocation/fixed-income-subclass-targets`);
+    return request("/allocation/fixed-income-subclass-targets");
   },
   setFixedIncomeSubClassTarget(
     body: FixedIncomeSubClassTargetCreation,
   ): Promise<FixedIncomeSubClassTarget> {
-    return request(`/allocation/fixed-income-subclass-targets`, json("POST", body));
+    return request("/allocation/fixed-income-subclass-targets", json("POST", body));
   },
   classifications(): Promise<ProductClassification[]> {
-    return request(`/allocation/classifications`);
+    return request("/allocation/classifications");
   },
   classify(body: ProductClassification): Promise<ProductClassification> {
-    return request(`/allocation/classifications`, json("POST", body));
+    return request("/allocation/classifications", json("POST", body));
   },
 
   // --- strategies ---
   listStrategies(): Promise<Strategy[]> {
-    return request(`/strategies`);
+    return request("/strategies");
   },
   createStrategy(body: StrategyCreation): Promise<Strategy> {
-    return request(`/strategies`, json("POST", body));
+    return request("/strategies", json("POST", body));
   },
   listStrategyEditions(strategyId: number): Promise<StrategyEditionWithDiff[]> {
     return request(`/strategies/${strategyId}/editions`);
@@ -280,7 +285,7 @@ export const api = {
     });
   },
   strategyWeightHistory(): Promise<StrategyWeight[]> {
-    return request(`/strategies/weights`);
+    return request("/strategies/weights");
   },
   setStrategyWeight(strategyId: number, body: StrategyWeightCreation): Promise<StrategyWeight> {
     return request(`/strategies/${strategyId}/weight`, json("POST", body));
@@ -290,19 +295,16 @@ export const api = {
   attributionSummary(assetId: number): Promise<AttributionSummary> {
     return request(`/listed-assets/${assetId}/attribution`);
   },
-  recordAttributionMovement(
-    assetId: number,
-    body: AttributionMovementCreation,
-  ): Promise<unknown> {
+  recordAttributionMovement(assetId: number, body: AttributionMovementCreation): Promise<unknown> {
     return request(`/listed-assets/${assetId}/attribution/movements`, json("POST", body));
   },
 
   // --- orders (Fase 3) ---
   orderPlan(): Promise<OrderPlan> {
-    return request(`/orders/plan`);
+    return request("/orders/plan");
   },
   applyTransfer(body: ApplyTransferRequest): Promise<void> {
-    return request(`/orders/transfers/apply`, json("POST", body));
+    return request("/orders/transfers/apply", json("POST", body));
   },
 
   // --- brokerage note import (Fase 4) ---
