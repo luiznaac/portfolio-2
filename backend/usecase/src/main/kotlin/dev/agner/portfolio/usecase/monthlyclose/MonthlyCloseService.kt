@@ -28,11 +28,7 @@ class MonthlyCloseService(
 
     suspend fun history(): List<MonthlyClose> = repository.fetchAll()
 
-    suspend fun close(): MonthlyClose {
-        val month = currentMonth()
-        repository.open(month)
-        return repository.close(month)
-    }
+    suspend fun close(): MonthlyClose = repository.close(currentMonth())
 
     suspend fun driftAlert(thresholdPP: BigDecimal = DEFAULT_THRESHOLD_PP): List<DriftAlert> {
         val plan = allocationService.currentPlan()

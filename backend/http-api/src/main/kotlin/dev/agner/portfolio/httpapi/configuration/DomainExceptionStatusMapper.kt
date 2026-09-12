@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.configuration
 
 import dev.agner.portfolio.usecase.commons.DomainException
+import dev.agner.portfolio.usecase.monthlyclose.MonthlyCloseAlreadyClosedException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
 import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import io.ktor.http.HttpStatusCode
@@ -15,6 +16,7 @@ class DefaultDomainExceptionStatusMapper : DomainExceptionStatusMapper {
     override fun statusFor(exception: DomainException) = when (exception) {
         is StrategyNotFoundException -> HttpStatusCode.NotFound
         is StrategyEditionAlreadyExistsException -> HttpStatusCode.Conflict
+        is MonthlyCloseAlreadyClosedException -> HttpStatusCode.Conflict
         else -> HttpStatusCode.BadRequest
     }
 }

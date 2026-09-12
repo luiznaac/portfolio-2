@@ -9,8 +9,10 @@ import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyClose
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.ABERTO
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.FECHADO
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,6 +31,9 @@ class MonthlyCloseServiceTest : StringSpec({
     val service = MonthlyCloseService(repository, allocationService, clock)
 
     beforeTest {
+        // Each test stubs its own behavior; clearing keeps the exact-count verifies scoped to one
+        // test instead of counting calls recorded by the tests before it.
+        clearMocks(repository)
         every { clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         every { clock.zone } returns ZoneOffset.UTC
     }
@@ -40,16 +45,22 @@ class MonthlyCloseServiceTest : StringSpec({
         service.current() shouldBe open
     }
 
-    "close should open the month first, then close it" {
+    "close should close the current month through a single repository call" {
         val month = LocalDate(2026, 9, 1)
-        coEvery { repository.open(month) } returns MonthlyClose(1, month, ABERTO, null)
         coEvery { repository.close(month) } returns MonthlyClose(1, month, FECHADO, null)
 
         val result = service.close()
 
         result.status shouldBe FECHADO
-        coVerify { repository.open(LocalDate(2026, 9, 1)) }
-        coVerify { repository.close(LocalDate(2026, 9, 1)) }
+        coVerify(exactly = 1) { repository.close(month) }
+        coVerify(exactly = 0) { repository.open(any()) }
+    }
+
+    "close should propagate the already-closed conflict" {
+        val month = LocalDate(2026, 9, 1)
+        coEvery { repository.close(month) } throws MonthlyCloseAlreadyClosedException(month)
+
+        shouldThrow<MonthlyCloseAlreadyClosedException> { service.close() }
     }
 
     "driftAlert should flag only classes whose drift exceeds the threshold" {
