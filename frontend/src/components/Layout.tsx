@@ -46,6 +46,9 @@ export function Layout() {
             <NavLink to="/imposto" className={linkClass}>
               Imposto
             </NavLink>
+            <NavLink to="/fechamento" className={linkClass}>
+              Fechamento
+            </NavLink>
             <NavLink to="/upload" className={linkClass}>
               Extratos
             </NavLink>

@@ -510,3 +510,51 @@ export interface StepUpPlan {
   total_realized_gain: number;
   remaining_ceiling_after: number;
 }
+
+// --- income + monthly close (Fase 7) ---
+
+// A DividendDeclaration turned into money for the position actually held on the ex-date. This is
+// "previsto", not "recebido" — see IncomeReconciliation for the two compared.
+export interface IncomeEvent {
+  listed_asset_id: number;
+  ticker: string;
+  type: DividendType;
+  ex_date: string;
+  payment_date: string | null;
+  quantity_held: number;
+  gross_amount: number;
+  retained_tax: number;
+  net_amount: number;
+}
+
+export interface AssetIncomeSummary {
+  listed_asset_id: number;
+  ticker: string;
+  total_net: number;
+  cost_basis: number;
+  yield_on_cost: number;
+}
+
+export interface IncomeReconciliation {
+  ticker: string;
+  month: string;
+  type: DividendType;
+  previsto: number;
+  recebido: number;
+}
+
+export type MonthlyCloseStatus = "ABERTO" | "FECHADO";
+
+export interface MonthlyClose {
+  id: number;
+  month: string;
+  status: MonthlyCloseStatus;
+  closed_at: string | null;
+}
+
+export interface DriftAlert {
+  asset_class: AssetClass;
+  ideal_weight: number;
+  current_weight: number;
+  drift_pp: number;
+}
