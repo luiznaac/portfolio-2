@@ -3,10 +3,10 @@ package dev.agner.portfolio.usecase.order.model
 import java.math.BigDecimal
 
 enum class OrderKind {
-    COMPRAR,
-    VENDER,
-    ZERAR, // no strategy wants this ticker anymore (ideal = 0), but custody > 0
-    ENTRADA_NOVA, // some strategy wants it (ideal > 0) and custody is currently 0
+    BUY,
+    SELL,
+    FULL_EXIT, // no strategy wants this ticker anymore (ideal = 0), but custody > 0
+    NEW_ENTRY, // some strategy wants it (ideal > 0) and custody is currently 0
 }
 
 // One ticker's net order — already the residual left over after TransferMatcher's suggestions

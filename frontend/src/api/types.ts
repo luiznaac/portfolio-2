@@ -390,7 +390,7 @@ export interface StrategyEditionWithDiff {
 
 // --- orders (Fase 3: grouped orders + the R$20k sale-exemption ceiling) ---
 
-export type OrderKind = "COMPRAR" | "VENDER" | "ZERAR" | "ENTRADA_NOVA";
+export type OrderKind = "BUY" | "SELL" | "FULL_EXIT" | "NEW_ENTRY";
 
 export interface StrategyDelta {
   strategy_id: number;
@@ -438,7 +438,7 @@ export interface ApplyTransferRequest {
 
 // Stock sales (never FIIs — always taxed at 20%, no exemption) up to R$20,000/month are exempt
 // from capital-gains tax; the ceiling is on the amount *sold*, not the gain. month_sold includes
-// both already-executed trades this month and this plan's own pending SELL/ZERAR orders.
+// both already-executed trades this month and this plan's own pending SELL/FULL_EXIT orders.
 export interface SaleCeiling {
   month_sold: number;
   limit: number;

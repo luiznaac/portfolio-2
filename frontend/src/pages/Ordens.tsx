@@ -4,17 +4,17 @@ import { Panel } from "../components/Panel.tsx";
 import { formatBRL } from "../lib/money.ts";
 
 const KIND_LABELS: Record<OrderKind, string> = {
-  COMPRAR: "Comprar",
-  VENDER: "Vender",
-  ZERAR: "Zerar posição",
-  ENTRADA_NOVA: "Entrada nova",
+  BUY: "Comprar",
+  SELL: "Vender",
+  FULL_EXIT: "Zerar posição",
+  NEW_ENTRY: "Entrada nova",
 };
 
 const KIND_COLOR: Record<OrderKind, string> = {
-  COMPRAR: "text-principal",
-  ENTRADA_NOVA: "text-principal",
-  VENDER: "text-accent-500",
-  ZERAR: "text-tax",
+  BUY: "text-principal",
+  NEW_ENTRY: "text-principal",
+  SELL: "text-accent-500",
+  FULL_EXIT: "text-tax",
 };
 
 export function Ordens() {

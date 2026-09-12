@@ -13,10 +13,10 @@ import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.model.Quote
 import dev.agner.portfolio.usecase.listedasset.model.QuoteSource.BRAPI
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
-import dev.agner.portfolio.usecase.order.model.OrderKind.COMPRAR
-import dev.agner.portfolio.usecase.order.model.OrderKind.ENTRADA_NOVA
-import dev.agner.portfolio.usecase.order.model.OrderKind.VENDER
-import dev.agner.portfolio.usecase.order.model.OrderKind.ZERAR
+import dev.agner.portfolio.usecase.order.model.OrderKind.BUY
+import dev.agner.portfolio.usecase.order.model.OrderKind.FULL_EXIT
+import dev.agner.portfolio.usecase.order.model.OrderKind.NEW_ENTRY
+import dev.agner.portfolio.usecase.order.model.OrderKind.SELL
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.Strategy
@@ -107,12 +107,12 @@ class OrderPlanServiceTest : StringSpec({
         val plan = service.computePlan()
 
         val petrOrder = plan.orders.single { it.ticker == "PETR4" }
-        petrOrder.kind shouldBe VENDER
+        petrOrder.kind shouldBe SELL
         petrOrder.quantity shouldBe BigDecimal("50")
         petrOrder.notional shouldBe BigDecimal("2500.00")
 
         val valeOrder = plan.orders.single { it.ticker == "VALE3" }
-        valeOrder.kind shouldBe COMPRAR
+        valeOrder.kind shouldBe BUY
         valeOrder.quantity shouldBe BigDecimal("100")
 
         plan.transferSuggestions shouldBe emptyList()
@@ -216,13 +216,13 @@ class OrderPlanServiceTest : StringSpec({
         val plan = service.computePlan()
 
         val exit = plan.orders.single { it.ticker == "PETR4" }
-        exit.kind shouldBe ZERAR
+        exit.kind shouldBe FULL_EXIT
         exit.quantity shouldBe BigDecimal("150")
-        // 150 * 50.00 of stock sold — straight past the exemption ceiling, as a ZERAR still counts.
+        // 150 * 50.00 of stock sold — straight past the exemption ceiling, as a FULL_EXIT still counts.
         plan.saleCeiling.monthSold shouldBe BigDecimal("7500.00")
 
         val entry = plan.orders.single { it.ticker == "VALE3" }
-        entry.kind shouldBe ENTRADA_NOVA
+        entry.kind shouldBe NEW_ENTRY
         // 100 shares of the R$10,000 ideal at R$25.00
         entry.quantity shouldBe BigDecimal("400")
     }
@@ -376,7 +376,7 @@ class OrderPlanServiceTest : StringSpec({
 
         plan.orders.single().let {
             it.ticker shouldBe "PETR4"
-            it.kind shouldBe COMPRAR
+            it.kind shouldBe BUY
             it.quantity shouldBe BigDecimal("100")
         }
     }

@@ -51,7 +51,7 @@ import java.time.Clock
  *     E -- no --> G
  *     F --> G{"custody − Σ ideals<br/>≠ 0 and a price exists?"}
  *     G -- no --> H["no order for this ticker"]
- *     G -- yes --> I["one net order:<br/>ZERAR / ENTRADA_NOVA / VENDER / COMPRAR"]
+ *     G -- yes --> I["one net order:<br/>FULL_EXIT / NEW_ENTRY / SELL / BUY"]
  *     I --> J["day-trade flag from today's ledger"]
  * ```
  *
@@ -161,7 +161,7 @@ class OrderPlanService(
      * Latest edition's target weights per strategy, keyed by ticker for O(1) lookup while walking
      * the assets. An empty edition list (or no edition at all) means "wants nothing" — that is
      * `BigDecimal.ZERO` everywhere downstream, which is what makes a fully-exited ticker produce a
-     * [OrderKind.ZERAR] instead of silently disappearing.
+     * [OrderKind.FULL_EXIT] instead of silently disappearing.
      *
      * `fetchEditions` throws [dev.agner.portfolio.usecase.strategy.StrategyNotFoundException] for an
      * unknown strategy, which cannot happen here: the ids come from `StrategyService.fetchAll()`.
@@ -239,8 +239,8 @@ class OrderPlanService(
      *
      * Ordering of the `when` matters: the first two branches describe what custody *currently* is
      * relative to every strategy's wish, and only the last two look at the sign of the net delta.
-     * A ticker with custody and no remaining target anywhere is a full exit ([OrderKind.ZERAR]), not
-     * a partial one; one with a target and no custody is a fresh entry ([OrderKind.ENTRADA_NOVA]).
+     * A ticker with custody and no remaining target anywhere is a full exit ([OrderKind.FULL_EXIT]), not
+     * a partial one; one with a target and no custody is a fresh entry ([OrderKind.NEW_ENTRY]).
      * `wantsSome` is the shared half of both tests, and it is exactly "not every ideal is zero".
      */
     private suspend fun orderFor(
@@ -257,10 +257,10 @@ class OrderPlanService(
 
         val wantsSome = idealByStrategy.values.any { it > BigDecimal.ZERO }
         val kind = when {
-            !wantsSome && summary.custodyQuantity > BigDecimal.ZERO -> OrderKind.ZERAR
-            summary.custodyQuantity.isZero() && wantsSome -> OrderKind.ENTRADA_NOVA
-            netDelta > BigDecimal.ZERO -> OrderKind.VENDER
-            else -> OrderKind.COMPRAR
+            !wantsSome && summary.custodyQuantity > BigDecimal.ZERO -> OrderKind.FULL_EXIT
+            summary.custodyQuantity.isZero() && wantsSome -> OrderKind.NEW_ENTRY
+            netDelta > BigDecimal.ZERO -> OrderKind.SELL
+            else -> OrderKind.BUY
         }
         val quantity = netDelta.abs()
 
@@ -283,7 +283,7 @@ class OrderPlanService(
             dayTradeRisk = hasOppositeTradeToday(
                 assetId = asset.id,
                 today = today,
-                sell = kind == OrderKind.VENDER || kind == OrderKind.ZERAR,
+                sell = kind == OrderKind.SELL || kind == OrderKind.FULL_EXIT,
             ),
         )
     }
@@ -330,7 +330,7 @@ class OrderPlanService(
             .sumOf { it.quantity.abs() * it.price }
 
         val plannedStockSales = orders
-            .filter { !it.isFii && (it.kind == OrderKind.VENDER || it.kind == OrderKind.ZERAR) }
+            .filter { !it.isFii && (it.kind == OrderKind.SELL || it.kind == OrderKind.FULL_EXIT) }
             .sumOf { it.notional }
 
         val monthSold = settledStockSales + plannedStockSales
