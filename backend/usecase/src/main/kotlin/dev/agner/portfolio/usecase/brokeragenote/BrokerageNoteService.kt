@@ -7,6 +7,8 @@ import dev.agner.portfolio.usecase.brokeragenote.parser.BrokerageNoteParseExcept
 import dev.agner.portfolio.usecase.brokeragenote.parser.IBrokerageNoteParser
 import dev.agner.portfolio.usecase.brokeragenote.parser.TradeSide
 import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.commons.logger
+import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.model.OrderKind
@@ -29,6 +31,7 @@ class BrokerageNoteService(
     private val listedAssetRepository: IListedAssetRepository,
     private val tradeService: TradeService,
     private val orderPlanService: OrderPlanService,
+    private val transaction: ITransactionTemplate,
 ) {
 
     suspend fun preview(xlsxBytes: ByteArray): ImportPreview {
@@ -37,7 +40,16 @@ class BrokerageNoteService(
             throw BrokerageNoteParseException("No trades found in statement")
         }
 
-        val plannedSideByTicker = orderPlanService.computePlan().orders.associate { it.ticker to it.kind }
+        // matchesPlan is informational and never blocks confirmation, so a quote-gateway hiccup
+        // while computing the plan must not turn a fully parseable statement into a failed preview:
+        // degrade every row to "doesn't match" instead. computePlan() is suspend, so runCatching
+        // can't be used here.
+        val plannedSideByTicker = try {
+            orderPlanService.computePlan().orders.associate { it.ticker to it.kind }
+        } catch (e: Exception) {
+            logger().warn("Could not compute order plan for preview; matchesPlan degraded to false", e)
+            emptyMap()
+        }
 
         val trades = parsed.map { row ->
             val assetId = listedAssetRepository.resolveIdByTicker(row.ticker, row.date)
@@ -62,23 +74,28 @@ class BrokerageNoteService(
     }
 
     suspend fun confirm(confirmations: List<ImportedTradeConfirmation>): List<Trade> =
-        confirmations.map { confirmation ->
-            val assetId = listedAssetRepository.resolveIdByTicker(confirmation.ticker, confirmation.date)
-                ?: throw BrokerageNoteParseException("Unresolved ticker ${confirmation.ticker} — cannot confirm")
+        // The batch is one operation from the ledger's point of view: a failure on row k must roll
+        // back rows 1..k-1, keeping the two-step flow's promise that the ledger only changes on a
+        // successful confirmation.
+        transaction.execute {
+            confirmations.map { confirmation ->
+                val assetId = listedAssetRepository.resolveIdByTicker(confirmation.ticker, confirmation.date)
+                    ?: throw BrokerageNoteParseException("Unresolved ticker ${confirmation.ticker} — cannot confirm")
 
-            tradeService.create(
-                TradeCreation(
-                    assetId = assetId,
-                    date = confirmation.date,
-                    quantity = confirmation.quantity,
-                    price = confirmation.price,
-                ),
-            )
+                tradeService.create(
+                    TradeCreation(
+                        assetId = assetId,
+                        date = confirmation.date,
+                        quantity = confirmation.quantity,
+                        price = confirmation.price,
+                    ),
+                )
+            }
         }
 
     private fun matchesPlan(plannedKind: OrderKind?, side: TradeSide): Boolean = when (plannedKind) {
-        OrderKind.COMPRAR, OrderKind.ENTRADA_NOVA -> side == TradeSide.COMPRA
-        OrderKind.VENDER, OrderKind.ZERAR -> side == TradeSide.VENDA
+        OrderKind.BUY, OrderKind.NEW_ENTRY -> side == TradeSide.COMPRA
+        OrderKind.SELL, OrderKind.FULL_EXIT -> side == TradeSide.VENDA
         null -> false
     }
 }

@@ -1,8 +1,6 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.attribution.AttributionService
-import dev.agner.portfolio.usecase.attribution.model.AttributionMovementCreation
-import dev.agner.portfolio.usecase.attribution.model.AttributionReason.TRANSFERENCIA
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -28,29 +26,17 @@ class OrderController(
 
             // A TransferSuggestion applied directly, rather than going through a proposal's own
             // approve/reject lifecycle (see TransferSuggestion's doc comment) — two attribution
-            // movements, reason TRANSFERENCIA: it's bookkeeping, not a trade.
+            // movements, reason TRANSFERENCIA, both saved in one transaction by the service: it's
+            // bookkeeping, not a trade, and either both sides land or neither does.
             post("/transfers/apply") {
                 val payload = call.receive<ApplyTransferRequest>()
 
-                attributionService.recordMovement(
-                    AttributionMovementCreation(
-                        listedAssetId = payload.listedAssetId,
-                        strategyId = payload.fromStrategyId,
-                        date = payload.date,
-                        quantity = -payload.quantity,
-                        reason = TRANSFERENCIA,
-                        note = "Transferência para a estratégia ${payload.toStrategyId}",
-                    ),
-                )
-                attributionService.recordMovement(
-                    AttributionMovementCreation(
-                        listedAssetId = payload.listedAssetId,
-                        strategyId = payload.toStrategyId,
-                        date = payload.date,
-                        quantity = payload.quantity,
-                        reason = TRANSFERENCIA,
-                        note = "Transferência da estratégia ${payload.fromStrategyId}",
-                    ),
+                attributionService.transferBetweenStrategies(
+                    listedAssetId = payload.listedAssetId,
+                    fromStrategyId = payload.fromStrategyId,
+                    toStrategyId = payload.toStrategyId,
+                    quantity = payload.quantity,
+                    date = payload.date,
                 )
 
                 call.respond(HttpStatusCode.NoContent)

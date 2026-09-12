@@ -46,20 +46,20 @@ class BondController(
             }
 
             post("/{bond_id}/consolidate") {
-                val bondId = call.parameters["bond_id"]!!.toInt()
+                val bondId = call.requiredInt("bond_id")
 
                 consolidationService.consolidateProduct(bondId, BOND)
                 call.respond(HttpStatusCode.NoContent)
             }
 
             get("/{bond_id}/positions") {
-                val bondId = call.parameters["bond_id"]!!.toInt()
+                val bondId = call.requiredInt("bond_id")
 
                 call.respond(positionService.getByBondId(bondId))
             }
 
             get("/{bond_id}/positions/last") {
-                val bondId = call.parameters["bond_id"]!!.toInt()
+                val bondId = call.requiredInt("bond_id")
 
                 call.respond(positionService.getLastByBondId(bondId))
             }

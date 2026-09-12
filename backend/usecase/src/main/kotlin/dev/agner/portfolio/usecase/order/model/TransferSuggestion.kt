@@ -11,8 +11,6 @@ data class TransferSuggestion(
     val listedAssetId: Int,
     val ticker: String,
     val fromStrategyId: Int,
-    val fromStrategyName: String,
     val toStrategyId: Int,
-    val toStrategyName: String,
     val quantity: BigDecimal,
 )

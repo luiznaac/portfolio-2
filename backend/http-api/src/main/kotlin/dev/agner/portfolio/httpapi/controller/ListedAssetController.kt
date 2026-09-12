@@ -39,39 +39,39 @@ class ListedAssetController(
 
             route("/{listed_asset_id}") {
                 get("/trades") {
-                    val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                    val assetId = call.requiredInt("listed_asset_id")
 
                     call.respond(HttpStatusCode.OK, tradeService.fetchByAssetId(assetId))
                 }
 
                 post("/trades") {
-                    val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                    val assetId = call.requiredInt("listed_asset_id")
                     val payload = call.receive<TradeCreation>()
 
                     call.respond(HttpStatusCode.Created, tradeService.create(payload.copy(assetId = assetId)))
                 }
 
                 post("/consolidate") {
-                    val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                    val assetId = call.requiredInt("listed_asset_id")
 
                     consolidationService.consolidateProduct(assetId, LISTED_ASSET)
                     call.respond(HttpStatusCode.NoContent)
                 }
 
                 get("/positions") {
-                    val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                    val assetId = call.requiredInt("listed_asset_id")
 
                     call.respond(HttpStatusCode.OK, positionService.getByAssetId(assetId))
                 }
 
                 get("/positions/last") {
-                    val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                    val assetId = call.requiredInt("listed_asset_id")
 
                     call.respond(HttpStatusCode.OK, positionService.getLastByAssetId(assetId))
                 }
 
                 get("/dividends") {
-                    val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                    val assetId = call.requiredInt("listed_asset_id")
                     val asset = service.fetchById(assetId)
 
                     call.respond(HttpStatusCode.OK, dividendGateway.getDividends(asset))

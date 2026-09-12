@@ -39,7 +39,7 @@ class CheckingAccountController(
             }
 
             post("/{checking_account_id}/deposit") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
                 val payload = call.receive<MovementRequest>()
 
                 call.respond(
@@ -49,7 +49,7 @@ class CheckingAccountController(
             }
 
             post("/{checking_account_id}/withdraw") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
                 val payload = call.receive<MovementRequest>()
 
                 call.respond(
@@ -59,7 +59,7 @@ class CheckingAccountController(
             }
 
             post("/{checking_account_id}/full-withdraw") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
                 val payload = call.receive<MovementRequest>()
 
                 call.respond(
@@ -69,20 +69,20 @@ class CheckingAccountController(
             }
 
             post("/{checking_account_id}/consolidate") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
 
                 consolidationService.consolidateProduct(checkingAccountId, CHECKING_ACCOUNT)
                 call.respond(HttpStatusCode.NoContent)
             }
 
             get("/{checking_account_id}/positions") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
 
                 call.respond(positionService.getByCheckingAccountId(checkingAccountId))
             }
 
             get("/{checking_account_id}/positions/last") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
 
                 call.respond(positionService.getLastByCheckingAccountId(checkingAccountId))
             }

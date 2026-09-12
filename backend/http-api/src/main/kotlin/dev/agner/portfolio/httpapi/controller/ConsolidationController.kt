@@ -20,8 +20,8 @@ class ConsolidationController(
             }
 
             post("/{product_type}/{product_id}") {
-                val productType = ProductType.valueOf(call.parameters["product_type"]!!)
-                val productId = call.parameters["product_id"]!!.toInt()
+                val productType = ProductType.valueOf(call.requiredString("product_type"))
+                val productId = call.requiredInt("product_id")
 
                 service.consolidateProduct(productId, productType)
 

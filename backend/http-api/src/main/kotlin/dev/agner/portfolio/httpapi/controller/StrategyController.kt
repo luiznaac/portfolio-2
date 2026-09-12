@@ -38,16 +38,16 @@ class StrategyController(
 
             route("/{strategy_id}") {
                 get("/editions") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
 
                     call.respond(HttpStatusCode.OK, editionService.fetchEditions(strategyId))
                 }
 
                 post("/weight") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
                     val payload = call.receive<StrategyWeightCreation>()
 
-                    call.respond(HttpStatusCode.Created, service.setWeight(payload.copy(strategyId = strategyId)))
+                    call.respond(HttpStatusCode.Created, service.setWeight(strategyId, payload))
                 }
 
                 // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly instead
@@ -55,7 +55,7 @@ class StrategyController(
                 // registered for the brokerage-note upload flow (UploadController) that expects a
                 // different shape.
                 post("/reports") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
                     val pdfBytes = call.receiveChannel().toByteArray()
 
                     call.respond(HttpStatusCode.Created, editionService.importReport(strategyId, pdfBytes))

@@ -10,4 +10,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.jackson)
     implementation("io.ktor:ktor-client-logging:3.3.1")
+    implementation(libs.caffeine)
+
+    testImplementation(libs.bundles.testDependencies)
 }
