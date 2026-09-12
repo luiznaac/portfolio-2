@@ -25,7 +25,9 @@ object TransferProposalTable : IntIdTable("transfer_proposal") {
     val decidedAt = datetime("decided_at").nullable()
     val createdAt = datetime("created_at")
 
-    // UNIQUE: reconcileProposal looks a pairing up by these four columns and assumes one row.
+    // UNIQUE, not just an index: the reconcile step looks a pairing up by exactly these four columns
+    // and assumes at most one row comes back (see OrderPlanService.reconcileProposal), and the
+    // check-then-insert in TransferProposalRepository.save relies on this constraint to close its race.
     init { index("transfer_proposal_pairing", true, month, listedAsset, fromStrategy, toStrategy) }
 }
 

@@ -39,6 +39,27 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
             )
         }
 
+        it("renders a numeric amount cell with the cell's own format") {
+            val xlsx = xlsxWithNumericAmount(199.5)
+
+            val result = parser.parse(xlsx)
+
+            result.single().ticker shouldBe "PETR4"
+            // BigDecimal.equals is scale-sensitive; 199.50 from the cell equals 199.5 numerically.
+            result.single().amount.compareTo(BigDecimal("199.5")) shouldBe 0
+        }
+
+        it("keeps the real column index when a header column is physically absent") {
+            val xlsx = xlsxOf(
+                listOf("Data", null, "Movimentação", "Produto", "Valor da Operação"),
+                listOf("15/06/2026", null, "Dividendo", "PETR4", "199,50"),
+            )
+
+            parser.parse(xlsx) shouldBe listOf(
+                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDEND, BigDecimal("199.50")),
+            )
+        }
+
         it("fails loudly when a required column is missing") {
             val xlsx = xlsxOf(
                 listOf("Data", "Produto", "Valor da Operação"),
@@ -50,16 +71,46 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
     }
 })
 
-private fun xlsxOf(vararg rows: List<String>): ByteArray {
+private fun xlsxOf(vararg rows: List<String?>): ByteArray {
     val workbook = XSSFWorkbook()
     val sheet = workbook.createSheet("Movimentação")
 
     rows.forEachIndexed { rowIndex, values ->
         val row = sheet.createRow(rowIndex)
-        values.forEachIndexed { cellIndex, value -> row.createCell(cellIndex).setCellValue(value) }
+        // A null entry leaves the column absent instead of writing an empty string, reproducing a
+        // B3 export where a spacer column carries no header.
+        values.forEachIndexed { cellIndex, value ->
+            if (value != null) row.createCell(cellIndex).setCellValue(value)
+        }
     }
 
     val out = ByteArrayOutputStream()
     workbook.write(out)
+    return out.toByteArray()
+}
+
+private fun xlsxWithNumericAmount(amount: Double): ByteArray {
+    val workbook = XSSFWorkbook()
+    val sheet = workbook.createSheet("Movimentação")
+    val amountStyle = workbook.createCellStyle().apply {
+        dataFormat = workbook.createDataFormat().getFormat("#,##0.00")
+    }
+
+    val header = sheet.createRow(0)
+    listOf("Data", "Movimentação", "Produto", "Valor da Operação")
+        .forEachIndexed { index, value -> header.createCell(index).setCellValue(value) }
+
+    val row = sheet.createRow(1)
+    row.createCell(0).setCellValue("15/06/2026")
+    row.createCell(1).setCellValue("Dividendo")
+    row.createCell(2).setCellValue("PETR4")
+    row.createCell(3).apply {
+        setCellValue(amount)
+        cellStyle = amountStyle
+    }
+
+    val out = ByteArrayOutputStream()
+    workbook.write(out)
+    workbook.close()
     return out.toByteArray()
 }

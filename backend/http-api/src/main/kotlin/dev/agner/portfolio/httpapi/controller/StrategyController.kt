@@ -40,13 +40,13 @@ class StrategyController(
 
             route("/{strategy_id}") {
                 get("/editions") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
 
                     call.respond(HttpStatusCode.OK, editionService.fetchEditions(strategyId))
                 }
 
                 post("/weight") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
                     val payload = call.receive<StrategyWeightCreation>()
 
                     call.respond(HttpStatusCode.Created, service.setWeight(strategyId, payload))
@@ -57,7 +57,7 @@ class StrategyController(
                 // for the upload flow and expects a different shape. Parsing happens here so the
                 // domain only ever receives the extracted report.
                 post("/reports") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
                     val pdfBytes = call.receiveChannel().toByteArray()
                     val report = parserResolver.parse(pdfBytes)
 

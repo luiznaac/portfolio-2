@@ -58,6 +58,13 @@ class StrategyDiffCalculatorTest : StringSpec({
         diff.changed shouldBe emptyList()
     }
 
+    "should detect rating and target price changes" {
+        val before = listOf(StrategyTarget("PETR4", BigDecimal("0.10"), "COMPRA", BigDecimal("40.00")))
+        val after = listOf(StrategyTarget("PETR4", BigDecimal("0.10"), "NEUTRO", BigDecimal("45.00")))
+
+        calculator.diff(before, after).changed.map { it.ticker } shouldBe listOf("PETR4")
+    }
+
     "should handle the first edition (nothing before) as everything entering" {
         val after = listOf(
             StrategyTarget("PETR4", BigDecimal("0.10")),
@@ -69,5 +76,24 @@ class StrategyDiffCalculatorTest : StringSpec({
         diff.entered shouldBe after
         diff.exited shouldBe emptyList()
         diff.changed shouldBe emptyList()
+    }
+
+    // Contract: both lists hold at most one entry per ticker. Duplicates are rejected in
+    // StrategyEditionService.validate before the calculator is called.
+    "should diff duplicate-free lists by ticker" {
+        val before = listOf(
+            StrategyTarget("PETR4", BigDecimal("0.60")),
+            StrategyTarget("VALE3", BigDecimal("0.40")),
+        )
+        val after = listOf(
+            StrategyTarget("PETR4", BigDecimal("0.50")),
+            StrategyTarget("ITUB4", BigDecimal("0.50")),
+        )
+
+        val diff = calculator.diff(before, after)
+
+        diff.entered.map { it.ticker } shouldBe listOf("ITUB4")
+        diff.exited.map { it.ticker } shouldBe listOf("VALE3")
+        diff.changed.map { it.ticker } shouldBe listOf("PETR4")
     }
 })

@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.brokeragenote.parser
 
+import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.trade.model.TradeSide
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
@@ -23,4 +24,9 @@ data class ParsedTrade(
     val price: BigDecimal,
 )
 
-class BrokerageNoteParseException(message: String) : Exception(message)
+class BrokerageNoteParseException(detail: String) :
+    DomainException(
+        error = "brokerage-note-invalid",
+        userMessage = "The brokerage note could not be parsed",
+        detail = detail,
+    )

@@ -151,5 +151,4 @@ private fun ceiling() = SaleCeiling(
     monthSold = BigDecimal.ZERO,
     limit = BigDecimal("20000.00"),
     remaining = BigDecimal("20000.00"),
-    exceeded = false,
 )

@@ -7,13 +7,13 @@ enum class OrderKind {
     SELL,
 
     /** No strategy targets this ticker anymore (ideal = 0) but custody is still above zero. */
-    EXIT,
+    FULL_EXIT,
 
     /** Some strategy targets it (ideal > 0) and custody is currently zero. */
     NEW_ENTRY,
     ;
 
-    val isSale: Boolean get() = this == SELL || this == EXIT
+    val isSale: Boolean get() = this == SELL || this == FULL_EXIT
 }
 
 /**
@@ -31,7 +31,8 @@ data class Order(
     val contributions: List<StrategyDelta>,
     // A trade already exists today for this ticker in the opposite direction — executing this
     // order too would be a day trade (loses the sale exemption, taxed at 20% instead). Flagged,
-    // never blocked.
+    // never blocked. Day-trade proceeds never consume the R$20k exemption, so the sale-exemption
+    // meter excludes day-trade orders (see SaleCeiling).
     val dayTradeRisk: Boolean,
 )
 

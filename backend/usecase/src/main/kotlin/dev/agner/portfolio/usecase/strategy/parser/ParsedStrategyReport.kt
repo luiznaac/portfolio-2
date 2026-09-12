@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.strategy.parser
 
+import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
 import kotlinx.datetime.LocalDate
 
@@ -14,4 +15,9 @@ data class ParsedStrategyReport(
     val targets: List<StrategyTarget>,
 )
 
-class StrategyReportParseException(message: String) : Exception(message)
+class StrategyReportParseException(detail: String) :
+    DomainException(
+        error = "strategy-report-invalid",
+        userMessage = "The strategy report is invalid",
+        detail = detail,
+    )

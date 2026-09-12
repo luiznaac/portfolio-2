@@ -30,18 +30,14 @@ export const keys = {
   bonds: ["bonds"] as const,
   bondPositions: (id: number) => ["bonds", id, "positions"] as const,
   checkingAccounts: ["checking-accounts"] as const,
-  checkingAccountPositions: (id: number) =>
-    ["checking-accounts", id, "positions"] as const,
+  checkingAccountPositions: (id: number) => ["checking-accounts", id, "positions"] as const,
   indexes: ["indexes"] as const,
   indexValues: (id: IndexId) => ["indexes", id, "values"] as const,
   listedAssets: ["listed-assets"] as const,
-  listedAssetPositions: (id: number) =>
-    ["listed-assets", id, "positions"] as const,
+  listedAssetPositions: (id: number) => ["listed-assets", id, "positions"] as const,
   trades: (assetId: number) => ["listed-assets", assetId, "trades"] as const,
-  corporateActions: (assetId: number) =>
-    ["listed-assets", assetId, "corporate-actions"] as const,
-  dividends: (assetId: number) =>
-    ["listed-assets", assetId, "dividends"] as const,
+  corporateActions: (assetId: number) => ["listed-assets", assetId, "corporate-actions"] as const,
+  dividends: (assetId: number) => ["listed-assets", assetId, "dividends"] as const,
   tickerCatalogSearch: (query: string) => ["ticker-catalog", query] as const,
   allocationPlan: ["allocation", "plan"] as const,
   capitalSnapshots: ["allocation", "capital-snapshots"] as const,
@@ -53,7 +49,6 @@ export const keys = {
   strategyWeights: ["strategies", "weights"] as const,
   attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
   orderPlan: ["orders", "plan"] as const,
-  transfersForMonth: ["orders", "transfers"] as const,
   transferSettings: ["orders", "transfers", "settings"] as const,
   monthlyCapitalGains: ["tax", "capital-gains"] as const,
   stepUpPlan: ["tax", "step-up-plan"] as const,
@@ -83,10 +78,7 @@ export function useCreateBond() {
       body:
         | ({ kind: "fixed" } & FixedRateBondCreation)
         | ({ kind: "floating" } & FloatingRateBondCreation),
-    ) =>
-      body.kind === "fixed"
-        ? api.createFixedBond(body)
-        : api.createFloatingBond(body),
+    ) => (body.kind === "fixed" ? api.createFixedBond(body) : api.createFloatingBond(body)),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.bonds }),
   });
 }
@@ -123,8 +115,7 @@ export function useCheckingAccountPositions(id: number) {
 export function useCreateCheckingAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CheckingAccountCreation) =>
-      api.createCheckingAccount(body),
+    mutationFn: (body: CheckingAccountCreation) => api.createCheckingAccount(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.checkingAccounts }),
   });
 }
@@ -194,8 +185,7 @@ export function useHydrateIndex() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: IndexId) => api.hydrateIndex(id),
-    onSuccess: (_r, id) =>
-      qc.invalidateQueries({ queryKey: keys.indexValues(id) }),
+    onSuccess: (_r, id) => qc.invalidateQueries({ queryKey: keys.indexValues(id) }),
   });
 }
 
@@ -256,8 +246,7 @@ export function useCreateTrade(assetId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: TradeCreation) => api.createTrade(assetId, body),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: keys.trades(assetId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.trades(assetId) }),
   });
 }
 
@@ -363,8 +352,7 @@ export function useFixedIncomeSubClassTargets() {
 export function useSetFixedIncomeSubClassTarget() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: FixedIncomeSubClassTargetCreation) =>
-      api.setFixedIncomeSubClassTarget(body),
+    mutationFn: (body: FixedIncomeSubClassTargetCreation) => api.setFixedIncomeSubClassTarget(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.fixedIncomeSubClassTargets });
       qc.invalidateQueries({ queryKey: keys.allocationPlan });
@@ -449,8 +437,7 @@ export function useAttributionSummary(assetId: number) {
 export function useRecordAttributionMovement(assetId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: AttributionMovementCreation) =>
-      api.recordAttributionMovement(assetId, body),
+    mutationFn: (body: AttributionMovementCreation) => api.recordAttributionMovement(assetId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.attribution(assetId) }),
   });
 }
@@ -461,18 +448,11 @@ export function useOrderPlan() {
   return useQuery({ queryKey: keys.orderPlan, queryFn: () => api.orderPlan() });
 }
 
-export function useTransfersForMonth() {
-  return useQuery({ queryKey: keys.transfersForMonth, queryFn: () => api.transfersForMonth() });
-}
-
 export function useApproveTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (args: { id: number; body: ApproveTransferRequest }) => api.approveTransfer(args.id, args.body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.orderPlan });
-      qc.invalidateQueries({ queryKey: keys.transfersForMonth });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
 }
 
@@ -480,10 +460,7 @@ export function useRejectTransfer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api.rejectTransfer(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.orderPlan });
-      qc.invalidateQueries({ queryKey: keys.transfersForMonth });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
 }
 

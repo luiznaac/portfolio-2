@@ -1,18 +1,18 @@
 import type { RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
-import { Dashboard } from "./pages/Dashboard.tsx";
 import { BondPage } from "./pages/BondPage.tsx";
-import { NewBond } from "./pages/NewBond.tsx";
-import { CheckingAccountPage } from "./pages/CheckingAccountPage.tsx";
-import { NewCheckingAccount } from "./pages/NewCheckingAccount.tsx";
-import { Indexes } from "./pages/Indexes.tsx";
-import { Upload } from "./pages/Upload.tsx";
-import { NewListedAsset } from "./pages/NewListedAsset.tsx";
-import { ListedAssetPage } from "./pages/ListedAssetPage.tsx";
 import { Carteira } from "./pages/Carteira.tsx";
+import { CheckingAccountPage } from "./pages/CheckingAccountPage.tsx";
+import { Dashboard } from "./pages/Dashboard.tsx";
 import { Estrategias } from "./pages/Estrategias.tsx";
+import { Indexes } from "./pages/Indexes.tsx";
+import { ListedAssetPage } from "./pages/ListedAssetPage.tsx";
+import { NewBond } from "./pages/NewBond.tsx";
+import { NewCheckingAccount } from "./pages/NewCheckingAccount.tsx";
+import { NewListedAsset } from "./pages/NewListedAsset.tsx";
 import { Ordens } from "./pages/Ordens.tsx";
 import { Importar } from "./pages/Importar.tsx";
+import { Upload } from "./pages/Upload.tsx";
 import { Imposto } from "./pages/Imposto.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
 

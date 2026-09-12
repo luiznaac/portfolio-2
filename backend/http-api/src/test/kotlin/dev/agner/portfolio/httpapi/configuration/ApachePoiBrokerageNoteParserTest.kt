@@ -77,6 +77,20 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
             result.single().price shouldBe BigDecimal("26.09")
         }
 
+        it("keeps the real column index when a header cell is blank") {
+            // POI's row iterator skips physically absent cells; the header index must come from
+            // the cell's real column, or a spacer column shifts every later header.
+            val xlsx = xlsxOf(
+                listOf(
+                    "Data do Negócio", null, "Tipo de Movimentação", "Mercado", "Prazo/Vencimento",
+                    "Instituição", "Código de Negociação", "Quantidade", "Preço", "Valor",
+                ),
+                listOf("11/08/2026", null, "Compra", "Mercado à Vista", "-", "XP", "PETR4", 100, 35.50, 3550.0),
+            )
+
+            parser.parse(xlsx).single().ticker shouldBe "PETR4"
+        }
+
         it("skips blank trailing rows") {
             val result = parser.parse(
                 statement(
@@ -105,13 +119,16 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
     }
 })
 
-private fun xlsxOf(vararg rows: List<Any>): ByteArray {
+private fun xlsxOf(vararg rows: List<Any?>): ByteArray {
     val workbook = XSSFWorkbook()
     val sheet = workbook.createSheet("Negociação")
 
     rows.forEachIndexed { rowIndex, values ->
         val row = sheet.createRow(rowIndex)
         values.forEachIndexed { cellIndex, value ->
+            // A null leaves the cell physically absent, which is what a real export with a spacer
+            // column looks like to POI.
+            if (value == null) return@forEachIndexed
             val cell = row.createCell(cellIndex)
             when (value) {
                 is Number -> cell.setCellValue(value.toDouble())

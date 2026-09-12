@@ -1,6 +1,5 @@
 package dev.agner.portfolio.usecase.monthlyclose
 
-import dev.agner.portfolio.usecase.PassThroughTransactionTemplate
 import dev.agner.portfolio.usecase.allocation.AllocationService
 import dev.agner.portfolio.usecase.allocation.model.AllocationPlan
 import dev.agner.portfolio.usecase.allocation.model.AssetClass.FIXED_INCOME
@@ -11,9 +10,12 @@ import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.CLOSED
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.OPEN
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.OrderPlan
+import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -34,14 +36,21 @@ class MonthlyCloseServiceTest : StringSpec({
         repository,
         allocationService,
         orderPlanService,
-        PassThroughTransactionTemplate,
         clock,
     )
 
     beforeTest {
+        // Each test stubs its own behavior; clearing keeps the exact-count verifies scoped to one
+        // test instead of counting calls recorded by the tests before it.
+        clearMocks(repository)
         every { clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         every { clock.zone } returns ZoneOffset.UTC
         coEvery { orderPlanService.transfersForMonth() } returns emptyList()
+        coEvery { orderPlanService.refreshPlan() } returns OrderPlan(
+            orders = emptyList(),
+            transferProposals = emptyList(),
+            saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
+        )
     }
 
     "current should open the current month" {
@@ -51,16 +60,25 @@ class MonthlyCloseServiceTest : StringSpec({
         service.current() shouldBe open
     }
 
-    "close should open the month first, then close it" {
+    "close should close the current month through a single repository call" {
         val month = LocalDate(2026, 9, 1)
-        coEvery { repository.open(month) } returns MonthlyClose(1, month, OPEN, null)
         coEvery { repository.close(month) } returns MonthlyClose(1, month, CLOSED, null)
 
         val result = service.close()
 
         result.status shouldBe CLOSED
-        coVerify { repository.open(LocalDate(2026, 9, 1)) }
-        coVerify { repository.close(LocalDate(2026, 9, 1)) }
+        // The stranded-pending expiry runs before counting, so a month whose leftovers were
+        // auto-rejected closes even though transfersForMonth() might have rows.
+        coVerify(exactly = 1) { orderPlanService.refreshPlan() }
+        coVerify(exactly = 1) { repository.close(month) }
+        coVerify(exactly = 0) { repository.open(any()) }
+    }
+
+    "close should propagate the already-closed conflict" {
+        val month = LocalDate(2026, 9, 1)
+        coEvery { repository.close(month) } throws MonthlyCloseAlreadyClosedException(month)
+
+        shouldThrow<MonthlyCloseAlreadyClosedException> { service.close() }
     }
 
     "close should refuse to close with a pending transfer proposal" {
@@ -81,7 +99,7 @@ class MonthlyCloseServiceTest : StringSpec({
             ),
         )
 
-        shouldThrow<IllegalArgumentException> { service.close() }
+        shouldThrow<PendingTransferProposalsException> { service.close() }
     }
 
     "driftAlert should flag only classes whose drift exceeds the threshold" {

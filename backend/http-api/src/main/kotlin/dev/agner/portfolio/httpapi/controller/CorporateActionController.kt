@@ -21,34 +21,34 @@ class CorporateActionController(
     override fun routes(): RouteDefinition = {
         route("/listed-assets/{listed_asset_id}/corporate-actions") {
             get {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
 
                 call.respond(HttpStatusCode.OK, service.fetchByAssetId(assetId))
             }
 
             post("/split") {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
                 val payload = call.receive<SplitCreation>()
 
                 call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
 
             post("/reverse-split") {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
                 val payload = call.receive<ReverseSplitCreation>()
 
                 call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
 
             post("/bonus") {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
                 val payload = call.receive<BonusCreation>()
 
                 call.respond(HttpStatusCode.Created, service.create(assetId, payload))
             }
 
             post("/ticker-change") {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
                 val payload = call.receive<TickerChangeCreation>()
 
                 call.respond(HttpStatusCode.Created, service.create(assetId, payload))

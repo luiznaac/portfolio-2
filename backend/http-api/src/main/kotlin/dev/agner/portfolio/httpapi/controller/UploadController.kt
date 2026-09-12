@@ -17,7 +17,7 @@ class UploadController(
     override fun routes(): RouteDefinition = {
         route("/upload") {
             post("/kinvo/bond/{bond_id}") {
-                val bondId = call.parameters["bond_id"]!!.toInt()
+                val bondId = call.requiredInt("bond_id")
                 val analise = call.receive<List<UploadOrder>>()
 
                 val result = service.createOrders(bondId, analise)
@@ -26,7 +26,7 @@ class UploadController(
             }
 
             post("/kinvo/checking-account/{checking_account_id}") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
                 val analise = call.receive<List<UploadOrder>>()
 
                 val result = service.createMovements(checkingAccountId, analise)
@@ -35,7 +35,7 @@ class UploadController(
             }
 
             post("/picpay/bond/{bond_id}") {
-                val bondId = call.parameters["bond_id"]!!.toInt()
+                val bondId = call.requiredInt("bond_id")
                 val analise = call.receive<List<UploadOrder>>()
 
                 val result = service.createOrders(bondId, analise)
@@ -44,7 +44,7 @@ class UploadController(
             }
 
             post("/picpay/checking-account/{checking_account_id}") {
-                val checkingAccountId = call.parameters["checking_account_id"]!!.toInt()
+                val checkingAccountId = call.requiredInt("checking_account_id")
                 val analise = call.receive<List<UploadOrder>>()
 
                 val result = service.createMovements(checkingAccountId, analise)

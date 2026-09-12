@@ -2,7 +2,6 @@ package dev.agner.portfolio.usecase.monthlyclose
 
 import dev.agner.portfolio.usecase.allocation.AllocationService
 import dev.agner.portfolio.usecase.commons.today
-import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.monthlyclose.model.DriftAlert
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyClose
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
@@ -23,7 +22,6 @@ class MonthlyCloseService(
     private val repository: IMonthlyCloseRepository,
     private val allocationService: AllocationService,
     private val orderPlanService: OrderPlanService,
-    private val transaction: ITransactionTemplate,
     private val clock: Clock,
 ) {
 
@@ -37,14 +35,15 @@ class MonthlyCloseService(
      * in a plan that might still change.
      */
     suspend fun close(): MonthlyClose {
-        val pending = orderPlanService.transfersForMonth().count { it.status == PENDING }
-        require(pending == 0) { "Cannot close the month with $pending pending transfer proposal(s)" }
+        // Recompute the matches first: the reconciliation auto-rejects a PENDING proposal whose
+        // pairing disappeared, so only proposals that are still live can block the close. Counting
+        // transfersForMonth() alone would keep counting stranded rows forever.
+        orderPlanService.refreshPlan()
 
-        val month = currentMonth()
-        return transaction.execute {
-            repository.open(month)
-            repository.close(month)
-        }
+        val pending = orderPlanService.transfersForMonth().count { it.status == PENDING }
+        if (pending > 0) throw PendingTransferProposalsException(pending)
+
+        return repository.close(currentMonth())
     }
 
     suspend fun driftAlert(thresholdPP: BigDecimal = DEFAULT_THRESHOLD_PP): List<DriftAlert> {

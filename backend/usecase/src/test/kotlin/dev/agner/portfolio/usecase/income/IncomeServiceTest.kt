@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.listedasset.gateway.IDividendGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDEND
+import dev.agner.portfolio.usecase.listedasset.model.DividendType.FUND_INCOME
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.JCP
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
@@ -14,7 +15,9 @@ import dev.agner.portfolio.usecase.trade.model.Trade
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.clearMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
@@ -34,6 +37,12 @@ class IncomeServiceTest : StringSpec({
     )
 
     val petr4 = ListedAsset(1, "PETR4", AssetKind.STOCK, "Petrobras", "PETROBRAS")
+
+    beforeTest {
+        // Each test stubs its own behavior; clearing keeps the exact-count verifies scoped to one
+        // test instead of counting calls recorded by the tests before it.
+        clearMocks(listedAssetRepository, tradeRepository, corporateActionRepository, dividendGateway)
+    }
 
     "should size the event by the quantity held on the ex-date, not the current quantity" {
         coEvery { listedAssetRepository.fetchById(1) } returns petr4
@@ -92,7 +101,7 @@ class IncomeServiceTest : StringSpec({
         service.eventsForAsset(1) shouldBe emptyList()
     }
 
-    "should reconcile previsto against recebido by ticker, month and type" {
+    "should reconcile expected against received by ticker, month and type" {
         coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
         coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
             Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
@@ -118,5 +127,80 @@ class IncomeServiceTest : StringSpec({
             ),
         )
         result[0].matches shouldBe false
+    }
+
+    "should reconcile on the payment month when it lags the ex-date" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
+        coEvery { dividendGateway.getDividends(petr4) } returns listOf(
+            // JCP declared with a June ex-date but paid in July — the common lag, not an edge case.
+            DividendDeclaration(JCP, BigDecimal("2.00"), LocalDate(2026, 6, 1), LocalDate(2026, 7, 15)),
+        )
+
+        val received = listOf(
+            ReceivedIncome(LocalDate(2026, 7, 15), "PETR4", JCP, BigDecimal("170.00")),
+        )
+
+        val result = service.reconcile(received)
+
+        result shouldBe listOf(
+            dev.agner.portfolio.usecase.income.model.IncomeReconciliation(
+                ticker = "PETR4",
+                month = LocalDate(2026, 7, 1),
+                type = JCP,
+                expected = BigDecimal("170.00"),
+                received = BigDecimal("170.00"),
+            ),
+        )
+        result[0].month shouldBe LocalDate(2026, 7, 1)
+        result[0].matches shouldBe true
+    }
+
+    "should fall back to the ex-date month when the declaration has no payment date" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
+        coEvery { dividendGateway.getDividends(petr4) } returns listOf(
+            DividendDeclaration(FUND_INCOME, BigDecimal("1.00"), LocalDate(2026, 6, 1), null),
+        )
+
+        val received = listOf(
+            ReceivedIncome(LocalDate(2026, 6, 20), "PETR4", FUND_INCOME, BigDecimal("100.00")),
+        )
+
+        val result = service.reconcile(received)
+
+        result shouldBe listOf(
+            dev.agner.portfolio.usecase.income.model.IncomeReconciliation(
+                ticker = "PETR4",
+                month = LocalDate(2026, 6, 1),
+                type = FUND_INCOME,
+                expected = BigDecimal("100.00"),
+                received = BigDecimal("100.00"),
+            ),
+        )
+    }
+
+    "should fetch each asset's trades and corporate actions once in summary" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { dividendGateway.getDividends(petr4) } returns listOf(
+            DividendDeclaration(DIVIDEND, BigDecimal("2.00"), LocalDate(2026, 6, 1), LocalDate(2026, 6, 15)),
+        )
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade.Buy(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
+
+        val result = service.summary()
+
+        result.single().totalNet shouldBe BigDecimal("200.00")
+        result.single().costBasis shouldBe BigDecimal("1000.00")
+        coVerify(exactly = 1) { tradeRepository.fetchByAssetId(1) }
+        coVerify(exactly = 1) { corporateActionRepository.fetchByAssetId(1) }
     }
 })

@@ -2,7 +2,9 @@ package dev.agner.portfolio.persistence.order
 
 import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.persistence.strategy.StrategyEntity
+import dev.agner.portfolio.persistence.strategy.isReferenceDateConflict
 import dev.agner.portfolio.usecase.commons.now
+import dev.agner.portfolio.usecase.order.model.TransferProposal
 import dev.agner.portfolio.usecase.order.model.TransferProposalCreation
 import dev.agner.portfolio.usecase.order.model.TransferProposalStatus
 import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
@@ -10,6 +12,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
@@ -42,22 +45,34 @@ class TransferProposalRepository(
         }.firstOrNull()?.toModel()
     }
 
-    override suspend fun save(creation: TransferProposalCreation) = transaction {
-        TransferProposalEntity.new {
-            month = creation.month
-            listedAsset = ListedAssetEntity.findById(creation.listedAssetId)
-                ?: throw IllegalArgumentException("ListedAsset ${creation.listedAssetId} not found")
-            ticker = creation.ticker
-            fromStrategy = StrategyEntity.findById(creation.fromStrategyId)
-                ?: throw IllegalArgumentException("Strategy ${creation.fromStrategyId} not found")
-            toStrategy = StrategyEntity.findById(creation.toStrategyId)
-                ?: throw IllegalArgumentException("Strategy ${creation.toStrategyId} not found")
-            proposedQuantity = creation.proposedQuantity
-            appliedQuantity = null
-            status = TransferProposalStatus.PENDING
-            decidedAt = null
-            createdAt = LocalDateTime.now(clock)
-        }.toModel()
+    override suspend fun save(creation: TransferProposalCreation): TransferProposal = try {
+        transaction {
+            TransferProposalEntity.new {
+                month = creation.month
+                listedAsset = ListedAssetEntity.findById(creation.listedAssetId)
+                    ?: throw IllegalArgumentException("ListedAsset ${creation.listedAssetId} not found")
+                ticker = creation.ticker
+                fromStrategy = StrategyEntity.findById(creation.fromStrategyId)
+                    ?: throw IllegalArgumentException("Strategy ${creation.fromStrategyId} not found")
+                toStrategy = StrategyEntity.findById(creation.toStrategyId)
+                    ?: throw IllegalArgumentException("Strategy ${creation.toStrategyId} not found")
+                proposedQuantity = creation.proposedQuantity
+                appliedQuantity = null
+                status = TransferProposalStatus.PENDING
+                decidedAt = null
+                createdAt = LocalDateTime.now(clock)
+            }.toModel()
+        }
+    } catch (e: ExposedSQLException) {
+        // uniqueIndex(month, asset, from, to) closes the service's check-then-insert race: if a
+        // concurrent request inserted the pairing first, return that row instead of leaking the
+        // duplicate-key error. Any other database failure still propagates.
+        if (isReferenceDateConflict(e.errorCode, e.sqlState)) {
+            find(creation.month, creation.listedAssetId, creation.fromStrategyId, creation.toStrategyId)
+                ?: throw e
+        } else {
+            throw e
+        }
     }
 
     override suspend fun updateProposedQuantity(id: Int, quantity: BigDecimal) = transaction {

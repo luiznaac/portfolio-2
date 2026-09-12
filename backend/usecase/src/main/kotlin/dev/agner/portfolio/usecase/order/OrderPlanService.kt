@@ -83,7 +83,20 @@ class OrderPlanService(
         val threshold = transferSettingsRepository.fetch().autoApprovalThreshold
         val month = currentMonth()
 
-        val pending = assembled.matches.mapNotNull { reconcileProposal(month, it, threshold) }
+        val pending = assembled.matches.mapNotNull {
+            reconcileProposal(month, it, assembled.strategyNames, threshold)
+        }
+
+        // A PENDING proposal the matcher did not return this run is stranded: its pairing
+        // disappeared (a price or capital change, or a manual attribution movement), so there is
+        // no path to approve or reject it any more. Expire it now — a rejection stands for the
+        // month — so it stops coming back from transfersForMonth() and blocking the close.
+        val liveIds = pending.mapTo(mutableSetOf()) { it.id }
+        val stranded = transferProposalRepository.fetchByMonth(month)
+            .filter { it.status == PENDING && it.id !in liveIds }
+        for (proposal in stranded) {
+            transferProposalRepository.decide(proposal.id, REJECTED, null, LocalDateTime.now(clock))
+        }
 
         return OrderPlan(orders = assembled.orders, transferProposals = pending, saleCeiling = assembled.saleCeiling)
     }
@@ -92,9 +105,10 @@ class OrderPlanService(
 
     suspend fun approveTransfer(id: Int, quantity: BigDecimal?): TransferProposal {
         val proposal = requireProposal(id)
+
         val approvedQuantity = quantity ?: proposal.proposedQuantity
-        require(approvedQuantity > BigDecimal.ZERO && approvedQuantity <= proposal.proposedQuantity) {
-            "Approved quantity must be above 0 and at most ${proposal.proposedQuantity}"
+        if (approvedQuantity <= BigDecimal.ZERO || approvedQuantity > proposal.proposedQuantity) {
+            throw InvalidTransferQuantityException(approvedQuantity, proposal.proposedQuantity)
         }
 
         return applyAndDecide(proposal, approvedQuantity)
@@ -130,11 +144,9 @@ class OrderPlanService(
         }
         val targetedTickers = targetsByStrategy.values.flatMap { it.keys }.toSet()
 
-        // Every trade and every asset, fetched once — the per-asset loop below would otherwise
-        // issue one query per asset for the day-trade check and another for the sale ceiling.
+        // Every asset fetched once — the per-asset loop below would otherwise issue one query per
+        // asset for the attribution replay.
         val allAssets = listedAssetRepository.fetchAll()
-        val allTrades = tradeRepository.fetchAll()
-        val tradesByAsset = allTrades.groupBy { it.assetId }
         val summaryByAsset = allAssets.associate { it.id to attributionService.summarize(it.id) }
 
         val relevant = allAssets.filter {
@@ -156,15 +168,15 @@ class OrderPlanService(
             }
 
             if (deltaByStrategy.values.any { !it.isZero() }) {
-                matches += transferMatcher.match(asset.id, asset.ticker, deltaByStrategy, strategyNames)
+                matches += transferMatcher.match(asset.id, asset.ticker, deltaByStrategy)
                     .map { PricedMatch(it, price) }
             }
 
-            buildOrder(asset, summary, idealByStrategy, deltaByStrategy, strategyNames, price, tradesByAsset, today)
+            buildOrder(asset, summary, idealByStrategy, deltaByStrategy, strategyNames, price, today)
                 ?.let { orders += it }
         }
 
-        return AssembledPlan(orders, matches, saleCeiling(today, orders, allTrades, allAssets))
+        return AssembledPlan(orders, matches, strategyNames, saleCeiling(today, orders, allAssets))
     }
 
     private fun idealByStrategy(
@@ -189,15 +201,13 @@ class OrderPlanService(
         }
     }
 
-    @Suppress("LongParameterList")
-    private fun buildOrder(
+    private suspend fun buildOrder(
         asset: ListedAsset,
         summary: AttributionSummary,
         idealByStrategy: Map<Int, BigDecimal>,
         deltaByStrategy: Map<Int, BigDecimal>,
         strategyNames: Map<Int, String>,
         price: BigDecimal?,
-        tradesByAsset: Map<Int, List<Trade>>,
         today: LocalDate,
     ): Order? {
         val totalIdeal = idealByStrategy.values.sumOf { it }
@@ -205,7 +215,7 @@ class OrderPlanService(
         if (netDelta.isZero() || price == null) return null
 
         val kind = when {
-            totalIdeal.isZero() && summary.custodyQuantity > BigDecimal.ZERO -> OrderKind.EXIT
+            totalIdeal.isZero() && summary.custodyQuantity > BigDecimal.ZERO -> OrderKind.FULL_EXIT
             summary.custodyQuantity.isZero() && totalIdeal > BigDecimal.ZERO -> OrderKind.NEW_ENTRY
             netDelta > BigDecimal.ZERO -> OrderKind.SELL
             else -> OrderKind.BUY
@@ -222,13 +232,14 @@ class OrderPlanService(
             contributions = deltaByStrategy.filterValues { !it.isZero() }.map {
                 StrategyDelta(strategyId = it.key, strategyName = strategyNames[it.key].orEmpty(), delta = it.value)
             },
-            dayTradeRisk = hasOppositeTradeToday(tradesByAsset[asset.id].orEmpty(), today, isSale = kind.isSale),
+            dayTradeRisk = hasOppositeTradeToday(asset.id, today, isSale = kind.isSale),
         )
     }
 
     private suspend fun reconcileProposal(
         month: LocalDate,
         priced: PricedMatch,
+        strategyNames: Map<Int, String>,
         threshold: BigDecimal,
     ): TransferProposal? {
         val match = priced.match
@@ -246,9 +257,9 @@ class OrderPlanService(
                     listedAssetId = match.listedAssetId,
                     ticker = match.ticker,
                     fromStrategyId = match.fromStrategyId,
-                    fromStrategyName = match.fromStrategyName,
+                    fromStrategyName = strategyNames[match.fromStrategyId].orEmpty(),
                     toStrategyId = match.toStrategyId,
-                    toStrategyName = match.toStrategyName,
+                    toStrategyName = strategyNames[match.toStrategyId].orEmpty(),
                     proposedQuantity = match.quantity,
                 ),
             )
@@ -309,43 +320,53 @@ class OrderPlanService(
 
     private suspend fun requireProposal(id: Int): TransferProposal {
         val proposal = transferProposalRepository.fetchById(id)
-            ?: throw IllegalArgumentException("Transfer proposal $id not found")
-        require(proposal.status == PENDING) { "Transfer proposal $id is already ${proposal.status}" }
+            ?: throw TransferProposalNotFoundException(id)
+        if (proposal.status != PENDING) throw TransferProposalNotPendingException(id, proposal.status)
 
         return proposal
     }
 
     private fun currentMonth() = LocalDate.today(clock).let { LocalDate(it.year, it.month, 1) }
 
-    private fun hasOppositeTradeToday(trades: List<Trade>, today: LocalDate, isSale: Boolean): Boolean =
-        trades.any { it.date == today && if (isSale) it is Trade.Buy else it is Trade.Sell }
+    private suspend fun hasOppositeTradeToday(assetId: Int, today: LocalDate, isSale: Boolean): Boolean =
+        tradeRepository.fetchByAssetId(assetId).any { trade ->
+            trade.date == today && if (isSale) trade is Trade.Buy else trade is Trade.Sell
+        }
 
-    private fun saleCeiling(
+    private suspend fun saleCeiling(
         today: LocalDate,
         orders: List<Order>,
-        allTrades: List<Trade>,
         allAssets: List<ListedAsset>,
     ): SaleCeiling {
         val monthStart = LocalDate(today.year, today.month, 1)
         val kindByAssetId = allAssets.associate { it.id to it.kind }
 
-        val executedStockSales = allTrades
+        // Day trades never consume the exemption: a sell paired with a buy on the same day is
+        // dropped from the ledger side, and a planned order already flagged as a day-trade risk is
+        // dropped from the planned side. Only FIIs are excluded from the ledger side — a sale of an
+        // asset the app does not know about still counts toward the ceiling, which can only
+        // understate headroom, never overstate it.
+        val trades = tradeRepository.fetchByDateRange(monthStart, today)
+        val boughtOn = trades.filterIsInstance<Trade.Buy>()
+            .mapTo(mutableSetOf()) { it.assetId to it.date }
+        val settledStockSales = trades
             .filterIsInstance<Trade.Sell>()
-            .filter { it.date in monthStart..today && kindByAssetId[it.assetId] == AssetKind.STOCK }
+            .filter { kindByAssetId[it.assetId] != AssetKind.FII }
+            .filter { (it.assetId to it.date) !in boughtOn }
             .sumOf { it.notional }
 
         val plannedStockSales = orders
             .filter { !it.isFii && it.kind.isSale }
+            .filter { !it.dayTradeRisk }
             .sumOf { it.notional }
 
-        val monthSold = (executedStockSales + plannedStockSales).defaultScale()
+        val monthSold = (settledStockSales + plannedStockSales).defaultScale()
         val limit = TaxRules.MONTHLY_STOCK_SALE_EXEMPTION
 
         return SaleCeiling(
             monthSold = monthSold,
             limit = limit,
             remaining = (limit - monthSold).max(BigDecimal.ZERO),
-            exceeded = monthSold > limit,
         )
     }
 
@@ -354,6 +375,7 @@ class OrderPlanService(
     private data class AssembledPlan(
         val orders: List<Order>,
         val matches: List<PricedMatch>,
+        val strategyNames: Map<Int, String>,
         val saleCeiling: SaleCeiling,
     )
 }

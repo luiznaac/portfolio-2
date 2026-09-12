@@ -18,6 +18,8 @@ class StrategyService(
 
     suspend fun fetchWeightHistory() = weightRepository.fetchAll()
 
-    suspend fun setWeight(strategyId: Int, creation: StrategyWeightCreation) =
-        weightRepository.save(strategyId, creation)
+    suspend fun setWeight(strategyId: Int, creation: StrategyWeightCreation) = weightRepository.save(
+        strategyId,
+        creation,
+    )
 }

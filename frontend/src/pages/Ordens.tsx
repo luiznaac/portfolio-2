@@ -13,7 +13,7 @@ import { formatBRL } from "../lib/money.ts";
 const KIND_LABELS: Record<OrderKind, string> = {
   BUY: "Comprar",
   SELL: "Vender",
-  EXIT: "Zerar posição",
+  FULL_EXIT: "Zerar posição",
   NEW_ENTRY: "Entrada nova",
 };
 
@@ -21,7 +21,7 @@ const KIND_COLOR: Record<OrderKind, string> = {
   BUY: "text-principal",
   NEW_ENTRY: "text-principal",
   SELL: "text-accent-500",
-  EXIT: "text-tax",
+  FULL_EXIT: "text-tax",
 };
 
 export function Ordens() {
@@ -32,6 +32,7 @@ export function Ordens() {
   if (!plan.data) return null;
 
   const { orders, transfer_proposals: transfers, sale_ceiling: ceiling } = plan.data;
+  const exceeded = ceiling.month_sold > ceiling.limit;
 
   return (
     <div className="space-y-6">
@@ -41,19 +42,21 @@ export function Ordens() {
         <div className="space-y-2">
           <div className="h-3 overflow-hidden rounded-full bg-slate-800">
             <div
-              className={`h-full ${ceiling.exceeded ? "bg-tax" : "bg-accent-500"}`}
+              className={`h-full ${exceeded ? "bg-tax" : "bg-accent-500"}`}
               style={{ width: `${Math.min(100, (ceiling.month_sold / ceiling.limit) * 100)}%` }}
             />
           </div>
           <p className="text-sm text-slate-300">
-            Vendido no mês: <span className="tabular-nums text-slate-100">{formatBRL(ceiling.month_sold)}</span>
+            Vendido no mês:{" "}
+            <span className="tabular-nums text-slate-100">{formatBRL(ceiling.month_sold)}</span>
             {" · "}
-            {ceiling.exceeded ? (
+            {exceeded ? (
               <span className="text-tax">teto estourado — ganho vira tributável a 15%</span>
             ) : (
               <>
-                falta <span className="tabular-nums text-slate-100">{formatBRL(ceiling.remaining)}</span> para
-                estourar
+                falta{" "}
+                <span className="tabular-nums text-slate-100">{formatBRL(ceiling.remaining)}</span>{" "}
+                para estourar
               </>
             )}
           </p>
@@ -201,13 +204,19 @@ function OrderRow({ order }: { order: Order }) {
       <td className="py-2 pr-4 text-slate-200">
         {order.ticker}
         {order.is_fii && (
-          <span className="ml-1.5 rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-500">FII</span>
+          <span className="ml-1.5 rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-500">
+            FII
+          </span>
         )}
         {order.day_trade_risk && (
-          <span className="ml-1.5 rounded bg-tax/15 px-1 py-0.5 text-[10px] text-tax">day trade</span>
+          <span className="ml-1.5 rounded bg-tax/15 px-1 py-0.5 text-[10px] text-tax">
+            day trade
+          </span>
         )}
       </td>
-      <td className={`py-2 pr-4 font-medium ${KIND_COLOR[order.kind]}`}>{KIND_LABELS[order.kind]}</td>
+      <td className={`py-2 pr-4 font-medium ${KIND_COLOR[order.kind]}`}>
+        {KIND_LABELS[order.kind]}
+      </td>
       <td className="py-2 pr-4 text-right text-slate-200">{order.quantity}</td>
       <td className="py-2 pr-4 text-right text-slate-200">{formatBRL(order.notional)}</td>
       <td className="py-2 text-slate-400">
@@ -225,7 +234,9 @@ function OrderRow({ order }: { order: Order }) {
 function ExportButton({ orders }: { orders: Order[] }) {
   const download = () => {
     const header = "ticker,acao,quantidade,estimado";
-    const lines = orders.map((o) => `${o.ticker},${KIND_LABELS[o.kind]},${o.quantity},${o.notional.toFixed(2)}`);
+    const lines = orders.map(
+      (o) => `${o.ticker},${KIND_LABELS[o.kind]},${o.quantity},${o.notional.toFixed(2)}`,
+    );
     const csv = [header, ...lines].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -238,6 +249,7 @@ function ExportButton({ orders }: { orders: Order[] }) {
 
   return (
     <button
+      type="button"
       onClick={download}
       disabled={orders.length === 0}
       className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:text-white disabled:opacity-50"

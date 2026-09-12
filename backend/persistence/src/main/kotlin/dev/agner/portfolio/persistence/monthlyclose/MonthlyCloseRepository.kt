@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.monthlyclose
 
 import dev.agner.portfolio.usecase.commons.now
+import dev.agner.portfolio.usecase.monthlyclose.MonthlyCloseAlreadyClosedException
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
 import kotlinx.datetime.LocalDate
@@ -24,23 +25,29 @@ class MonthlyCloseRepository(
     }
 
     override suspend fun open(month: LocalDate) = transaction {
-        MonthlyCloseEntity.find { MonthlyCloseTable.month eq month }.firstOrNull()?.toModel()
-            ?: MonthlyCloseEntity.new {
-                this.month = month
-                status = MonthlyCloseStatus.OPEN
-                closedAt = null
-                createdAt = LocalDateTime.now(clock)
-            }.toModel()
+        findOrCreate(month).toModel()
     }
 
     override suspend fun close(month: LocalDate) = transaction {
-        val entity = MonthlyCloseEntity.find { MonthlyCloseTable.month eq month }.firstOrNull()
-            ?: throw IllegalStateException("Month $month was never opened")
+        val entity = findOrCreate(month)
 
-        require(entity.status == MonthlyCloseStatus.OPEN) { "Month $month is already closed" }
+        if (entity.status == MonthlyCloseStatus.CLOSED) {
+            throw MonthlyCloseAlreadyClosedException(month)
+        }
 
         entity.status = MonthlyCloseStatus.CLOSED
         entity.closedAt = LocalDateTime.now(clock)
         entity.toModel()
     }
+
+    // Find-or-create inside the caller's transaction: a never-opened month can be opened and closed
+    // atomically, and a concurrent close sees the same row instead of failing on a missing one.
+    private fun findOrCreate(month: LocalDate): MonthlyCloseEntity =
+        MonthlyCloseEntity.find { MonthlyCloseTable.month eq month }.firstOrNull()
+            ?: MonthlyCloseEntity.new {
+                this.month = month
+                status = MonthlyCloseStatus.OPEN
+                closedAt = null
+                createdAt = LocalDateTime.now(clock)
+            }
 }

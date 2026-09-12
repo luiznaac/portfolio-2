@@ -13,11 +13,8 @@ data class StrategyWeight(
     val effectiveFrom: LocalDate,
 )
 
-/**
- * What the client sends to set a weight. The owning strategy is *not* part of this shape — it
- * comes from the URL path and is passed alongside it to
- * [dev.agner.portfolio.usecase.strategy.StrategyService.setWeight].
- */
+// The strategy is taken from the URL path (POST /strategies/{strategy_id}/weight), not from the
+// payload — the frontend never sends it, same convention as TradeCreation/AttributionMovementCreation.
 data class StrategyWeightCreation(
     val weight: BigDecimal,
     val effectiveFrom: LocalDate,

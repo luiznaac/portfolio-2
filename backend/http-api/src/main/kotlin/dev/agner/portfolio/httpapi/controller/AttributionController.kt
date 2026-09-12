@@ -18,13 +18,13 @@ class AttributionController(
     override fun routes(): RouteDefinition = {
         route("/listed-assets/{listed_asset_id}/attribution") {
             get {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
 
                 call.respond(HttpStatusCode.OK, service.summarize(assetId))
             }
 
             post("/movements") {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
                 val payload = call.receive<AttributionMovementCreation>()
 
                 call.respond(HttpStatusCode.Created, service.recordMovement(assetId, payload))

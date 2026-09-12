@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.CellType
 import org.apache.poi.ss.usermodel.DateUtil
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.Sheet
+import org.apache.poi.ss.usermodel.Workbook
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import java.io.ByteArrayInputStream
 import java.math.BigDecimal
@@ -19,12 +20,16 @@ import java.math.BigDecimal
  * Typed cells are read as themselves rather than round-tripped through their string form: POI
  * renders a numeric cell as `"100.0"`, and Brazilian-format parsing (strip `.`, swap `,` for `.`)
  * would turn that into 1000. Only genuine text cells go through the Brazilian number/date rules.
+ *
+ * The reader owns the [Workbook] it opens and must be used within `use { }`: POI keeps file
+ * handles and memory buffers open until the workbook is closed.
  */
 class XlsxSheetReader private constructor(
+    private val workbook: Workbook,
     private val sheet: Sheet,
     private val columnIndexByHeader: Map<String, Int>,
     private val onError: (String) -> Nothing,
-) {
+) : AutoCloseable {
 
     companion object {
         /**
@@ -36,17 +41,21 @@ class XlsxSheetReader private constructor(
             requiredColumns: List<String>,
             onError: (String) -> Nothing,
         ): XlsxSheetReader {
-            val sheet = WorkbookFactory.create(ByteArrayInputStream(xlsxBytes)).getSheetAt(0)
+            val workbook = WorkbookFactory.create(ByteArrayInputStream(xlsxBytes))
+            val sheet = workbook.getSheetAt(0)
             val headerRow = sheet.getRow(0) ?: onError("Empty spreadsheet")
 
-            val columnIndexByHeader = headerRow.mapNotNull { it.stringValue()?.trim() }
-                .withIndex()
-                .associate { (index, header) -> header to index }
+            // Use the cell's real column index, not its position in the iteration: POI's row
+            // iterator skips physically absent cells, so a spacer column would otherwise shift
+            // every subsequent header onto the wrong column.
+            val columnIndexByHeader = headerRow.mapNotNull { cell ->
+                cell.stringValue()?.trim()?.let { header -> header to cell.columnIndex }
+            }.toMap()
 
             val missing = requiredColumns.filterNot { it in columnIndexByHeader }
             if (missing.isNotEmpty()) onError("Missing expected columns: $missing")
 
-            return XlsxSheetReader(sheet, columnIndexByHeader, onError)
+            return XlsxSheetReader(workbook, sheet, columnIndexByHeader, onError)
         }
 
         private fun Cell.stringValue(): String? = when (cellType) {
@@ -102,4 +111,8 @@ class XlsxSheetReader private constructor(
     }
 
     private fun Row.cell(header: String): Cell? = columnIndexByHeader[header]?.let { getCell(it) }
+
+    override fun close() {
+        workbook.close()
+    }
 }

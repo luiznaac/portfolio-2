@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useAllocationPlan,
@@ -10,16 +10,16 @@ import {
   useSetFixedIncomeSubClassTarget,
 } from "../api/queries.ts";
 import type { AssetClass, FixedIncomeSubClass } from "../api/types.ts";
+import { DivergentBar } from "../components/DivergentBar.tsx";
+import { Panel } from "../components/Panel.tsx";
 import {
   ASSET_CLASSES,
   FIXED_INCOME_SUBCLASSES,
   assetClassLabel,
   fixedIncomeSubClassLabel,
 } from "../i18n/assetClass.ts";
-import { DivergentBar } from "../components/DivergentBar.tsx";
-import { Panel } from "../components/Panel.tsx";
-import { formatBRL, formatRatio } from "../lib/money.ts";
 import { formatDate } from "../lib/format.ts";
+import { formatBRL, formatRatio } from "../lib/money.ts";
 
 export function Carteira() {
   const plan = useAllocationPlan();
@@ -142,7 +142,12 @@ function AllocationTree({
     ideal: number;
     current: number;
     delta: number;
-    sub_classes: { sub_class: FixedIncomeSubClass; ideal: number; current: number; delta: number }[];
+    sub_classes: {
+      sub_class: FixedIncomeSubClass;
+      ideal: number;
+      current: number;
+      delta: number;
+    }[];
   }[];
 }) {
   const maxAbs = Math.max(1, ...classes.map((c) => Math.abs(c.delta)));
@@ -199,7 +204,7 @@ function ClassTargetsPanel() {
           <li key={c} className="flex items-center justify-between py-1.5">
             <span className="text-slate-300">{assetClassLabel(c)}</span>
             <span className="tabular-nums text-slate-200">
-              {current.has(c) ? formatRatio(current.get(c)!) : "—"}
+              {current.has(c) ? formatRatio(current.get(c) ?? 0) : "—"}
             </span>
           </li>
         ))}
@@ -269,7 +274,7 @@ function SubClassTargetsPanel() {
           <li key={s} className="flex items-center justify-between py-1.5">
             <span className="text-slate-300">{fixedIncomeSubClassLabel(s)}</span>
             <span className="tabular-nums text-slate-200">
-              {current.has(s) ? formatRatio(current.get(s)!) : "—"}
+              {current.has(s) ? formatRatio(current.get(s) ?? 0) : "—"}
             </span>
           </li>
         ))}

@@ -18,21 +18,20 @@ import org.springframework.stereotype.Component
 @Component
 class ApachePoiBrokerageNoteParser : IBrokerageNoteParser {
 
-    override fun parse(xlsxBytes: ByteArray): List<ParsedTrade> {
-        val reader = XlsxSheetReader.open(xlsxBytes, REQUIRED_COLUMNS, ::fail)
-
-        return with(reader) {
-            dataRows().map { row ->
-                ParsedTrade(
-                    date = row.requiredDate(COLUMN_DATE),
-                    ticker = row.requiredText(COLUMN_TICKER).canonicalTicker(),
-                    side = row.requiredText(COLUMN_SIDE).toSide(row.rowNum),
-                    quantity = row.requiredDecimal(COLUMN_QUANTITY),
-                    price = row.requiredDecimal(COLUMN_PRICE),
-                )
+    override fun parse(xlsxBytes: ByteArray): List<ParsedTrade> =
+        XlsxSheetReader.open(xlsxBytes, REQUIRED_COLUMNS, ::fail).use { reader ->
+            with(reader) {
+                dataRows().map { row ->
+                    ParsedTrade(
+                        date = row.requiredDate(COLUMN_DATE),
+                        ticker = row.requiredText(COLUMN_TICKER).canonicalTicker(),
+                        side = row.requiredText(COLUMN_SIDE).toSide(row.rowNum),
+                        quantity = row.requiredDecimal(COLUMN_QUANTITY),
+                        price = row.requiredDecimal(COLUMN_PRICE),
+                    )
+                }
             }
         }
-    }
 
     /**
      * A fractional-market execution ("Mercado Fracionário") lists the ticker with a trailing `F`

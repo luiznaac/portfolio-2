@@ -17,22 +17,21 @@ import org.springframework.stereotype.Component
 @Component
 class ApachePoiIncomeStatementParser : IIncomeStatementParser {
 
-    override fun parse(xlsxBytes: ByteArray): List<ReceivedIncome> {
-        val reader = XlsxSheetReader.open(xlsxBytes, REQUIRED_COLUMNS, ::fail)
+    override fun parse(xlsxBytes: ByteArray): List<ReceivedIncome> =
+        XlsxSheetReader.open(xlsxBytes, REQUIRED_COLUMNS, ::fail).use { reader ->
+            with(reader) {
+                dataRows().mapNotNull { row ->
+                    val type = row.text(COLUMN_MOVEMENT).orEmpty().toDividendTypeOrNull() ?: return@mapNotNull null
 
-        return with(reader) {
-            dataRows().mapNotNull { row ->
-                val type = row.text(COLUMN_MOVEMENT).orEmpty().toDividendTypeOrNull() ?: return@mapNotNull null
-
-                ReceivedIncome(
-                    date = row.requiredDate(COLUMN_DATE),
-                    ticker = row.requiredText(COLUMN_TICKER),
-                    type = type,
-                    amount = row.requiredDecimal(COLUMN_AMOUNT),
-                )
+                    ReceivedIncome(
+                        date = row.requiredDate(COLUMN_DATE),
+                        ticker = row.requiredText(COLUMN_TICKER),
+                        type = type,
+                        amount = row.requiredDecimal(COLUMN_AMOUNT),
+                    )
+                }
             }
         }
-    }
 
     private fun String.toDividendTypeOrNull(): DividendType? = when {
         contains("JRS", ignoreCase = true) || contains("JUROS", ignoreCase = true) -> DividendType.JCP
