@@ -20,19 +20,14 @@ controllers in `backend/http-api/.../controller/` serialize — Jackson is confi
 change to a DTO on one side must update the other in the **same commit**. The backend has no
 generated schema; this mirror is the contract.
 
-## Git workflow
-
-**Do not commit directly to `master`.** Always create a feature branch and open a PR,
-even for a small or "obviously safe" change. This applies to all contributors.
-
 ## Tooling
 
 Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`,
 `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate -- -Pname=V5__x`,
 `npm run up`). It has no dependencies and is not a real package.
 `.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`),
-and carries `no-commit-to-branch` — the "don't commit to master" rule above is enforced there,
-not merely stated.
+and carries `no-commit-to-branch` — the git/PR conventions are enforced there, not merely stated
+(see `salgadinhos/global/AGENTS.md`).
 
 ## Docker
 
