@@ -39,6 +39,16 @@ class ApachePoiIncomeStatementParserTest : DescribeSpec({
             )
         }
 
+        it("renders a numeric amount cell with the cell's own format") {
+            val xlsx = xlsxWithNumericAmount(199.5)
+
+            val result = parser.parse(xlsx)
+
+            result.single().ticker shouldBe "PETR4"
+            // BigDecimal.equals is scale-sensitive; 199.50 from the cell equals 199.5 numerically.
+            result.single().amount.compareTo(BigDecimal("199.5")) shouldBe 0
+        }
+
         it("fails loudly when a required column is missing") {
             val xlsx = xlsxOf(
                 listOf("Data", "Produto", "Valor da Operação"),
@@ -61,5 +71,31 @@ private fun xlsxOf(vararg rows: List<String>): ByteArray {
 
     val out = ByteArrayOutputStream()
     workbook.write(out)
+    return out.toByteArray()
+}
+
+private fun xlsxWithNumericAmount(amount: Double): ByteArray {
+    val workbook = XSSFWorkbook()
+    val sheet = workbook.createSheet("Movimentação")
+    val amountStyle = workbook.createCellStyle().apply {
+        dataFormat = workbook.createDataFormat().getFormat("#,##0.00")
+    }
+
+    val header = sheet.createRow(0)
+    listOf("Data", "Movimentação", "Produto", "Valor da Operação")
+        .forEachIndexed { index, value -> header.createCell(index).setCellValue(value) }
+
+    val row = sheet.createRow(1)
+    row.createCell(0).setCellValue("15/06/2026")
+    row.createCell(1).setCellValue("Dividendo")
+    row.createCell(2).setCellValue("PETR4")
+    row.createCell(3).apply {
+        setCellValue(amount)
+        cellStyle = amountStyle
+    }
+
+    val out = ByteArrayOutputStream()
+    workbook.write(out)
+    workbook.close()
     return out.toByteArray()
 }

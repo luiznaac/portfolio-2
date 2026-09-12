@@ -7,11 +7,13 @@ import dev.agner.portfolio.usecase.listedasset.model.DividendType
 import kotlinx.datetime.LocalDate
 import org.apache.poi.ss.usermodel.Cell
 import org.apache.poi.ss.usermodel.CellType
+import org.apache.poi.ss.usermodel.DataFormatter
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
 import java.math.BigDecimal
+import java.util.Locale
 
 /**
  * Reads the "Movimentação" sheet of the same B3 statement export
@@ -25,35 +27,45 @@ import java.math.BigDecimal
 @Component
 class ApachePoiIncomeStatementParser : IIncomeStatementParser {
 
-    override fun parse(xlsxBytes: ByteArray): List<ReceivedIncome> {
-        val sheet = WorkbookFactory.create(ByteArrayInputStream(xlsxBytes)).getSheetAt(0)
-        val headerRow = sheet.getRow(0)
-            ?: throw IncomeStatementParseException("Empty spreadsheet")
-        val columnIndexByHeader = headerRow.mapNotNull { it.stringValue()?.trim() }
-            .withIndex()
-            .associate { (i, header) -> header to i }
+    override fun parse(xlsxBytes: ByteArray): List<ReceivedIncome> =
+        WorkbookFactory.create(ByteArrayInputStream(xlsxBytes)).use { workbook ->
+            val sheet = workbook.getSheetAt(0)
+            // DataFormatter is not thread-safe and this parser is a singleton, so build one per
+            // parse call. It renders numeric cells with their own display format, which matters for
+            // B3's numeric "Valor da Operação" cells — numericCellValue.toString() ignores the
+            // format, and toBrDecimal would then strip the dot and read 199.5 as 1995.
+            val formatter = DataFormatter(Locale.forLanguageTag("pt-BR"))
+            val headerRow = sheet.getRow(0)
+                ?: throw IncomeStatementParseException("Empty spreadsheet")
+            val columnIndexByHeader = headerRow.mapNotNull { it.stringValue(formatter)?.trim() }
+                .withIndex()
+                .associate { (i, header) -> header to i }
 
-        val missing = REQUIRED_COLUMNS.filterNot { it in columnIndexByHeader }
-        if (missing.isNotEmpty()) {
-            throw IncomeStatementParseException("Missing expected columns: $missing")
+            val missing = REQUIRED_COLUMNS.filterNot { it in columnIndexByHeader }
+            if (missing.isNotEmpty()) {
+                throw IncomeStatementParseException("Missing expected columns: $missing")
+            }
+
+            sheet.drop(1)
+                .filter { row -> row.any { it.stringValue(formatter)?.isNotBlank() == true } }
+                .mapNotNull { row -> parseRow(row, columnIndexByHeader, formatter) }
         }
 
-        return sheet.drop(1)
-            .filter { row -> row.any { it.stringValue()?.isNotBlank() == true } }
-            .mapNotNull { row -> parseRow(row, columnIndexByHeader) }
-    }
-
-    private fun parseRow(row: Row, columnIndexByHeader: Map<String, Int>): ReceivedIncome? {
+    private fun parseRow(
+        row: Row,
+        columnIndexByHeader: Map<String, Int>,
+        formatter: DataFormatter,
+    ): ReceivedIncome? {
         fun cell(header: String): Cell? = columnIndexByHeader[header]?.let { row.getCell(it) }
 
-        val movementText = cell(COLUMN_MOVEMENT)?.stringValue()?.trim() ?: ""
+        val movementText = cell(COLUMN_MOVEMENT)?.stringValue(formatter)?.trim() ?: ""
         val type = movementText.toDividendTypeOrNull() ?: return null
 
-        val dateText = cell(COLUMN_DATE)?.stringValue()
+        val dateText = cell(COLUMN_DATE)?.stringValue(formatter)
             ?: throw IncomeStatementParseException("Missing $COLUMN_DATE on row ${row.rowNum + 1}")
-        val ticker = cell(COLUMN_TICKER)?.stringValue()?.trim()
+        val ticker = cell(COLUMN_TICKER)?.stringValue(formatter)?.trim()
             ?: throw IncomeStatementParseException("Missing $COLUMN_TICKER on row ${row.rowNum + 1}")
-        val amountText = cell(COLUMN_AMOUNT)?.stringValue()
+        val amountText = cell(COLUMN_AMOUNT)?.stringValue(formatter)
             ?: throw IncomeStatementParseException("Missing $COLUMN_AMOUNT on row ${row.rowNum + 1}")
 
         return ReceivedIncome(
@@ -86,11 +98,11 @@ class ApachePoiIncomeStatementParser : IIncomeStatementParser {
             throw IncomeStatementParseException("Unrecognized number '$this' on row ${rowNum + 1}")
         }
 
-    private fun Cell.stringValue(): String? = when (cellType) {
+    private fun Cell.stringValue(formatter: DataFormatter): String? = when (cellType) {
         CellType.STRING -> stringCellValue
-        CellType.NUMERIC -> numericCellValue.toString()
+        CellType.NUMERIC -> formatter.formatCellValue(this)
         CellType.BLANK -> null
-        else -> toString()
+        else -> formatter.formatCellValue(this)
     }
 
     private companion object {
