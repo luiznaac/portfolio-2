@@ -11,6 +11,7 @@ import { NewBond } from "./pages/NewBond.tsx";
 import { NewCheckingAccount } from "./pages/NewCheckingAccount.tsx";
 import { NewListedAsset } from "./pages/NewListedAsset.tsx";
 import { Ordens } from "./pages/Ordens.tsx";
+import { Importar } from "./pages/Importar.tsx";
 import { Upload } from "./pages/Upload.tsx";
 
 export const routes: RouteObject[] = [
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
       { path: "carteira", element: <Carteira /> },
       { path: "estrategias", element: <Estrategias /> },
       { path: "ordens", element: <Ordens /> },
+      { path: "importar", element: <Importar /> },
       { path: "indexes", element: <Indexes /> },
       { path: "upload", element: <Upload /> },
     ],
