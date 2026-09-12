@@ -51,6 +51,30 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
             )
         }
 
+        it("keeps the real column index when a header cell is blank") {
+            val xlsx = xlsxOf(
+                listOf(
+                    "Data do Negócio",
+                    null,
+                    "Tipo de Movimentação",
+                    "Código de Negociação",
+                    "Quantidade",
+                    "Preço",
+                ),
+                listOf("01/09/2026", null, "Compra", "PETR4", "100", "35,50"),
+            )
+
+            parser.parse(xlsx) shouldBe listOf(
+                ParsedTrade(
+                    date = LocalDate(2026, 9, 1),
+                    ticker = "PETR4",
+                    side = TradeSide.COMPRA,
+                    quantity = BigDecimal("100"),
+                    price = BigDecimal("35.50"),
+                ),
+            )
+        }
+
         it("skips blank trailing rows") {
             val xlsx = xlsxOf(
                 listOf("Data do Negócio", "Tipo de Movimentação", "Código de Negociação", "Quantidade", "Preço"),
@@ -81,13 +105,17 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
     }
 })
 
-private fun xlsxOf(vararg rows: List<String>): ByteArray {
+private fun xlsxOf(vararg rows: List<String?>): ByteArray {
     val workbook = XSSFWorkbook()
     val sheet = workbook.createSheet("Negociação de Ativos")
 
     rows.forEachIndexed { rowIndex, values ->
         val row = sheet.createRow(rowIndex)
-        values.forEachIndexed { cellIndex, value -> row.createCell(cellIndex).setCellValue(value) }
+        // A null entry leaves the column absent instead of writing an empty string, reproducing a
+        // B3 export where a spacer column carries no header.
+        values.forEachIndexed { cellIndex, value ->
+            if (value != null) row.createCell(cellIndex).setCellValue(value)
+        }
     }
 
     val out = ByteArrayOutputStream()
