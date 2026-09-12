@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.allocation.model.ClassNode
 import dev.agner.portfolio.usecase.attribution.AttributionService
 import dev.agner.portfolio.usecase.attribution.model.AttributionSummary
 import dev.agner.portfolio.usecase.attribution.model.StrategyBalance
+import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.STOCK
@@ -60,6 +61,11 @@ class OrderPlanServiceTest : StringSpec({
     val transferProposalRepository = mockk<ITransferProposalRepository>()
     val transferSettingsRepository = mockk<ITransferSettingsRepository>()
     val clock = mockk<Clock>()
+    // Runs the block verbatim, like the real TransactionService: a failure inside the block
+    // propagates out, so the tests can assert what ran before the rollback.
+    val transaction = object : ITransactionTemplate {
+        override suspend fun <T> execute(block: suspend () -> T): T = block()
+    }
 
     val service = OrderPlanService(
         strategyService,
@@ -73,6 +79,7 @@ class OrderPlanServiceTest : StringSpec({
         TransferMatcher(),
         transferProposalRepository,
         transferSettingsRepository,
+        transaction,
         clock,
     )
 
@@ -871,6 +878,35 @@ class OrderPlanServiceTest : StringSpec({
         val result = service.approveTransfer(4, BigDecimal("5"))
 
         result.status shouldBe APLICADA
+        io.mockk.coVerify(exactly = 2) { attributionService.recordMovement(any()) }
+    }
+
+    "approveTransfer should attempt both movements before a failing decide, inside one transaction" {
+        val pending = TransferProposal(
+            id = 4,
+            month = LocalDate.parse("2026-09-01"),
+            listedAssetId = 10,
+            ticker = "PETR4",
+            fromStrategyId = 1,
+            fromStrategyName = "Top",
+            toStrategyId = 2,
+            toStrategyName = "Dividendos",
+            proposedQuantity = BigDecimal("9"),
+            appliedQuantity = null,
+            status = PENDENTE,
+            decidedAt = null,
+        )
+        coEvery { transferProposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")) } returns listOf(pending)
+        coEvery { attributionService.recordMovement(any()) } returns mockk()
+        coEvery { transferProposalRepository.decide(4, APLICADA, BigDecimal("5"), any()) } throws
+            RuntimeException("decide fails")
+
+        io.kotest.assertions.throwables.shouldThrow<RuntimeException> {
+            service.approveTransfer(4, BigDecimal("5"))
+        }
+
+        // Both movements were attempted before decide blew up, so they share the execute block
+        // that decide's failure rolls back with it.
         io.mockk.coVerify(exactly = 2) { attributionService.recordMovement(any()) }
     }
 

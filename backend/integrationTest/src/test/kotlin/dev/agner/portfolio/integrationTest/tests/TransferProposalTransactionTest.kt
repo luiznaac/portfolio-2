@@ -4,7 +4,6 @@ import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.allocation.model.AssetClass.ACOES
-import dev.agner.portfolio.usecase.attribution.AttributionService
 import dev.agner.portfolio.usecase.attribution.model.AttributionMovementCreation
 import dev.agner.portfolio.usecase.attribution.model.AttributionReason
 import dev.agner.portfolio.usecase.attribution.repository.IAttributionRepository
@@ -12,7 +11,10 @@ import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.STOCK
 import dev.agner.portfolio.usecase.listedasset.model.ListedAssetCreation
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
-import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
+import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.TransferProposalCreation
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APLICADA
+import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import io.kotest.assertions.throwables.shouldThrow
@@ -20,18 +22,24 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import java.math.BigDecimal
 import java.time.Instant
 
+// The real-database counterpart of the fake inline transaction in OrderPlanServiceTest: it proves
+// that approving a transfer commits the two attribution movements and the status change together,
+// and that a final failure rolls all three back. The old TransferTransactionTest covered
+// AttributionService.transferBetweenStrategies, which the lifecycle no longer uses.
 @IntegrationTest
-class TransferTransactionTest : StringSpec({
+class TransferProposalTransactionTest : StringSpec({
 
-    "applying a transfer persists both movements in one transaction" {
+    "approving a proposal commits both movements and the status together" {
         every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         val strategyRepository = getBean<IStrategyRepository>()
         val listedAssetRepository = getBean<IListedAssetRepository>()
         val attributionRepository = getBean<IAttributionRepository>()
-        val attributionService = getBean<AttributionService>()
+        val proposalRepository = getBean<ITransferProposalRepository>()
+        val planService = getBean<OrderPlanService>()
 
         val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
         val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = ACOES))
@@ -47,67 +55,40 @@ class TransferTransactionTest : StringSpec({
                 reason = AttributionReason.COMPRA,
             ),
         )
-
-        attributionService.transferBetweenStrategies(
-            listedAssetId = asset.id,
-            fromStrategyId = fromStrategy.id,
-            toStrategyId = toStrategy.id,
-            quantity = BigDecimal("40"),
-            date = LocalDate.parse("2026-09-15"),
+        val proposal = proposalRepository.save(
+            TransferProposalCreation(
+                month = LocalDate.parse("2026-09-01"),
+                listedAssetId = asset.id,
+                ticker = "PETR4",
+                fromStrategyId = fromStrategy.id,
+                fromStrategyName = fromStrategy.name,
+                toStrategyId = toStrategy.id,
+                toStrategyName = toStrategy.name,
+                proposedQuantity = BigDecimal("40"),
+            ),
         )
 
+        val result = planService.approveTransfer(proposal.id, null)
+
+        result.status shouldBe APLICADA
         val balances = attributionRepository.fetchByAssetId(asset.id)
             .groupBy { it.strategyId }
             .mapValues { (_, movements) -> movements.sumOf { it.quantity } }
         balances[fromStrategy.id] shouldBe BigDecimal("60.00000000")
         balances[toStrategy.id] shouldBe BigDecimal("40.00000000")
+        proposalRepository.fetchByMonth(LocalDate.parse("2026-09-01")).single().status shouldBe APLICADA
     }
 
-    "an unknown to-strategy returns StrategyNotFoundException and writes nothing" {
+    "a failure on the status write rolls back both movements" {
         every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         val strategyRepository = getBean<IStrategyRepository>()
         val listedAssetRepository = getBean<IListedAssetRepository>()
         val attributionRepository = getBean<IAttributionRepository>()
-        val attributionService = getBean<AttributionService>()
-
-        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
-        val asset = listedAssetRepository.save(
-            ListedAssetCreation(ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS"),
-        )
-        attributionRepository.save(
-            AttributionMovementCreation(
-                listedAssetId = asset.id,
-                strategyId = fromStrategy.id,
-                date = LocalDate.parse("2026-09-01"),
-                quantity = BigDecimal("100"),
-                reason = AttributionReason.COMPRA,
-            ),
-        )
-
-        shouldThrow<StrategyNotFoundException> {
-            attributionService.transferBetweenStrategies(
-                listedAssetId = asset.id,
-                fromStrategyId = fromStrategy.id,
-                toStrategyId = 999_999,
-                quantity = BigDecimal("40"),
-                date = LocalDate.parse("2026-09-15"),
-            )
-        }
-
-        val balances = attributionRepository.fetchByAssetId(asset.id)
-            .groupBy { it.strategyId }
-            .mapValues { (_, movements) -> movements.sumOf { it.quantity } }
-        balances[fromStrategy.id] shouldBe BigDecimal("100.00000000")
-    }
-
-    "a failed second save rolls back the first movement" {
-        every { ClockMock.clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
-        val strategyRepository = getBean<IStrategyRepository>()
-        val listedAssetRepository = getBean<IListedAssetRepository>()
-        val attributionRepository = getBean<IAttributionRepository>()
+        val proposalRepository = getBean<ITransferProposalRepository>()
         val transaction = getBean<ITransactionTemplate>()
 
-        val strategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
+        val fromStrategy = strategyRepository.save(StrategyCreation(name = "Top", assetClass = ACOES))
+        val toStrategy = strategyRepository.save(StrategyCreation(name = "Dividendos", assetClass = ACOES))
         val asset = listedAssetRepository.save(
             ListedAssetCreation(ticker = "PETR4", kind = STOCK, name = "Petrobras", b3Identifier = "PETROBRAS"),
         )
@@ -117,23 +98,23 @@ class TransferTransactionTest : StringSpec({
                 attributionRepository.save(
                     AttributionMovementCreation(
                         listedAssetId = asset.id,
-                        strategyId = strategy.id,
-                        date = LocalDate.parse("2026-09-01"),
-                        quantity = BigDecimal("100"),
-                        reason = AttributionReason.COMPRA,
+                        strategyId = fromStrategy.id,
+                        date = LocalDate.parse("2026-09-15"),
+                        quantity = BigDecimal("-40"),
+                        reason = AttributionReason.TRANSFERENCIA,
                     ),
                 )
-                // The second save targets an unknown strategy: the FK must blow up inside the
-                // same transaction and take the first movement down with it.
                 attributionRepository.save(
                     AttributionMovementCreation(
                         listedAssetId = asset.id,
-                        strategyId = 999_999,
-                        date = LocalDate.parse("2026-09-01"),
+                        strategyId = toStrategy.id,
+                        date = LocalDate.parse("2026-09-15"),
                         quantity = BigDecimal("40"),
-                        reason = AttributionReason.COMPRA,
+                        reason = AttributionReason.TRANSFERENCIA,
                     ),
                 )
+                // The status write targets an unknown proposal; the whole execute must roll back.
+                proposalRepository.decide(999_999, APLICADA, BigDecimal("40"), LocalDateTime.now())
             }
         }
 

@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.attribution.model.AttributionSummary
 import dev.agner.portfolio.usecase.commons.isZero
 import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.commons.today
+import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
@@ -90,6 +91,7 @@ class OrderPlanService(
     private val transferMatcher: TransferMatcher,
     private val transferProposalRepository: ITransferProposalRepository,
     private val transferSettingsRepository: ITransferSettingsRepository,
+    private val transaction: ITransactionTemplate,
     private val clock: Clock,
 ) {
 
@@ -217,8 +219,13 @@ class OrderPlanService(
             throw InvalidTransferQuantityException(approvedQuantity, proposal.proposedQuantity)
         }
 
-        applyTransfer(proposal, approvedQuantity)
-        return transferProposalRepository.decide(id, APLICADA, approvedQuantity, LocalDateTime.now(clock))
+        // The two movements and the status change are one atomic action: a failure anywhere in the
+        // block rolls the whole transfer back instead of leaving a strategy debited with no
+        // matching credit — the invariant [AttributionService.summarize] is computed from.
+        return transaction.execute {
+            applyTransfer(proposal, approvedQuantity)
+            transferProposalRepository.decide(id, APLICADA, approvedQuantity, LocalDateTime.now(clock))
+        }
     }
 
     suspend fun rejectTransfer(id: Int): TransferProposal {
@@ -276,8 +283,15 @@ class OrderPlanService(
 
         val notional = price?.let { current.proposedQuantity * it }
         if (notional != null && notional <= threshold) {
-            applyTransfer(current, current.proposedQuantity)
-            transferProposalRepository.decide(current.id, APLICADA, current.proposedQuantity, LocalDateTime.now(clock))
+            transaction.execute {
+                applyTransfer(current, current.proposedQuantity)
+                transferProposalRepository.decide(
+                    current.id,
+                    APLICADA,
+                    current.proposedQuantity,
+                    LocalDateTime.now(clock),
+                )
+            }
             return null
         }
 
