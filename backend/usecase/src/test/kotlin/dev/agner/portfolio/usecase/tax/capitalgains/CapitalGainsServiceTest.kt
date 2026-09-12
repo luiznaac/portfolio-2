@@ -49,4 +49,24 @@ class CapitalGainsServiceTest : StringSpec({
         result.first { it.isFii }.grossGain shouldBe BigDecimal("100.00")
         result.first { it.isFii }.exempt shouldBe false
     }
+
+    "should flag a same-day buy and sell as a day trade, keeping it out of the exemption test" {
+        val stock = ListedAsset(1, "PETR4", AssetKind.STOCK, "Petrobras", "PETROBRAS")
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade(2, 1, LocalDate(2026, 8, 10), BigDecimal("100"), BigDecimal("10.00")),
+            Trade(3, 1, LocalDate(2026, 8, 10), BigDecimal("-100"), BigDecimal("12.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(any()) } returns emptyList()
+
+        val result = service.monthlyReport()
+
+        val month = result.single()
+        // The only sale is a day trade: its R$1.200,00 proceeds do not consume the R$20k ceiling,
+        // but its gain stays taxable.
+        month.exempt shouldBe true
+        month.taxableGain shouldBe BigDecimal("200.00")
+        month.taxDue shouldBe BigDecimal("30.00")
+    }
 })

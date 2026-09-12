@@ -10,6 +10,7 @@ import java.math.RoundingMode
 data class TaxableSale(
     val date: LocalDate,
     val isFii: Boolean,
+    val isDayTrade: Boolean,
     val proceeds: BigDecimal,
     val costBasis: BigDecimal,
 ) {
@@ -21,9 +22,10 @@ data class TaxableSale(
  * same lot-derived-from-replay spirit as [dev.agner.portfolio.usecase.trade.AveragePriceCalculator],
  * just one level up. Two independent buckets (stocks/ETFs/BDRs vs. FIIs — [MonthlyCapitalGain.isFii]),
  * each carrying its own loss forward, because Brazilian tax law never lets a stock loss offset a
- * FII gain or vice versa. Day-trade gains are NOT taxed at the special day-trade rate here — see
- * [dev.agner.portfolio.usecase.order.model.Order.dayTradeRisk] for where that risk is flagged
- * instead; folding it into this calculator is left for a later pass.
+ * FII gain or vice versa. The R$20k monthly exemption only covers non-day-trade sales: day-trade
+ * proceeds never count toward the ceiling and a day-trade gain never lands in the exempt bucket.
+ * Day-trade gains are still taxed in the 15% bucket here — the special 20% day-trade rate is left
+ * for a later pass (see [dev.agner.portfolio.usecase.order.model.Order.dayTradeRisk]).
  */
 @Component
 class CapitalGainsCalculator {
@@ -46,14 +48,17 @@ class CapitalGainsCalculator {
         return monthGroups.map { (month, sales) ->
             val proceeds = sales.sumOf { it.proceeds }
             val grossGain = sales.sumOf { it.gain }
-            val exempt = !isFii && proceeds <= EXEMPTION_LIMIT
+            val swingProceeds = sales.filter { !it.isDayTrade }.sumOf { it.proceeds }
+            val exempt = !isFii && swingProceeds <= EXEMPTION_LIMIT
+            // When the month is exempt, only the day-trade remainder is taxed; otherwise the whole
+            // gross gain is. Either way a day-trade gain never ends up tax-free.
+            val gainToTax = if (exempt) sales.filter { it.isDayTrade }.sumOf { it.gain } else grossGain
 
             val (compensation, taxable) = when {
-                grossGain <= BigDecimal.ZERO -> BigDecimal.ZERO to BigDecimal.ZERO
-                exempt -> BigDecimal.ZERO to BigDecimal.ZERO
+                gainToTax <= BigDecimal.ZERO -> BigDecimal.ZERO to BigDecimal.ZERO
                 else -> {
-                    val used = grossGain.min(carriedLoss)
-                    used to (grossGain - used)
+                    val used = gainToTax.min(carriedLoss)
+                    used to (gainToTax - used)
                 }
             }
 
