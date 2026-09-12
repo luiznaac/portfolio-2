@@ -172,7 +172,7 @@ class OrderPlanServiceTest : StringSpec({
             classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
         )
         // Target matches custody exactly (100 shares) so this ticker generates no order of its
-        // own â€” isolates the ceiling meter to just the already-executed trade below.
+        // own — isolates the ceiling meter to just the already-executed trade below.
         coEvery { strategyEditionService.fetchEditions(1) } returns listOf(
             edition(1, listOf(StrategyTarget("PETR4", BigDecimal("0.5")))),
         )
@@ -210,7 +210,7 @@ class OrderPlanServiceTest : StringSpec({
             custodyQuantity = BigDecimal("150"),
             balances = listOf(StrategyBalance(1, "Top", BigDecimal("150"))),
         )
-        // A buy already happened today â€” the planned order here will be a sell (150 > ideal 100)
+        // A buy already happened today — the planned order here will be a sell (150 > ideal 100)
         coEvery { tradeRepository.fetchByAssetId(10) } returns listOf(
             Trade.Buy(2, 10, LocalDate.parse("2026-09-15"), BigDecimal("10"), BigDecimal("50.00")),
         )
@@ -239,7 +239,7 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
         coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
-        // Top has 50 more than its 100-share ideal; Dividendos has 50 fewer than its own â€”
+        // Top has 50 more than its 100-share ideal; Dividendos has 50 fewer than its own —
         // a clean transfer pairing, net custody already matches total ideal (no real order).
         coEvery { attributionService.summarize(10) } returns AttributionSummary(
             custodyQuantity = BigDecimal("200"),
@@ -432,7 +432,7 @@ class OrderPlanServiceTest : StringSpec({
         val exit = plan.orders.single { it.ticker == "PETR4" }
         exit.kind shouldBe FULL_EXIT
         exit.quantity shouldBe BigDecimal("150")
-        // 150 * 50.00 of stock sold â€” straight past the exemption ceiling, as a FULL_EXIT still counts.
+        // 150 * 50.00 of stock sold — straight past the exemption ceiling, as a FULL_EXIT still counts.
         plan.saleCeiling.monthSold shouldBe BigDecimal("7500.00")
 
         val entry = plan.orders.single { it.ticker == "VALE3" }
@@ -461,7 +461,7 @@ class OrderPlanServiceTest : StringSpec({
 
         val plan = service.computePlan()
 
-        // 10000 * 0.3333 / 30 = 111.1 â€” floored to 111, so the order never overspends the ideal.
+        // 10000 * 0.3333 / 30 = 111.1 — floored to 111, so the order never overspends the ideal.
         plan.orders.single().quantity shouldBe BigDecimal("111")
     }
 
@@ -486,7 +486,7 @@ class OrderPlanServiceTest : StringSpec({
         val plan = service.computePlan()
 
         // Without a price the ideal is unknowable, so the plan declines to trade rather than
-        // guessing â€” and proposes no transfer to a strategy it cannot size either.
+        // guessing — and proposes no transfer to a strategy it cannot size either.
         plan.orders shouldBe emptyList()
         plan.transferProposals shouldBe emptyList()
         plan.saleCeiling.monthSold shouldBe BigDecimal("0.00")
@@ -508,7 +508,7 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
         coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
-        // Each strategy is owed R$5,000 at R$50.00, so 100 shares each and 200 in total â€” and the
+        // Each strategy is owed R$5,000 at R$50.00, so 100 shares each and 200 in total — and the
         // books already say exactly that, one balance per strategy. Nothing to fix, nothing to
         // trade, and no delta to transfer.
         coEvery { attributionService.summarize(10) } returns AttributionSummary(
@@ -543,7 +543,7 @@ class OrderPlanServiceTest : StringSpec({
         )
         coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
         coEvery { quoteGateway.getQuote(petr4) } returns Quote(BigDecimal("50.00"), today, BRAPI)
-        // Ideals are 100 / 50 / 50 = 200 shares, exactly custody â€” so nothing has to trade. The
+        // Ideals are 100 / 50 / 50 = 200 shares, exactly custody — so nothing has to trade. The
         // attribution is lopsided anyway, and re-leveling it is a free transfer: exactly the case
         // the whole transfer-before-trading rule exists for.
         coEvery { attributionService.summarize(10) } returns AttributionSummary(
@@ -581,7 +581,7 @@ class OrderPlanServiceTest : StringSpec({
             capital = BigDecimal("10000.00"),
             classes = listOf(ClassNode(STOCKS, BigDecimal("1.0"), BigDecimal("10000.00"), BigDecimal("10000.00"))),
         )
-        // Each strategy is owed R$5,000 at R$50.00 = 100 shares, so 200 in total â€” but the books
+        // Each strategy is owed R$5,000 at R$50.00 = 100 shares, so 200 in total — but the books
         // only say 180. Top is 30 over its ideal, Dividendos 50 short: a free transfer covers the
         // first 30, and the remaining 20 shares are still missing from the portfolio as a whole.
         coEvery { strategyEditionService.fetchEditions(any()) } returns listOf(
@@ -691,7 +691,7 @@ class OrderPlanServiceTest : StringSpec({
             custodyQuantity = BigDecimal("150"),
             balances = listOf(StrategyBalance(1, "Top", BigDecimal("150"))),
         )
-        // A buy already happened today, so the planned sell (150 > ideal 100) is a day trade â€”
+        // A buy already happened today, so the planned sell (150 > ideal 100) is a day trade —
         // taxed at 20% regardless, so its notional must not eat the R$20k exemption.
         coEvery { tradeRepository.fetchByAssetId(10) } returns listOf(
             Trade.Buy(2, 10, LocalDate.parse("2026-09-15"), BigDecimal("10"), BigDecimal("50.00")),
