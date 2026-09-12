@@ -15,12 +15,8 @@ const router = createBrowserRouter(routes, {
   basename: import.meta.env.BASE_URL.replace(/\/$/, "") || "/",
 });
 
-const rootElement = document.getElementById("root");
-if (!rootElement) {
-  throw new Error("Root element #root is missing from index.html");
-}
-
-createRoot(rootElement).render(
+// biome-ignore lint/style/noNonNullAssertion: index.html always has #root
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

@@ -10,15 +10,9 @@ Two projects, one repo:
   [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
 - **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from
   `frontend/` (`npm --prefix frontend run <script>`). Details in
-  [frontend/README.md](frontend/README.md).
-
-## Cross-cutting rule
-
-`frontend/src/api/types.ts` is a hand-maintained mirror of the request/response DTOs that the
-controllers in `backend/http-api/.../controller/` serialize — Jackson is configured
-`SNAKE_CASE`, non-null, ISO dates in `backend/usecase/.../configuration/JsonMapper.kt`. Any
-change to a DTO on one side must update the other in the **same commit**. The backend has no
-generated schema; this mirror is the contract.
+  [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react`
+  scaffold (health-check slice only) and will be rewritten from scratch in future plans — the
+  former hand-mirrored `src/api/types.ts` DTO contract no longer exists.
 
 ## Tooling
 

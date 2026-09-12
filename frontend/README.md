@@ -4,9 +4,10 @@ Frontend for [`portfolio-2`](../backend) — a personal Brazilian fixed-income
 portfolio tracker. SPA in React 19 + Vite + TypeScript + Tailwind v4, consuming
 the backend's HTTP API.
 
-Same stack and conventions as [`shougong/frontend`](../../shougong/frontend):
-typed hand-written API client mirroring the backend DTOs, TanStack Query for
-data, hand-rolled SVG charts (no chart lib), dark-only theme, pt-BR copy.
+This frontend is currently reset to the `environments/react` scaffold: the only
+vertical slice is the health-check dashboard calling `GET /health` through the
+typed client. The product frontend will be rewritten from scratch in future
+plans, so the scaffold is the starting point, not a base to extend.
 
 ## Prerequisites
 
@@ -29,6 +30,12 @@ Opens at `http://localhost:5273`. Calls to `/api/*` are proxied to
 > loaded`), use `npm.cmd install` / `npm.cmd run dev`, or run
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
+## Checks
+
+```bash
+npm run check      # typecheck + lint (biome) + test (vitest)
+```
+
 ## Build
 
 ```bash
@@ -39,34 +46,11 @@ npm run preview
 To build at the root (`/`) instead — which is what the combined Docker image
 does — set `VITE_BASE=/`.
 
-## Screens
-
-| Route                    | What                                                            |
-| ------------------------ | -------------------------------------------------------------- |
-| `/`                      | Painel: net-worth tiles, portfolio value chart, bond & account lists, "Consolidar tudo" |
-| `/bonds/new`             | Register a fixed- or floating-rate bond                         |
-| `/bonds/:id`             | Bond detail: positions chart + table, consolidate, new order    |
-| `/checking-accounts/new` | Register a checking account                                     |
-| `/checking-accounts/:id` | Account detail: balance chart + table, deposit/withdraw, consolidate |
-| `/indexes`               | CDI / SELIC / IPCA — latest value, record count, hydrate, sparkline |
-| `/upload`                | Import a broker's `.xlsx` export (Kinvo / PicPay) into a bond or account |
-
 ## Architecture notes
 
 - `src/api/` — typed HTTP client (`client.ts`), TanStack Query hooks
-  (`queries.ts`), and `types.ts`. **`types.ts` is a hand-maintained mirror of the
-  DTOs the backend controllers serialize** (`backend/http-api/.../controller/`,
-  Jackson `SNAKE_CASE` — see `backend/usecase/.../configuration/JsonMapper.kt`).
-  Change a DTO on either side and update the other in the same commit.
-- The backend has no whole-portfolio endpoint, so the dashboard **aggregates
-  client-side**: one `GET /{bonds|checking-accounts}/{id}/positions` per product
-  (via `useQueries`), merged by date in `src/lib/positions.ts`.
-- `src/components/PositionChart.tsx` — hand-rolled SVG area chart of
-  `principal + yield - taxes` over time (same technique as shougong's
-  `ItemsLearnedChart`). No chart library.
-- Money & rates are `number` in TS but `BigDecimal` on the backend — the frontend
-  only formats them (`src/lib/money.ts`), never does money arithmetic.
-- `src/i18n/` — pt-BR labels for backend enums (`IndexId`, `BondOrderType`),
-  which stay English/acronym on the wire.
-- The `Bond` DTO has no type discriminator: floating-rate bonds are the ones with
-  an `index_id`.
+  (`queries.ts`), and `types.ts` (hand-maintained DTO mirror). New API call:
+  typed function in `client.ts` → hook in `queries.ts` → `pages/` component.
+- `src/lib/` — pure helpers, unit-tested in `lib/**/*.test.ts`; no React imports.
+- `src/index.css` — Tailwind v4 theme lives here (`@theme`), not in a
+  `tailwind.config.js`.
