@@ -49,6 +49,8 @@ export const keys = {
   strategyWeights: ["strategies", "weights"] as const,
   attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
   orderPlan: ["orders", "plan"] as const,
+  monthlyCapitalGains: ["tax", "capital-gains"] as const,
+  stepUpPlan: ["tax", "step-up-plan"] as const,
 };
 
 // --- bonds ---
@@ -463,6 +465,16 @@ export function useConfirmBrokerageNote() {
     mutationFn: (trades: ImportedTradeConfirmation[]) => api.confirmBrokerageNote(trades),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
   });
+}
+
+// --- tax: capital gains + step-up (Fase 5) ---
+
+export function useMonthlyCapitalGains() {
+  return useQuery({ queryKey: keys.monthlyCapitalGains, queryFn: () => api.monthlyCapitalGains() });
+}
+
+export function useStepUpPlan() {
+  return useQuery({ queryKey: keys.stepUpPlan, queryFn: () => api.stepUpPlan() });
 }
 
 export function useUploadXlsx() {

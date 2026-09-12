@@ -13,6 +13,7 @@ import { NewListedAsset } from "./pages/NewListedAsset.tsx";
 import { Ordens } from "./pages/Ordens.tsx";
 import { Importar } from "./pages/Importar.tsx";
 import { Upload } from "./pages/Upload.tsx";
+import { Imposto } from "./pages/Imposto.tsx";
 
 export const routes: RouteObject[] = [
   {
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
       { path: "estrategias", element: <Estrategias /> },
       { path: "ordens", element: <Ordens /> },
       { path: "importar", element: <Importar /> },
+      { path: "imposto", element: <Imposto /> },
       { path: "indexes", element: <Indexes /> },
       { path: "upload", element: <Upload /> },
     ],
