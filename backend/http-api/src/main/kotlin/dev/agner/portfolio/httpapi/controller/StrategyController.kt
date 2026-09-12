@@ -46,10 +46,10 @@ class StrategyController(
                 }
 
                 post("/weight") {
-                    val strategyId = call.parameters["strategy_id"]!!.toInt()
+                    val strategyId = call.strategyId()
                     val payload = call.receive<StrategyWeightCreation>()
 
-                    call.respond(HttpStatusCode.Created, service.setWeight(payload.copy(strategyId = strategyId)))
+                    call.respond(HttpStatusCode.Created, service.setWeight(strategyId, payload))
                 }
 
                 // Raw PDF body, not JSON — the broker's model-portfolio report. Read directly instead

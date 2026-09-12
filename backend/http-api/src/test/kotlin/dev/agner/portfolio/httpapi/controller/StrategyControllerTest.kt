@@ -3,6 +3,7 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.configuration.DefaultDomainExceptionStatusMapper
 import dev.agner.portfolio.usecase.commons.DomainException
+import dev.agner.portfolio.usecase.configuration.JsonMapper
 import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
@@ -16,6 +17,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.serialization.jackson.JacksonConverter
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -88,6 +90,27 @@ class StrategyControllerTest : DescribeSpec({
         }
     }
 
+    describe("setting a strategy weight") {
+
+        it("passes the id parsed from the path to setWeight") {
+            val service = mockk<StrategyService>()
+            val editionService = mockk<StrategyEditionService>(relaxed = true)
+            coEvery { service.setWeight(5, any()) } returns mockk(relaxed = true)
+
+            testApplication {
+                application { installController(StrategyController(service, editionService)) }
+
+                val response = client.post("/strategies/5/weight") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"weight": 0.4, "effective_from": "2026-09-01"}""")
+                }
+
+                response.status shouldBe HttpStatusCode.Created
+                coVerify(exactly = 1) { service.setWeight(5, any()) }
+            }
+        }
+    }
+
     describe("fetching editions") {
 
         it("returns 404 when the strategy does not exist") {
@@ -149,7 +172,7 @@ private data class TestApiError(val error: String, val message: String, val deta
 
 private fun Application.installController(controller: StrategyController) {
     install(ContentNegotiation) {
-        register(ContentType.Application.Json, JacksonConverter(ObjectMapper()))
+        register(ContentType.Application.Json, JacksonConverter(JsonMapper.mapper))
     }
 
     install(StatusPages) {

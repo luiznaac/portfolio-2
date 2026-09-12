@@ -31,10 +31,10 @@ class StrategyWeightRepository(
             .map { it.last() }
     }
 
-    override suspend fun save(creation: StrategyWeightCreation) = transaction {
+    override suspend fun save(strategyId: Int, creation: StrategyWeightCreation) = transaction {
         StrategyWeightEntity.new {
-            strategy = StrategyEntity.findById(creation.strategyId)
-                ?: throw IllegalArgumentException("Strategy with ID ${creation.strategyId} not found")
+            strategy = StrategyEntity.findById(strategyId)
+                ?: throw IllegalArgumentException("Strategy with ID $strategyId not found")
             weight = creation.weight
             effectiveFrom = creation.effectiveFrom
             createdAt = LocalDateTime.now(clock)
