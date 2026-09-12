@@ -5,6 +5,8 @@ import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.monthlyclose.model.DriftAlert
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyClose
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
+import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -21,6 +23,7 @@ import java.time.Clock
 class MonthlyCloseService(
     private val repository: IMonthlyCloseRepository,
     private val allocationService: AllocationService,
+    private val orderPlanService: OrderPlanService,
     private val clock: Clock,
 ) {
 
@@ -28,7 +31,21 @@ class MonthlyCloseService(
 
     suspend fun history(): List<MonthlyClose> = repository.fetchAll()
 
-    suspend fun close(): MonthlyClose = repository.close(currentMonth())
+    // "Não dá para fechar as ordens do mês com proposta pendente" — the plan's ritual (§7). A
+    // transfer proposal changes what the order list looks like (approved -> smaller net trade,
+    // rejected -> the full buy+sell), so closing with one still undecided would lock in a plan
+    // that might still change.
+    suspend fun close(): MonthlyClose {
+        // Recompute the matches first: the reconciliation auto-rejects a PENDENTE whose pairing
+        // disappeared, so only proposals that are still live can block the close. Counting
+        // transfersForMonth() alone would keep counting stranded rows forever.
+        orderPlanService.reconcileTransfers()
+
+        val pending = orderPlanService.transfersForMonth().count { it.status == PENDENTE }
+        if (pending > 0) throw PendingTransferProposalsException(pending)
+
+        return repository.close(currentMonth())
+    }
 
     suspend fun driftAlert(thresholdPP: BigDecimal = DEFAULT_THRESHOLD_PP): List<DriftAlert> {
         val plan = allocationService.currentPlan()

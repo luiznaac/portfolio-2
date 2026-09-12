@@ -1,21 +1,19 @@
 package dev.agner.portfolio.httpapi.controller
 
-import dev.agner.portfolio.usecase.attribution.AttributionService
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 
 @Component
 class OrderController(
     private val planService: OrderPlanService,
-    private val attributionService: AttributionService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -24,31 +22,40 @@ class OrderController(
                 call.respond(HttpStatusCode.OK, planService.computePlan())
             }
 
-            // A TransferSuggestion applied directly, rather than going through a proposal's own
-            // approve/reject lifecycle (see TransferSuggestion's doc comment) — two attribution
-            // movements, reason TRANSFERENCIA, both saved in one transaction by the service: it's
-            // bookkeeping, not a trade, and either both sides land or neither does.
-            post("/transfers/apply") {
-                val payload = call.receive<ApplyTransferRequest>()
+            route("/transfers") {
+                get {
+                    call.respond(HttpStatusCode.OK, planService.transfersForMonth())
+                }
 
-                attributionService.transferBetweenStrategies(
-                    listedAssetId = payload.listedAssetId,
-                    fromStrategyId = payload.fromStrategyId,
-                    toStrategyId = payload.toStrategyId,
-                    quantity = payload.quantity,
-                    date = payload.date,
-                )
+                get("/settings") {
+                    call.respond(HttpStatusCode.OK, planService.transferSettings())
+                }
 
-                call.respond(HttpStatusCode.NoContent)
+                put("/settings") {
+                    val payload = call.receive<TransferSettingsRequest>()
+
+                    call.respond(HttpStatusCode.OK, planService.setTransferSettings(payload.autoApprovalThreshold))
+                }
+
+                route("/{transfer_id}") {
+                    post("/approve") {
+                        val id = call.requiredInt("transfer_id")
+                        val payload = call.receive<ApproveTransferRequest>()
+
+                        call.respond(HttpStatusCode.OK, planService.approveTransfer(id, payload.quantity))
+                    }
+
+                    post("/reject") {
+                        val id = call.requiredInt("transfer_id")
+
+                        call.respond(HttpStatusCode.OK, planService.rejectTransfer(id))
+                    }
+                }
             }
         }
     }
 }
 
-private data class ApplyTransferRequest(
-    val listedAssetId: Int,
-    val fromStrategyId: Int,
-    val toStrategyId: Int,
-    val quantity: BigDecimal,
-    val date: LocalDate,
-)
+private data class ApproveTransferRequest(val quantity: BigDecimal? = null)
+
+private data class TransferSettingsRequest(val autoApprovalThreshold: BigDecimal)

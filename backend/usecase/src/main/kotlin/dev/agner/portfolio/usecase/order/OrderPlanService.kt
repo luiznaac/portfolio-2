@@ -2,9 +2,13 @@ package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.allocation.AllocationService
 import dev.agner.portfolio.usecase.attribution.AttributionService
+import dev.agner.portfolio.usecase.attribution.model.AttributionMovementCreation
+import dev.agner.portfolio.usecase.attribution.model.AttributionReason.TRANSFERENCIA
 import dev.agner.portfolio.usecase.attribution.model.AttributionSummary
 import dev.agner.portfolio.usecase.commons.isZero
+import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.commons.today
+import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
@@ -15,12 +19,19 @@ import dev.agner.portfolio.usecase.order.model.OrderKind
 import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import dev.agner.portfolio.usecase.order.model.StrategyDelta
-import dev.agner.portfolio.usecase.order.model.TransferSuggestion
+import dev.agner.portfolio.usecase.order.model.TransferProposal
+import dev.agner.portfolio.usecase.order.model.TransferProposalCreation
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APLICADA
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE
+import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.REJEITADA
+import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
+import dev.agner.portfolio.usecase.order.repository.ITransferSettingsRepository
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyWeightRepository
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -28,11 +39,12 @@ import java.time.Clock
 
 /**
  * Assembles the month's executable order list: per strategy per ticker, ideal quantity (from the
- * strategy's own share of its [dev.agner.portfolio.usecase.allocation.model.AssetClass]'s ideal
- * capital — see [dev.agner.portfolio.usecase.strategy.model.StrategyWeight] — times its latest
- * [dev.agner.portfolio.usecase.strategy.model.StrategyEdition]'s target weight) against current
- * attributed quantity, netted per ticker across strategies into one order, with same-ticker
- * excess/shortage matched into [TransferSuggestion]s first. See the plan's "Fases" §3.
+ * strategy's own share of its AssetClass's ideal capital — see [dev.agner.portfolio.usecase.strategy.model.StrategyWeight] —
+ * times its latest [dev.agner.portfolio.usecase.strategy.model.StrategyEdition]'s target weight)
+ * against current attributed quantity, netted per ticker across strategies into one order, with
+ * same-ticker excess/shortage matched by [TransferMatcher] first and reconciled here against
+ * persisted [TransferProposal]s — the plan's full "proposta -> aprovada/rejeitada" lifecycle
+ * (Fases §3), not the fresh-every-request shortcut this service started with.
  *
  * No I/O of its own: every price, balance and target comes from a repository or gateway injected
  * here, and the pure matching lives in [TransferMatcher]. This class is the orchestration around
@@ -62,7 +74,7 @@ import java.time.Clock
  *   strategy simply has no delta and therefore lands in the net order as a real trade. Splitting
  *   it across strategies is the user's decision, never derived — see the plan's "atribuição por
  *   estratégia" decision and [dev.agner.portfolio.usecase.attribution.AttributionSummary].
- * - **Transfers do not shrink the order.** They are a side channel of suggestions; the *net*
+ * - **Transfers do not shrink the order.** They are a side channel of proposals; the *net*
  *   quantity stays a function of custody against the sum of ideals, because attribution movements
  *   do not change how many shares the user actually owns.
  */
@@ -77,11 +89,31 @@ class OrderPlanService(
     private val tradeRepository: ITradeRepository,
     private val quoteGateway: IQuoteGateway,
     private val transferMatcher: TransferMatcher,
+    private val transferProposalRepository: ITransferProposalRepository,
+    private val transferSettingsRepository: ITransferSettingsRepository,
+    private val transaction: ITransactionTemplate,
     private val clock: Clock,
 ) {
 
-    suspend fun computePlan(): OrderPlan {
+    suspend fun computePlan(): OrderPlan = reconcileTransfers()
+
+    /**
+     * Recomputes the month's plan and expires the proposals that no longer pair with anything.
+     *
+     * `computePlan` delegates here unchanged. The extra pass exists because `reconcileProposal` is
+     * only reached for the current matches: once a price or capital change (or a manual attribution
+     * movement) removes a pairing, a previously-`PENDENTE` row would never be touched again — it
+     * would keep coming back from `transfersForMonth()` and block `MonthlyCloseService.close()`
+     * forever, with no route for the user to reject it. So every `PENDENTE` of the month that the
+     * matcher did not return this run is auto-rejected. `REJEITADA`/`APLICADA` rows are left alone,
+     * since a decision already made stands for the whole competência.
+     *
+     * `MonthlyCloseService.close()` calls this (not just `transfersForMonth()`) so the close counts
+     * only live proposals, not stranded ones.
+     */
+    suspend fun reconcileTransfers(): OrderPlan {
         val today = LocalDate.today(clock)
+        val month = monthOf(today)
         val strategies = strategyService.fetchAll()
 
         // The whole month's plan hangs off three snapshots taken once here: where the strategies
@@ -108,7 +140,9 @@ class OrderPlanService(
         val tickersToInspect = targetedTickers + listedAssets.map { it.ticker }
 
         val orders = mutableListOf<Order>()
-        val transferSuggestions = mutableListOf<TransferSuggestion>()
+        val pendingProposals = mutableListOf<TransferProposal>()
+        val liveProposalIds = mutableSetOf<Int>()
+        val threshold = transferSettingsRepository.fetch().autoApprovalThreshold
 
         for (ticker in tickersToInspect) {
             val asset = assetsByTicker[ticker] ?: continue
@@ -135,7 +169,13 @@ class OrderPlanService(
             )
 
             if (deltaByStrategy.values.any { !it.isZero() }) {
-                transferSuggestions += transferMatcher.match(asset.id, asset.ticker, deltaByStrategy)
+                val matches = transferMatcher.match(asset.id, asset.ticker, deltaByStrategy)
+                for (match in matches) {
+                    reconcileProposal(month, match, quote?.price, threshold, strategyNames)?.let {
+                        liveProposalIds += it.id
+                        pendingProposals += it
+                    }
+                }
             }
 
             val order = orderFor(
@@ -150,12 +190,144 @@ class OrderPlanService(
             if (order != null) orders += order
         }
 
+        // A PENDENTE the matcher did not return this run is stranded: its pairing disappeared, so
+        // there is no path to approve or reject it any more. Expire it now (a rejection stands for
+        // the month) so it stops coming back from transfersForMonth() and blocking the close.
+        val stranded = transferProposalRepository.fetchByMonth(month)
+            .filter { it.status == PENDENTE && it.id !in liveProposalIds }
+        for (proposal in stranded) {
+            transferProposalRepository.decide(proposal.id, REJEITADA, null, LocalDateTime.now(clock))
+        }
+
         return OrderPlan(
             orders = orders,
-            transferSuggestions = transferSuggestions,
+            transferProposals = pendingProposals,
             saleCeiling = saleCeiling(today, listedAssets, orders),
         )
     }
+
+    suspend fun transfersForMonth(): List<TransferProposal> = transferProposalRepository.fetchByMonth(
+        monthOf(LocalDate.today(clock)),
+    )
+
+    suspend fun approveTransfer(id: Int, quantity: BigDecimal?): TransferProposal {
+        val proposal = requireProposal(id)
+        if (proposal.status != PENDENTE) throw TransferProposalNotPendingException(id, proposal.status)
+
+        val approvedQuantity = quantity ?: proposal.proposedQuantity
+        if (approvedQuantity <= BigDecimal.ZERO || approvedQuantity > proposal.proposedQuantity) {
+            throw InvalidTransferQuantityException(approvedQuantity, proposal.proposedQuantity)
+        }
+
+        // The two movements and the status change are one atomic action: a failure anywhere in the
+        // block rolls the whole transfer back instead of leaving a strategy debited with no
+        // matching credit — the invariant [AttributionService.summarize] is computed from.
+        return transaction.execute {
+            applyTransfer(proposal, approvedQuantity)
+            transferProposalRepository.decide(id, APLICADA, approvedQuantity, LocalDateTime.now(clock))
+        }
+    }
+
+    suspend fun rejectTransfer(id: Int): TransferProposal {
+        val proposal = requireProposal(id)
+        if (proposal.status != PENDENTE) throw TransferProposalNotPendingException(id, proposal.status)
+
+        return transferProposalRepository.decide(id, REJEITADA, null, LocalDateTime.now(clock))
+    }
+
+    suspend fun transferSettings() = transferSettingsRepository.fetch()
+
+    suspend fun setTransferSettings(autoApprovalThreshold: BigDecimal) =
+        transferSettingsRepository.save(autoApprovalThreshold)
+
+    private suspend fun reconcileProposal(
+        month: LocalDate,
+        match: TransferMatch,
+        price: BigDecimal?,
+        threshold: BigDecimal,
+        strategyNames: Map<Int, String>,
+    ): TransferProposal? {
+        val existing = transferProposalRepository.find(
+            month,
+            match.listedAssetId,
+            match.fromStrategyId,
+            match.toStrategyId,
+        )
+
+        val current = when {
+            existing == null -> transferProposalRepository.save(
+                TransferProposalCreation(
+                    month = month,
+                    listedAssetId = match.listedAssetId,
+                    ticker = match.ticker,
+                    fromStrategyId = match.fromStrategyId,
+                    fromStrategyName = strategyNames[match.fromStrategyId].orEmpty(),
+                    toStrategyId = match.toStrategyId,
+                    toStrategyName = strategyNames[match.toStrategyId].orEmpty(),
+                    proposedQuantity = match.quantity,
+                ),
+            )
+
+            // `compareTo`, not `!=`: `BigDecimal.equals` is scale-sensitive, and the column
+            // (18,8) reads back at scale 8 while a computed match can arrive at scale 0, so `!=`
+            // would refresh the quantity on every plan computation even when the value is the same.
+            existing.status == PENDENTE && existing.proposedQuantity.compareTo(match.quantity) != 0 ->
+                transferProposalRepository.updateProposedQuantity(existing.id, match.quantity)
+
+            else -> existing
+        }
+
+        // A rejection or an already-applied transfer stands for the whole month — never
+        // recreated or re-surfaced until the next competência.
+        if (current.status != PENDENTE) return null
+
+        val notional = price?.let { current.proposedQuantity * it }
+        if (notional != null && notional <= threshold) {
+            transaction.execute {
+                applyTransfer(current, current.proposedQuantity)
+                transferProposalRepository.decide(
+                    current.id,
+                    APLICADA,
+                    current.proposedQuantity,
+                    LocalDateTime.now(clock),
+                )
+            }
+            return null
+        }
+
+        return current
+    }
+
+    private suspend fun applyTransfer(proposal: TransferProposal, quantity: BigDecimal) {
+        val today = LocalDate.today(clock)
+
+        attributionService.recordMovement(
+            AttributionMovementCreation(
+                listedAssetId = proposal.listedAssetId,
+                strategyId = proposal.fromStrategyId,
+                date = today,
+                quantity = quantity.negate(),
+                reason = TRANSFERENCIA,
+                note = "Transferência para ${proposal.toStrategyName} (proposta #${proposal.id})",
+            ),
+        )
+        attributionService.recordMovement(
+            AttributionMovementCreation(
+                listedAssetId = proposal.listedAssetId,
+                strategyId = proposal.toStrategyId,
+                date = today,
+                quantity = quantity,
+                reason = TRANSFERENCIA,
+                note = "Transferência de ${proposal.fromStrategyName} (proposta #${proposal.id})",
+            ),
+        )
+    }
+
+    private suspend fun requireProposal(id: Int): TransferProposal =
+        transferProposalRepository.fetchByMonth(monthOf(LocalDate.today(clock))).find { it.id == id }
+            ?: throw TransferProposalNotFoundException(id)
+
+    private fun monthOf(date: LocalDate) = LocalDate(date.year, date.month, 1)
 
     /**
      * Latest edition's target weights per strategy, keyed by ticker for O(1) lookup while walking

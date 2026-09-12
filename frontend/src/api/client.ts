@@ -1,6 +1,6 @@
 import type {
   AllocationPlan,
-  ApplyTransferRequest,
+  ApproveTransferRequest,
   AssetClassTarget,
   AssetClassTargetCreation,
   AssetIncomeSummary,
@@ -21,8 +21,8 @@ import type {
   FixedIncomeSubClassTargetCreation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
-  ImportedTradeConfirmation,
   ImportPreview,
+  ImportedTradeConfirmation,
   IncomeEvent,
   IncomeReconciliation,
   Index,
@@ -48,6 +48,8 @@ import type {
   TickerChangeCreation,
   Trade,
   TradeCreation,
+  TransferProposal,
+  TransferSettings,
   UploadBroker,
   UploadProduct,
 } from "./types.ts";
@@ -310,8 +312,20 @@ export const api = {
   orderPlan(): Promise<OrderPlan> {
     return request("/orders/plan");
   },
-  applyTransfer(body: ApplyTransferRequest): Promise<void> {
-    return request("/orders/transfers/apply", json("POST", body));
+  approveTransfer(id: number, body: ApproveTransferRequest): Promise<TransferProposal> {
+    return request(`/orders/transfers/${id}/approve`, json("POST", body));
+  },
+  rejectTransfer(id: number): Promise<TransferProposal> {
+    return request(`/orders/transfers/${id}/reject`, { method: "POST" });
+  },
+  transferSettings(): Promise<TransferSettings> {
+    return request("/orders/transfers/settings");
+  },
+  setTransferSettings(autoApprovalThreshold: number): Promise<TransferSettings> {
+    return request(
+      "/orders/transfers/settings",
+      json("PUT", { auto_approval_threshold: autoApprovalThreshold }),
+    );
   },
 
   // --- brokerage note import (Fase 4) ---

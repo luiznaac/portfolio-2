@@ -55,7 +55,7 @@ class StepUpServiceTest : StringSpec({
         every { clock.zone } returns ZoneOffset.UTC
         coEvery { orderPlanService.computePlan() } returns OrderPlan(
             orders = emptyList(),
-            transferSuggestions = emptyList(),
+            transferProposals = emptyList(),
             saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
         )
         coEvery { corporateActionRepository.fetchByAssetId(any()) } returns emptyList()
@@ -97,7 +97,7 @@ class StepUpServiceTest : StringSpec({
     "should use the order plan's remaining ceiling as the step-up budget" {
         coEvery { orderPlanService.computePlan() } returns OrderPlan(
             orders = emptyList(),
-            transferSuggestions = emptyList(),
+            transferProposals = emptyList(),
             saleCeiling = SaleCeiling(BigDecimal("19500.00"), BigDecimal("20000.00"), BigDecimal("500.00")),
         )
         coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
@@ -116,7 +116,7 @@ class StepUpServiceTest : StringSpec({
             orders = listOf(
                 Order(1, "PETR4", false, OrderKind.SELL, BigDecimal("40"), BigDecimal("600.00"), emptyList(), false),
             ),
-            transferSuggestions = emptyList(),
+            transferProposals = emptyList(),
             saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
         )
         coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
@@ -141,7 +141,7 @@ class StepUpServiceTest : StringSpec({
                 orders = listOf(
                     Order(1, "PETR4", false, kind, BigDecimal("100"), BigDecimal("1500.00"), emptyList(), false),
                 ),
-                transferSuggestions = emptyList(),
+                transferProposals = emptyList(),
                 saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
             )
 

@@ -53,7 +53,7 @@ class BrokerageNoteServiceTest : StringSpec({
                 order(ticker = "PETR4", kind = OrderKind.BUY),
                 order(ticker = "VALE3", kind = OrderKind.BUY),
             ),
-            transferSuggestions = emptyList(),
+            transferProposals = emptyList(),
             saleCeiling = ceiling(),
         )
         coEvery { listedAssetRepository.resolveIdByTicker("PETR4", date) } returns 1

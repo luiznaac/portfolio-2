@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client.ts";
 import type {
-  ApplyTransferRequest,
+  ApproveTransferRequest,
   AssetClassTargetCreation,
   AttributionMovementCreation,
   BondOrderCreation,
@@ -49,6 +49,7 @@ export const keys = {
   strategyWeights: ["strategies", "weights"] as const,
   attribution: (assetId: number) => ["listed-assets", assetId, "attribution"] as const,
   orderPlan: ["orders", "plan"] as const,
+  transferSettings: ["orders", "transfers", "settings"] as const,
   monthlyCapitalGains: ["tax", "capital-gains"] as const,
   stepUpPlan: ["tax", "step-up-plan"] as const,
   incomeSummary: ["income", "summary"] as const,
@@ -447,11 +448,31 @@ export function useOrderPlan() {
   return useQuery({ queryKey: keys.orderPlan, queryFn: () => api.orderPlan() });
 }
 
-export function useApplyTransfer() {
+export function useApproveTransfer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: ApplyTransferRequest) => api.applyTransfer(body),
+    mutationFn: (args: { id: number; body: ApproveTransferRequest }) => api.approveTransfer(args.id, args.body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
+  });
+}
+
+export function useRejectTransfer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.rejectTransfer(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.orderPlan }),
+  });
+}
+
+export function useTransferSettings() {
+  return useQuery({ queryKey: keys.transferSettings, queryFn: () => api.transferSettings() });
+}
+
+export function useSetTransferSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (autoApprovalThreshold: number) => api.setTransferSettings(autoApprovalThreshold),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.transferSettings }),
   });
 }
 

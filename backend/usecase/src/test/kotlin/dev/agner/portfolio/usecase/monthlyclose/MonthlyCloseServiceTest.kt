@@ -9,6 +9,9 @@ import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyClose
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.ABERTO
 import dev.agner.portfolio.usecase.monthlyclose.model.MonthlyCloseStatus.FECHADO
 import dev.agner.portfolio.usecase.monthlyclose.repository.IMonthlyCloseRepository
+import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.OrderPlan
+import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -26,9 +29,10 @@ import java.time.ZoneOffset
 class MonthlyCloseServiceTest : StringSpec({
     val repository = mockk<IMonthlyCloseRepository>()
     val allocationService = mockk<AllocationService>()
+    val orderPlanService = mockk<OrderPlanService>()
     val clock = mockk<Clock>()
 
-    val service = MonthlyCloseService(repository, allocationService, clock)
+    val service = MonthlyCloseService(repository, allocationService, orderPlanService, clock)
 
     beforeTest {
         // Each test stubs its own behavior; clearing keeps the exact-count verifies scoped to one
@@ -36,6 +40,12 @@ class MonthlyCloseServiceTest : StringSpec({
         clearMocks(repository)
         every { clock.instant() } returns Instant.parse("2026-09-15T12:00:00Z")
         every { clock.zone } returns ZoneOffset.UTC
+        coEvery { orderPlanService.transfersForMonth() } returns emptyList()
+        coEvery { orderPlanService.reconcileTransfers() } returns OrderPlan(
+            orders = emptyList(),
+            transferProposals = emptyList(),
+            saleCeiling = SaleCeiling(BigDecimal.ZERO, BigDecimal("20000.00"), BigDecimal("20000.00")),
+        )
     }
 
     "current should open the current month" {
@@ -52,6 +62,9 @@ class MonthlyCloseServiceTest : StringSpec({
         val result = service.close()
 
         result.status shouldBe FECHADO
+        // The stranded-pending expiry runs before counting, so a month whose leftovers were
+        // auto-rejected closes even though transfersForMonth() might have rows.
+        coVerify(exactly = 1) { orderPlanService.reconcileTransfers() }
         coVerify(exactly = 1) { repository.close(month) }
         coVerify(exactly = 0) { repository.open(any()) }
     }
@@ -61,6 +74,27 @@ class MonthlyCloseServiceTest : StringSpec({
         coEvery { repository.close(month) } throws MonthlyCloseAlreadyClosedException(month)
 
         shouldThrow<MonthlyCloseAlreadyClosedException> { service.close() }
+    }
+
+    "close should refuse to close with a pending transfer proposal" {
+        coEvery { orderPlanService.transfersForMonth() } returns listOf(
+            dev.agner.portfolio.usecase.order.model.TransferProposal(
+                id = 1,
+                month = LocalDate(2026, 9, 1),
+                listedAssetId = 1,
+                ticker = "ORVR3",
+                fromStrategyId = 1,
+                fromStrategyName = "Top",
+                toStrategyId = 2,
+                toStrategyName = "Small Caps",
+                proposedQuantity = BigDecimal("9"),
+                appliedQuantity = null,
+                status = dev.agner.portfolio.usecase.order.model.TransferProposalStatus.PENDENTE,
+                decidedAt = null,
+            ),
+        )
+
+        shouldThrow<PendingTransferProposalsException> { service.close() }
     }
 
     "driftAlert should flag only classes whose drift exceeds the threshold" {
