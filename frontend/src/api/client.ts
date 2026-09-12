@@ -283,7 +283,7 @@ export const api = {
     });
   },
   strategyWeightHistory(): Promise<StrategyWeight[]> {
-    return request(`/strategies/weights`);
+    return request("/strategies/weights");
   },
   setStrategyWeight(strategyId: number, body: StrategyWeightCreation): Promise<StrategyWeight> {
     return request(`/strategies/${strategyId}/weight`, json("POST", body));
@@ -299,9 +299,9 @@ export const api = {
 
   // --- orders (Fase 3) ---
   orderPlan(): Promise<OrderPlan> {
-    return request(`/orders/plan`);
+    return request("/orders/plan");
   },
   applyTransfer(body: ApplyTransferRequest): Promise<void> {
-    return request(`/orders/transfers/apply`, json("POST", body));
+    return request("/orders/transfers/apply", json("POST", body));
   },
 };

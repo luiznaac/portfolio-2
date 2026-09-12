@@ -8,8 +8,8 @@ import {
   useUploadStrategyReport,
 } from "../api/queries.ts";
 import type { AssetClass, Strategy, StrategyTarget } from "../api/types.ts";
-import { ASSET_CLASSES, assetClassLabel } from "../i18n/assetClass.ts";
 import { Panel } from "../components/Panel.tsx";
+import { ASSET_CLASSES, assetClassLabel } from "../i18n/assetClass.ts";
 import { formatDate } from "../lib/format.ts";
 import { formatBRL, formatRatio } from "../lib/money.ts";
 
