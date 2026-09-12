@@ -101,7 +101,7 @@ class CapitalGainsCalculatorTest : StringSpec({
         result[1].lossCarriedForward shouldBe BigDecimal("0.00")
     }
 
-    "should keep a loss available even in an exempt month, for a later month to use" {
+    "should not carry a loss from an exempt month into a later month" {
         val sales = listOf(
             TaxableSale(
                 LocalDate(2026, 7, 5),
@@ -122,10 +122,10 @@ class CapitalGainsCalculatorTest : StringSpec({
         val result = calculator.calculate(sales)
 
         result[0].exempt shouldBe true
-        result[0].lossCarriedForward shouldBe BigDecimal("2000.00")
+        result[0].lossCarriedForward shouldBe BigDecimal("0.00")
 
-        result[1].lossCompensated shouldBe BigDecimal("2000.00")
-        result[1].taxableGain shouldBe BigDecimal("0.00")
+        result[1].lossCompensated shouldBe BigDecimal("0.00")
+        result[1].taxableGain shouldBe BigDecimal("2000.00")
     }
 
     "should keep stock and FII loss carryforwards independent" {

@@ -39,6 +39,16 @@ class CapitalGainsCalculator {
             .flatMap { (isFii, monthGroups) -> replay(isFii, monthGroups.sortedBy { it.first }) }
             .sortedWith(compareBy({ it.month }, { it.isFii }))
 
+    /**
+     * Replays one bucket's months in chronological order, compensating each taxable month's gain
+     * with the loss balance left by earlier ones.
+     *
+     * Losses only enter that balance from months that actually owed tax (`!exempt`): the R$20k
+     * exemption is evaluated month by month, so a month at or under the ceiling has no tax apurado
+     * and its loss has no future compensation to reduce — it does not carry. Within a taxed month
+     * the negative result still reduces that same month's gain, since `grossGain` nets it before
+     * any carryforward is computed.
+     */
     private fun replay(
         isFii: Boolean,
         monthGroups: List<Pair<LocalDate, List<TaxableSale>>>,
@@ -62,7 +72,7 @@ class CapitalGainsCalculator {
                 }
             }
 
-            carriedLoss = if (grossGain < BigDecimal.ZERO) {
+            carriedLoss = if (grossGain < BigDecimal.ZERO && !exempt) {
                 carriedLoss + grossGain.negate()
             } else {
                 carriedLoss - compensation
