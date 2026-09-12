@@ -9,6 +9,8 @@ import dev.agner.portfolio.usecase.income.parser.IIncomeStatementParser
 import dev.agner.portfolio.usecase.income.parser.IncomeStatementParseException
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -23,6 +25,7 @@ import io.ktor.server.plugins.statuspages.exception
 import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 
@@ -65,6 +68,26 @@ class IncomeControllerTest : DescribeSpec({
                 // StatusPages only maps DomainException, so an internal failure must stay a 500
                 // instead of becoming a 400 with the same shape as a parse failure.
                 response.status shouldBe HttpStatusCode.InternalServerError
+            }
+        }
+    }
+
+    describe("income asset path parameter") {
+
+        it("returns 400 with the ApiError payload for a non-numeric id and never reaches the service") {
+            val service = mockk<IncomeService>()
+            val parser = mockk<IIncomeStatementParser>()
+
+            testApplication {
+                application { installController(IncomeController(service, parser)) }
+
+                val response = client.get("/income/assets/abc")
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                payload.get("error").asText() shouldBe "invalid-parameter"
+                payload.get("detail").asText() shouldContain "listed_asset_id"
+                coVerify(exactly = 0) { service.eventsForAsset(any()) }
             }
         }
     }

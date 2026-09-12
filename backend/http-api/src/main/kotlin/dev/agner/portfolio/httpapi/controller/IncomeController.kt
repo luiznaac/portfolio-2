@@ -24,7 +24,7 @@ class IncomeController(
             }
 
             get("/assets/{listed_asset_id}") {
-                val assetId = call.parameters["listed_asset_id"]!!.toInt()
+                val assetId = call.requiredInt("listed_asset_id")
 
                 call.respond(HttpStatusCode.OK, service.eventsForAsset(assetId))
             }
