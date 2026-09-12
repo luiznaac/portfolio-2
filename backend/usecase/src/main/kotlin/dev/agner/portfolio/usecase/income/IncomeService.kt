@@ -61,7 +61,7 @@ class IncomeService(
         val previstoByAsset = listedAssetRepository.fetchAll().associateWith { events(it) }
 
         val previstoByKey = previstoByAsset.values.flatten()
-            .groupBy { Triple(it.ticker, monthOf(it.exDate), it.type) }
+            .groupBy { Triple(it.ticker, monthOf(it.paymentDate ?: it.exDate), it.type) }
             .mapValues { (_, group) -> group.sumOf { it.netAmount } }
 
         val recebidoByKey = received

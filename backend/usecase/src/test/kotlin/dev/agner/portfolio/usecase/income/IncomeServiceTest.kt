@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDENDO
 import dev.agner.portfolio.usecase.listedasset.model.DividendType.JCP
+import dev.agner.portfolio.usecase.listedasset.model.DividendType.RENDIMENTO
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
@@ -118,5 +119,62 @@ class IncomeServiceTest : StringSpec({
             ),
         )
         result[0].matches shouldBe false
+    }
+
+    "should reconcile on the payment month when it lags the ex-date" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
+        coEvery { dividendGateway.getDividends(petr4) } returns listOf(
+            // JCP declared with a June ex-date but paid in July — the common lag, not an edge case.
+            DividendDeclaration(JCP, BigDecimal("2.00"), LocalDate(2026, 6, 1), LocalDate(2026, 7, 15)),
+        )
+
+        val received = listOf(
+            ReceivedIncome(LocalDate(2026, 7, 15), "PETR4", JCP, BigDecimal("170.00")),
+        )
+
+        val result = service.reconcile(received)
+
+        result shouldBe listOf(
+            dev.agner.portfolio.usecase.income.model.IncomeReconciliation(
+                ticker = "PETR4",
+                month = LocalDate(2026, 7, 1),
+                type = JCP,
+                previsto = BigDecimal("170.00"),
+                recebido = BigDecimal("170.00"),
+            ),
+        )
+        result[0].month shouldBe LocalDate(2026, 7, 1)
+        result[0].matches shouldBe true
+    }
+
+    "should fall back to the ex-date month when the declaration has no payment date" {
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(petr4)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade(1, 1, LocalDate(2026, 1, 1), BigDecimal("100"), BigDecimal("10.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(1) } returns emptyList()
+        coEvery { dividendGateway.getDividends(petr4) } returns listOf(
+            DividendDeclaration(RENDIMENTO, BigDecimal("1.00"), LocalDate(2026, 6, 1), null),
+        )
+
+        val received = listOf(
+            ReceivedIncome(LocalDate(2026, 6, 20), "PETR4", RENDIMENTO, BigDecimal("100.00")),
+        )
+
+        val result = service.reconcile(received)
+
+        result shouldBe listOf(
+            dev.agner.portfolio.usecase.income.model.IncomeReconciliation(
+                ticker = "PETR4",
+                month = LocalDate(2026, 6, 1),
+                type = RENDIMENTO,
+                previsto = BigDecimal("100.00"),
+                recebido = BigDecimal("100.00"),
+            ),
+        )
     }
 })
