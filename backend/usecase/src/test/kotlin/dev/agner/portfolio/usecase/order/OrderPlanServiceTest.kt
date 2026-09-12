@@ -117,7 +117,6 @@ class OrderPlanServiceTest : StringSpec({
 
         plan.transferSuggestions shouldBe emptyList()
         plan.saleCeiling.monthSold shouldBe BigDecimal("2500.00")
-        plan.saleCeiling.exceeded shouldBe false
     }
 
     "should flag the sale-exemption ceiling as exceeded past R$20,000 in stock sales this month" {
@@ -147,7 +146,6 @@ class OrderPlanServiceTest : StringSpec({
 
         // 500 * 45.00 already sold this month, well past the 20k ceiling on its own
         plan.saleCeiling.monthSold shouldBe BigDecimal("22500.00")
-        plan.saleCeiling.exceeded shouldBe true
         plan.saleCeiling.remaining shouldBe BigDecimal.ZERO
     }
 

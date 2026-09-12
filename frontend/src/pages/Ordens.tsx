@@ -1,4 +1,4 @@
-import { useApplyTransfer, useOrderPlan } from "../api/queries.ts";
+import { useApplyTransfer, useOrderPlan, useStrategies } from "../api/queries.ts";
 import type { Order, OrderKind, TransferSuggestion } from "../api/types.ts";
 import { Panel } from "../components/Panel.tsx";
 import { formatBRL } from "../lib/money.ts";
@@ -100,6 +100,10 @@ export function Ordens() {
 
 function TransferRow({ transfer }: { transfer: TransferSuggestion }) {
   const mutation = useApplyTransfer();
+  const strategies = useStrategies();
+  const nameById = new Map((strategies.data ?? []).map((s) => [s.id, s.name]));
+  const fromName = nameById.get(transfer.from_strategy_id) ?? transfer.from_strategy_id;
+  const toName = nameById.get(transfer.to_strategy_id) ?? transfer.to_strategy_id;
 
   const apply = () => {
     mutation.mutate({
@@ -115,7 +119,7 @@ function TransferRow({ transfer }: { transfer: TransferSuggestion }) {
     <li className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
       <span className="font-medium text-slate-100">{transfer.ticker}</span>
       <span className="text-slate-400">
-        {transfer.from_strategy_name} → {transfer.to_strategy_name}
+        {fromName} → {toName}
       </span>
       <span className="tabular-nums text-slate-300">{transfer.quantity} cotas</span>
       <button

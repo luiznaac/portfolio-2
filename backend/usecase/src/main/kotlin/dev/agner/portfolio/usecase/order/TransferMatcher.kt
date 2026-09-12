@@ -43,8 +43,8 @@ import java.math.BigDecimal
  *
  * ### Preconditions (the caller's job)
  *
- * - Deltas arrive keyed by strategy id, and [strategyNames] resolves every id it will be asked
- *   about. Both come from the same source, so a missing name is not defended against here.
+ * - Deltas arrive keyed by strategy id; names are resolved by the caller when it renders the
+ *   suggestions, not carried on the model.
  * - Zero deltas may be present and are ignored by the two `filterValues` below.
  */
 @Component
@@ -58,11 +58,9 @@ class TransferMatcher {
         listedAssetId: Int,
         ticker: String,
         deltasByStrategy: Map<Int, BigDecimal>,
-        strategyNames: Map<Int, String>,
     ): List<TransferSuggestion> = pairRemaining(
         listedAssetId = listedAssetId,
         ticker = ticker,
-        strategyNames = strategyNames,
         // Largest excess first and largest shortage first: the greedy pairing then starts with the
         // meatiest pair, which tends to cover the most deltas in the fewest suggestions.
         excess = deltasByStrategy
@@ -85,7 +83,6 @@ class TransferMatcher {
     private tailrec fun pairRemaining(
         listedAssetId: Int,
         ticker: String,
-        strategyNames: Map<Int, String>,
         excess: List<Pair<Int, BigDecimal>>,
         shortage: List<Pair<Int, BigDecimal>>,
         suggestions: List<TransferSuggestion> = emptyList(),
@@ -102,9 +99,7 @@ class TransferMatcher {
             listedAssetId = listedAssetId,
             ticker = ticker,
             fromStrategyId = fromStrategyId,
-            fromStrategyName = strategyNames[fromStrategyId].orEmpty(),
             toStrategyId = toStrategyId,
-            toStrategyName = strategyNames[toStrategyId].orEmpty(),
             quantity = quantity,
         )
 
@@ -123,7 +118,6 @@ class TransferMatcher {
         return pairRemaining(
             listedAssetId = listedAssetId,
             ticker = ticker,
-            strategyNames = strategyNames,
             excess = remainingExcess,
             shortage = remainingShortage,
             suggestions = suggestions + suggestion,

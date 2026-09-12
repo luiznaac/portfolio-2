@@ -135,7 +135,7 @@ class OrderPlanService(
             )
 
             if (deltaByStrategy.values.any { !it.isZero() }) {
-                transferSuggestions += transferMatcher.match(asset.id, asset.ticker, deltaByStrategy, strategyNames)
+                transferSuggestions += transferMatcher.match(asset.id, asset.ticker, deltaByStrategy)
             }
 
             val order = orderFor(

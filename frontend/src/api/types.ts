@@ -418,13 +418,12 @@ export interface Order {
 // brokerage, no tax, doesn't touch the sale-exemption ceiling — versus selling from one strategy
 // and buying back for the other. Computed fresh every time the plan is requested; POST
 // /orders/transfers/apply executes one directly (no separate approve/reject lifecycle).
+// Strategy names are resolved on screen from the ids (see Ordens.tsx), not carried here.
 export interface TransferSuggestion {
   listed_asset_id: number;
   ticker: string;
   from_strategy_id: number;
-  from_strategy_name: string;
   to_strategy_id: number;
-  to_strategy_name: string;
   quantity: number;
 }
 
