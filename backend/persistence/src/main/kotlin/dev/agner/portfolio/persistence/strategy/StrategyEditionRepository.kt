@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.strategy
 
 import dev.agner.portfolio.usecase.commons.now
+import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
 import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.model.StrategyEdition
 import dev.agner.portfolio.usecase.strategy.model.StrategyEditionCreation
@@ -12,6 +13,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
@@ -48,26 +50,42 @@ class StrategyEditionRepository(
         }.any()
     }
 
-    override suspend fun save(creation: StrategyEditionCreation): StrategyEdition = transaction {
-        val entity = StrategyEditionEntity.new {
-            strategy = StrategyEntity.findById(creation.strategyId)
-                ?: throw StrategyNotFoundException(creation.strategyId)
-            referenceDate = creation.referenceDate
-            changesText = creation.changesText
-            createdAt = LocalDateTime.now(clock)
-        }
+    override suspend fun save(creation: StrategyEditionCreation): StrategyEdition = try {
+        transaction {
+            val entity = StrategyEditionEntity.new {
+                strategy = StrategyEntity.findById(creation.strategyId)
+                    ?: throw StrategyNotFoundException(creation.strategyId)
+                referenceDate = creation.referenceDate
+                changesText = creation.changesText
+                createdAt = LocalDateTime.now(clock)
+            }
 
-        StrategyTargetTable.batchInsert(creation.targets) { target ->
-            this[StrategyTargetTable.strategyEdition] = entity.id
-            this[StrategyTargetTable.ticker] = target.ticker
-            this[StrategyTargetTable.weight] = target.weight
-            this[StrategyTargetTable.rating] = target.rating
-            this[StrategyTargetTable.targetPrice] = target.targetPrice
-        }
+            StrategyTargetTable.batchInsert(creation.targets) { target ->
+                this[StrategyTargetTable.strategyEdition] = entity.id
+                this[StrategyTargetTable.ticker] = target.ticker
+                this[StrategyTargetTable.weight] = target.weight
+                this[StrategyTargetTable.rating] = target.rating
+                this[StrategyTargetTable.targetPrice] = target.targetPrice
+            }
 
-        entity.toModel(creation.targets)
+            entity.toModel(creation.targets)
+        }
+    } catch (e: ExposedSQLException) {
+        // uniqueIndex(strategy, referenceDate) is the concurrency guarantee for imports: the
+        // service's exists() pre-check is only a friendly fast path. Translate only its
+        // duplicate-key violation, leaving every other database failure untouched.
+        if (isReferenceDateConflict(e.errorCode, e.sqlState)) {
+            throw StrategyEditionAlreadyExistsException(creation.strategyId, creation.referenceDate.toString())
+        }
+        throw e
     }
 }
+
+private const val MYSQL_DUPLICATE_ENTRY = 1062
+private const val DUPLICATE_KEY_SQL_STATE = "23000"
+
+internal fun isReferenceDateConflict(errorCode: Int, sqlState: String?): Boolean =
+    errorCode == MYSQL_DUPLICATE_ENTRY || sqlState == DUPLICATE_KEY_SQL_STATE
 
 private fun StrategyEditionEntity.toModel(targets: List<StrategyTarget>) = StrategyEdition(
     id = id.value,

@@ -3,6 +3,7 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.configuration.DefaultDomainExceptionStatusMapper
 import dev.agner.portfolio.usecase.commons.DomainException
+import dev.agner.portfolio.usecase.strategy.StrategyEditionAlreadyExistsException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.StrategyService
@@ -11,6 +12,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -116,6 +118,28 @@ class StrategyControllerTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.OK
                 response.bodyAsText() shouldBe "[]"
+            }
+        }
+    }
+
+    describe("importing a report") {
+
+        it("returns 409 when the reference date was already imported") {
+            val service = mockk<StrategyService>(relaxed = true)
+            val editionService = mockk<StrategyEditionService>()
+            coEvery { editionService.importReport(5, any()) } throws
+                StrategyEditionAlreadyExistsException(5, "2026-09-01")
+
+            testApplication {
+                application { installController(StrategyController(service, editionService)) }
+
+                val response = client.post("/strategies/5/reports") {
+                    setBody(byteArrayOf(1, 2, 3))
+                }
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.Conflict
+                payload.get("error").asText() shouldBe "strategy-edition-duplicate"
             }
         }
     }

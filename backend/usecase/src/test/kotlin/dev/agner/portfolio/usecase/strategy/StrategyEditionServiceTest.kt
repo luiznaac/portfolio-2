@@ -119,6 +119,15 @@ class StrategyEditionServiceTest : StringSpec({
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
+    "should surface the domain exception when save hits the reference date constraint" {
+        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, validTargets)
+        coEvery { repository.exists(5, referenceDate) } returns false
+        coEvery { repository.save(any()) } throws
+            StrategyEditionAlreadyExistsException(5, referenceDate.toString())
+
+        shouldThrow<StrategyEditionAlreadyExistsException> { service.importReport(5, byteArrayOf(1)) }
+    }
+
     "fetchEditions should attach a diff to every edition but the first" {
         val edition1 = StrategyEdition(1, 5, LocalDate.parse("2026-08-01"), null, validTargets)
         val edition2 = StrategyEdition(
