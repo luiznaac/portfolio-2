@@ -1,4 +1,5 @@
-# Keep the build context small — only backend/ and frontend/ source is needed.
+# Keep the build context small — only backend/ and frontend/ source (plus the shared
+# contracts/ fixtures the frontend build resolves) is needed.
 
 .git
 .github

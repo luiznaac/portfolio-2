@@ -81,6 +81,7 @@ subprojects {
 
 	tasks.withType<Test> {
 		useJUnitPlatform()
+		systemProperty("contractsDir", rootProject.projectDir.parentFile.resolve("contracts").absolutePath)
 		testLogging {
 			events("passed", "skipped", "failed")
 		}

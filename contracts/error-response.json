@@ -1,0 +1,5 @@
+{
+  "error": "strategy-not-found",
+  "message": "Strategy not found",
+  "detail": "Strategy with ID 42 not found"
+}

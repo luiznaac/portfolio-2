@@ -20,6 +20,9 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
+# The shared error-body fixture lives outside frontend/ (contracts/), and the
+# frontend's contract test imports it, so `tsc -b` needs it here too.
+COPY contracts/ /contracts/
 # Served at the nginx root; the API is reached through nginx's /api proxy
 # (see deploy/nginx.conf.template), so the client's base stays "/api".
 ENV VITE_BASE=/ \
