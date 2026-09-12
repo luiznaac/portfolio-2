@@ -1,12 +1,10 @@
 package dev.agner.portfolio.httpapi.controller
 
-import dev.agner.portfolio.usecase.strategy.InvalidStrategyIdException
 import dev.agner.portfolio.usecase.strategy.StrategyEditionService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyWeightCreation
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
@@ -66,9 +64,3 @@ class StrategyController(
         }
     }
 }
-
-// Client-driven path parsing: an absent or non-numeric segment must surface as the domain error
-// (mapped to 400) instead of a NumberFormatException/KotlinNullPointerException 500.
-internal fun ApplicationCall.strategyId(): Int =
-    parameters["strategy_id"]?.toIntOrNull()
-        ?: throw InvalidStrategyIdException(parameters["strategy_id"])

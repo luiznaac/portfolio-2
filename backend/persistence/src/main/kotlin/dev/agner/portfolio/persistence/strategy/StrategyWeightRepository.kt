@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.strategy
 
 import dev.agner.portfolio.usecase.commons.now
+import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import dev.agner.portfolio.usecase.strategy.model.StrategyWeightCreation
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyWeightRepository
 import kotlinx.datetime.LocalDate
@@ -33,8 +34,7 @@ class StrategyWeightRepository(
 
     override suspend fun save(strategyId: Int, creation: StrategyWeightCreation) = transaction {
         StrategyWeightEntity.new {
-            strategy = StrategyEntity.findById(strategyId)
-                ?: throw IllegalArgumentException("Strategy with ID $strategyId not found")
+            strategy = StrategyEntity.findById(strategyId) ?: throw StrategyNotFoundException(strategyId)
             weight = creation.weight
             effectiveFrom = creation.effectiveFrom
             createdAt = LocalDateTime.now(clock)

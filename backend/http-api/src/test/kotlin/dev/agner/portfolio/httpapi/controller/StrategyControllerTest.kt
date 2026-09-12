@@ -47,7 +47,8 @@ class StrategyControllerTest : DescribeSpec({
                 val payload = ObjectMapper().readTree(response.bodyAsText())
 
                 response.status shouldBe HttpStatusCode.BadRequest
-                payload.get("error").asText() shouldBe "invalid-strategy-id"
+                payload.get("error").asText() shouldBe "invalid-parameter"
+                payload.get("detail").asText() shouldContain "strategy_id"
                 payload.get("detail").asText() shouldContain "abc"
                 coVerify(exactly = 0) { editionService.fetchEditions(any()) }
             }
@@ -64,7 +65,8 @@ class StrategyControllerTest : DescribeSpec({
                 val payload = ObjectMapper().readTree(response.bodyAsText())
 
                 response.status shouldBe HttpStatusCode.BadRequest
-                payload.get("error").asText() shouldBe "invalid-strategy-id"
+                payload.get("error").asText() shouldBe "invalid-parameter"
+                payload.get("detail").asText() shouldContain "strategy_id"
                 payload.get("detail").asText() shouldContain "abc"
                 coVerify(exactly = 0) { editionService.importReport(any(), any()) }
             }
@@ -83,7 +85,8 @@ class StrategyControllerTest : DescribeSpec({
                 val payload = ObjectMapper().readTree(response.bodyAsText())
 
                 response.status shouldBe HttpStatusCode.BadRequest
-                payload.get("error").asText() shouldBe "invalid-strategy-id"
+                payload.get("error").asText() shouldBe "invalid-parameter"
+                payload.get("detail").asText() shouldContain "strategy_id"
                 payload.get("detail").asText() shouldContain "<missing>"
                 coVerify(exactly = 0) { editionService.fetchEditions(any()) }
             }
@@ -107,6 +110,46 @@ class StrategyControllerTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.Created
                 coVerify(exactly = 1) { service.setWeight(5, any()) }
+            }
+        }
+
+        it("returns 400 for a non-numeric id on the weight route") {
+            val service = mockk<StrategyService>(relaxed = true)
+            val editionService = mockk<StrategyEditionService>(relaxed = true)
+
+            testApplication {
+                application { installController(StrategyController(service, editionService)) }
+
+                val response = client.post("/strategies/abc/weight") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"weight": 0.4, "effective_from": "2026-09-01"}""")
+                }
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                payload.get("error").asText() shouldBe "invalid-parameter"
+                payload.get("detail").asText() shouldContain "strategy_id"
+                payload.get("detail").asText() shouldContain "abc"
+                coVerify(exactly = 0) { service.setWeight(any(), any()) }
+            }
+        }
+
+        it("returns 404 when the strategy in the weight path does not exist") {
+            val service = mockk<StrategyService>()
+            val editionService = mockk<StrategyEditionService>(relaxed = true)
+            coEvery { service.setWeight(99, any()) } throws StrategyNotFoundException(99)
+
+            testApplication {
+                application { installController(StrategyController(service, editionService)) }
+
+                val response = client.post("/strategies/99/weight") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"weight": 0.4, "effective_from": "2026-09-01"}""")
+                }
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.NotFound
+                payload.get("error").asText() shouldBe "strategy-not-found"
             }
         }
     }
