@@ -1,7 +1,7 @@
 package dev.agner.portfolio.httpapi.configuration
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.commons.DomainException
+import dev.agner.portfolio.usecase.configuration.JsonMapper
 import dev.agner.portfolio.usecase.strategy.StrategyNotFoundException
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -26,13 +26,13 @@ class DomainExceptionContractTest : DescribeSpec({
     describe("the golden error-response contract") {
 
         it("serialises a domain exception to exactly the committed fixture") {
-            val expected = ObjectMapper().readTree(contractsDir().resolve("error-response.json"))
+            val expected = JsonMapper.mapper.readTree(contractsDir().resolve("error-response.json"))
 
             testApplication {
                 application { installThrowingRoute(StrategyNotFoundException(42)) }
 
                 val response = client.get("/boom")
-                val actual = ObjectMapper().readTree(response.bodyAsText())
+                val actual = JsonMapper.mapper.readTree(response.bodyAsText())
 
                 response.status shouldBe HttpStatusCode.NotFound
                 actual shouldBe expected
@@ -49,7 +49,7 @@ private fun contractsDir(): File =
 
 private fun Application.installThrowingRoute(exception: DomainException) {
     install(ContentNegotiation) {
-        register(ContentType.Application.Json, JacksonConverter(ObjectMapper()))
+        register(ContentType.Application.Json, JacksonConverter(JsonMapper.mapper))
     }
 
     installDomainExceptionHandler(DefaultDomainExceptionStatusMapper())
