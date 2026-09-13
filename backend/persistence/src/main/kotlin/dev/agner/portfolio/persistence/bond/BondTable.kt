@@ -46,6 +46,6 @@ class BondEntity(id: EntityID<Int>) : IntEntity(id) {
             maturityDate = maturityDate,
             indexId = IndexId.valueOf(indexId!!.id.value),
         )
-        else -> throw IllegalStateException("Unknown rate type: $rateType")
+        else -> error("Unknown rate type: $rateType")
     }
 }

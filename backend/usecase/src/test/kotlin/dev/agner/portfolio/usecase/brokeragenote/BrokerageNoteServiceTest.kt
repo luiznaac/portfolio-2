@@ -22,7 +22,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.datetime.LocalDate
+import java.io.IOException
 import java.math.BigDecimal
 
 class BrokerageNoteServiceTest : StringSpec({
@@ -87,7 +89,7 @@ class BrokerageNoteServiceTest : StringSpec({
             ParsedTrade(date, "PETR4", TradeSide.BUY, BigDecimal("100"), BigDecimal("35.50")),
             ParsedTrade(date, "NOVA11", TradeSide.BUY, BigDecimal("5"), BigDecimal("10.00")),
         )
-        coEvery { orderPlanService.computePlan() } throws RuntimeException("quote gateway down")
+        coEvery { orderPlanService.computePlan() } throws IOException("quote gateway down")
         coEvery { listedAssetRepository.resolveIdByTicker("PETR4", date) } returns 1
         coEvery { listedAssetRepository.resolveIdByTicker("NOVA11", date) } returns null
 
@@ -95,6 +97,15 @@ class BrokerageNoteServiceTest : StringSpec({
 
         preview.trades.all { !it.matchesPlan } shouldBe true
         preview.unresolvedTickers shouldBe listOf("NOVA11")
+    }
+
+    "should propagate cancellation instead of degrading matchesPlan" {
+        every { parser.parse(xlsxBytes) } returns listOf(
+            ParsedTrade(date, "PETR4", TradeSide.BUY, BigDecimal("100"), BigDecimal("35.50")),
+        )
+        coEvery { orderPlanService.computePlan() } throws CancellationException("request cancelled")
+
+        shouldThrow<CancellationException> { service.preview(xlsxBytes) }
     }
 
     "should fail loudly when the statement has no trades" {

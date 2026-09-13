@@ -1,5 +1,6 @@
 package dev.agner.portfolio.gateway.health
 
+import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.health.HealthCheckResult
 import dev.agner.portfolio.usecase.health.HealthChecker
@@ -16,11 +17,9 @@ class HttpClientHealthCheck(
 
     override suspend fun getHealthStatus() = HealthCheckResult(
         serviceName = "http-client",
-        isHealthy = try {
-            healthGateway.isHealthy()
-        } catch (e: Exception) {
-            false
-        },
+        isHealthy = runCatching { healthGateway.isHealthy() }
+            .onFailure { logger().warn("HTTP client health check failed", it) }
+            .getOrDefault(false),
         timestamp = LocalDateTime.now(clock),
     )
 }

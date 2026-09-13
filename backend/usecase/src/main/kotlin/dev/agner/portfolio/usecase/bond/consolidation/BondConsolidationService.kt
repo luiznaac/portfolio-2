@@ -122,9 +122,7 @@ class BondConsolidationService(
         ).id
 
     private suspend fun Collection<RedemptionContext>.handleRemaining() {
-        if (size > 1) {
-            throw IllegalStateException("There is more than one remaining sell")
-        }
+        check(size <= 1) { "There is more than one remaining sell" }
 
         if (size == 1) {
             val remainingRedemption = first()

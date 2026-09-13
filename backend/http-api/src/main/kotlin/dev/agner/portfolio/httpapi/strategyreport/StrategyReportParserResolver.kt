@@ -1,10 +1,12 @@
 package dev.agner.portfolio.httpapi.strategyreport
 
+import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.strategy.parser.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
 import org.springframework.stereotype.Component
+import java.io.IOException
 
 /**
  * Extracts the PDF's text once (pdfbox — same dependency and technique as
@@ -33,9 +35,12 @@ class StrategyReportParserResolver(
     private val parserNames get() = parsers.joinToString { it.javaClass.simpleName }
 
     private fun extractText(pdfBytes: ByteArray): String =
-        try {
+        runCatching {
             Loader.loadPDF(pdfBytes).use { PDFTextStripper().getText(it) }
-        } catch (e: Exception) {
-            throw StrategyReportParseException("Could not read the uploaded file as a PDF: ${e.message}")
+        }.getOrElse { failure ->
+            if (failure !is IOException) throw failure
+
+            logger().warn("Could not read the uploaded file as a PDF", failure)
+            throw StrategyReportParseException("Could not read the uploaded file as a PDF: ${failure.message}")
         }
 }

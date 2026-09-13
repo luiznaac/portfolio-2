@@ -80,6 +80,6 @@ class BondOrderEntity(id: EntityID<Int>) : IntEntity(id) {
             date = date,
             checkingAccountId = checkingAccount!!.id.value,
         )
-        else -> throw IllegalStateException("Unknown order type: $type")
+        else -> error("Unknown order type: $type")
     }
 }

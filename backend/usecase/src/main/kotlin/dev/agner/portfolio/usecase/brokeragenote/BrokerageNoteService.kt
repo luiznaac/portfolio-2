@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.brokeragenote.model.ImportedTrade
 import dev.agner.portfolio.usecase.brokeragenote.model.ImportedTradeConfirmation
 import dev.agner.portfolio.usecase.brokeragenote.parser.BrokerageNoteParseException
 import dev.agner.portfolio.usecase.brokeragenote.parser.IBrokerageNoteParser
+import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
@@ -15,7 +16,9 @@ import dev.agner.portfolio.usecase.trade.TradeService
 import dev.agner.portfolio.usecase.trade.model.Trade
 import dev.agner.portfolio.usecase.trade.model.TradeCreation
 import dev.agner.portfolio.usecase.trade.model.TradeSide
+import kotlinx.coroutines.CancellationException
 import org.springframework.stereotype.Service
+import java.io.IOException
 
 /**
  * Two-step import: [preview] parses the statement and reconciles it against the current
@@ -44,10 +47,15 @@ class BrokerageNoteService(
         // transfer proposals as a side effect of being looked at. matchesPlan is informational and
         // never blocks confirmation, so a quote-gateway hiccup while computing the plan must not
         // turn a fully parseable statement into a failed preview: degrade every row to "doesn't
-        // match" instead. computePlan() is suspend, so runCatching can't be used here.
+        // match" instead. Cancellation is not a hiccup — it must keep propagating.
         val plannedKindByTicker = try {
             orderPlanService.computePlan().orders.associate { it.ticker to it.kind }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: DomainException) {
+            logger().warn("Could not compute order plan for preview; matchesPlan degraded to false", e)
+            emptyMap()
+        } catch (e: IOException) {
             logger().warn("Could not compute order plan for preview; matchesPlan degraded to false", e)
             emptyMap()
         }

@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.health
 
+import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.health.HealthCheckResult
 import dev.agner.portfolio.usecase.health.HealthChecker
@@ -18,12 +19,9 @@ class MySqlConnectionHealthCheck(
 
     override suspend fun getHealthStatus() = HealthCheckResult(
         serviceName = "mysql-connection",
-        isHealthy = try {
-            executeQuery()
-            true
-        } catch (e: Exception) {
-            false
-        },
+        isHealthy = runCatching { executeQuery() }
+            .onFailure { logger().warn("MySQL connection health check failed", it) }
+            .isSuccess,
         timestamp = LocalDateTime.now(clock),
     )
 

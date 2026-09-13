@@ -22,12 +22,12 @@ class BondOrderService(
     suspend fun fetchByBondId(bondId: Int) = bondOrderRepository.fetchByBondId(bondId)
 
     suspend fun create(bondCreation: BondOrderCreation, isInternal: Boolean = false) = with(bondCreation) {
-        if (listOf(FULL_REDEMPTION, FULL_WITHDRAWAL).contains(bondCreation.type) && bondCreation.amount != null) {
-            throw IllegalArgumentException("Cannot create a full redemption order with an amount")
+        require(bondCreation.type !in listOf(FULL_REDEMPTION, FULL_WITHDRAWAL) || bondCreation.amount == null) {
+            "Cannot create a full redemption order with an amount"
         }
 
-        if (bondCreation.type == MATURITY && !isInternal) {
-            throw IllegalArgumentException("Cannot create a maturity order from an external source")
+        require(bondCreation.type != MATURITY || isInternal) {
+            "Cannot create a maturity order from an external source"
         }
 
         // Consolidation keys redemptions by date, so a second redemption on the same date would

@@ -53,6 +53,6 @@ class CorporateActionEntity(id: EntityID<Int>) : IntEntity(id) {
             date = date,
             newTicker = newTicker!!,
         )
-        else -> throw IllegalStateException("Unknown corporate action type: $type")
+        else -> error("Unknown corporate action type: $type")
     }
 }

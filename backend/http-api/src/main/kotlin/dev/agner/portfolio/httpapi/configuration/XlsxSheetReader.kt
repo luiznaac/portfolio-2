@@ -44,7 +44,7 @@ class XlsxSheetReader private constructor(
             onError: (String) -> Nothing,
         ): XlsxSheetReader {
             val workbook = WorkbookFactory.create(ByteArrayInputStream(xlsxBytes))
-            try {
+            return runCatching {
                 val sheet = workbook.getSheetAt(0)
                 val headerRow = sheet.getRow(0) ?: onError("Empty spreadsheet")
 
@@ -58,10 +58,10 @@ class XlsxSheetReader private constructor(
                 val missing = requiredColumns.filterNot { it in columnIndexByHeader }
                 if (missing.isNotEmpty()) onError("Missing expected columns: $missing")
 
-                return XlsxSheetReader(workbook, sheet, columnIndexByHeader, onError)
-            } catch (e: Throwable) {
+                XlsxSheetReader(workbook, sheet, columnIndexByHeader, onError)
+            }.getOrElse { cause ->
                 workbook.close()
-                throw e
+                throw cause
             }
         }
 

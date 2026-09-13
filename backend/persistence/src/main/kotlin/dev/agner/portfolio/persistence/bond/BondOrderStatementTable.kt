@@ -60,7 +60,7 @@ class BondOrderStatementEntity(id: EntityID<Int>) : IntEntity(id) {
             sellOrderId = sellOrderId!!.id.value,
         )
         else -> {
-            if (!type.contains("_TAX")) throw IllegalArgumentException("Invalid bond order statement type: $type")
+            require(type.contains("_TAX")) { "Invalid bond order statement type: $type" }
 
             TaxIncidence(
                 id = id.value,

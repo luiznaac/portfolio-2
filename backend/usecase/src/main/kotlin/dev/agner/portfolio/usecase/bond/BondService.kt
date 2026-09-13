@@ -13,16 +13,16 @@ class BondService(
 ) {
 
     suspend fun create(creation: BondCreation) = with(creation) {
-        if (creation.maturityDate.isWeekend()) {
-            throw IllegalArgumentException("Cannot create a bond with a weekend maturity date")
+        require(!creation.maturityDate.isWeekend()) {
+            "Cannot create a bond with a weekend maturity date"
         }
 
         bondRepository.save(this)
     }
 
     suspend fun createForCheckingAccount(checkingAccountId: Int, creation: FloatingRateBondCreation) = with(creation) {
-        if (creation.maturityDate.isWeekend()) {
-            throw IllegalArgumentException("Cannot create a bond with a weekend maturity date")
+        require(!creation.maturityDate.isWeekend()) {
+            "Cannot create a bond with a weekend maturity date"
         }
 
         bondRepository.save(checkingAccountId, copy(maturityDate = maturityDate.toMondayIfWeekend()))
