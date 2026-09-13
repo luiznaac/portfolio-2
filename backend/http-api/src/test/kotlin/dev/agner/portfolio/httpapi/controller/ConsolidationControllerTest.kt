@@ -58,8 +58,8 @@ class ConsolidationControllerTest : DescribeSpec({
                 val response = client.post("/consolidations/UNKNOWN/1")
 
                 // ProductType.valueOf throws an IllegalArgumentException that nothing maps yet, so
-                // the request dies in the pipeline. This pins today's accidental 500; the KCA-308
-                // fix should turn it into a 400 with error "invalid-parameter", consistent with the
+                // the request dies in the pipeline. This pins today's accidental 500; a later fix
+                // should turn it into a 400 with error "invalid-parameter", consistent with the
                 // product id handling below.
                 response.status shouldBe HttpStatusCode.InternalServerError
                 coVerify(exactly = 0) { service.consolidateProduct(any(), any()) }

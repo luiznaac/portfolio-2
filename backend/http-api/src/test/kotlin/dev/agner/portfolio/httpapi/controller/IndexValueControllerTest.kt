@@ -56,7 +56,7 @@ class IndexValueControllerTest : DescribeSpec({
                 val response = client.get("/indexes/XPTO/values")
 
                 // IndexId.valueOf throws an IllegalArgumentException that nothing maps yet, so the
-                // request dies in the pipeline. This pins today's accidental 500; the KCA-308 fix
+                // request dies in the pipeline. This pins today's accidental 500; a later fix
                 // should turn it into a 400 with error "invalid-parameter", like requiredInt.
                 response.status shouldBe HttpStatusCode.InternalServerError
                 coVerify(exactly = 0) { service.fetchAllBy(any()) }
@@ -72,7 +72,7 @@ class IndexValueControllerTest : DescribeSpec({
                 val response = client.post("/indexes/XPTO/values/hydrate")
 
                 // Same unmapped IllegalArgumentException as the GET above; expected to become a
-                // 400 "invalid-parameter" once KCA-308 is fixed.
+                // 400 "invalid-parameter" once that mapping is added.
                 response.status shouldBe HttpStatusCode.InternalServerError
                 coVerify(exactly = 0) { service.hydrateIndexValues(any()) }
             }
