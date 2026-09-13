@@ -18,6 +18,12 @@ import kotlin.collections.flatMap
 import kotlin.math.exp
 import kotlin.math.ln
 
+/** Intermediate precision of the annual-to-daily conversion — the rate round-trips through ln/exp. */
+private const val RATE_CALCULATION_SCALE = 20
+
+/** Scale of the published daily rate, kept consistent with the stored index values. */
+private const val DAILY_RATE_SCALE = 8
+
 @Service
 class YieldRateService(
     private val indexValueService: IndexValueService,
@@ -41,10 +47,10 @@ class YieldRateService(
                 val allWorkingDays = (firstDayOfTheYear..lastDayOfTheYear).removeWeekends()
 
                 // Calculate daily rate
-                val annualRate = value.divide(BigDecimal("100"), 20, HALF_EVEN)
+                val annualRate = value.divide(BigDecimal("100"), RATE_CALCULATION_SCALE, HALF_EVEN)
                 val onePlusRate = BigDecimal.ONE.add(annualRate) // e.g., 1.15
                 val daysCount = BigDecimal(allWorkingDays.size)
-                val exponent = BigDecimal.ONE.divide(daysCount, 20, HALF_EVEN)
+                val exponent = BigDecimal.ONE.divide(daysCount, RATE_CALCULATION_SCALE, HALF_EVEN)
 
                 // Calculate (1 + rate)^(1/days) using natural logarithm approach
                 val lnOnePlusRate = BigDecimal(ln(onePlusRate.toDouble()))
@@ -53,7 +59,7 @@ class YieldRateService(
 
                 // Convert back to percentage rate
                 val dailyRate = dailyFactor.subtract(BigDecimal.ONE)
-                val tx = dailyRate.multiply(BigDecimal("100")).setScale(8, HALF_EVEN)
+                val tx = dailyRate.multiply(BigDecimal("100")).setScale(DAILY_RATE_SCALE, HALF_EVEN)
 
                 allWorkingDays
                     .filter { it >= startingAt }

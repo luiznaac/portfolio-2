@@ -9,6 +9,15 @@ import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/** Scale of the principal/yield proportion used to split a partial redemption. */
+private const val PROPORTION_SCALE = 6
+
+/** Scale of the net/gross ratio used to gross a redeemed net amount back up. */
+private const val RATIO_SCALE = 8
+
+/** Scale of a tax rate carried as a percentage. */
+private const val TAX_RATE_SCALE = 4
+
 @Component
 class BondCalculator {
 
@@ -71,7 +80,7 @@ class BondCalculator {
                         processingData.taxes.calculate(netYield, netYield, grossYield),
                     )
                 } else {
-                    val proportion = principal.setScale(6) / (principal + netYield)
+                    val proportion = principal.setScale(PROPORTION_SCALE) / (principal + netYield)
                     val redeemedPrincipal = (processingData.redeemedAmount * proportion).defaultScale()
                     val redeemedYield = (processingData.redeemedAmount * (BigDecimal.ONE - proportion)).setScale(
                         2,
@@ -96,7 +105,7 @@ private fun Set<TaxIncidence>.calculate(
     if (isEmpty() || redeemedNetAmount == BigDecimal("0.00")) {
         emptySet()
     } else {
-        val redeemedGrossAmount = ((redeemedNetAmount.setScale(8) / netAmount) * grossAmount).defaultScale()
+        val redeemedGrossAmount = ((redeemedNetAmount.setScale(RATIO_SCALE) / netAmount) * grossAmount).defaultScale()
 
         data class TaxState(val remainingAmount: BigDecimal, val results: Set<Pair<TaxIncidence, BigDecimal>>)
 
@@ -105,7 +114,7 @@ private fun Set<TaxIncidence>.calculate(
                 // if it's the last tax, grab all the remaining amount to avoid rounding issues during calculation
                 state.remainingAmount - redeemedNetAmount
             } else {
-                (state.remainingAmount * tax.rate.setScale(4) / BigDecimal("100")).defaultScale()
+                (state.remainingAmount * tax.rate.setScale(TAX_RATE_SCALE) / BigDecimal("100")).defaultScale()
             }
 
             TaxState(

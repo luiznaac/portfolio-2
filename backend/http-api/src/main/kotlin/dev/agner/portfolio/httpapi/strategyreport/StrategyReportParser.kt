@@ -96,10 +96,10 @@ data class StrategyReportDocument(val text: String) {
     fun findTicker(line: String): String? =
         TICKER.findAll(line)
             .map { it.value }
-            .firstOrNull { it.take(4).any(Char::isLetter) }
+            .firstOrNull { it.take(TICKER_SYMBOL_LENGTH).any(Char::isLetter) }
 
     private fun monthYearToDate(match: MatchResult): LocalDate? {
-        val month = MONTHS[match.groupValues[1].lowercase().take(3)] ?: return null
+        val month = MONTHS[match.groupValues[1].lowercase().take(MONTH_ABBREVIATION_LENGTH)] ?: return null
         val year = match.groupValues[2].let { if (it.length == 2) "20$it" else it }.toInt()
         return LocalDate(year, month, 1)
     }
@@ -134,6 +134,15 @@ data class StrategyReportDocument(val text: String) {
         )
         private const val MAX_CHANGELOG_LINES = 10
 
+        /** A B3 ticker is a four-character symbol plus a separate class code. */
+        private const val TICKER_SYMBOL_LENGTH = 4
+
+        /** Portuguese month names are matched by their first three letters. */
+        private const val MONTH_ABBREVIATION_LENGTH = 3
+
+        /** Scale of the fractions this parser produces ("12,5" → 0.1250). */
+        private const val FRACTION_SCALE = 4
+
         val TICKER: Regex = Regex("""\b[A-Z0-9]{4}\d{1,2}\b""")
         val WEIGHT_PCT: Regex = Regex("""(\d{1,3}(?:,\d+)?)\s*%""")
         val RATING: Regex = Regex("""(?i)\b(compra|neutro|venda)\b""")
@@ -143,7 +152,7 @@ data class StrategyReportDocument(val text: String) {
 
         /** "12,5" (Brazilian) → 0.1250; the fraction convention the domain stores. */
         fun percentToFraction(brazilianNumber: String): BigDecimal =
-            brDecimal(brazilianNumber).divide(ONE_HUNDRED, 4, RoundingMode.HALF_EVEN)
+            brDecimal(brazilianNumber).divide(ONE_HUNDRED, FRACTION_SCALE, RoundingMode.HALF_EVEN)
 
         /** "1.234,56" (Brazilian) → 1234.56. */
         fun brDecimal(brazilianNumber: String): BigDecimal =

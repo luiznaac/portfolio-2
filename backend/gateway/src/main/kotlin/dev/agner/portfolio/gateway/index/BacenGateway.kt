@@ -16,6 +16,12 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
+// BACEN's SGS ("sistema gerenciador de séries temporais") series codes, per the Central Bank's
+// series catalogue: CDI is 11, SELIC is 12, IPCA is 433.
+private const val CDI_SERIES = 11
+private const val SELIC_SERIES = 12
+private const val IPCA_SERIES = 433
+
 @Service
 class BacenGateway(
     private val client: HttpClient,
@@ -41,9 +47,9 @@ class BacenGateway(
 }
 
 private fun IndexId.getBacenCode() = when (this) {
-    IndexId.CDI -> 11
-    IndexId.IPCA -> 433
-    IndexId.SELIC -> 12
+    IndexId.CDI -> CDI_SERIES
+    IndexId.IPCA -> IPCA_SERIES
+    IndexId.SELIC -> SELIC_SERIES
 }
 
 private data class BacenIndexValue(val data: String, val valor: BigDecimal) {

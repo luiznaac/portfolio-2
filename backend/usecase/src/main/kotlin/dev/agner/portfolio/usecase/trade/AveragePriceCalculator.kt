@@ -13,6 +13,12 @@ import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/** Scale of the computed weighted average price — deliberately finer than money. */
+private const val AVERAGE_PRICE_SCALE = 6
+
+/** Scale of a quantity derived by division (a reverse split) — finer than a whole share. */
+private const val QUANTITY_SCALE = 8
+
 /**
  * Pure replay of trades and corporate actions into a current [Position] and the [RealizedGain]s
  * along the way. Never fed a running balance: a corporate action discovered late is inserted with
@@ -62,7 +68,7 @@ class AveragePriceCalculator {
             get() = if (quantity.compareTo(BigDecimal.ZERO) == 0) {
                 BigDecimal.ZERO
             } else {
-                totalCost.divide(quantity, 6, RoundingMode.HALF_EVEN)
+                totalCost.divide(quantity, AVERAGE_PRICE_SCALE, RoundingMode.HALF_EVEN)
             }
 
         fun apply(trade: Trade): Accumulator = when (trade) {
@@ -91,7 +97,7 @@ class AveragePriceCalculator {
 
         fun apply(action: CorporateAction): Accumulator = when (action) {
             is Split -> copy(quantity = quantity * action.ratio)
-            is ReverseSplit -> copy(quantity = quantity.divide(action.ratio, 8, RoundingMode.HALF_EVEN))
+            is ReverseSplit -> copy(quantity = quantity.divide(action.ratio, QUANTITY_SCALE, RoundingMode.HALF_EVEN))
             is Bonus -> {
                 val newShares = quantity * action.ratio
                 copy(

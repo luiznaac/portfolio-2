@@ -18,6 +18,9 @@ import kotlinx.coroutines.awaitAll
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
+/** Positions are saved in batches rather than one insert per position. */
+private const val POSITION_SAVE_BATCH_SIZE = 100
+
 @Service
 class BondPositionService(
     private val repository: IBondOrderPositionRepository,
@@ -102,7 +105,7 @@ class BondPositionService(
                 .positions
         }
             .flatten()
-            .chunked(100)
+            .chunked(POSITION_SAVE_BATCH_SIZE)
             .onEach { repository.saveAll(it) }
     }
 }

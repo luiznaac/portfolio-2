@@ -23,6 +23,9 @@ import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/** Scale of the yield-on-cost ratio — a fraction, not money. */
+private const val YIELD_ON_COST_SCALE = 4
+
 /**
  * Turns [dev.agner.portfolio.usecase.listedasset.model.DividendDeclaration]s (declared, gross, per
  * share) into money for the position actually held on each ex-date, and reconciles that expected
@@ -64,7 +67,7 @@ class IncomeService(
                 yieldOnCost = if (costBasis.isZero()) {
                     BigDecimal.ZERO
                 } else {
-                    totalNet.divide(costBasis, 4, RoundingMode.HALF_EVEN)
+                    totalNet.divide(costBasis, YIELD_ON_COST_SCALE, RoundingMode.HALF_EVEN)
                 },
             )
         }.filter { !it.totalNet.isZero() || !it.costBasis.isZero() }

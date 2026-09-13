@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/** Scale of the unit gain ratio used to rank candidates — a fraction, not money. */
+private const val UNIT_GAIN_RATIO_SCALE = 8
+
 /** One position eligible for the step-up — already filtered to stocks with an unrealized gain and no day-trade risk. */
 data class StepUpCandidate(
     val listedAssetId: Int,
@@ -70,5 +73,9 @@ class StepUpPlanner {
     }
 
     private fun unitGainRatio(candidate: StepUpCandidate): BigDecimal =
-        (candidate.currentPrice - candidate.averagePrice).divide(candidate.currentPrice, 8, RoundingMode.HALF_EVEN)
+        (candidate.currentPrice - candidate.averagePrice).divide(
+            candidate.currentPrice,
+            UNIT_GAIN_RATIO_SCALE,
+            RoundingMode.HALF_EVEN,
+        )
 }

@@ -33,6 +33,9 @@ import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.time.Clock
 
+/** Statements are saved in batches rather than one insert per statement. */
+private const val STATEMENT_SAVE_BATCH_SIZE = 100
+
 @Service
 class BondConsolidationService(
     private val repository: IBondOrderStatementRepository,
@@ -79,7 +82,7 @@ class BondConsolidationService(
             }
             .also { it.remainingRedemptions.values.handleRemaining() }
             .statements
-            .chunked(100)
+            .chunked(STATEMENT_SAVE_BATCH_SIZE)
             .mapAsync { repository.saveAll(it) }
             .awaitAll()
             .flatten()

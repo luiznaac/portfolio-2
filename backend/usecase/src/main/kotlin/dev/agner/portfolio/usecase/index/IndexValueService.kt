@@ -18,6 +18,9 @@ import kotlinx.datetime.plus
 import org.springframework.stereotype.Service
 import java.time.Clock
 
+/** Each BACEN fetch covers a window of this many days, walked until the index is current. */
+private const val FETCH_WINDOW_DAYS = 100
+
 @Service
 class IndexValueService(
     private val repository: IIndexValueRepository,
@@ -44,11 +47,11 @@ class IndexValueService(
         if (startDate > endDate) return emptyList()
 
         return generateSequence(startDate) { prev ->
-            val next = prev.plus(100, DateTimeUnit.DAY).plus(1, DateTimeUnit.DAY)
+            val next = prev.plus(FETCH_WINDOW_DAYS, DateTimeUnit.DAY).plus(1, DateTimeUnit.DAY)
             if (next > endDate) null else next
         }
             .map { currentStart ->
-                val currentEnd = minOf(currentStart.plus(100, DateTimeUnit.DAY), endDate)
+                val currentEnd = minOf(currentStart.plus(FETCH_WINDOW_DAYS, DateTimeUnit.DAY), endDate)
                 currentStart to currentEnd
             }
             .toList()

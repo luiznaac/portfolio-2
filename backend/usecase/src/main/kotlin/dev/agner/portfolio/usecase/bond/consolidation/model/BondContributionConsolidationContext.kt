@@ -5,6 +5,9 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.math.RoundingMode
 
+/** The index multiplier is a percentage; four decimals match how brokers quote it. */
+private const val MULTIPLIER_SCALE = 4
+
 data class BondContributionConsolidationContext(
     val bondOrderId: Int,
     val contributionDate: LocalDate,
@@ -45,7 +48,10 @@ data class BondContributionConsolidationContext(
         val rate: BigDecimal,
     ) {
         constructor(multiplier: BigDecimal, indexValue: IndexValue) : this(
-            rate = (multiplier.setScale(4, RoundingMode.HALF_EVEN) / BigDecimal("100")) * indexValue.value,
+            rate = multiplier
+                .setScale(MULTIPLIER_SCALE, RoundingMode.HALF_EVEN)
+                .divide(BigDecimal("100"))
+                .multiply(indexValue.value),
         )
     }
 }

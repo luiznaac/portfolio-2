@@ -51,7 +51,7 @@ class MonthlyCloseService(
         if (plan.capital.signum() == 0) return emptyList()
 
         return plan.classes.mapNotNull { node ->
-            val currentWeight = node.current.divide(plan.capital, 6, RoundingMode.HALF_EVEN)
+            val currentWeight = node.current.divide(plan.capital, WEIGHT_SCALE, RoundingMode.HALF_EVEN)
             val driftPP = (currentWeight - node.idealWeight).abs()
 
             if (driftPP > thresholdPP) {
@@ -74,5 +74,8 @@ class MonthlyCloseService(
 
     private companion object {
         val DEFAULT_THRESHOLD_PP: BigDecimal = BigDecimal("0.05")
+
+        /** Allocation weights are fractions of capital; six decimals keeps small positions meaningful. */
+        const val WEIGHT_SCALE = 6
     }
 }
