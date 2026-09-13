@@ -9,7 +9,7 @@ import java.math.BigDecimal
  * into the existing dashboard and PositionChart with no new frontend code.
  *
  * For a listed asset: principal = cost basis, yield = unrealized gain (mark-to-market minus cost),
- * taxes = a same-day-sale income-tax estimate. See [dev.agner.portfolio.usecase.listedasset.consolidation.ListedAssetConsolidator].
+ * taxes = an estimated swing-sale income tax. See [dev.agner.portfolio.usecase.listedasset.consolidation.ListedAssetConsolidator].
  */
 data class ListedAssetPosition(
     val date: LocalDate,

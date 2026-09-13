@@ -11,6 +11,7 @@ import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.FII
 import dev.agner.portfolio.usecase.listedasset.position.model.ListedAssetPosition
 import dev.agner.portfolio.usecase.listedasset.position.repository.IListedAssetPositionRepository
+import dev.agner.portfolio.usecase.tax.TaxRules
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
 import dev.agner.portfolio.usecase.trade.TradeService
 import kotlinx.datetime.LocalDate
@@ -23,10 +24,11 @@ import java.time.Clock
  * replay the ledger (here, [AveragePriceCalculator] over trades + corporate actions) into a
  * current position, price it, and persist a [ListedAssetPosition] the frontend charts unchanged.
  *
- * The `taxes` estimate here is deliberately naive — same-day-sale income tax on the unrealized
- * gain, ignoring the monthly stock exemption and loss carry-forward. Real tax planning lives in
- * usecase/tax; this is just enough to show what redeeming today would roughly cost, the same
- * spirit as the bond IOF/income-tax estimate.
+ * The `taxes` estimate here is deliberately naive — an estimated swing-sale income tax on the
+ * unrealized gain (what a normal sale of the open position today would cost), ignoring the monthly
+ * stock exemption and loss carry-forward. Real tax planning lives in usecase/tax; this is just
+ * enough to show what redeeming today would roughly cost, the same spirit as the bond
+ * IOF/income-tax estimate.
  */
 @Component
 class ListedAssetConsolidator(
@@ -65,7 +67,11 @@ class ListedAssetConsolidator(
 
         val marketValue = (result.position.quantity * quote.price).defaultScale()
         val unrealizedGain = marketValue - result.position.totalCost
-        val taxRate = if (ctx.asset.kind == FII) BigDecimal("0.15") else BigDecimal("0.20")
+        val taxRate = if (ctx.asset.kind == FII) {
+            TaxRules.FII_CAPITAL_GAINS_RATE
+        } else {
+            TaxRules.STOCK_CAPITAL_GAINS_RATE
+        }
         val estimatedTax = if (unrealizedGain > BigDecimal.ZERO) {
             (unrealizedGain * taxRate).defaultScale()
         } else {
