@@ -46,5 +46,7 @@ npm run build         # tsc -b && vite build
 - **Testing scope**: only `src/lib/**` and `src/api/**` have tests (`vitest.config.ts` restricts
   `include` to them) — pure logic and the HTTP contract, no rendering. Don't claim UI coverage
   beyond what this actually checks.
+- **Shared error-body fixture**: `contracts/error-response.json` at the repo root is the canonical
+  domain-exception body, type-checked by `src/api/contract.test.ts`.
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

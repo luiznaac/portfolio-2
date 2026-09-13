@@ -12,7 +12,9 @@ more likely to be the up-to-date version.
 > script-only `package.json` task runner. **Cross-cutting rule:** `frontend/src/api/types.ts` is
 > a hand-maintained mirror of the DTOs the controllers in `http-api/.../controller/` serialize
 > (Jackson `SNAKE_CASE`, see `usecase/.../configuration/JsonMapper.kt`). Change a
-> request/response shape on one side and update the other in the same commit.
+> request/response shape on one side and update the other in the same commit. The domain-exception
+> error body is pinned by the shared fixture `contracts/error-response.json` instead, asserted by
+> `DomainExceptionContractTest` and type-checked by `frontend/src/api/contract.test.ts`.
 
 ## What this service does
 

@@ -11,8 +11,16 @@ Two projects, one repo:
 - **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from
   `frontend/` (`npm --prefix frontend run <script>`). Details in
   [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react`
-  scaffold (health-check slice only) and will be rewritten from scratch in future plans — the
-  former hand-mirrored `src/api/types.ts` DTO contract no longer exists.
+  scaffold (health-check slice only) and will be rewritten from scratch in future plans — its
+  hand-mirrored `src/api/types.ts` is down to the health-check DTO.
+
+## Shared contracts
+
+Repo-root `contracts/` holds JSON fixtures that are the cross-cutting source of truth shared by the
+backend tests and the frontend build. `contracts/error-response.json` is the canonical
+domain-exception body: `DomainExceptionContractTest` asserts the API serialises exactly it and
+`frontend/src/api/contract.test.ts` type-checks it, so a shape change edits the fixture once and
+fails on whichever side lags.
 
 ## Tooling
 
