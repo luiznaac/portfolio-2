@@ -4,8 +4,6 @@ import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.consolidation.ProductConsolidator
 import dev.agner.portfolio.usecase.consolidation.ProductType
-import dev.agner.portfolio.usecase.corporateaction.CorporateActionService
-import dev.agner.portfolio.usecase.listedasset.ListedAssetService
 import dev.agner.portfolio.usecase.listedasset.consolidation.model.ListedAssetConsolidationContext
 import dev.agner.portfolio.usecase.listedasset.gateway.IQuoteGateway
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind.FII
@@ -13,7 +11,6 @@ import dev.agner.portfolio.usecase.listedasset.position.model.ListedAssetPositio
 import dev.agner.portfolio.usecase.listedasset.position.repository.IListedAssetPositionRepository
 import dev.agner.portfolio.usecase.tax.TaxRules
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
-import dev.agner.portfolio.usecase.trade.TradeService
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
@@ -32,9 +29,7 @@ import java.time.Clock
  */
 @Component
 class ListedAssetConsolidator(
-    private val listedAssetService: ListedAssetService,
-    private val tradeService: TradeService,
-    private val corporateActionService: CorporateActionService,
+    private val contextProvider: ListedAssetConsolidationContextProvider,
     private val quoteGateway: IQuoteGateway,
     private val calculator: AveragePriceCalculator,
     private val positionRepository: IListedAssetPositionRepository,
@@ -43,17 +38,9 @@ class ListedAssetConsolidator(
 
     override val type = ProductType.LISTED_ASSET
 
-    override suspend fun getConsolidatableIds() = listedAssetService.fetchAll().map { it.id }
+    override suspend fun getConsolidatableIds() = contextProvider.fetchConsolidatableIds()
 
-    override suspend fun buildContext(productId: Int): ListedAssetConsolidationContext {
-        val asset = listedAssetService.fetchById(productId)
-
-        return ListedAssetConsolidationContext(
-            asset = asset,
-            trades = tradeService.fetchByAssetId(productId),
-            corporateActions = corporateActionService.fetchByAssetId(productId),
-        )
-    }
+    override suspend fun buildContext(productId: Int) = contextProvider.buildContext(productId)
 
     override suspend fun consolidate(ctx: ListedAssetConsolidationContext) {
         val result = calculator.calculate(ctx.trades, ctx.corporateActions)

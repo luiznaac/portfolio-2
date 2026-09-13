@@ -35,11 +35,13 @@ class StepUpServiceTest : StringSpec({
     val clock = mockk<Clock>()
 
     val service = StepUpService(
-        listedAssetRepository,
-        tradeRepository,
-        corporateActionRepository,
-        quoteGateway,
-        AveragePriceCalculator(),
+        StepUpCandidateProvider(
+            listedAssetRepository,
+            tradeRepository,
+            corporateActionRepository,
+            quoteGateway,
+            AveragePriceCalculator(),
+        ),
         orderPlanService,
         StepUpPlanner(),
         clock,
