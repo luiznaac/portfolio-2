@@ -79,8 +79,12 @@ subprojects {
 		}
 	}
 
+	val contractsDir = rootProject.projectDir.parentFile.resolve("contracts")
+
 	tasks.withType<Test> {
 		useJUnitPlatform()
+		inputs.dir(contractsDir)
+		systemProperty("contractsDir", contractsDir.absolutePath)
 		testLogging {
 			events("passed", "skipped", "failed")
 		}

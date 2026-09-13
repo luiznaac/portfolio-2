@@ -30,7 +30,7 @@ npm run dev         # vite dev server, port 5273
 npm run typecheck    # tsc -b --noEmit
 npm run lint         # biome check
 npm run lint:fix     # biome check --write
-npm run test          # vitest run (src/lib/** only)
+npm run test          # vitest run (src/lib/** and src/api/**)
 npm run check         # typecheck + lint + test — run before considering a change done
 npm run build         # tsc -b && vite build
 ```
@@ -43,7 +43,10 @@ npm run build         # tsc -b && vite build
   (override with `VITE_BASE`) and `/` in dev; the dev server proxies `/api` to
   `VITE_API_TARGET` (default `http://localhost:8080`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`, and references `public/favicon.svg`.
-- **Testing scope**: only `src/lib/**` has tests (`vitest.config.ts` restricts `include` to it) —
-  pure logic, no rendering. Don't claim UI coverage beyond what this actually checks.
+- **Testing scope**: only `src/lib/**` and `src/api/**` have tests (`vitest.config.ts` restricts
+  `include` to them) — pure logic and the HTTP contract, no rendering. Don't claim UI coverage
+  beyond what this actually checks.
+- **Shared error-body fixture**: `contracts/error-response.json` at the repo root is the canonical
+  domain-exception body, type-checked by `src/api/contract.test.ts`.
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
