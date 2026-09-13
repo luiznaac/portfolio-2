@@ -21,6 +21,12 @@ interface ITransferProposalRepository {
     /** Refreshes a still-PENDING proposal's quantity as the underlying deltas move. */
     suspend fun updateProposedQuantity(id: Int, quantity: BigDecimal): TransferProposal
 
+    /**
+     * Moves the proposal out of PENDING. The transition only succeeds while the stored status is
+     * still PENDING — a repeated or concurrent decision fails with
+     * `TransferProposalNotPendingException` instead of applying the proposal twice. An unknown id
+     * is an `IllegalArgumentException`.
+     */
     suspend fun decide(
         id: Int,
         status: TransferProposalStatus,

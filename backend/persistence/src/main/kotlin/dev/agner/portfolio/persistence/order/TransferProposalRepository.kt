@@ -4,6 +4,7 @@ import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.persistence.strategy.StrategyEntity
 import dev.agner.portfolio.persistence.strategy.isReferenceDateConflict
 import dev.agner.portfolio.usecase.commons.now
+import dev.agner.portfolio.usecase.order.TransferProposalNotPendingException
 import dev.agner.portfolio.usecase.order.model.TransferProposal
 import dev.agner.portfolio.usecase.order.model.TransferProposalCreation
 import dev.agner.portfolio.usecase.order.model.TransferProposalStatus
@@ -14,6 +15,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.time.Clock
@@ -87,11 +89,23 @@ class TransferProposalRepository(
         appliedQuantity: BigDecimal?,
         decidedAt: LocalDateTime,
     ) = transaction {
-        val entity = findEntity(id)
-        entity.status = status
-        entity.appliedQuantity = appliedQuantity
-        entity.decidedAt = decidedAt
-        entity.toModel()
+        val updated = TransferProposalTable.update({
+            (TransferProposalTable.id eq id) and (TransferProposalTable.status eq TransferProposalStatus.PENDING)
+        }) {
+            it[TransferProposalTable.status] = status
+            it[TransferProposalTable.appliedQuantity] = appliedQuantity
+            it[TransferProposalTable.decidedAt] = decidedAt
+        }
+
+        if (updated == 0) {
+            // The status column is the guard, so a second decide — a double click, a retry, or a
+            // concurrent request that read PENDING before the first commit — can never apply the
+            // proposal twice. findEntity keeps the unknown-id contract and reports the current
+            // status.
+            throw TransferProposalNotPendingException(id, findEntity(id).status)
+        }
+
+        findEntity(id).toModel()
     }
 
     private fun findEntity(id: Int) =
