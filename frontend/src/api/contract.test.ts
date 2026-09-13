@@ -6,7 +6,7 @@ import { ApiError, api } from "./client.ts";
 // DomainExceptionContractTest asserts the API serialises exactly the committed golden fixture;
 // this is the compile-time half: if the fixture stops matching this type, `tsc` fails here.
 // (The full hand-mirrored types.ts contract is gone with the frontend reset — the scaffold
-// client only surfaces `status` + `message` on ApiError.) See the plan's Fase 4.
+// client only surfaces `status` + `message` on ApiError.)
 interface GoldenErrorBody {
   error: string;
   message: string;

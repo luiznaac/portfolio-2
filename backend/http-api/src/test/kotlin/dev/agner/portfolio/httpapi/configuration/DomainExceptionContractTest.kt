@@ -20,7 +20,7 @@ import java.io.File
 
 // The golden error body is committed once at contracts/error-response.json and also asserted by
 // the frontend's src/api/contract.test.ts. Changing the shape on the backend breaks this test;
-// changing it in the fixture breaks the frontend's typecheck. See the plan's Fase 4.
+// changing it in the fixture breaks the frontend's typecheck.
 class DomainExceptionContractTest : DescribeSpec({
 
     describe("the golden error-response contract") {
