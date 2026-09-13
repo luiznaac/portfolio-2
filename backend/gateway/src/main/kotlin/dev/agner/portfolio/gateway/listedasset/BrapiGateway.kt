@@ -57,15 +57,19 @@ open class BrapiGateway(
             parameter("token", token)
         }
 
-        if (response.status != HttpStatusCode.OK) return null
+        val result = if (response.status == HttpStatusCode.OK) {
+            response.body<BrapiQuoteResponse>().results.firstOrNull()
+        } else {
+            null
+        }
 
-        val result = response.body<BrapiQuoteResponse>().results.firstOrNull() ?: return null
-
-        return Quote(
-            price = result.regularMarketPrice,
-            date = Instant.parse(result.regularMarketTime).atZone(ZoneOffset.UTC).toLocalDate().toKotlinLocalDate(),
-            source = QuoteSource.BRAPI,
-        )
+        return result?.let {
+            Quote(
+                price = it.regularMarketPrice,
+                date = Instant.parse(it.regularMarketTime).atZone(ZoneOffset.UTC).toLocalDate().toKotlinLocalDate(),
+                source = QuoteSource.BRAPI,
+            )
+        }
     }
 
     private companion object {

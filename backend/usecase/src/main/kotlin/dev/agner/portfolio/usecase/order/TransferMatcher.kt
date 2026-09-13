@@ -32,9 +32,12 @@ data class TransferMatch(
  *
  * ```mermaid
  * flowchart LR
- *     A["deltas per strategy<br/>(+ = holds too much, − = holds too little)"] --> B{excess a<br/>nd shortage<br/>both non-empty?}
+ *     A["deltas per strategy<br/>(+ = holds too much, − = holds too little)"]
+ *     B{excess a<br/>nd shortage<br/>both non-empty?}
+ *     A --> B
  *     B -- no --> C["no suggestion<br/>(nothing to move)"]
- *     B -- yes --> D["move min(excess, |shortage|)<br/>from the largest holder of excess<br/>to the largest holder of shortage"]
+ *     D["move min(excess, |shortage|)<br/>from the largest holder of excess<br/>to the largest holder of shortage"]
+ *     B -- yes --> D
  *     D --> E{one side<br/>exhausted?}
  *     E -- no --> D
  *     E -- yes --> F["transfers that flatten<br/>every delta they cover"]

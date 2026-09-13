@@ -46,17 +46,22 @@ class XpEquityCarteiraReportParser : StrategyReportParser {
     }
 
     private fun parseRow(document: StrategyReportDocument, line: String): StrategyTarget? {
-        val rating = RATING.find(line) ?: return null
-        val ticker = document.findTicker(line) ?: return null
+        val rating = RATING.find(line)
+        val ticker = document.findTicker(line)
+        val weight = rating?.let {
+            val beforeRating = line.substring(0, it.range.first)
+            WEIGHT_PCT.findAll(beforeRating).lastOrNull()?.groupValues?.get(1)
+        }
 
-        val beforeRating = line.substring(0, rating.range.first)
-        val weight = WEIGHT_PCT.findAll(beforeRating).lastOrNull()?.groupValues?.get(1) ?: return null
-
-        return StrategyTarget(
-            ticker = ticker,
-            weight = percentToFraction(weight),
-            rating = rating.value.uppercase(),
-            targetPrice = TARGET_PRICE.find(line, rating.range.last)?.groupValues?.get(1)?.let(::brDecimal),
-        )
+        return if (ticker != null && rating != null && weight != null) {
+            StrategyTarget(
+                ticker = ticker,
+                weight = percentToFraction(weight),
+                rating = rating.value.uppercase(),
+                targetPrice = TARGET_PRICE.find(line, rating.range.last)?.groupValues?.get(1)?.let(::brDecimal),
+            )
+        } else {
+            null
+        }
     }
 }

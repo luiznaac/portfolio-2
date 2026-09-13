@@ -276,7 +276,9 @@ class BondContributionConsolidatorTest : StringSpec({
             yieldRates = mapOf(
                 date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
                 date2 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.60")),
-                date3 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.70")), // Should not be processed
+                date3 to BondContributionConsolidationContext.YieldRateContext(
+                    BigDecimal("0.70"),
+                ), // Should not be processed
             ),
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("800.00")),

@@ -44,9 +44,15 @@ class XpQuantCarteiraReportParser : StrategyReportParser {
     }
 
     private fun parseRow(document: StrategyReportDocument, line: String): StrategyTarget? {
-        val ticker = document.findTicker(line) ?: return null
-        val weight = WEIGHT_PCT.find(line, line.indexOf(ticker) + ticker.length)?.groupValues?.get(1) ?: return null
+        val ticker = document.findTicker(line)
+        val weight = ticker?.let {
+            WEIGHT_PCT.find(line, line.indexOf(it) + it.length)?.groupValues?.get(1)
+        }
 
-        return StrategyTarget(ticker = ticker, weight = percentToFraction(weight))
+        return if (ticker != null && weight != null) {
+            StrategyTarget(ticker = ticker, weight = percentToFraction(weight))
+        } else {
+            null
+        }
     }
 }

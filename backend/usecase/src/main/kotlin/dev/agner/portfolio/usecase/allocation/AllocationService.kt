@@ -73,11 +73,44 @@ class AllocationService(
         val capital = capitalSnapshotRepository.fetchLast()?.total ?: BigDecimal.ZERO
         val classTargets = classTargetRepository.fetchCurrent(today)
         val subClassTargets = subClassTargetRepository.fetchCurrent(today)
+        val positions = fetchCurrentPositions()
+
+        return calculator.calculate(capital, classTargets, subClassTargets, positions.byClass, positions.bySubClass)
+    }
+
+    private suspend fun fetchCurrentPositions(): CurrentPositions {
         val overrides = classificationRepository.fetchAll()
             .associate { (it.productType to it.productId) to it.assetClass }
+        val positions = CurrentPositions(overrides)
 
-        val currentByClass = mutableMapOf<AssetClass, BigDecimal>()
-        val currentBySubClass = mutableMapOf<FixedIncomeSubClass, BigDecimal>()
+        for (bond in bondRepository.fetchAll()) {
+            val value = bondPositionService.getByBondId(bond.id).lastOrNull()?.let { it.principal + it.yield }
+                ?: continue
+            positions.add(BOND, bond.id, AssetClass.FIXED_INCOME, value, subClassOf(bond))
+        }
+
+        for (account in checkingAccountRepository.fetchAll()) {
+            val value = bondPositionService.getByCheckingAccountId(account.id).lastOrNull()
+                ?.let { it.principal + it.yield } ?: continue
+            positions.add(CHECKING_ACCOUNT, account.id, AssetClass.FIXED_INCOME, value, subClassOf(account.indexId))
+        }
+
+        for (asset in listedAssetRepository.fetchAll()) {
+            val value = listedAssetPositionService.getByAssetId(asset.id).lastOrNull()
+                ?.let { it.principal + it.yield } ?: continue
+            // No IndexId to derive a fixed-income subclass from if a listed asset gets
+            // reclassified into FIXED_INCOME — contributes to the class total, not a sub-bucket.
+            positions.add(LISTED_ASSET, asset.id, defaultClassOf(asset.kind), value, null)
+        }
+
+        return positions
+    }
+
+    private class CurrentPositions(
+        private val overrides: Map<Pair<ProductType, Int>, AssetClass>,
+    ) {
+        val byClass = mutableMapOf<AssetClass, BigDecimal>()
+        val bySubClass = mutableMapOf<FixedIncomeSubClass, BigDecimal>()
 
         fun add(
             productType: ProductType,
@@ -87,33 +120,11 @@ class AllocationService(
             subClass: FixedIncomeSubClass?,
         ) {
             val assetClass = overrides[productType to productId] ?: default
-            currentByClass.merge(assetClass, value, BigDecimal::add)
+            byClass.merge(assetClass, value, BigDecimal::add)
             if (assetClass == AssetClass.FIXED_INCOME && subClass != null) {
-                currentBySubClass.merge(subClass, value, BigDecimal::add)
+                bySubClass.merge(subClass, value, BigDecimal::add)
             }
         }
-
-        for (bond in bondRepository.fetchAll()) {
-            val value = bondPositionService.getByBondId(bond.id).lastOrNull()?.let { it.principal + it.yield }
-                ?: continue
-            add(BOND, bond.id, AssetClass.FIXED_INCOME, value, subClassOf(bond))
-        }
-
-        for (account in checkingAccountRepository.fetchAll()) {
-            val value = bondPositionService.getByCheckingAccountId(account.id).lastOrNull()
-                ?.let { it.principal + it.yield } ?: continue
-            add(CHECKING_ACCOUNT, account.id, AssetClass.FIXED_INCOME, value, subClassOf(account.indexId))
-        }
-
-        for (asset in listedAssetRepository.fetchAll()) {
-            val value = listedAssetPositionService.getByAssetId(asset.id).lastOrNull()
-                ?.let { it.principal + it.yield } ?: continue
-            // No IndexId to derive a fixed-income subclass from if a listed asset gets
-            // reclassified into FIXED_INCOME — contributes to the class total, not a sub-bucket.
-            add(LISTED_ASSET, asset.id, defaultClassOf(asset.kind), value, null)
-        }
-
-        return calculator.calculate(capital, classTargets, subClassTargets, currentByClass, currentBySubClass)
     }
 
     private fun defaultClassOf(kind: AssetKind): AssetClass = when (kind) {

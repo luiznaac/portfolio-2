@@ -23,7 +23,10 @@ interface StrategyReportParser {
     /** Whether this parser recognises [document] as its own layout. Must not throw. */
     fun shouldExecute(document: StrategyReportDocument): Boolean
 
-    /** Parses a document [shouldExecute] returned true for, or throws [dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException]. */
+    /**
+     * Parses a document [shouldExecute] returned true for, or throws
+     * [dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException].
+     */
     fun parse(document: StrategyReportDocument): ParsedStrategyReport
 }
 

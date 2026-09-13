@@ -56,6 +56,13 @@ class StrategyEditionService(
             throw StrategyReportParseException("No targets found in report")
         }
 
+        validateTickers(parsed)
+        validateTotalWeight(parsed)
+
+        return parsed
+    }
+
+    private fun validateTickers(parsed: ParsedStrategyReport) {
         val invalidTickers = parsed.targets.map(StrategyTarget::ticker).filterNot(TICKER_PATTERN::matches)
         if (invalidTickers.isNotEmpty()) {
             throw StrategyReportParseException("Not B3 tickers: $invalidTickers")
@@ -70,7 +77,9 @@ class StrategyEditionService(
         if (duplicatedTickers.isNotEmpty()) {
             throw StrategyReportParseException("Duplicated target tickers: $duplicatedTickers")
         }
+    }
 
+    private fun validateTotalWeight(parsed: ParsedStrategyReport) {
         // Weights are fractions (0.05 for 5%), same convention as AssetClassTarget. The report is
         // the broker's model portfolio, so the rows must add up to the whole portfolio exactly —
         // after the parser's scale normalization the sum has to be 1, with no rounding slack.
@@ -78,8 +87,6 @@ class StrategyEditionService(
         if (totalWeight.compareTo(BigDecimal.ONE) != 0) {
             throw StrategyReportParseException("Target weights sum to $totalWeight (fraction), expected exactly 1.0")
         }
-
-        return parsed
     }
 
     private companion object {

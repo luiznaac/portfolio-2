@@ -42,24 +42,24 @@ class StepUpPlanner {
             // <= 0, not isZero(): notional is rounded to two places, so a whole-share fill can
             // overshoot the budget by cents and leave it slightly negative. Guarding on zero alone
             // would then let a negative maxByBudget through as a negative suggested quantity.
-            if (budget <= BigDecimal.ZERO) continue
+            if (budget > BigDecimal.ZERO) {
+                val maxByBudget = budget.divide(candidate.currentPrice, 0, RoundingMode.DOWN)
+                val quantity = candidate.quantity.min(maxByBudget)
+                if (quantity > BigDecimal.ZERO) {
+                    val notional = (quantity * candidate.currentPrice).defaultScale()
+                    val realizedGain = (quantity * (candidate.currentPrice - candidate.averagePrice)).defaultScale()
 
-            val maxByBudget = budget.divide(candidate.currentPrice, 0, RoundingMode.DOWN)
-            val quantity = candidate.quantity.min(maxByBudget)
-            if (quantity <= BigDecimal.ZERO) continue
-
-            val notional = (quantity * candidate.currentPrice).defaultScale()
-            val realizedGain = (quantity * (candidate.currentPrice - candidate.averagePrice)).defaultScale()
-
-            suggestions += StepUpSuggestion(
-                listedAssetId = candidate.listedAssetId,
-                ticker = candidate.ticker,
-                quantity = quantity,
-                notional = notional,
-                realizedGain = realizedGain,
-                rebuyDate = rebuyDate,
-            )
-            budget -= notional
+                    suggestions += StepUpSuggestion(
+                        listedAssetId = candidate.listedAssetId,
+                        ticker = candidate.ticker,
+                        quantity = quantity,
+                        notional = notional,
+                        realizedGain = realizedGain,
+                        rebuyDate = rebuyDate,
+                    )
+                    budget -= notional
+                }
+            }
         }
 
         return StepUpPlan(

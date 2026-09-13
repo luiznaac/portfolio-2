@@ -50,71 +50,70 @@ class BondCalculator {
     private fun BondCalculationContext.calculateRedemption(
         yieldedAmount: BigDecimal,
         fullRedemption: Boolean,
-    ): RedemptionCalculation {
+    ): RedemptionCalculation =
         if (!fullRedemption && processingData.redeemedAmount.compareTo(BigDecimal("0.00")) == 0) {
-            return RedemptionCalculation.zero()
-        }
+            RedemptionCalculation.zero()
+        } else {
+            with(actualData) {
+                val grossYield = yieldAmount + yieldedAmount
+                val netYield = processingData.taxes
+                    .fold(grossYield) { acc, incidence ->
+                        (acc * (BigDecimal("100.0000") - incidence.rate) / BigDecimal("100")).setScale(
+                            2,
+                            RoundingMode.HALF_EVEN,
+                        )
+                    }
 
-        with(actualData) {
-            val grossYield = yieldAmount + yieldedAmount
-            val netYield = processingData.taxes
-                .fold(grossYield) { acc, incidence ->
-                    (acc * (BigDecimal("100.0000") - incidence.rate) / BigDecimal("100")).setScale(
+                if (fullRedemption || principal + netYield <= processingData.redeemedAmount) {
+                    RedemptionCalculation(
+                        principal,
+                        netYield,
+                        processingData.taxes.calculate(netYield, netYield, grossYield),
+                    )
+                } else {
+                    val proportion = principal.setScale(6) / (principal + netYield)
+                    val redeemedPrincipal = (processingData.redeemedAmount * proportion).defaultScale()
+                    val redeemedYield = (processingData.redeemedAmount * (BigDecimal.ONE - proportion)).setScale(
                         2,
                         RoundingMode.HALF_EVEN,
                     )
+
+                    RedemptionCalculation(
+                        redeemedPrincipal,
+                        redeemedYield,
+                        processingData.taxes.calculate(redeemedYield, netYield, grossYield),
+                    )
                 }
-
-            if (fullRedemption || principal + netYield <= processingData.redeemedAmount) {
-                return RedemptionCalculation(
-                    principal,
-                    netYield,
-                    processingData.taxes.calculate(netYield, netYield, grossYield),
-                )
             }
-
-            val proportion = principal.setScale(6) / (principal + netYield)
-            val redeemedPrincipal = (processingData.redeemedAmount * proportion).defaultScale()
-            val redeemedYield = (processingData.redeemedAmount * (BigDecimal.ONE - proportion)).setScale(
-                2,
-                RoundingMode.HALF_EVEN,
-            )
-
-            return RedemptionCalculation(
-                redeemedPrincipal,
-                redeemedYield,
-                processingData.taxes.calculate(redeemedYield, netYield, grossYield),
-            )
         }
-    }
 }
 
 private fun Set<TaxIncidence>.calculate(
     redeemedNetAmount: BigDecimal,
     netAmount: BigDecimal,
     grossAmount: BigDecimal,
-): Set<Pair<TaxIncidence, BigDecimal>> {
-    if (isEmpty()) return emptySet()
-    if (redeemedNetAmount == BigDecimal("0.00")) return emptySet()
+): Set<Pair<TaxIncidence, BigDecimal>> =
+    if (isEmpty() || redeemedNetAmount == BigDecimal("0.00")) {
+        emptySet()
+    } else {
+        val redeemedGrossAmount = ((redeemedNetAmount.setScale(8) / netAmount) * grossAmount).defaultScale()
 
-    val redeemedGrossAmount = ((redeemedNetAmount.setScale(8) / netAmount) * grossAmount).defaultScale()
+        data class TaxState(val remainingAmount: BigDecimal, val results: Set<Pair<TaxIncidence, BigDecimal>>)
 
-    data class TaxState(val remainingAmount: BigDecimal, val results: Set<Pair<TaxIncidence, BigDecimal>>)
+        foldIndexed(TaxState(redeemedGrossAmount, emptySet())) { idx, state, tax ->
+            val consumedAmount = if (idx == size - 1) {
+                // if it's the last tax, grab all the remaining amount to avoid rounding issues during calculation
+                state.remainingAmount - redeemedNetAmount
+            } else {
+                (state.remainingAmount * tax.rate.setScale(4) / BigDecimal("100")).defaultScale()
+            }
 
-    return foldIndexed(TaxState(redeemedGrossAmount, emptySet())) { idx, state, tax ->
-        val consumedAmount = if (idx == size - 1) {
-            // if it's the last tax, grab all the remaining amount to avoid rounding issues during calculation
-            state.remainingAmount - redeemedNetAmount
-        } else {
-            (state.remainingAmount * tax.rate.setScale(4) / BigDecimal("100")).defaultScale()
-        }
-
-        TaxState(
-            remainingAmount = state.remainingAmount - consumedAmount,
-            results = state.results + (tax to consumedAmount),
-        )
-    }.results
-}
+            TaxState(
+                remainingAmount = state.remainingAmount - consumedAmount,
+                results = state.results + (tax to consumedAmount),
+            )
+        }.results
+    }
 
 private operator fun BigDecimal.minus(taxes: Set<Pair<TaxIncidence, BigDecimal>>) = this - taxes.sumOf { it.second }
 

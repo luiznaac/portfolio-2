@@ -273,16 +273,18 @@ class OrderPlanService(
         }
 
         // A rejection or an already-applied transfer stands for the whole month — never recreated
-        // or re-surfaced until the next one.
-        if (current.status != PENDING) return null
-
+        // or re-surfaced until the next one. A still-pending proposal under the auto-approval
+        // threshold is applied on the spot instead of being returned.
         val notional = priced.price?.let { current.proposedQuantity * it }
-        if (notional != null && notional <= threshold) {
-            applyAndDecide(current, current.proposedQuantity)
-            return null
-        }
+        return when {
+            current.status != PENDING -> null
+            notional != null && notional <= threshold -> {
+                applyAndDecide(current, current.proposedQuantity)
+                null
+            }
 
-        return current
+            else -> current
+        }
     }
 
     /**

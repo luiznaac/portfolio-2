@@ -42,18 +42,22 @@ class GenericLineReportParser : StrategyReportParser {
     }
 
     private fun targetRow(document: StrategyReportDocument, line: String): StrategyTarget? {
-        val ticker = document.findTicker(line) ?: return null
-        val tickerEnd = line.indexOf(ticker) + ticker.length
+        val ticker = document.findTicker(line)
+        val weight = ticker?.let {
+            val tickerEnd = line.indexOf(it) + it.length
+            WEIGHT_PCT.find(line, tickerEnd)?.groupValues?.get(1)
+                ?: WEIGHT_PCT.findAll(line.take(tickerEnd)).lastOrNull()?.groupValues?.get(1)
+        }
 
-        val weight = WEIGHT_PCT.find(line, tickerEnd)?.groupValues?.get(1)
-            ?: WEIGHT_PCT.findAll(line.take(tickerEnd)).lastOrNull()?.groupValues?.get(1)
-            ?: return null
-
-        return StrategyTarget(
-            ticker = ticker,
-            weight = percentToFraction(weight),
-            rating = RATING.find(line)?.value?.uppercase(),
-            targetPrice = TARGET_PRICE.find(line)?.groupValues?.get(1)?.let(::brDecimal),
-        )
+        return if (ticker != null && weight != null) {
+            StrategyTarget(
+                ticker = ticker,
+                weight = percentToFraction(weight),
+                rating = RATING.find(line)?.value?.uppercase(),
+                targetPrice = TARGET_PRICE.find(line)?.groupValues?.get(1)?.let(::brDecimal),
+            )
+        } else {
+            null
+        }
     }
 }

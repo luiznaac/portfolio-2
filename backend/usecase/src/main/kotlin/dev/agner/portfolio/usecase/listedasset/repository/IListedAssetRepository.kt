@@ -12,7 +12,10 @@ interface IListedAssetRepository {
 
     suspend fun save(creation: ListedAssetCreation): ListedAsset
 
-    /** Closes the current ticker-history entry and opens a new one. See [dev.agner.portfolio.usecase.listedasset.model.TickerHistoryEntry]. */
+    /**
+     * Closes the current ticker-history entry and opens a new one.
+     * See [dev.agner.portfolio.usecase.listedasset.model.TickerHistoryEntry].
+     */
     suspend fun changeTicker(assetId: Int, newTicker: String, effectiveFrom: LocalDate): ListedAsset
 
     /** Resolves the asset a ticker pointed to on a given date — for reconciling old brokerage notes. */

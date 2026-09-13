@@ -55,7 +55,8 @@ class BondConsolidationServiceTest : StringSpec({
     val service =
         BondConsolidationService(repository, bondOrderService, yieldRateService, contributionConsolidator, clock)
 
-    // Doing this so that I don't have to rewrite the whole test class and I ensure that the refactor hasn't broken anything
+    // Doing this so that I don't have to rewrite the whole test class and I ensure that the
+    // refactor hasn't broken anything
     val consolidator = BondConsolidator(repository, bondService, bondOrderService, service, positionService)
 
     beforeEach {
