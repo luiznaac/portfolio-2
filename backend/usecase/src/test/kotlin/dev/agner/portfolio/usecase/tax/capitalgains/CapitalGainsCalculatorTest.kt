@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.tax.capitalgains
 
+import dev.agner.portfolio.usecase.tax.capitalgains.model.MonthlyCapitalGain
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.LocalDate
@@ -23,7 +24,7 @@ class CapitalGainsCalculatorTest : StringSpec({
         val result = calculator.calculate(sales)
 
         result shouldBe listOf(
-            MonthlyGainFixture.of(
+            MonthlyCapitalGain(
                 month = LocalDate(2026, 8, 1),
                 isFii = false,
                 proceeds = BigDecimal("19000.00"),
@@ -253,20 +254,3 @@ class CapitalGainsCalculatorTest : StringSpec({
         result[0].taxDue shouldBe BigDecimal("150.00")
     }
 })
-
-// Small helper so the "should exempt" test reads as one literal instead of field-by-field asserts.
-private object MonthlyGainFixture {
-    fun of(
-        month: LocalDate,
-        isFii: Boolean,
-        proceeds: BigDecimal,
-        grossGain: BigDecimal,
-        exempt: Boolean,
-        lossCompensated: BigDecimal,
-        taxableGain: BigDecimal,
-        taxDue: BigDecimal,
-        lossCarriedForward: BigDecimal,
-    ) = dev.agner.portfolio.usecase.tax.capitalgains.model.MonthlyCapitalGain(
-        month, isFii, proceeds, grossGain, exempt, lossCompensated, taxableGain, taxDue, lossCarriedForward,
-    )
-}

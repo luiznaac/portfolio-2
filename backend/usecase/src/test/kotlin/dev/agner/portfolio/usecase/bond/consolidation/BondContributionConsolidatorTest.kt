@@ -1,5 +1,7 @@
 package dev.agner.portfolio.usecase.bond.consolidation
 
+import dev.agner.portfolio.usecase.BondConsolidationContextFixture
+import dev.agner.portfolio.usecase.BondMaturityConsolidationContextFixture
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationRecord
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondCalculationResult
 import dev.agner.portfolio.usecase.bond.consolidation.model.BondContributionConsolidationContext
@@ -10,8 +12,6 @@ import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.TaxInci
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.YieldCreation
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatementCreation.YieldRedeemCreation
 import dev.agner.portfolio.usecase.bondCalculationContext
-import dev.agner.portfolio.usecase.bondConsolidationContext
-import dev.agner.portfolio.usecase.bondMaturityConsolidationContext
 import dev.agner.portfolio.usecase.iofIncidence
 import dev.agner.portfolio.usecase.rendaIncidence
 import dev.agner.portfolio.usecase.tax.TaxService
@@ -25,7 +25,6 @@ import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-@Suppress("MaximumLineLength")
 class BondContributionConsolidatorTest : StringSpec({
 
     val calculator = mockk<BondCalculator>()
@@ -39,7 +38,7 @@ class BondContributionConsolidatorTest : StringSpec({
         val date1 = LocalDate.parse("2024-01-16")
         val date2 = LocalDate.parse("2024-01-17")
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1, date2),
             principal = BigDecimal("10000.00"),
@@ -52,7 +51,7 @@ class BondContributionConsolidatorTest : StringSpec({
                 date1 to SellContext(5, BigDecimal("500.00")),
                 date2 to SellContext(7, BigDecimal("500.00")),
             ),
-        )
+        ).toContext()
 
         val taxes1 = setOf(iofIncidence(), rendaIncidence())
         val taxes2 = setOf(iofIncidence(), rendaIncidence())
@@ -123,7 +122,7 @@ class BondContributionConsolidatorTest : StringSpec({
         val bondOrderId = 1
         val date1 = LocalDate.parse("2024-01-16")
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1),
             principal = BigDecimal("1000.00"),
@@ -134,7 +133,7 @@ class BondContributionConsolidatorTest : StringSpec({
             sellOrders = mapOf(
                 date1 to SellContext(5, BigDecimal("1500.00")),
             ),
-        )
+        ).toContext()
 
         coEvery {
             calculator.calculate(
@@ -174,7 +173,7 @@ class BondContributionConsolidatorTest : StringSpec({
         val date2 = LocalDate.parse("2024-01-15") // Earlier date but added later
         val date3 = LocalDate.parse("2024-01-25")
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1, date2, date3),
             principal = BigDecimal("10000.00"),
@@ -184,7 +183,7 @@ class BondContributionConsolidatorTest : StringSpec({
                 date2 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.40")),
                 date3 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.60")),
             ),
-        )
+        ).toContext()
 
         // Mock responses for each calculation in chronological order
         coEvery {
@@ -246,13 +245,13 @@ class BondContributionConsolidatorTest : StringSpec({
     }
 
     "should handle empty date range" {
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = 1,
             dateRange = listOf(),
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldRates = emptyMap(),
-        )
+        ).toContext()
 
         val result = service.calculateBondo(consolidationContext)
 
@@ -268,7 +267,7 @@ class BondContributionConsolidatorTest : StringSpec({
         val date2 = LocalDate.parse("2024-01-17")
         val date3 = LocalDate.parse("2024-01-18") // This date should not be processed
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1, date2, date3),
             principal = BigDecimal("1000.00"),
@@ -284,7 +283,7 @@ class BondContributionConsolidatorTest : StringSpec({
                 date1 to SellContext(5, BigDecimal("800.00")),
                 date2 to SellContext(6, BigDecimal("900.00")),
             ),
-        )
+        ).toContext()
 
         // First calculation: reduces principal and yield but doesn't reach zero
         coEvery {
@@ -353,13 +352,13 @@ class BondContributionConsolidatorTest : StringSpec({
         val bondOrderId = 1
         val date1 = LocalDate.parse("2024-01-16")
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1),
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("0.00"),
             yieldRates = emptyMap(),
-        )
+        ).toContext()
 
         coEvery {
             calculator.calculate(
@@ -393,7 +392,7 @@ class BondContributionConsolidatorTest : StringSpec({
         val date2 = LocalDate.parse("2024-01-17")
         val fullRedemptionDate = LocalDate.parse("2024-01-17")
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1, date2),
             principal = BigDecimal("10000.00"),
@@ -406,7 +405,7 @@ class BondContributionConsolidatorTest : StringSpec({
                 id = 10,
                 date = fullRedemptionDate,
             ),
-        )
+        ).toContext()
 
         coEvery {
             calculator.calculate(
@@ -466,7 +465,7 @@ class BondContributionConsolidatorTest : StringSpec({
         val bondOrderId = 1
         val date1 = LocalDate.parse("2024-01-16")
 
-        val consolidationContext = bondConsolidationContext(
+        val consolidationContext = BondConsolidationContextFixture(
             bondOrderId = bondOrderId,
             dateRange = listOf(date1),
             principal = BigDecimal("10000.00"),
@@ -475,7 +474,7 @@ class BondContributionConsolidatorTest : StringSpec({
                 date1 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.50")),
             ),
             fullRedemption = null, // No full redemption
-        )
+        ).toContext()
 
         coEvery {
             calculator.calculate(
@@ -514,14 +513,14 @@ class BondContributionConsolidatorTest : StringSpec({
         val maturityDate = LocalDate.parse("2024-06-30")
         val contributionDate = LocalDate.parse("2024-01-01")
 
-        val maturityContext = bondMaturityConsolidationContext(
+        val maturityContext = BondMaturityConsolidationContextFixture(
             bondOrderId = bondOrderId,
             maturityOrderId = maturityOrderId,
             date = maturityDate,
             contributionDate = contributionDate,
             principal = BigDecimal("10000.00"),
             yieldAmount = BigDecimal("500.00"),
-        )
+        ).toContext()
 
         val taxes = setOf(iofIncidence(), rendaIncidence())
 
@@ -577,14 +576,14 @@ class BondContributionConsolidatorTest : StringSpec({
         val maturityDate = LocalDate.parse("2024-12-31")
         val contributionDate = LocalDate.parse("2024-01-15")
 
-        val maturityContext = bondMaturityConsolidationContext(
+        val maturityContext = BondMaturityConsolidationContextFixture(
             bondOrderId = bondOrderId,
             maturityOrderId = maturityOrderId,
             date = maturityDate,
             contributionDate = contributionDate,
             principal = BigDecimal("5000.00"),
             yieldAmount = BigDecimal("0.00"),
-        )
+        ).toContext()
 
         val taxes = setOf(rendaIncidence())
 
@@ -629,14 +628,14 @@ class BondContributionConsolidatorTest : StringSpec({
         val maturityDate = LocalDate.parse("2024-09-15")
         val contributionDate = LocalDate.parse("2024-06-01")
 
-        val maturityContext = bondMaturityConsolidationContext(
+        val maturityContext = BondMaturityConsolidationContextFixture(
             bondOrderId = bondOrderId,
             maturityOrderId = maturityOrderId,
             date = maturityDate,
             contributionDate = contributionDate,
             principal = BigDecimal("0.00"),
             yieldAmount = BigDecimal("1250.75"),
-        )
+        ).toContext()
 
         val taxes = setOf(iofIncidence(), rendaIncidence())
 

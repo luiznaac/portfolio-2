@@ -26,25 +26,27 @@ fun bondCalculationContext(
     taxes = taxes,
 )
 
-fun bondConsolidationContext(
-    bondOrderId: Int,
-    principal: BigDecimal,
-    yieldAmount: BigDecimal,
-    yieldRates: Map<LocalDate, BondContributionConsolidationContext.YieldRateContext>,
-    sellOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
-    contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
-    dateRange: List<LocalDate> = emptyList(),
-    fullRedemption: DownToZeroContext? = null,
-) = BondContributionConsolidationContext(
-    bondOrderId = bondOrderId,
-    contributionDate = contributionDate,
-    principal = principal,
-    yieldAmount = yieldAmount,
-    yieldRates = yieldRates,
-    redemptionOrders = sellOrders,
-    dateRange = dateRange,
-    downToZeroContext = fullRedemption,
-)
+data class BondConsolidationContextFixture(
+    val bondOrderId: Int,
+    val principal: BigDecimal,
+    val yieldAmount: BigDecimal,
+    val yieldRates: Map<LocalDate, BondContributionConsolidationContext.YieldRateContext>,
+    val sellOrders: Map<LocalDate, RedemptionContext> = emptyMap(),
+    val contributionDate: LocalDate = LocalDate.parse("2025-09-29"),
+    val dateRange: List<LocalDate> = emptyList(),
+    val fullRedemption: DownToZeroContext? = null,
+) {
+    fun toContext() = BondContributionConsolidationContext(
+        bondOrderId = bondOrderId,
+        contributionDate = contributionDate,
+        principal = principal,
+        yieldAmount = yieldAmount,
+        yieldRates = yieldRates,
+        redemptionOrders = sellOrders,
+        dateRange = dateRange,
+        downToZeroContext = fullRedemption,
+    )
+}
 
 fun floatingRateBond(
     maturityDate: LocalDate = LocalDate.parse("2025-09-29"),
@@ -68,18 +70,20 @@ fun bondConsolidationResult(
     yieldAmount = yieldAmount,
 )
 
-fun bondMaturityConsolidationContext(
-    bondOrderId: Int = 1,
-    maturityOrderId: Int = 100,
-    date: LocalDate = LocalDate.parse("2024-06-30"),
-    contributionDate: LocalDate = LocalDate.parse("2024-01-01"),
-    principal: BigDecimal = BigDecimal("10000.00"),
-    yieldAmount: BigDecimal = BigDecimal("500.00"),
-) = BondMaturityConsolidationContext(
-    bondOrderId = bondOrderId,
-    maturityOrderId = maturityOrderId,
-    date = date,
-    contributionDate = contributionDate,
-    principal = principal,
-    yieldAmount = yieldAmount,
-)
+data class BondMaturityConsolidationContextFixture(
+    val bondOrderId: Int = 1,
+    val maturityOrderId: Int = 100,
+    val date: LocalDate = LocalDate.parse("2024-06-30"),
+    val contributionDate: LocalDate = LocalDate.parse("2024-01-01"),
+    val principal: BigDecimal = BigDecimal("10000.00"),
+    val yieldAmount: BigDecimal = BigDecimal("500.00"),
+) {
+    fun toContext() = BondMaturityConsolidationContext(
+        bondOrderId = bondOrderId,
+        maturityOrderId = maturityOrderId,
+        date = date,
+        contributionDate = contributionDate,
+        principal = principal,
+        yieldAmount = yieldAmount,
+    )
+}

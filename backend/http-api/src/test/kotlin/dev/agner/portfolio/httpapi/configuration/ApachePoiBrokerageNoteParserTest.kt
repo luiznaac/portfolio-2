@@ -29,18 +29,13 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
         *rows,
     )
 
-    fun trade(date: String, side: String, market: String, ticker: String, qty: Number, price: Number): List<Any> {
-        val notional = qty.toDouble() * price.toDouble()
-        return listOf(date, side, market, "-", "XP INVESTIMENTOS CCTVM S/A.", ticker, qty, price, notional)
-    }
-
     describe("parsing a Negociação de Ativos export") {
 
         it("reads a buy and a sell, quantity always positive, price without float noise") {
             val result = parser.parse(
                 statement(
-                    trade("11/08/2026", "Compra", "Mercado à Vista", "PETR4", 100, 35.50),
-                    trade("11/08/2026", "Venda", "Mercado à Vista", "VALE3", 50, 70.25),
+                    TradeRow("11/08/2026", "Compra", "Mercado à Vista", "PETR4", 100, 35.50).toCells(),
+                    TradeRow("11/08/2026", "Venda", "Mercado à Vista", "VALE3", 50, 70.25).toCells(),
                 ),
             )
 
@@ -59,10 +54,10 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
             // execution, so a single order lands as several trades on the canonical ticker.
             val result = parser.parse(
                 statement(
-                    trade("10/08/2026", "Venda", "Mercado à Vista", "ALUP11", 100, 31.24),
-                    trade("11/08/2026", "Venda", "Mercado Fracionário", "ALUP11F", 13, 31.56),
-                    trade("11/08/2026", "Venda", "Mercado Fracionário", "B3SA3F", 6, 14.26),
-                    trade("10/08/2026", "Compra", "Mercado à Vista", "ROXO34", 80, 11.81),
+                    TradeRow("10/08/2026", "Venda", "Mercado à Vista", "ALUP11", 100, 31.24).toCells(),
+                    TradeRow("11/08/2026", "Venda", "Mercado Fracionário", "ALUP11F", 13, 31.56).toCells(),
+                    TradeRow("11/08/2026", "Venda", "Mercado Fracionário", "B3SA3F", 6, 14.26).toCells(),
+                    TradeRow("10/08/2026", "Compra", "Mercado à Vista", "ROXO34", 80, 11.81).toCells(),
                 ),
             )
 
@@ -71,7 +66,7 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
 
         it("keeps prices exact — a numeric 26.09 cell must not become 26.0900000000…") {
             val result = parser.parse(
-                statement(trade("11/08/2026", "Compra", "Mercado Fracionário", "ALOS3F", 7, 26.09)),
+                statement(TradeRow("11/08/2026", "Compra", "Mercado Fracionário", "ALOS3F", 7, 26.09).toCells()),
             )
 
             result.single().price shouldBe BigDecimal("26.09")
@@ -94,7 +89,7 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
         it("skips blank trailing rows") {
             val result = parser.parse(
                 statement(
-                    trade("11/08/2026", "Compra", "Mercado à Vista", "PETR4", 100, 35.50),
+                    TradeRow("11/08/2026", "Compra", "Mercado à Vista", "PETR4", 100, 35.50).toCells(),
                     listOf("", "", "", "", "", "", "", "", ""),
                 ),
             )
@@ -112,12 +107,26 @@ class ApachePoiBrokerageNoteParserTest : DescribeSpec({
         }
 
         it("fails loudly on an unrecognised trade side") {
-            val note = statement(trade("11/08/2026", "Aluguel", "Mercado à Vista", "PETR4", 100, 35.50))
+            val note = statement(TradeRow("11/08/2026", "Aluguel", "Mercado à Vista", "PETR4", 100, 35.50).toCells())
 
             shouldThrow<BrokerageNoteParseException> { parser.parse(note) }
         }
     }
 })
+
+private data class TradeRow(
+    val date: String,
+    val side: String,
+    val market: String,
+    val ticker: String,
+    val quantity: Number,
+    val price: Number,
+) {
+    fun toCells(): List<Any> {
+        val notional = quantity.toDouble() * price.toDouble()
+        return listOf(date, side, market, "-", "XP INVESTIMENTOS CCTVM S/A.", ticker, quantity, price, notional)
+    }
+}
 
 private fun xlsxOf(vararg rows: List<Any?>): ByteArray {
     val workbook = XSSFWorkbook()
