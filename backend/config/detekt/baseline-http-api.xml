@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LongParameterList:ApachePoiBrokerageNoteParserTest.kt$ApachePoiBrokerageNoteParserTest$(date: String, side: String, market: String, ticker: String, qty: Number, price: Number)</ID>
+    <ID>MagicNumber:StrategyReportParser.kt$StrategyReportDocument$3</ID>
+    <ID>MagicNumber:StrategyReportParser.kt$StrategyReportDocument$4</ID>
+    <ID>MagicNumber:StrategyReportParser.kt$StrategyReportDocument.Companion$4</ID>
+    <ID>MatchingDeclarationName:ControllerExtensions.kt$InvalidParameterException : DomainException</ID>
+    <ID>MaxLineLength:StrategyReportParser.kt$StrategyReportParser$/** Parses a document [shouldExecute] returned true for, or throws [dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException]. */</ID>
+    <ID>ReturnCount:GenericLineReportParser.kt$GenericLineReportParser$private fun targetRow(document: StrategyReportDocument, line: String): StrategyTarget?</ID>
+    <ID>ReturnCount:XpEquityCarteiraReportParser.kt$XpEquityCarteiraReportParser$private fun parseRow(document: StrategyReportDocument, line: String): StrategyTarget?</ID>
+    <ID>ReturnCount:XpFiiCarteiraReportParser.kt$XpFiiCarteiraReportParser$private fun parseRow(document: StrategyReportDocument, line: String): StrategyTarget?</ID>
+    <ID>ReturnCount:XpQuantCarteiraReportParser.kt$XpQuantCarteiraReportParser$private fun parseRow(document: StrategyReportDocument, line: String): StrategyTarget?</ID>
+    <ID>SwallowedException:StrategyReportParserResolver.kt$StrategyReportParserResolver$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:StrategyReportParserResolver.kt$StrategyReportParserResolver$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:XlsxSheetReader.kt$XlsxSheetReader.Companion$e: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

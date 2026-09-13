@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MatchingDeclarationName:HttpRequestService.kt$BaseHttpRequestTemplate</ID>
+    <ID>VariableNaming:ConsolidationTest.kt$ConsolidationTest$val bondId_withBuy = bondWithBuy()</ID>
+    <ID>VariableNaming:ConsolidationTest.kt$ConsolidationTest$val bondId_withFullRedemption = bondWithFullRedemption()</ID>
+    <ID>VariableNaming:ConsolidationTest.kt$ConsolidationTest$val bondId_withMaturity = bondWithMaturity()</ID>
+    <ID>VariableNaming:ConsolidationTest.kt$ConsolidationTest$val checkingAccountId_withDeposit = checkingAccountWithDeposit()</ID>
+    <ID>VariableNaming:ConsolidationTest.kt$ConsolidationTest$val checkingAccountId_withFullWithdraw = checkingAccountWithFullWithdraw()</ID>
+    <ID>VariableNaming:ConsolidationTest.kt$ConsolidationTest$val checkingAccountId_withMaturity = checkingAccountWithMaturity()</ID>
+  </CurrentIssues>
+</SmellBaseline>

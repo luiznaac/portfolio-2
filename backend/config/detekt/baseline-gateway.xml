@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:BacenGateway.kt$11</ID>
+    <ID>MagicNumber:BacenGateway.kt$12</ID>
+    <ID>MagicNumber:BacenGateway.kt$433</ID>
+    <ID>ProtectedMemberInFinalClass:BrapiGateway.kt$BrapiGateway$protected open suspend fun fetchQuote(asset: ListedAsset): Quote?</ID>
+    <ID>ReturnCount:BrapiGateway.kt$BrapiGateway$protected open suspend fun fetchQuote(asset: ListedAsset): Quote?</ID>
+    <ID>SwallowedException:HttpClientHealthCheck.kt$HttpClientHealthCheck$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:HttpClientHealthCheck.kt$HttpClientHealthCheck$e: Exception</ID>
+  </CurrentIssues>
+</SmellBaseline>

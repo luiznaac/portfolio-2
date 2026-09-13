@@ -1,0 +1,86 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:AllocationService.kt$AllocationService$suspend fun currentPlan(): AllocationPlan</ID>
+    <ID>CyclomaticComplexMethod:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$private fun calculateIOFRate(daysOfApplication: Int)</ID>
+    <ID>InvalidPackageDeclaration:KotlinxDatePeriodModule.kt$package dev.agner.chameidor.usecase.configuration.serializers</ID>
+    <ID>InvalidPackageDeclaration:KotlinxLocalDateModule.kt$package dev.agner.chameidor.usecase.configuration.serializers</ID>
+    <ID>InvalidPackageDeclaration:KotlinxLocalDateTimeModule.kt$package dev.agner.chameidor.usecase.configuration.serializers</ID>
+    <ID>LargeClass:BondConsolidationServiceTest.kt$BondConsolidationServiceTest : StringSpec</ID>
+    <ID>LargeClass:OrderPlanServiceTest.kt$OrderPlanServiceTest : StringSpec</ID>
+    <ID>LongParameterList:AllocationService.kt$AllocationService$( private val capitalSnapshotRepository: ICapitalSnapshotRepository, private val classTargetRepository: IAssetClassTargetRepository, private val subClassTargetRepository: IFixedIncomeSubClassTargetRepository, private val classificationRepository: IProductClassificationRepository, private val bondRepository: IBondRepository, private val checkingAccountRepository: ICheckingAccountRepository, private val listedAssetRepository: IListedAssetRepository, private val bondPositionService: BondPositionService, private val listedAssetPositionService: ListedAssetPositionService, private val calculator: RebalanceCalculator, private val clock: Clock, )</ID>
+    <ID>LongParameterList:BondConsolidationHelpers.kt$( bondOrderId: Int = 1, maturityOrderId: Int = 100, date: LocalDate = LocalDate.parse("2024-06-30"), contributionDate: LocalDate = LocalDate.parse("2024-01-01"), principal: BigDecimal = BigDecimal("10000.00"), yieldAmount: BigDecimal = BigDecimal("500.00"), )</ID>
+    <ID>LongParameterList:BondConsolidationHelpers.kt$( bondOrderId: Int, principal: BigDecimal, yieldAmount: BigDecimal, yieldRates: Map&lt;LocalDate, BondContributionConsolidationContext.YieldRateContext&gt;, sellOrders: Map&lt;LocalDate, RedemptionContext&gt; = emptyMap(), contributionDate: LocalDate = LocalDate.parse("2025-09-29"), dateRange: List&lt;LocalDate&gt; = emptyList(), fullRedemption: DownToZeroContext? = null, )</ID>
+    <ID>LongParameterList:CapitalGainsCalculatorTest.kt$MonthlyGainFixture$( month: LocalDate, isFii: Boolean, proceeds: BigDecimal, grossGain: BigDecimal, exempt: Boolean, lossCompensated: BigDecimal, taxableGain: BigDecimal, taxDue: BigDecimal, lossCarriedForward: BigDecimal, )</ID>
+    <ID>LongParameterList:ListedAssetConsolidator.kt$ListedAssetConsolidator$( private val listedAssetService: ListedAssetService, private val tradeService: TradeService, private val corporateActionService: CorporateActionService, private val quoteGateway: IQuoteGateway, private val calculator: AveragePriceCalculator, private val positionRepository: IListedAssetPositionRepository, private val clock: Clock, )</ID>
+    <ID>LongParameterList:OrderPlanService.kt$OrderPlanService$( asset: ListedAsset, summary: AttributionSummary, idealByStrategy: Map&lt;Int, BigDecimal&gt;, deltaByStrategy: Map&lt;Int, BigDecimal&gt;, strategyNames: Map&lt;Int, String&gt;, price: BigDecimal?, today: LocalDate, )</ID>
+    <ID>LongParameterList:OrderPlanService.kt$OrderPlanService$( private val strategyService: StrategyService, private val strategyWeightRepository: IStrategyWeightRepository, private val strategyEditionService: StrategyEditionService, private val allocationService: AllocationService, private val attributionService: AttributionService, private val listedAssetRepository: IListedAssetRepository, private val tradeRepository: ITradeRepository, private val quoteGateway: IQuoteGateway, private val transferMatcher: TransferMatcher, private val transferProposalRepository: ITransferProposalRepository, private val transferSettingsRepository: ITransferSettingsRepository, private val transaction: ITransactionTemplate, private val clock: Clock, )</ID>
+    <ID>LongParameterList:StepUpService.kt$StepUpService$( private val listedAssetRepository: IListedAssetRepository, private val tradeRepository: ITradeRepository, private val corporateActionRepository: ICorporateActionRepository, private val quoteGateway: IQuoteGateway, private val averagePriceCalculator: AveragePriceCalculator, private val orderPlanService: OrderPlanService, private val planner: StepUpPlanner, private val clock: Clock, )</ID>
+    <ID>LoopWithTooManyJumpStatements:StepUpPlanner.kt$StepUpPlanner$for</ID>
+    <ID>MagicNumber:AveragePriceCalculator.kt$AveragePriceCalculator.Accumulator$6</ID>
+    <ID>MagicNumber:AveragePriceCalculator.kt$AveragePriceCalculator.Accumulator$8</ID>
+    <ID>MagicNumber:BondCalculator.kt$0.01</ID>
+    <ID>MagicNumber:BondCalculator.kt$4</ID>
+    <ID>MagicNumber:BondCalculator.kt$8</ID>
+    <ID>MagicNumber:BondCalculator.kt$BondCalculator$6</ID>
+    <ID>MagicNumber:BondConsolidationService.kt$BondConsolidationService$100</ID>
+    <ID>MagicNumber:BondContributionConsolidationContext.kt$BondContributionConsolidationContext.YieldRateContext$4</ID>
+    <ID>MagicNumber:BondPositionService.kt$BondPositionService$100</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$10</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$11</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$12</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$13</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$14</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$15</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$16</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$17</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$18</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$19</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$20</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$21</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$22</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$23</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$24</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$25</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$26</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$27</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$28</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$29</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$3</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$4</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$5</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$6</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$7</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$8</ID>
+    <ID>MagicNumber:IOFIncidenceCalculator.kt$IOFIncidenceCalculator$9</ID>
+    <ID>MagicNumber:IncomeService.kt$IncomeService$4</ID>
+    <ID>MagicNumber:IndexValueService.kt$IndexValueService$100</ID>
+    <ID>MagicNumber:MonthlyCloseService.kt$MonthlyCloseService$6</ID>
+    <ID>MagicNumber:RendaIncidenceCalculator.kt$RendaIncidenceCalculator$180</ID>
+    <ID>MagicNumber:RendaIncidenceCalculator.kt$RendaIncidenceCalculator$360</ID>
+    <ID>MagicNumber:RendaIncidenceCalculator.kt$RendaIncidenceCalculator$720</ID>
+    <ID>MagicNumber:StepUpPlanner.kt$StepUpPlanner$8</ID>
+    <ID>MagicNumber:YieldRateService.kt$YieldRateService$20</ID>
+    <ID>MagicNumber:YieldRateService.kt$YieldRateService$8</ID>
+    <ID>MaxLineLength:BondConsolidationServiceTest.kt$BondConsolidationServiceTest$// Doing this so that I don't have to rewrite the whole test class and I ensure that the refactor hasn't broken anything</ID>
+    <ID>MaxLineLength:BondContributionConsolidatorTest.kt$BondContributionConsolidatorTest$date3 to BondContributionConsolidationContext.YieldRateContext(BigDecimal("0.70"))</ID>
+    <ID>MaxLineLength:DriftAlert.kt$DriftAlert$/** One AssetClass whose current weight has drifted more than the threshold away from its ideal, in percentage points. */</ID>
+    <ID>MaxLineLength:IListedAssetRepository.kt$IListedAssetRepository$/** Closes the current ticker-history entry and opens a new one. See [dev.agner.portfolio.usecase.listedasset.model.TickerHistoryEntry]. */</ID>
+    <ID>MaxLineLength:ListedAssetPosition.kt$ListedAssetPosition$*</ID>
+    <ID>MaxLineLength:TransferMatcher.kt$TransferMatcher$*</ID>
+    <ID>ReturnCount:BondCalculator.kt$BondCalculator$private fun BondCalculationContext.calculateRedemption( yieldedAmount: BigDecimal, fullRedemption: Boolean, ): RedemptionCalculation</ID>
+    <ID>ReturnCount:BondCalculator.kt$private fun Set&lt;TaxIncidence&gt;.calculate( redeemedNetAmount: BigDecimal, netAmount: BigDecimal, grossAmount: BigDecimal, ): Set&lt;Pair&lt;TaxIncidence, BigDecimal&gt;&gt;</ID>
+    <ID>ReturnCount:OrderPlanService.kt$OrderPlanService$private suspend fun reconcileProposal( month: LocalDate, priced: PricedMatch, strategyNames: Map&lt;Int, String&gt;, threshold: BigDecimal, ): TransferProposal?</ID>
+    <ID>ThrowsCount:StrategyEditionService.kt$StrategyEditionService$private fun validate(parsed: ParsedStrategyReport): ParsedStrategyReport</ID>
+    <ID>TooGenericExceptionCaught:BrokerageNoteService.kt$BrokerageNoteService$e: Exception</ID>
+    <ID>TooManyFunctions:AllocationService.kt$AllocationService</ID>
+    <ID>TooManyFunctions:CommonExtensions.kt$dev.agner.portfolio.usecase.commons.CommonExtensions.kt</ID>
+    <ID>TooManyFunctions:OrderPlanService.kt$OrderPlanService</ID>
+    <ID>UnusedPrivateMember:BondCalculator.kt$private fun Double.toZeroIfTooSmall()</ID>
+    <ID>UseCheckOrError:BondConsolidationService.kt$BondConsolidationService$throw IllegalStateException("There is more than one remaining sell")</ID>
+    <ID>UseRequire:BondOrderService.kt$BondOrderService$throw IllegalArgumentException("Cannot create a full redemption order with an amount")</ID>
+    <ID>UseRequire:BondOrderService.kt$BondOrderService$throw IllegalArgumentException("Cannot create a maturity order from an external source")</ID>
+    <ID>UseRequire:BondService.kt$BondService$throw IllegalArgumentException("Cannot create a bond with a weekend maturity date")</ID>
+  </CurrentIssues>
+</SmellBaseline>

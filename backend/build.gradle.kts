@@ -26,6 +26,11 @@ subprojects {
 	group = "dev.agner.portfolio"
 	version = "1.0"
 
+	// The baseline grandfathers the findings that existed when the built-in rule sets were first
+	// switched on. New violations fail the build (`maxIssues: 0`); shrink the baseline as the
+	// existing debt is paid down. Formatting rules stay live and are not baselined.
+	val detektBaseline = rootProject.file("config/detekt/baseline-$name.xml")
+
 	apply(plugin = "kotlin")
 	apply(plugin = "jacoco")
 	apply(plugin = "kotlin-spring")
@@ -52,10 +57,10 @@ subprojects {
 
 	tasks.withType<Detekt> {
 		parallel = true
-		disableDefaultRuleSets = true
 		buildUponDefaultConfig = true
 		autoCorrect = true
 		ignoreFailures = false
+		baseline.set(detektBaseline)
 		setSource(files(projectDir))
 		include("*/.kt", "*/.kts")
 		config.setFrom(files("$rootDir/config/detekt/config.yml", "$rootDir/config/detekt/format.yml"))
