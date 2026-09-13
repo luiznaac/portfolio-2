@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.trade
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.persistence.listedasset.ListedAssetTable
 import dev.agner.portfolio.usecase.trade.model.Trade
@@ -13,8 +14,8 @@ import org.jetbrains.exposed.v1.datetime.datetime
 object TradeTable : IntIdTable("trade") {
     val listedAsset = reference("listed_asset_id", ListedAssetTable.id)
     val date = date("date")
-    val quantity = decimal("quantity", 18, 8)
-    val price = decimal("price", 12, 4)
+    val quantity = decimal("quantity", ColumnSizes.QUANTITY_PRECISION, ColumnSizes.QUANTITY_SCALE)
+    val price = decimal("price", ColumnSizes.PRICE_PRECISION, ColumnSizes.PRICE_SCALE)
     val createdAt = datetime("created_at")
 
     init { index(null, false, listedAsset, date) }

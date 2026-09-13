@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.listedasset
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
@@ -9,7 +10,7 @@ import org.jetbrains.exposed.v1.datetime.datetime
 
 object ListedAssetTickerHistoryTable : IntIdTable("listed_asset_ticker_history") {
     val listedAsset = reference("listed_asset_id", ListedAssetTable.id)
-    val ticker = varchar("ticker", 12)
+    val ticker = varchar("ticker", ColumnSizes.TICKER_LENGTH)
     val effectiveFrom = date("effective_from")
     val effectiveTo = date("effective_to").nullable()
     val createdAt = datetime("created_at")

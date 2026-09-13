@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.allocation
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.allocation.model.AssetClass
 import dev.agner.portfolio.usecase.allocation.model.AssetClassTarget
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -10,8 +11,8 @@ import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.datetime
 
 object AssetClassTargetTable : IntIdTable("asset_class_target") {
-    val assetClass = varchar("asset_class", 20)
-    val weight = decimal("weight", 7, 4)
+    val assetClass = varchar("asset_class", ColumnSizes.ENUM_NAME_LENGTH)
+    val weight = decimal("weight", ColumnSizes.WEIGHT_PRECISION, ColumnSizes.WEIGHT_SCALE)
     val effectiveFrom = date("effective_from")
     val createdAt = datetime("created_at")
 

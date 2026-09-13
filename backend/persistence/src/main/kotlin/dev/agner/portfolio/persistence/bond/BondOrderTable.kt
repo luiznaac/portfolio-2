@@ -2,6 +2,7 @@ package dev.agner.portfolio.persistence.bond
 
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Buy
 import dev.agner.portfolio.usecase.bond.model.BondOrder.Contribution.Deposit
 import dev.agner.portfolio.usecase.bond.model.BondOrder.DownToZero.FullRedemption
@@ -21,9 +22,9 @@ import kotlin.time.ExperimentalTime
 object BondOrderTable : IntIdTable("bond_order") {
     val bondId = reference("bond_id", BondTable.id).nullable()
     val checkingAccountId = reference("checking_account_id", CheckingAccountTable.id).nullable()
-    val type = varchar("type", 20)
+    val type = varchar("type", ColumnSizes.ENUM_NAME_LENGTH)
     val date = date("date")
-    val amount = decimal("amount", 12, 2).nullable()
+    val amount = decimal("amount", ColumnSizes.MONEY_PRECISION, ColumnSizes.MONEY_SCALE).nullable()
     val createdAt = datetime("created_at")
 
     init { index(null, false, bondId, type) }

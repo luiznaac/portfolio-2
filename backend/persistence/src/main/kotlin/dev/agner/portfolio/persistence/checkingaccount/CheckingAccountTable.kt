@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.checkingaccount
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.persistence.index.IndexEntity
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.usecase.checkingaccount.model.CheckingAccount
@@ -14,10 +15,10 @@ import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 object CheckingAccountTable : IntIdTable("checking_account") {
-    val name = varchar("name", 100)
-    val value = decimal("value", 8, 4)
+    val name = varchar("name", ColumnSizes.NAME_LENGTH)
+    val value = decimal("value", ColumnSizes.RATE_PRECISION, ColumnSizes.RATE_SCALE)
     val index = reference("index_id", IndexTable.id)
-    val maturityDuration = varchar("maturity_duration", 5)
+    val maturityDuration = varchar("maturity_duration", ColumnSizes.MATURITY_DURATION_LENGTH)
     val createdAt = datetime("created_at")
 }
 

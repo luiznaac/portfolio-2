@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.index
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.index.model.IndexValue
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
@@ -13,7 +14,7 @@ import kotlin.time.ExperimentalTime
 object IndexValueTable : IntIdTable("index_value") {
     val indexId = reference("index_id", IndexTable.id)
     val date = date("date")
-    val value = decimal("value", 12, 8)
+    val value = decimal("value", ColumnSizes.INDEX_VALUE_PRECISION, ColumnSizes.INDEX_VALUE_SCALE)
     val createdAt = datetime("created_at")
 
     init { uniqueIndex(indexId, date) }

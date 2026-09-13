@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.corporateaction
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.persistence.listedasset.ListedAssetTable
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
@@ -16,11 +17,15 @@ import org.jetbrains.exposed.v1.datetime.datetime
 
 object CorporateActionTable : IntIdTable("corporate_action") {
     val listedAsset = reference("listed_asset_id", ListedAssetTable.id)
-    val type = varchar("type", 20)
+    val type = varchar("type", ColumnSizes.ENUM_NAME_LENGTH)
     val date = date("date")
-    val ratio = decimal("ratio", 18, 8).nullable()
-    val valuePerNewShare = decimal("value_per_new_share", 12, 4).nullable()
-    val newTicker = varchar("new_ticker", 12).nullable()
+    val ratio = decimal("ratio", ColumnSizes.RATIO_PRECISION, ColumnSizes.RATIO_SCALE).nullable()
+    val valuePerNewShare = decimal(
+        "value_per_new_share",
+        ColumnSizes.PRICE_PRECISION,
+        ColumnSizes.PRICE_SCALE,
+    ).nullable()
+    val newTicker = varchar("new_ticker", ColumnSizes.TICKER_LENGTH).nullable()
     val createdAt = datetime("created_at")
 
     init { index(null, false, listedAsset, date) }

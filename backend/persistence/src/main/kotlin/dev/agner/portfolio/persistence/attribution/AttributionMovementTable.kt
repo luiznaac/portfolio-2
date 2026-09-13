@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.attribution
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.persistence.listedasset.ListedAssetTable
 import dev.agner.portfolio.persistence.strategy.StrategyEntity
@@ -17,9 +18,9 @@ object AttributionMovementTable : IntIdTable("attribution_movement") {
     val listedAsset = reference("listed_asset_id", ListedAssetTable.id)
     val strategy = reference("strategy_id", StrategyTable.id)
     val date = date("date")
-    val quantity = decimal("quantity", 18, 8)
-    val reason = varchar("reason", 20)
-    val note = varchar("note", 255).nullable()
+    val quantity = decimal("quantity", ColumnSizes.QUANTITY_PRECISION, ColumnSizes.QUANTITY_SCALE)
+    val reason = varchar("reason", ColumnSizes.ENUM_NAME_LENGTH)
+    val note = varchar("note", ColumnSizes.NOTE_LENGTH).nullable()
     val createdAt = datetime("created_at")
 
     init { index(null, false, listedAsset, date) }

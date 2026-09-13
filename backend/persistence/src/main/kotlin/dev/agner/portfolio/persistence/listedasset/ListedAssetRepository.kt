@@ -9,6 +9,10 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
 
+// No trades can predate the asset's own creation, so any date far enough in the past works as the
+// opening bound of the first ticker-history entry.
+private const val TICKER_HISTORY_OPENING_YEAR = 1970
+
 @Component
 class ListedAssetRepository(
     private val clock: Clock,
@@ -36,9 +40,7 @@ class ListedAssetRepository(
         ListedAssetTickerHistoryEntity.new {
             listedAsset = entity
             ticker = creation.ticker
-            // No trades can predate the asset's own creation, so any date far enough in the past
-            // works as the opening bound of the first ticker-history entry.
-            effectiveFrom = LocalDate(1970, 1, 1)
+            effectiveFrom = LocalDate(TICKER_HISTORY_OPENING_YEAR, 1, 1)
             effectiveTo = null
             createdAt = now
         }

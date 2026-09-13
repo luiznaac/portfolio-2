@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.strategy
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.strategy.model.StrategyWeight
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
@@ -10,7 +11,7 @@ import org.jetbrains.exposed.v1.datetime.datetime
 
 object StrategyWeightTable : IntIdTable("strategy_weight") {
     val strategy = reference("strategy_id", StrategyTable.id)
-    val weight = decimal("weight", 7, 4)
+    val weight = decimal("weight", ColumnSizes.WEIGHT_PRECISION, ColumnSizes.WEIGHT_SCALE)
     val effectiveFrom = date("effective_from")
     val createdAt = datetime("created_at")
 

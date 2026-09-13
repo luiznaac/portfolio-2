@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.allocation
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.allocation.model.CapitalSnapshot
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
@@ -10,8 +11,8 @@ import org.jetbrains.exposed.v1.datetime.datetime
 
 object CapitalSnapshotTable : IntIdTable("capital_snapshot") {
     val date = date("date").index()
-    val externalBalance = decimal("external_balance", 14, 2)
-    val plannedContribution = decimal("planned_contribution", 14, 2)
+    val externalBalance = decimal("external_balance", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
+    val plannedContribution = decimal("planned_contribution", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
     val createdAt = datetime("created_at")
 }
 

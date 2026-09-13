@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.listedasset
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.model.ListedAsset
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -9,10 +10,10 @@ import org.jetbrains.exposed.v1.dao.IntEntityClass
 import org.jetbrains.exposed.v1.datetime.datetime
 
 object ListedAssetTable : IntIdTable("listed_asset") {
-    val ticker = varchar("ticker", 12).uniqueIndex()
-    val kind = varchar("kind", 10)
-    val name = varchar("name", 150)
-    val b3Identifier = varchar("b3_identifier", 100)
+    val ticker = varchar("ticker", ColumnSizes.TICKER_LENGTH).uniqueIndex()
+    val kind = varchar("kind", ColumnSizes.ASSET_KIND_LENGTH)
+    val name = varchar("name", ColumnSizes.LISTED_ASSET_NAME_LENGTH)
+    val b3Identifier = varchar("b3_identifier", ColumnSizes.B3_IDENTIFIER_LENGTH)
     val createdAt = datetime("created_at")
 }
 

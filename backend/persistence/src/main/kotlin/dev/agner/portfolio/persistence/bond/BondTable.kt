@@ -2,6 +2,7 @@ package dev.agner.portfolio.persistence.bond
 
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountEntity
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.persistence.index.IndexEntity
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.usecase.bond.model.Bond.FixedRateBond
@@ -17,9 +18,9 @@ import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 object BondTable : IntIdTable("bond") {
-    val name = varchar("name", 100)
-    val rateType = varchar("rate_type", 10)
-    val value = decimal("value", 8, 4)
+    val name = varchar("name", ColumnSizes.NAME_LENGTH)
+    val rateType = varchar("rate_type", ColumnSizes.RATE_TYPE_LENGTH)
+    val value = decimal("value", ColumnSizes.RATE_PRECISION, ColumnSizes.RATE_SCALE)
     val indexId = reference("index_id", IndexTable.id).nullable()
     val maturityDate = date("maturity_date")
     val checkingAccount = reference("checking_account_id", CheckingAccountTable.id).nullable()

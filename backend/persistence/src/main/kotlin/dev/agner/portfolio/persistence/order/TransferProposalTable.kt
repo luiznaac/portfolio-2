@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.order
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.persistence.listedasset.ListedAssetEntity
 import dev.agner.portfolio.persistence.listedasset.ListedAssetTable
 import dev.agner.portfolio.persistence.strategy.StrategyEntity
@@ -16,12 +17,16 @@ import org.jetbrains.exposed.v1.datetime.datetime
 object TransferProposalTable : IntIdTable("transfer_proposal") {
     val month = date("month")
     val listedAsset = reference("listed_asset_id", ListedAssetTable.id)
-    val ticker = varchar("ticker", 12)
+    val ticker = varchar("ticker", ColumnSizes.TICKER_LENGTH)
     val fromStrategy = reference("from_strategy_id", StrategyTable.id)
     val toStrategy = reference("to_strategy_id", StrategyTable.id)
-    val proposedQuantity = decimal("proposed_quantity", 18, 8)
-    val appliedQuantity = decimal("applied_quantity", 18, 8).nullable()
-    val status = enumerationByName("status", 20, TransferProposalStatus::class)
+    val proposedQuantity = decimal("proposed_quantity", ColumnSizes.QUANTITY_PRECISION, ColumnSizes.QUANTITY_SCALE)
+    val appliedQuantity = decimal(
+        "applied_quantity",
+        ColumnSizes.QUANTITY_PRECISION,
+        ColumnSizes.QUANTITY_SCALE,
+    ).nullable()
+    val status = enumerationByName("status", ColumnSizes.ENUM_NAME_LENGTH, TransferProposalStatus::class)
     val decidedAt = datetime("decided_at").nullable()
     val createdAt = datetime("created_at")
 

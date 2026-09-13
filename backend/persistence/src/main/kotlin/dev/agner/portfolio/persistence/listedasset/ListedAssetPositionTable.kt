@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.listedasset
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
@@ -10,9 +11,9 @@ import org.jetbrains.exposed.v1.datetime.datetime
 object ListedAssetPositionTable : IntIdTable("listed_asset_position") {
     val listedAsset = reference("listed_asset_id", ListedAssetTable.id)
     val date = date("date")
-    val principal = decimal("principal", 14, 2)
-    val yieldValue = decimal("yield", 14, 2)
-    val taxes = decimal("taxes", 14, 2)
+    val principal = decimal("principal", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
+    val yieldValue = decimal("yield", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
+    val taxes = decimal("taxes", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
     val createdAt = datetime("created_at")
 
     init { uniqueIndex(listedAsset, date) }

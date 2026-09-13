@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.bond
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.PrincipalRedeem
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.TaxIncidence
 import dev.agner.portfolio.usecase.bond.model.BondOrderStatement.Yield
@@ -17,9 +18,9 @@ import kotlin.time.ExperimentalTime
 object BondOrderStatementTable : IntIdTable("bond_order_statement") {
     val buyOrderId = reference("buy_order_id", BondOrderTable.id)
     val sellOrderId = reference("sell_order_id", BondOrderTable.id).nullable()
-    val type = varchar("type", 20)
+    val type = varchar("type", ColumnSizes.ENUM_NAME_LENGTH)
     val date = date("date")
-    val amount = decimal("amount", 12, 2)
+    val amount = decimal("amount", ColumnSizes.MONEY_PRECISION, ColumnSizes.MONEY_SCALE)
     val createdAt = datetime("created_at")
 
     init {

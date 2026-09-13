@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.bond
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.bond.position.model.BondOrderPosition
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
@@ -13,9 +14,9 @@ import kotlin.time.ExperimentalTime
 object BondOrderPositionTable : IntIdTable("bond_order_position") {
     val bondOrderId = reference("bond_order_id", BondOrderTable.id)
     val date = date("date")
-    val principal = decimal("principal", 14, 2)
-    val yieldValue = decimal("yield", 14, 2)
-    val taxes = decimal("taxes", 14, 2)
+    val principal = decimal("principal", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
+    val yieldValue = decimal("yield", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
+    val taxes = decimal("taxes", ColumnSizes.BALANCE_PRECISION, ColumnSizes.BALANCE_SCALE)
     val createdAt = datetime("created_at")
 }
 

@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.strategy
 
+import dev.agner.portfolio.persistence.configuration.ColumnSizes
 import dev.agner.portfolio.usecase.allocation.model.AssetClass
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -9,8 +10,8 @@ import org.jetbrains.exposed.v1.dao.IntEntityClass
 import org.jetbrains.exposed.v1.datetime.datetime
 
 object StrategyTable : IntIdTable("strategy") {
-    val name = varchar("name", 100)
-    val assetClass = varchar("asset_class", 20)
+    val name = varchar("name", ColumnSizes.NAME_LENGTH)
+    val assetClass = varchar("asset_class", ColumnSizes.ENUM_NAME_LENGTH)
     val createdAt = datetime("created_at")
 }
 
