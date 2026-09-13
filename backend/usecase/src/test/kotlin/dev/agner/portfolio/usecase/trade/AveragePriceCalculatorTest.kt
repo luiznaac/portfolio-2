@@ -55,7 +55,47 @@ class AveragePriceCalculatorTest : StringSpec({
         result.realizedGains.single().gain shouldBe BigDecimal("50.00")
     }
 
-    "rounds a recurring-decimal cost basis HALF_EVEN at scale 2" {
+    "rounds a half-cent cost basis down to the even digit at scale 2" {
+        val result = calculator.calculate(
+            trades = listOf(
+                buy(id = 1, date = LocalDate(2026, 1, 5), quantity = "2000", price = "1.0005"),
+                sell(id = 2, date = LocalDate(2026, 1, 10), quantity = "10", price = "2"),
+            ),
+            corporateActions = emptyList(),
+        )
+
+        // The average is exactly 1.000500, so the ten shares sold cost 10.005000: HALF_EVEN rounds
+        // to 10.00 (the even digit), while HALF_UP would give 10.01.
+        result.realizedGains.single().costBasis shouldBe BigDecimal("10.00")
+        result.realizedGains.single().proceeds shouldBe BigDecimal("20.00")
+        result.position shouldBe Position(
+            quantity = BigDecimal("1990"),
+            averagePrice = BigDecimal("1.000503"),
+            totalCost = BigDecimal("1991.00"),
+        )
+    }
+
+    "rounds a half-cent cost basis up to the even digit at scale 2" {
+        val result = calculator.calculate(
+            trades = listOf(
+                buy(id = 1, date = LocalDate(2026, 1, 5), quantity = "2000", price = "1.0015"),
+                sell(id = 2, date = LocalDate(2026, 1, 10), quantity = "10", price = "2"),
+            ),
+            corporateActions = emptyList(),
+        )
+
+        // The average is exactly 1.001500, so the ten shares sold cost 10.015000: HALF_EVEN rounds
+        // to 10.02 (the even digit), while HALF_DOWN would give 10.01.
+        result.realizedGains.single().costBasis shouldBe BigDecimal("10.02")
+        result.realizedGains.single().proceeds shouldBe BigDecimal("20.00")
+        result.position shouldBe Position(
+            quantity = BigDecimal("1990"),
+            averagePrice = BigDecimal("1.001497"),
+            totalCost = BigDecimal("1992.98"),
+        )
+    }
+
+    "rounds a recurring-decimal cost basis down at scale 2" {
         val result = calculator.calculate(
             trades = listOf(
                 buy(id = 1, date = LocalDate(2026, 1, 5), quantity = "1", price = "10"),
