@@ -68,4 +68,42 @@ class CapitalGainsServiceTest : StringSpec({
         month.taxableGain shouldBe BigDecimal("200.00")
         month.taxDue shouldBe BigDecimal("30.00")
     }
+
+    "should exempt a swing stock sale of a month within the ceiling" {
+        val stock = ListedAsset(1, "PETR4", AssetKind.STOCK, "Petrobras", "PETROBRAS")
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade.Buy(1, 1, LocalDate(2026, 8, 1), BigDecimal("100"), BigDecimal("10.00")),
+            Trade.Sell(2, 1, LocalDate(2026, 8, 15), BigDecimal("100"), BigDecimal("12.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(any()) } returns emptyList()
+
+        val result = service.monthlyReport()
+
+        val month = result.single()
+        // The buy is on a different date than the sale, so this is a swing trade: it stays
+        // exemption-eligible and, under the monthly ceiling, owes nothing.
+        month.exempt shouldBe true
+        month.taxableGain shouldBe BigDecimal("0.00")
+        month.taxDue shouldBe BigDecimal("0.00")
+        month.lossCarriedForward shouldBe BigDecimal("0.00")
+    }
+
+    "should not exempt a swing stock sale whose proceeds exceed the ceiling" {
+        val stock = ListedAsset(1, "PETR4", AssetKind.STOCK, "Petrobras", "PETROBRAS")
+        coEvery { listedAssetRepository.fetchAll() } returns listOf(stock)
+        coEvery { tradeRepository.fetchByAssetId(1) } returns listOf(
+            Trade.Buy(1, 1, LocalDate(2026, 8, 1), BigDecimal("3000"), BigDecimal("10.00")),
+            Trade.Sell(2, 1, LocalDate(2026, 8, 15), BigDecimal("3000"), BigDecimal("12.00")),
+        )
+        coEvery { corporateActionRepository.fetchByAssetId(any()) } returns emptyList()
+
+        val result = service.monthlyReport()
+
+        val month = result.single()
+        // Proceeds of 36,000 exceed the 20,000 monthly ceiling, so the whole gain is taxable.
+        month.exempt shouldBe false
+        month.taxableGain shouldBe BigDecimal("6000.00")
+        month.taxDue shouldBe BigDecimal("900.00")
+    }
 })

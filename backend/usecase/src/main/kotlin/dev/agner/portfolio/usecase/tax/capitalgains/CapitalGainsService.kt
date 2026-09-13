@@ -5,9 +5,9 @@ import dev.agner.portfolio.usecase.listedasset.model.AssetKind
 import dev.agner.portfolio.usecase.listedasset.repository.IListedAssetRepository
 import dev.agner.portfolio.usecase.tax.capitalgains.model.MonthlyCapitalGain
 import dev.agner.portfolio.usecase.trade.AveragePriceCalculator
+import dev.agner.portfolio.usecase.trade.model.Trade
 import dev.agner.portfolio.usecase.trade.repository.ITradeRepository
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
 
 /**
  * Orchestrates [CapitalGainsCalculator]: replays every asset's trades + corporate actions into
@@ -34,7 +34,7 @@ class CapitalGainsService(
 
             // A buy and a sell of the same ticker on the same day is a day trade — the same
             // definition the sale-ceiling meter applies on the ledger side (OrderPlanService).
-            val boughtDates = trades.filter { it.quantity > BigDecimal.ZERO }.map { it.date }.toSet()
+            val boughtDates = trades.filterIsInstance<Trade.Buy>().map { it.date }.toSet()
 
             gains.map { gain ->
                 TaxableSale(
