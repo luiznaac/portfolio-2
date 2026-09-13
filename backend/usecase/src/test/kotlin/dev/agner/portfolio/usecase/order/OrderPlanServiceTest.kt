@@ -67,18 +67,27 @@ class OrderPlanServiceTest : StringSpec({
         override suspend fun <T> execute(block: suspend () -> T): T = block()
     }
 
-    val service = OrderPlanService(
+    val strategyIdealProvider = StrategyIdealProvider(
         strategyService,
         strategyWeightRepository,
         strategyEditionService,
         allocationService,
+        clock,
+    )
+    val tradeLedger = TradeLedger(tradeRepository)
+    val assembler = OrderPlanAssembler(
+        strategyIdealProvider,
         attributionService,
         listedAssetRepository,
-        tradeRepository,
         quoteGateway,
         TransferMatcher(),
+        tradeLedger,
+    )
+    val service = OrderPlanService(
+        assembler,
         transferProposalRepository,
         transferSettingsRepository,
+        attributionService,
         transaction,
         clock,
     )

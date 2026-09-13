@@ -22,7 +22,7 @@ data class TransferMatch(
  * leave every strategy as close to its ideal as the ticker's total custody allows.
  *
  * Pure and stateless: no I/O, no clock, no repository. Everything it needs is in the arguments, so
- * it is unit-testable in isolation — see [OrderPlanService], which owns the fetching.
+ * it is unit-testable in isolation — see [OrderPlanAssembler], which owns the fetching.
  *
  * ### Where it sits in the plan
  *
