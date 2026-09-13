@@ -34,7 +34,7 @@ import java.time.ZoneOffset
  * older value.
  */
 @Service
-class BrapiGateway(
+open class BrapiGateway(
     private val client: HttpClient,
     @param:Value("\${gateways.brapi.host}") private val host: String,
     @param:Value("\${gateways.brapi.token}") private val token: String,

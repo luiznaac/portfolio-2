@@ -10,11 +10,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.path
 
-class BaseHttpRequestTemplate {
-    lateinit var path: String
-    var body: Any = emptyMap<String, String>()
-}
-
 suspend inline fun <reified T> getRequest(crossinline configure: BaseHttpRequestTemplate.() -> Unit) =
     getBean<HttpClient>().get("http://localhost:8080") {
         url {

@@ -52,29 +52,29 @@ class ConsolidationTest : StringSpec({
 
         hydrateIndexValues("CDI")["count"]!! shouldBe "87"
 
-        val checkingAccountId_withDeposit = checkingAccountWithDeposit()
-        val checkingAccountId_withMaturity = checkingAccountWithMaturity()
-        val checkingAccountId_withFullWithdraw = checkingAccountWithFullWithdraw()
+        val checkingAccountIdWithDeposit = checkingAccountWithDeposit()
+        val checkingAccountIdWithMaturity = checkingAccountWithMaturity()
+        val checkingAccountIdWithFullWithdraw = checkingAccountWithFullWithdraw()
 
-        val bondId_withBuy = bondWithBuy()
-        val bondId_withMaturity = bondWithMaturity()
-        val bondId_withFullRedemption = bondWithFullRedemption()
+        val bondIdWithBuy = bondWithBuy()
+        val bondIdWithMaturity = bondWithMaturity()
+        val bondIdWithFullRedemption = bondWithFullRedemption()
 
         scheduleConsolidations().also {
             it["BOND"]!! shouldBe listOf(
-                bondId_withBuy.toInt(),
-                bondId_withMaturity.toInt(),
-                bondId_withFullRedemption.toInt(),
+                bondIdWithBuy.toInt(),
+                bondIdWithMaturity.toInt(),
+                bondIdWithFullRedemption.toInt(),
             )
 
             it["CHECKING_ACCOUNT"]!! shouldBe listOf(
-                checkingAccountId_withDeposit.toInt(),
-                checkingAccountId_withMaturity.toInt(),
-                checkingAccountId_withFullWithdraw.toInt(),
+                checkingAccountIdWithDeposit.toInt(),
+                checkingAccountIdWithMaturity.toInt(),
+                checkingAccountIdWithFullWithdraw.toInt(),
             )
         }
 
-        bondPositions(bondId_withBuy).also { positions ->
+        bondPositions(bondIdWithBuy).also { positions ->
             positions.size shouldBe 87
             positions.last().also {
                 it["date"]!! shouldBe "2025-09-30"
@@ -83,7 +83,7 @@ class ConsolidationTest : StringSpec({
                 it["taxes"]!! shouldBe 44.21
             }
         }
-        bondPositions(bondId_withMaturity).also { positions ->
+        bondPositions(bondIdWithMaturity).also { positions ->
             positions.size shouldBe 66
             positions.last().also {
                 it["date"]!! shouldBe "2025-09-01"
@@ -92,7 +92,7 @@ class ConsolidationTest : StringSpec({
                 it["taxes"]!! shouldBe 0.0
             }
         }
-        bondPositions(bondId_withFullRedemption).also { positions ->
+        bondPositions(bondIdWithFullRedemption).also { positions ->
             positions.size shouldBe 3
             positions.last().also {
                 it["date"]!! shouldBe "2025-06-03"
@@ -102,7 +102,7 @@ class ConsolidationTest : StringSpec({
             }
         }
 
-        checkingAccountPositions(checkingAccountId_withDeposit).also { positions ->
+        checkingAccountPositions(checkingAccountIdWithDeposit).also { positions ->
             positions.size shouldBe 87
             positions.last().also {
                 it["date"]!! shouldBe "2025-09-30"
@@ -111,7 +111,7 @@ class ConsolidationTest : StringSpec({
                 it["taxes"]!! shouldBe 44.21
             }
         }
-        checkingAccountPositions(checkingAccountId_withMaturity).also { positions ->
+        checkingAccountPositions(checkingAccountIdWithMaturity).also { positions ->
             positions.size shouldBe 66
             positions.last().also {
                 it["date"]!! shouldBe "2025-09-01"
@@ -120,7 +120,7 @@ class ConsolidationTest : StringSpec({
                 it["taxes"]!! shouldBe 0.0
             }
         }
-        checkingAccountPositions(checkingAccountId_withFullWithdraw).also { positions ->
+        checkingAccountPositions(checkingAccountIdWithFullWithdraw).also { positions ->
             positions.size shouldBe 3
             positions.last().also {
                 it["date"]!! shouldBe "2025-06-03"
@@ -131,8 +131,8 @@ class ConsolidationTest : StringSpec({
         }
 
         scheduleConsolidations().also {
-            it["BOND"]!! shouldBe listOf(bondId_withBuy.toInt())
-            it["CHECKING_ACCOUNT"]!! shouldBe listOf(checkingAccountId_withDeposit.toInt())
+            it["BOND"]!! shouldBe listOf(bondIdWithBuy.toInt())
+            it["CHECKING_ACCOUNT"]!! shouldBe listOf(checkingAccountIdWithDeposit.toInt())
         }
     }
 })

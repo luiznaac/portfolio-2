@@ -121,8 +121,6 @@ private operator fun BigDecimal.minus(taxes: Set<Pair<TaxIncidence, BigDecimal>>
 private inline fun <T> List<T>.plusIf(condition: Boolean, block: () -> T): List<T> =
     if (condition) this.plus(block()) else this
 
-private fun Double.toZeroIfTooSmall() = if (this < 0.01) 0.0 else this
-
 private data class RedemptionCalculation(
     val redeemedPrincipal: BigDecimal,
     val redeemedYield: BigDecimal,

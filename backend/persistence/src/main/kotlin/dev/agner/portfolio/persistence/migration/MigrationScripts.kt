@@ -83,12 +83,12 @@ fun main() {
         password = mysql.password,
     )
 
+    // A callable reference exposes Exposed's `vararg tables` as an array parameter, so the table
+    // array is passed through as-is instead of copied by a spread operator.
+    val generateMigrationScript = MigrationUtils::generateMigrationScript
+
     val script = transaction {
-        MigrationUtils.generateMigrationScript(
-            *allTables,
-            scriptDirectory = MIGRATIONS_DIRECTORY,
-            scriptName = name,
-        )
+        generateMigrationScript(allTables, MIGRATIONS_DIRECTORY, name, true)
     }
     println("wrote ${script.absolutePath}")
 }
