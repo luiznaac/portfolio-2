@@ -8,6 +8,8 @@ import dev.agner.portfolio.usecase.order.InvalidTransferQuantityException
 import dev.agner.portfolio.usecase.order.OrderPlanService
 import dev.agner.portfolio.usecase.order.TransferProposalNotFoundException
 import dev.agner.portfolio.usecase.order.TransferProposalNotPendingException
+import dev.agner.portfolio.usecase.order.model.OrderPlan
+import dev.agner.portfolio.usecase.order.model.SaleCeiling
 import dev.agner.portfolio.usecase.order.model.TransferProposal
 import dev.agner.portfolio.usecase.order.model.TransferProposalStatus
 import dev.agner.portfolio.usecase.order.model.TransferProposalStatus.APPLIED
@@ -222,6 +224,40 @@ class OrderControllerTest : DescribeSpec({
             }
         }
     }
+
+    describe("the plan query and refresh command") {
+
+        it("returns 200 from GET /orders/plan and computes without refreshing") {
+            val planService = mockk<OrderPlanService>(relaxed = true)
+            coEvery { planService.computePlan() } returns emptyPlan()
+
+            testApplication {
+                application { installController(OrderController(planService)) }
+
+                val response = client.get("/orders/plan")
+
+                response.status shouldBe HttpStatusCode.OK
+                response.bodyAsText() shouldContain "\"orders\""
+                coVerify(exactly = 1) { planService.computePlan() }
+                coVerify(exactly = 0) { planService.refreshPlan() }
+            }
+        }
+
+        it("returns 200 from POST /orders/plan/refresh and refreshes exactly once") {
+            val planService = mockk<OrderPlanService>(relaxed = true)
+            coEvery { planService.refreshPlan() } returns emptyPlan()
+
+            testApplication {
+                application { installController(OrderController(planService)) }
+
+                val response = client.post("/orders/plan/refresh")
+
+                response.status shouldBe HttpStatusCode.OK
+                coVerify(exactly = 1) { planService.refreshPlan() }
+                coVerify(exactly = 0) { planService.computePlan() }
+            }
+        }
+    }
 })
 
 private fun proposal(status: TransferProposalStatus) = TransferProposal(
@@ -237,6 +273,16 @@ private fun proposal(status: TransferProposalStatus) = TransferProposal(
     appliedQuantity = if (status == PENDING) null else BigDecimal("5"),
     status = status,
     decidedAt = null,
+)
+
+private fun emptyPlan() = OrderPlan(
+    orders = emptyList(),
+    transferProposals = emptyList(),
+    saleCeiling = SaleCeiling(
+        monthSold = BigDecimal("0.00"),
+        limit = BigDecimal("20000.00"),
+        remaining = BigDecimal("20000.00"),
+    ),
 )
 
 private data class OrderTestApiError(val error: String, val message: String, val detail: String)
