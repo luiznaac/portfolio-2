@@ -3,7 +3,6 @@ package dev.agner.portfolio.usecase.strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyEdition
 import dev.agner.portfolio.usecase.strategy.model.StrategyEditionCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyTarget
-import dev.agner.portfolio.usecase.strategy.parser.IStrategyReportParser
 import dev.agner.portfolio.usecase.strategy.parser.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.parser.StrategyReportParseException
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyEditionRepository
@@ -14,16 +13,14 @@ import io.kotest.matchers.string.shouldContain
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 class StrategyEditionServiceTest : StringSpec({
     val repository = mockk<IStrategyEditionRepository>(relaxed = true)
-    val parser = mockk<IStrategyReportParser>()
     val diffCalculator = StrategyDiffCalculator()
-    val service = StrategyEditionService(repository, parser, diffCalculator)
+    val service = StrategyEditionService(repository, diffCalculator)
 
     val validTargets = listOf(
         StrategyTarget("PETR4", BigDecimal("0.60")),
@@ -34,13 +31,12 @@ class StrategyEditionServiceTest : StringSpec({
     beforeTest { clearAllMocks() }
 
     "should save a valid parsed report as a new edition" {
-        every { parser.parse(any()) } returns
-            ParsedStrategyReport(referenceDate, "changelog", validTargets)
+        val report = ParsedStrategyReport(referenceDate, "changelog", validTargets)
         val saved = StrategyEdition(1, strategyId = 5, referenceDate, "changelog", validTargets)
         coEvery { repository.save(any()) } returns saved
         coEvery { repository.exists(5, referenceDate) } returns false
 
-        val result = service.importReport(5, byteArrayOf(1))
+        val result = service.importReport(5, report)
 
         result shouldBe saved
         coVerify {
@@ -56,17 +52,16 @@ class StrategyEditionServiceTest : StringSpec({
     }
 
     "should reject a report with no targets" {
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, emptyList())
+        val report = ParsedStrategyReport(referenceDate, null, emptyList())
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "should reject a report with a non-B3 ticker" {
-        every { parser.parse(any()) } returns
-            ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("NOTATICKER", BigDecimal("1.0"))))
+        val report = ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("NOTATICKER", BigDecimal("1.0"))))
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
     }
 
     "should reject a report with a duplicated ticker even when the weights sum to 100%" {
@@ -74,19 +69,18 @@ class StrategyEditionServiceTest : StringSpec({
             StrategyTarget("PETR4", BigDecimal("0.50")),
             StrategyTarget("PETR4", BigDecimal("0.50")),
         )
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, duplicated)
+        val report = ParsedStrategyReport(referenceDate, null, duplicated)
 
-        val error = shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        val error = shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
 
         error.detail shouldContain "PETR4"
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "should reject a report whose weights sum below 100%" {
-        every { parser.parse(any()) } returns
-            ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("PETR4", BigDecimal("0.50"))))
+        val report = ParsedStrategyReport(referenceDate, null, listOf(StrategyTarget("PETR4", BigDecimal("0.50"))))
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
@@ -95,37 +89,37 @@ class StrategyEditionServiceTest : StringSpec({
             StrategyTarget("PETR4", BigDecimal("0.601")),
             StrategyTarget("VALE3", BigDecimal("0.40")),
         )
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, above100)
+        val report = ParsedStrategyReport(referenceDate, null, above100)
 
-        shouldThrow<StrategyReportParseException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyReportParseException> { service.importReport(5, report) }
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "should accept weights that sum exactly to 100%" {
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, validTargets)
+        val report = ParsedStrategyReport(referenceDate, null, validTargets)
         coEvery { repository.exists(5, referenceDate) } returns false
         coEvery { repository.save(any()) } returns StrategyEdition(1, 5, referenceDate, null, validTargets)
 
-        service.importReport(5, byteArrayOf(1))
+        service.importReport(5, report)
 
         coVerify { repository.save(any()) }
     }
 
     "should reject a duplicate reference date" {
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, validTargets)
+        val report = ParsedStrategyReport(referenceDate, null, validTargets)
         coEvery { repository.exists(5, referenceDate) } returns true
 
-        shouldThrow<StrategyEditionAlreadyExistsException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyEditionAlreadyExistsException> { service.importReport(5, report) }
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "should surface the domain exception when save hits the reference date constraint" {
-        every { parser.parse(any()) } returns ParsedStrategyReport(referenceDate, null, validTargets)
+        val report = ParsedStrategyReport(referenceDate, null, validTargets)
         coEvery { repository.exists(5, referenceDate) } returns false
         coEvery { repository.save(any()) } throws
             StrategyEditionAlreadyExistsException(5, referenceDate.toString())
 
-        shouldThrow<StrategyEditionAlreadyExistsException> { service.importReport(5, byteArrayOf(1)) }
+        shouldThrow<StrategyEditionAlreadyExistsException> { service.importReport(5, report) }
     }
 
     "fetchEditions should attach a diff to every edition but the first" {

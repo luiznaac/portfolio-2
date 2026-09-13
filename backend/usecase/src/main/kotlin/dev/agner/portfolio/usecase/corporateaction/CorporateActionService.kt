@@ -12,11 +12,11 @@ class CorporateActionService(
     private val listedAssetService: ListedAssetService,
 ) {
 
-    suspend fun create(creation: CorporateActionCreation) = repository.save(creation).also {
+    suspend fun create(assetId: Int, creation: CorporateActionCreation) = repository.save(assetId, creation).also {
         // A ticker change is dual-natured: it's an event in the asset's timeline (for replay) AND
         // it updates what the asset is currently called (for display, new trades, gateway lookups).
         if (creation is TickerChangeCreation) {
-            listedAssetService.changeTicker(creation.assetId, creation.newTicker, creation.date)
+            listedAssetService.changeTicker(assetId, creation.newTicker, creation.date)
         }
     }
 

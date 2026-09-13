@@ -7,5 +7,5 @@ interface IAttributionRepository {
 
     suspend fun fetchByAssetId(assetId: Int): List<AttributionMovement>
 
-    suspend fun save(creation: AttributionMovementCreation): AttributionMovement
+    suspend fun save(assetId: Int, creation: AttributionMovementCreation): AttributionMovement
 }

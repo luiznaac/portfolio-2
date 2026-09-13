@@ -26,9 +26,9 @@ class CorporateActionRepository(
             .map { it.toModel() }
     }
 
-    override suspend fun save(creation: CorporateActionCreation) = transaction {
-        val asset = ListedAssetEntity.findById(creation.assetId)
-            ?: throw IllegalArgumentException("Listed asset with ID ${creation.assetId} not found")
+    override suspend fun save(assetId: Int, creation: CorporateActionCreation) = transaction {
+        val asset = ListedAssetEntity.findById(assetId)
+            ?: throw IllegalArgumentException("Listed asset with ID $assetId not found")
 
         CorporateActionEntity.new {
             listedAsset = asset

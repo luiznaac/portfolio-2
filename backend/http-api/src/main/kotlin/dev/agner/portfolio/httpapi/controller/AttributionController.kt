@@ -27,7 +27,7 @@ class AttributionController(
                 val assetId = call.requiredInt("listed_asset_id")
                 val payload = call.receive<AttributionMovementCreation>()
 
-                call.respond(HttpStatusCode.Created, service.recordMovement(payload.copy(listedAssetId = assetId)))
+                call.respond(HttpStatusCode.Created, service.recordMovement(assetId, payload))
             }
         }
     }

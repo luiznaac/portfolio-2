@@ -1,19 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import goldenError from "../../../contracts/error-response.json";
 import { ApiError, api } from "./client.ts";
-import type { ApiErrorResponse } from "./types.ts";
 
-// Compile-time half of the contract: if the committed fixture stops matching the mirrored type,
-// `tsc` fails here. The backend's DomainExceptionContractTest asserts the other half (that the
-// API serialises exactly this body). See the plan's Fase 4.
-const contract: ApiErrorResponse = goldenError;
+// Shape of the error body the backend serialises for domain exceptions. The backend's
+// DomainExceptionContractTest asserts the API serialises exactly the committed golden fixture;
+// this is the compile-time half: if the fixture stops matching this type, `tsc` fails here.
+// (The full hand-mirrored types.ts contract is gone with the frontend reset — the scaffold
+// client only surfaces `status` + `message` on ApiError.) See the plan's Fase 4.
+interface GoldenErrorBody {
+  error: string;
+  message: string;
+  detail: string;
+}
+
+const contract: GoldenErrorBody = goldenError;
 
 describe("error response contract", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps the golden fixture aligned with ApiErrorResponse", () => {
+  it("keeps the golden fixture aligned with the error body shape", () => {
     expect(Object.keys(contract).sort()).toEqual(["detail", "error", "message"]);
   });
 
@@ -28,7 +35,7 @@ describe("error response contract", () => {
       ),
     );
 
-    const thrown = await api.listStrategies().then(
+    const thrown = await api.getHealth().then(
       () => {
         throw new Error("expected the request to reject");
       },
@@ -38,9 +45,7 @@ describe("error response contract", () => {
     expect(thrown).toBeInstanceOf(ApiError);
     expect(thrown).toMatchObject({
       status: 404,
-      code: contract.error,
-      detail: contract.detail,
-      message: contract.message,
+      message: contract.detail,
     });
   });
 });

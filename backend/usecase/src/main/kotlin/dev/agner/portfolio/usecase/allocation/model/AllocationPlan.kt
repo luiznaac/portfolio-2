@@ -2,10 +2,8 @@ package dev.agner.portfolio.usecase.allocation.model
 
 import java.math.BigDecimal
 
-// The output of RebalanceCalculator: Capital -> Classe -> (Renda Fixa only, for now) Sub-classe.
-// Ticker-level detail for Ações/FIIs needs per-strategy targets, which don't exist until Fase 2 —
-// so this tree stops one level short of the plan's full Capital -> Classe -> Estratégia -> Ticker
-// shape until then.
+// The output of RebalanceCalculator: capital -> class -> (fixed income only, for now) sub-class.
+// Ticker-level detail belongs to the order engine, which is where per-strategy targets resolve.
 data class AllocationPlan(
     val capital: BigDecimal,
     val classes: List<ClassNode>,

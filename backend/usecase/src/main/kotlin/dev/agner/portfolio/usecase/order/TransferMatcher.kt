@@ -1,9 +1,21 @@
 package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.commons.isZero
-import dev.agner.portfolio.usecase.order.model.TransferSuggestion
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
+
+/**
+ * One pure match, before any persisted lifecycle — see
+ * [dev.agner.portfolio.usecase.order.model.TransferProposal] for the stored shape
+ * [OrderPlanService] reconciles this against.
+ */
+data class TransferMatch(
+    val listedAssetId: Int,
+    val ticker: String,
+    val fromStrategyId: Int,
+    val toStrategyId: Int,
+    val quantity: BigDecimal,
+)
 
 /**
  * Turns one ticker's per-strategy deltas into the smallest set of attribution transfers that would
@@ -43,26 +55,26 @@ import java.math.BigDecimal
  *
  * ### Preconditions (the caller's job)
  *
- * - Deltas arrive keyed by strategy id; names are resolved by the caller when it renders the
- *   suggestions, not carried on the model.
+ * - Deltas arrive keyed by strategy id; names are resolved by the caller when it persists the
+ *   proposal, not carried on the model.
  * - Zero deltas may be present and are ignored by the two `filterValues` below.
  */
 @Component
 class TransferMatcher {
 
     /**
-     * Pairs this ticker's excess against its shortage and returns the resulting suggestions,
+     * Pairs this ticker's excess against its shortage and returns the resulting matches,
      * largest magnitudes first. Returns an empty list when nothing can be moved.
      */
     fun match(
         listedAssetId: Int,
         ticker: String,
         deltasByStrategy: Map<Int, BigDecimal>,
-    ): List<TransferSuggestion> = pairRemaining(
+    ): List<TransferMatch> = pairRemaining(
         listedAssetId = listedAssetId,
         ticker = ticker,
         // Largest excess first and largest shortage first: the greedy pairing then starts with the
-        // meatiest pair, which tends to cover the most deltas in the fewest suggestions.
+        // meatiest pair, which tends to cover the most deltas in the fewest matches.
         excess = deltasByStrategy
             .filterValues { it > BigDecimal.ZERO }
             .toList()
@@ -77,7 +89,7 @@ class TransferMatcher {
 
     /**
      * Walks both magnitude-sorted queues in lockstep, consuming the smaller of the two sides at
-     * each step. Tail-recursive so the accumulated suggestions are passed along rather than held in
+     * each step. Tail-recursive so the accumulated matches are passed along rather than held in
      * a mutable list captured from the enclosing scope.
      */
     private tailrec fun pairRemaining(
@@ -85,17 +97,17 @@ class TransferMatcher {
         ticker: String,
         excess: List<Pair<Int, BigDecimal>>,
         shortage: List<Pair<Int, BigDecimal>>,
-        suggestions: List<TransferSuggestion> = emptyList(),
-    ): List<TransferSuggestion> {
+        matches: List<TransferMatch> = emptyList(),
+    ): List<TransferMatch> {
         // Either side running out ends the walk: whatever is left on the other side stays in the
         // net order, which is exactly what the order already accounts for.
-        if (excess.isEmpty() || shortage.isEmpty()) return suggestions
+        if (excess.isEmpty() || shortage.isEmpty()) return matches
 
         val (fromStrategyId, fromRemaining) = excess.first()
         val (toStrategyId, toRemaining) = shortage.first()
         val quantity = minOf(fromRemaining, toRemaining)
 
-        val suggestion = TransferSuggestion(
+        val match = TransferMatch(
             listedAssetId = listedAssetId,
             ticker = ticker,
             fromStrategyId = fromStrategyId,
@@ -120,7 +132,7 @@ class TransferMatcher {
             ticker = ticker,
             excess = remainingExcess,
             shortage = remainingShortage,
-            suggestions = suggestions + suggestion,
+            matches = matches + match,
         )
     }
 }

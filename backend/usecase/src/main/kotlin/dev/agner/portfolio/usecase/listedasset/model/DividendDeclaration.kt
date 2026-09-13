@@ -4,16 +4,19 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 enum class DividendType {
-    DIVIDENDO,
+    DIVIDEND,
+
+    /** Juros sobre Capital Próprio — a Brazilian instrument with no English equivalent. */
     JCP,
-    RENDIMENTO,
+
+    /** A fund's monthly distribution ("rendimento"), the FII equivalent of a dividend. */
+    FUND_INCOME,
 }
 
 /**
- * A provento as declared by B3, gross per share. This is NOT what lands in the account: JCP has
- * 15% withheld at source, DIVIDENDO and RENDIMENTO are tax-free for individuals. See the plan's
- * section on proventos for why this is reconciled against the broker statement rather than trusted
- * outright.
+ * A distribution as declared by B3, gross per share. This is NOT what lands in the account: JCP
+ * has IRRF withheld at source, while dividends and fund income are tax-free for individuals —
+ * which is why it is reconciled against the broker statement rather than trusted outright.
  */
 data class DividendDeclaration(
     val type: DividendType,

@@ -7,5 +7,5 @@ interface ICorporateActionRepository {
 
     suspend fun fetchByAssetId(assetId: Int): List<CorporateAction>
 
-    suspend fun save(creation: CorporateActionCreation): CorporateAction
+    suspend fun save(assetId: Int, creation: CorporateActionCreation): CorporateAction
 }

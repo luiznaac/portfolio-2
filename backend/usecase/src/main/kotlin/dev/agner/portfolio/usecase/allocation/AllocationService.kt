@@ -32,7 +32,7 @@ import java.time.Clock
 
 /**
  * Orchestrates the pieces RebalanceCalculator needs: latest capital, current targets, and each
- * tracked product's current value bucketed by AssetClass (and, for RENDA_FIXA, by
+ * tracked product's current value bucketed by AssetClass (and, for FIXED_INCOME, by
  * FixedIncomeSubClass). The calculator itself stays pure and untouched by any of this fetching.
  */
 @Service
@@ -88,7 +88,7 @@ class AllocationService(
         ) {
             val assetClass = overrides[productType to productId] ?: default
             currentByClass.merge(assetClass, value, BigDecimal::add)
-            if (assetClass == AssetClass.RENDA_FIXA && subClass != null) {
+            if (assetClass == AssetClass.FIXED_INCOME && subClass != null) {
                 currentBySubClass.merge(subClass, value, BigDecimal::add)
             }
         }
@@ -96,20 +96,20 @@ class AllocationService(
         for (bond in bondRepository.fetchAll()) {
             val value = bondPositionService.getByBondId(bond.id).lastOrNull()?.let { it.principal + it.yield }
                 ?: continue
-            add(BOND, bond.id, AssetClass.RENDA_FIXA, value, subClassOf(bond))
+            add(BOND, bond.id, AssetClass.FIXED_INCOME, value, subClassOf(bond))
         }
 
         for (account in checkingAccountRepository.fetchAll()) {
             val value = bondPositionService.getByCheckingAccountId(account.id).lastOrNull()
                 ?.let { it.principal + it.yield } ?: continue
-            add(CHECKING_ACCOUNT, account.id, AssetClass.RENDA_FIXA, value, subClassOf(account.indexId))
+            add(CHECKING_ACCOUNT, account.id, AssetClass.FIXED_INCOME, value, subClassOf(account.indexId))
         }
 
         for (asset in listedAssetRepository.fetchAll()) {
             val value = listedAssetPositionService.getByAssetId(asset.id).lastOrNull()
                 ?.let { it.principal + it.yield } ?: continue
             // No IndexId to derive a fixed-income subclass from if a listed asset gets
-            // reclassified into RENDA_FIXA — contributes to the class total, not a sub-bucket.
+            // reclassified into FIXED_INCOME — contributes to the class total, not a sub-bucket.
             add(LISTED_ASSET, asset.id, defaultClassOf(asset.kind), value, null)
         }
 
@@ -117,15 +117,15 @@ class AllocationService(
     }
 
     private fun defaultClassOf(kind: AssetKind): AssetClass = when (kind) {
-        AssetKind.FII -> AssetClass.REAL_STATE
-        AssetKind.STOCK, AssetKind.ETF, AssetKind.BDR -> AssetClass.ACOES
+        AssetKind.FII -> AssetClass.REAL_ESTATE
+        AssetKind.STOCK, AssetKind.ETF, AssetKind.BDR -> AssetClass.STOCKS
     }
 
     private fun subClassOf(bond: Bond): FixedIncomeSubClass =
-        if (bond is FloatingRateBond) subClassOf(bond.indexId) else FixedIncomeSubClass.PRE_FIXADO
+        if (bond is FloatingRateBond) subClassOf(bond.indexId) else FixedIncomeSubClass.FIXED_RATE
 
     private fun subClassOf(indexId: IndexId): FixedIncomeSubClass = when (indexId) {
-        IndexId.CDI, IndexId.SELIC -> FixedIncomeSubClass.POS_FIXADO
-        IndexId.IPCA -> FixedIncomeSubClass.INFLACAO
+        IndexId.CDI, IndexId.SELIC -> FixedIncomeSubClass.FLOATING_RATE
+        IndexId.IPCA -> FixedIncomeSubClass.INFLATION_LINKED
     }
 }

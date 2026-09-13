@@ -1,0 +1,116 @@
+package dev.agner.portfolio.httpapi.configuration
+
+import dev.agner.portfolio.usecase.income.model.ReceivedIncome
+import dev.agner.portfolio.usecase.income.parser.IncomeStatementParseException
+import dev.agner.portfolio.usecase.listedasset.model.DividendType.DIVIDEND
+import dev.agner.portfolio.usecase.listedasset.model.DividendType.JCP
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.core.spec.style.DescribeSpec
+import io.kotest.matchers.shouldBe
+import kotlinx.datetime.LocalDate
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import java.io.ByteArrayOutputStream
+import java.math.BigDecimal
+
+/**
+ * No real B3 "Movimentação" export was available when this parser was written — same caveat as
+ * [ApachePoiBrokerageNoteParserTest]: these spreadsheets are synthesized from the documented
+ * column layout, not a real sample.
+ */
+class ApachePoiIncomeStatementParserTest : DescribeSpec({
+
+    val parser = ApachePoiIncomeStatementParser()
+
+    describe("parsing a Movimentação export") {
+
+        it("extracts dividend and JCP rows, skipping corporate-action rows") {
+            val xlsx = xlsxOf(
+                listOf("Data", "Movimentação", "Produto", "Valor da Operação"),
+                listOf("15/06/2026", "Dividendo", "PETR4", "199,50"),
+                listOf("15/06/2026", "Juros Sobre Capital Próprio", "ITUB4", "85,00"),
+                listOf("10/06/2026", "Desdobro", "VALE3", "0,00"),
+            )
+
+            val result = parser.parse(xlsx)
+
+            result shouldBe listOf(
+                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDEND, BigDecimal("199.50")),
+                ReceivedIncome(LocalDate(2026, 6, 15), "ITUB4", JCP, BigDecimal("85.00")),
+            )
+        }
+
+        it("renders a numeric amount cell with the cell's own format") {
+            val xlsx = xlsxWithNumericAmount(199.5)
+
+            val result = parser.parse(xlsx)
+
+            result.single().ticker shouldBe "PETR4"
+            // BigDecimal.equals is scale-sensitive; 199.50 from the cell equals 199.5 numerically.
+            result.single().amount.compareTo(BigDecimal("199.5")) shouldBe 0
+        }
+
+        it("keeps the real column index when a header column is physically absent") {
+            val xlsx = xlsxOf(
+                listOf("Data", null, "Movimentação", "Produto", "Valor da Operação"),
+                listOf("15/06/2026", null, "Dividendo", "PETR4", "199,50"),
+            )
+
+            parser.parse(xlsx) shouldBe listOf(
+                ReceivedIncome(LocalDate(2026, 6, 15), "PETR4", DIVIDEND, BigDecimal("199.50")),
+            )
+        }
+
+        it("fails loudly when a required column is missing") {
+            val xlsx = xlsxOf(
+                listOf("Data", "Produto", "Valor da Operação"),
+                listOf("15/06/2026", "PETR4", "199,50"),
+            )
+
+            shouldThrow<IncomeStatementParseException> { parser.parse(xlsx) }
+        }
+    }
+})
+
+private fun xlsxOf(vararg rows: List<String?>): ByteArray {
+    val workbook = XSSFWorkbook()
+    val sheet = workbook.createSheet("Movimentação")
+
+    rows.forEachIndexed { rowIndex, values ->
+        val row = sheet.createRow(rowIndex)
+        // A null entry leaves the column absent instead of writing an empty string, reproducing a
+        // B3 export where a spacer column carries no header.
+        values.forEachIndexed { cellIndex, value ->
+            if (value != null) row.createCell(cellIndex).setCellValue(value)
+        }
+    }
+
+    val out = ByteArrayOutputStream()
+    workbook.write(out)
+    return out.toByteArray()
+}
+
+private fun xlsxWithNumericAmount(amount: Double): ByteArray {
+    val workbook = XSSFWorkbook()
+    val sheet = workbook.createSheet("Movimentação")
+    val amountStyle = workbook.createCellStyle().apply {
+        dataFormat = workbook.createDataFormat().getFormat("#,##0.00")
+    }
+
+    val header = sheet.createRow(0)
+    listOf("Data", "Movimentação", "Produto", "Valor da Operação")
+        .forEachIndexed { index, value -> header.createCell(index).setCellValue(value) }
+
+    val row = sheet.createRow(1)
+    row.createCell(0).setCellValue("15/06/2026")
+    row.createCell(1).setCellValue("Dividendo")
+    row.createCell(2).setCellValue("PETR4")
+    row.createCell(3).apply {
+        setCellValue(amount)
+        cellStyle = amountStyle
+    }
+
+    val out = ByteArrayOutputStream()
+    workbook.write(out)
+    workbook.close()
+    return out.toByteArray()
+}
