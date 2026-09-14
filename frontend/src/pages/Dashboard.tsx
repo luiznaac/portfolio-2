@@ -17,7 +17,7 @@ export function Dashboard() {
         {data?.map((check) => (
           <li key={check.name} className="flex justify-between">
             <span>{check.name}</span>
-            <span className={check.is_healthy ? "text-emerald-400" : "text-rose-400"}>
+            <span className={check.is_healthy ? "text-rose-400" : "text-emerald-400"}>
               {formatHealthStatus(check.is_healthy)}
             </span>
           </li>
