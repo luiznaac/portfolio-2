@@ -8,8 +8,10 @@ import org.springframework.stereotype.Component
 @Component
 class IOFIncidenceCalculator : TaxIncidenceCalculator {
 
+    private val APPLICABLE_DAYS = 1..29
+
     override fun isApplicable(consolidatingDate: LocalDate, contributionDate: LocalDate) =
-        contributionDate.daysUntil(consolidatingDate) + 1 in 1..30
+        contributionDate.daysUntil(consolidatingDate) + 1 in APPLICABLE_DAYS
 
     override fun resolve(consolidatingDate: LocalDate, contributionDate: LocalDate): TaxIncidence {
         val daysOfApplication = contributionDate.daysUntil(consolidatingDate)

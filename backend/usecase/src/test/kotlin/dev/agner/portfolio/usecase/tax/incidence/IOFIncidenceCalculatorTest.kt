@@ -14,10 +14,27 @@ class IOFIncidenceCalculatorTest : StringSpec({
 
     val calculator = IOFIncidenceCalculator()
 
-    "should not be applicable when contribution date is exactly 30 days ago" {
+    "should not be applicable when the contribution date is in the future" {
         val consolidatingDate = LocalDate.parse("2023-11-15")
         val contributionDate = consolidatingDate.plus(30, DateTimeUnit.DAY)
         calculator.isApplicable(consolidatingDate, contributionDate) shouldBe false
+    }
+
+    "should be applicable with the day-29 rate on the last applicable day" {
+        val consolidatingDate = LocalDate.parse("2023-12-15")
+        val contributionDate = consolidatingDate.minus(28, DateTimeUnit.DAY)
+        calculator.isApplicable(consolidatingDate, contributionDate) shouldBe true
+        calculator.resolve(consolidatingDate, contributionDate).rate shouldBe 3.00.toBigDecimal().setScale(2)
+    }
+
+    "should not be applicable and throw on day 30" {
+        val consolidatingDate = LocalDate.parse("2023-12-15")
+        val contributionDate = consolidatingDate.minus(29, DateTimeUnit.DAY)
+        calculator.isApplicable(consolidatingDate, contributionDate) shouldBe false
+
+        shouldThrow<IllegalArgumentException> {
+            calculator.resolve(consolidatingDate, contributionDate)
+        }
     }
 
     "should calculate correct IOF rates for all valid days" {
