@@ -32,13 +32,15 @@ class ChameidorGatewayContractTest : StringSpec({
 
         request.method shouldBe HttpMethod.Post
         request.url.toString() shouldBe "$CHAMEIDOR_HOST/tasks/one-time"
-        request.headers["X-External-System"] shouldBe "portfolio"
+        request.headers[HttpHeaders.Authorization] shouldBe "Bearer $CHAMEIDOR_TOKEN"
+        request.headers["X-External-System"] shouldBe null
         request.body.contentType?.match(ContentType.Application.Json) shouldBe true
         JsonMapper.mapper.readTree(request.bodyText()) shouldBe JsonMapper.mapper.readTree(fixture)
     }
 })
 
 private const val CHAMEIDOR_HOST = "http://localhost:3000"
+private const val CHAMEIDOR_TOKEN = "dev-portfolio-fixture-token"
 private const val CALLBACK_HOST = "portfolio:8080"
 private const val CALLBACK_ENDPOINT = "/consolidations/BOND/1"
 
@@ -54,7 +56,7 @@ private suspend fun captureRequest(block: suspend (ChameidorGateway) -> Unit): H
         }
     }
 
-    block(ChameidorGateway(client, CHAMEIDOR_HOST))
+    block(ChameidorGateway(client, CHAMEIDOR_HOST, CHAMEIDOR_TOKEN))
     return captured
 }
 

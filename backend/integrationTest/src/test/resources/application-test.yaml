@@ -11,3 +11,4 @@ gateways:
     host: 'http://localhost:3000'
   chameidor:
     host: 'http://localhost:3000'
+    token: 'dev-portfolio-fixture-token'

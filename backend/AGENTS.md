@@ -224,6 +224,7 @@ changes without a matching migration (or vice versa), this test fails.
 | `mysql.host` / `mysql.user` / `mysql.password` | `MYSQL_HOST` / `MYSQL_USER` / `MYSQL_PASSWORD` | required |
 | `gateways.bacen.host` | fixed | `https://api.bcb.gov.br` |
 | `gateways.chameidor.host` | fixed (overridable) | `http://localhost:8081` locally — chameidor must be running separately for scheduling to work end-to-end |
+| `gateways.chameidor.token` | `CHAMEIDOR_TOKEN` | required — portfolio's Bearer token in chameidor's external_systems registry (dev fixture: `dev-portfolio-fixture-token`) |
 | `app-own-host` | fixed | `localhost:8080` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 
 ## Build, run, deploy
@@ -239,7 +240,8 @@ Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the r
 `./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database
 migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`,
 `MYSQL_USER=root`, `MYSQL_PASSWORD=`. If you need scheduled-job registration to actually fire,
-also run chameidor locally on port `8081`.
+also run chameidor locally on port `8081` and set `CHAMEIDOR_TOKEN` to the token registered for
+`portfolio` in chameidor (`dev-portfolio-fixture-token` against a local chameidor).
 
 Docker: the repo-root `Dockerfile` is a multi-stage build (frontend SPA → `gradle:8.14-jdk21`
 backend distribution → `eclipse-temurin:21-jre-jammy` runtime) that ships backend + built SPA in
