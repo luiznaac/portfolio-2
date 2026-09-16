@@ -7,9 +7,9 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import dev.agner.chameidor.usecase.configuration.serializers.KotlinxDatePeriodModule
-import dev.agner.chameidor.usecase.configuration.serializers.KotlinxLocalDateModule
-import dev.agner.chameidor.usecase.configuration.serializers.KotlinxLocalDateTimeModule
+import dev.agner.portfolio.usecase.configuration.serializers.KotlinxDatePeriodModule
+import dev.agner.portfolio.usecase.configuration.serializers.KotlinxLocalDateModule
+import dev.agner.portfolio.usecase.configuration.serializers.KotlinxLocalDateTimeModule
 import org.springframework.context.annotation.Bean
 import org.springframework.stereotype.Component
 
