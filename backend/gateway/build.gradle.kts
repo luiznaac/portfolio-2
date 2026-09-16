@@ -12,4 +12,5 @@ dependencies {
     implementation("io.ktor:ktor-client-logging:3.3.1")
 
     testImplementation(libs.bundles.testDependencies)
+    testImplementation(libs.ktor.client.mock)
 }
