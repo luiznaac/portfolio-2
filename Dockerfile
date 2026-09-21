@@ -13,7 +13,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1 — build the frontend SPA to static files
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS frontend
+FROM node:25-slim AS frontend
 WORKDIR /fe
 
 COPY frontend/package.json frontend/package-lock.json ./
