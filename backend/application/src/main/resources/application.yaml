@@ -13,9 +13,6 @@ gateways:
   chameidor:
     host: 'http://localhost:8081'
     token: ${CHAMEIDOR_TOKEN}
-  brapi:
-    host: 'https://brapi.dev'
-    token: ${BRAPI_TOKEN}
   b3:
     host: 'https://sistemaswebb3-listados.b3.com.br'
 

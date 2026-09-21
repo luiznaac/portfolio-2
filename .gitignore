@@ -12,6 +12,11 @@ frontend/dist-ssr/
 .vite/
 npm-debug.log*
 
+### Local secrets (see .env.example) ###
+.env
+.env.*.local
+docker-compose.override.yml
+
 ### STS ###
 .apt_generated
 .classpath

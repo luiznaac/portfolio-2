@@ -15,6 +15,12 @@ Repo-root `contracts/` holds JSON fixtures that are the cross-cutting source of 
 
 Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`, `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate -- -Pname=V5__x`, `npm run up`). It has no dependencies and is not a real package. `.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the git/PR conventions are enforced there, not merely stated (see `salgadinhos/global/AGENTS.md`).
 
+## Config & secrets
+
+The env-driven settings are `mysql.*` and `gateways.chameidor.token`, wired into `application.yaml`; the full list with per-variable notes is in [backend/AGENTS.md](backend/AGENTS.md) §Configuration. Locally the IntelliJ run config `backend/.run/BootKt.run.xml` and `docker compose up` supply them — the app does not read `.env` yet. The versioned [`.env.example`](.env.example) is the reference for the vars and their dev fixtures; `.env` is gitignored so real values stay out of git.
+
+`MYSQL_*` and `CHAMEIDOR_TOKEN` are required (no default), so a missing value fails the boot. The fixtures are `MYSQL_*` = `localhost` / `root` / empty and `CHAMEIDOR_TOKEN=dev-portfolio-fixture-token`; the single secrets doc is `docs/salgadinhos/secrets.md` in the salgadinhos repo.
+
 ## Docker
 
 One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend together: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → the app). No DB in the image. Repo-root `docker-compose.yml` adds MySQL for full-stack / DB-only local runs; `backend/docker-compose.yml` is the MySQL-only file consumed by the `integrationTest` module via Testcontainers — keep the two MySQL definitions in sync. The schema comes from `backend/persistence/src/main/resources/db/migration/V*.sql`, applied by Flyway (`bin/migrate` in the image) from `deploy/entrypoint.sh` before the app starts — see [backend/AGENTS.md](backend/AGENTS.md).
