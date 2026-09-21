@@ -41,7 +41,7 @@ RUN mkdir -p /home/gradle/project/build/distributions/app/ \
 # ---------------------------------------------------------------------------
 # Stage 3 — runtime
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:25-jre-jammy
 WORKDIR /opt/app
 
 RUN apt-get update \
