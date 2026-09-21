@@ -29,7 +29,7 @@ RUN npm run build          # -> /fe/dist
 # ---------------------------------------------------------------------------
 # Stage 2 — build the backend distribution
 # ---------------------------------------------------------------------------
-FROM gradle:8.14-jdk21 AS builder
+FROM gradle:9.7-jdk21 AS builder
 COPY backend/ /home/gradle/project
 WORKDIR /home/gradle/project
 
