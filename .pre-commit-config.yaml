@@ -19,3 +19,15 @@ repos:
         language: system
         files: ^frontend/.*\.(ts|tsx)$
         pass_filenames: false
+      - id: test-backend
+        name: test (backend)
+        entry: sh -c 'cd backend && ./gradlew test'
+        language: system
+        files: ^backend/.*\.(kt|kts)$
+        pass_filenames: false
+      - id: test-frontend
+        name: test (frontend)
+        entry: sh -c 'cd frontend && npm test'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|mjs|cjs)$
+        pass_filenames: false
