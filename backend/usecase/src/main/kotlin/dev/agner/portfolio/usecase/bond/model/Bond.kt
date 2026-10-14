@@ -7,21 +7,21 @@ import java.math.BigDecimal
 sealed class Bond(
     open val id: Int,
     open val name: String,
-    open val value: BigDecimal,
+    open val rate: BigDecimal,
     open val maturityDate: LocalDate,
 ) {
     data class FixedRateBond(
         override val id: Int,
         override val name: String,
-        override val value: BigDecimal,
+        override val rate: BigDecimal,
         override val maturityDate: LocalDate,
-    ) : Bond(id, name, value, maturityDate)
+    ) : Bond(id, name, rate, maturityDate)
 
     data class FloatingRateBond(
         override val id: Int,
         override val name: String,
-        override val value: BigDecimal,
+        override val rate: BigDecimal,
         override val maturityDate: LocalDate,
         val indexId: IndexId,
-    ) : Bond(id, name, value, maturityDate)
+    ) : Bond(id, name, rate, maturityDate)
 }

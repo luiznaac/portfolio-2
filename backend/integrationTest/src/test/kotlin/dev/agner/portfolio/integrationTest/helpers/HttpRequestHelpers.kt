@@ -23,7 +23,7 @@ suspend fun createFloatingBond(value: String, index: String, maturityDate: Strin
         path = "/bonds/floating"
         body = mapOf(
             "name" to "pipipipopopo",
-            "value" to value,
+            "rate" to value,
             "index_id" to index,
             "maturity_date" to maturityDate,
         )
@@ -34,7 +34,7 @@ suspend fun createFixedBond(value: String, maturityDate: String = "2025-10-20") 
         path = "/bonds/fixed"
         body = mapOf(
             "name" to "papapapepepe",
-            "value" to value,
+            "rate" to value,
             "maturity_date" to maturityDate,
         )
     }["id"]!!
@@ -82,7 +82,7 @@ suspend fun createCheckingAccount(value: String, index: String, maturityDuration
         path = "/checking-accounts"
         body = mapOf(
             "name" to "pipipipopopo",
-            "value" to value,
+            "rate" to value,
             "index_id" to index,
             "maturity_duration" to maturityDuration,
         )

@@ -7,14 +7,14 @@ import java.math.BigDecimal
 data class CheckingAccount(
     val id: Int,
     val name: String,
-    val value: BigDecimal,
+    val rate: BigDecimal,
     val indexId: IndexId,
     val maturityDuration: DatePeriod,
 )
 
 data class CheckingAccountCreation(
     val name: String,
-    val value: BigDecimal,
+    val rate: BigDecimal,
     val indexId: IndexId,
     val maturityDuration: DatePeriod,
 )

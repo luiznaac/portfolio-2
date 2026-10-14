@@ -45,7 +45,7 @@ data class BondContributionConsolidationContext(
         val rate: BigDecimal,
     ) {
         constructor(multiplier: BigDecimal, indexValue: IndexValue) : this(
-            rate = (multiplier.setScale(4, RoundingMode.HALF_EVEN) / BigDecimal("100")) * indexValue.value,
+            rate = (multiplier.setScale(4, RoundingMode.HALF_EVEN) / BigDecimal("100")) * indexValue.observation,
         )
     }
 }
