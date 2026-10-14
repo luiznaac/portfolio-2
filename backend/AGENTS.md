@@ -47,7 +47,7 @@ application  →  http-api  →  usecase  ←  persistence
 
 ## How to implement a new feature
 
-Same shape as chameidor (model in `usecase` → port → service → Exposed persistence → Ktor controller, no manual registration), with two portfolio-2-specific additions: create the feature as its own top-level `usecase` package (see "Design principles"), and register it with `ProductConsolidator`/`ConsolidationService` in `consolidation/` if it should participate in overall portfolio consolidation (`ProductType` is the existing extension point for this). Reuse `testFixtures` helpers (`BasicHelpers.kt`, `BondConsolidationHelpers.kt`, `TaxHelpers.kt`) instead of hand-rolling test data. Full generic walkthrough: salgadinhos' `kotlin-hexagonal-feature` skill.
+Same shape as chameidor (model in `usecase` → port → service → Exposed persistence → Ktor controller, no manual registration), with two portfolio-2-specific additions: create the feature as its own top-level `usecase` package (see "Design principles"), and register it with `ProductConsolidator`/`ConsolidationService` in `consolidation/` if it should participate in overall portfolio consolidation (`ProductType` is the existing extension point for this). Reuse `testFixtures` helpers (`BasicHelpers.kt`, `BondConsolidationHelpers.kt`, `TaxHelpers.kt`) instead of hand-rolling test data. Full generic walkthrough: salgadinhos' `kotlin-hexagonal-feature` skill. New `*Table.kt`/`*Entity.kt`: copy the import block from an existing file (e.g. `CheckingAccountTable.kt`) verbatim — `varchar`/`decimal` are member functions, so they stay out of the imports — then add only the table-specific columns.
 
 ## Code style
 
