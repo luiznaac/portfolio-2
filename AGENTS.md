@@ -26,3 +26,11 @@ The env-driven settings are `mysql.*` and `gateways.chameidor.token`, wired into
 One image (repo-root `Dockerfile`, multi-stage) ships backend + frontend together: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the built SPA on `WEB_PORT`/8081 and reverse-proxies `/api` → the app). No DB in the image. Repo-root `docker-compose.yml` adds MySQL for full-stack / DB-only local runs; `backend/docker-compose.yml` is the MySQL-only file consumed by the `integrationTest` module via Testcontainers — keep the two MySQL definitions in sync. The schema comes from `backend/persistence/src/main/resources/db/migration/V*.sql`, applied by Flyway (`bin/migrate` in the image) from `deploy/entrypoint.sh` before the app starts — see [backend/AGENTS.md](backend/AGENTS.md).
 
 `.github/workflows/ci.yml` runs `backend` (Gradle `clean build`) and `frontend` (`npm ci && typecheck && build`) jobs on every push to master and every PR. Its `publish` job (`needs: [backend, frontend]`, push-to-master only) then builds the repo-root `Dockerfile` and pushes `luiznaac/portfolio` with tags `latest` and `v<run-number>` (a sequential build number, `github.run_number`) — so the image is published only after a green CI run.
+
+## User-facing surface declaration
+
+Surfaces: **HTTP + Browser**.
+
+Run story: combined Docker image — `docker compose up --build` at the repo root (`mysql` + `app`), run in the acceptance session; `CHAMEIDOR_TOKEN` injected as the dev fixture via a gitignored `docker-compose.override.yml`; chameidor is not booted.
+
+Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md).
