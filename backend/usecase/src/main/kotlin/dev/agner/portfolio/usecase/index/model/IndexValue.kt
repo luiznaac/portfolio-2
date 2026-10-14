@@ -5,5 +5,5 @@ import java.math.BigDecimal
 
 data class IndexValue(
     val date: LocalDate,
-    val value: BigDecimal,
+    val observation: BigDecimal,
 )

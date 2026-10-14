@@ -100,7 +100,7 @@ class BondConsolidationServiceTest : StringSpec({
         )
 
         val indexValues = listOf(
-            IndexValue(date = sellDate, value = BigDecimal("100.00")),
+            IndexValue(date = sellDate, observation = BigDecimal("100.00")),
         )
 
         val consolidationResult = bondConsolidationResult(
@@ -140,7 +140,7 @@ class BondConsolidationServiceTest : StringSpec({
                     principal = BigDecimal("9500.00"),
                     yieldAmount = BigDecimal("25.00"),
                     yieldRates = mapOf(
-                        sellDate to YieldRateContext(floatingRateBond.value, indexValues[0]),
+                        sellDate to YieldRateContext(floatingRateBond.rate, indexValues[0]),
                     ),
                     redemptionOrders = mapOf(
                         sellDate to SellContext(2, BigDecimal("1000.00")),
@@ -237,7 +237,7 @@ class BondConsolidationServiceTest : StringSpec({
         )
 
         val indexValues = listOf(
-            IndexValue(date = sellDate, value = BigDecimal("102.00")),
+            IndexValue(date = sellDate, observation = BigDecimal("102.00")),
         )
 
         val consolidationResult1 = bondConsolidationResult(
@@ -283,7 +283,7 @@ class BondConsolidationServiceTest : StringSpec({
                     principal = BigDecimal("5000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldRates = indexValues.associate {
-                        it.date to YieldRateContext(floatingRateBond.value, it)
+                        it.date to YieldRateContext(floatingRateBond.rate, it)
                     },
                     sellOrders = mapOf(
                         sellDate to SellContext(3, BigDecimal("2000.00")),
@@ -302,7 +302,7 @@ class BondConsolidationServiceTest : StringSpec({
                     principal = BigDecimal("8000.00"),
                     yieldAmount = BigDecimal("0.00"),
                     yieldRates = indexValues.associate {
-                        it.date to YieldRateContext(floatingRateBond.value, it)
+                        it.date to YieldRateContext(floatingRateBond.rate, it)
                     },
                     sellOrders = emptyMap(),
                 ),

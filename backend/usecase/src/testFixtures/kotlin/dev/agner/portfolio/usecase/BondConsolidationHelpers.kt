@@ -51,7 +51,7 @@ fun floatingRateBond(
 ) = FloatingRateBond(
     id = int(),
     name = arbAsciiString(),
-    value = bigDecimal(),
+    rate = bigDecimal(),
     maturityDate = maturityDate,
     indexId = enum(),
 )
