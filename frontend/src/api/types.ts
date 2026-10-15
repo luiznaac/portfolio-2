@@ -42,3 +42,30 @@ export interface TickerRefreshResult {
   catalog: number;
   quotes: number;
 }
+
+export type TradeSide = "BUY" | "SELL";
+
+export type ImportSource = "B3_TRADES" | "B3_POSITION" | "B3_MOVEMENTS" | "XP_REPORT";
+export type ImportStatus = "STAGED" | "REVIEWED" | "APPLIED" | "FAILED";
+
+export interface Import {
+  id: number;
+  source: ImportSource;
+  file_name: string;
+  file_hash: string;
+  status: ImportStatus;
+  created_at: string;
+}
+
+export interface ImportRow {
+  id: number;
+  import_id: number;
+  date: string;
+  side: TradeSide;
+  venue: string;
+  ticker: string;
+  quantity: number;
+  unit_price: number;
+  institution_name: string;
+  error?: string;
+}
