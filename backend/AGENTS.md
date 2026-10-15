@@ -95,6 +95,9 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 | `gateways.bacen.host` | fixed | `https://api.bcb.gov.br` |
 | `gateways.chameidor.host` | fixed (overridable) | `http://localhost:8081` locally — chameidor must be running separately for scheduling to work end-to-end |
 | `gateways.chameidor.token` | `CHAMEIDOR_TOKEN` | required — portfolio's Bearer token in chameidor's external_systems registry (dev fixture: `dev-portfolio-fixture-token`) |
+| `gateways.cotahist.host` | fixed | `https://bvmf.bmfbovespa.com.br` — B3 COTAHIST daily file (ticker catalog + EOD quotes) |
+| `gateways.brapi.host` | fixed | `https://brapi.dev` — current-quote API |
+| `gateways.brapi.token` | `BRAPI_TOKEN` | optional — brapi Bearer token; empty disables current-quote refresh (callers fall back to the last stored COTAHIST close) |
 | `app-own-host` | fixed | `localhost:8080` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 
 ## Build, run, deploy

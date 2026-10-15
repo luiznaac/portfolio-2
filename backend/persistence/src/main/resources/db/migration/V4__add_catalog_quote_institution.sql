@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS ticker_catalog (ticker VARCHAR(12) PRIMARY KEY, short_name VARCHAR(12) NOT NULL, bdi_type VARCHAR(2) NOT NULL, isin VARCHAR(12) NULL, asset_kind VARCHAR(20) NOT NULL, asset_class VARCHAR(20) NULL, first_seen DATE NOT NULL, last_seen DATE NOT NULL, created_at DATETIME(6) NOT NULL);
+CREATE TABLE IF NOT EXISTS quote (id INT AUTO_INCREMENT PRIMARY KEY, ticker VARCHAR(12) NOT NULL, `date` DATE NOT NULL, `close` DECIMAL(18, 6) NOT NULL, `source` VARCHAR(10) NOT NULL, created_at DATETIME(6) NOT NULL);
+ALTER TABLE quote ADD CONSTRAINT quote_ticker_date_unique UNIQUE (ticker, `date`);
+CREATE TABLE IF NOT EXISTS institution (id INT AUTO_INCREMENT PRIMARY KEY, `name` VARCHAR(100) NOT NULL, created_at DATETIME(6) NOT NULL);
+ALTER TABLE institution ADD CONSTRAINT institution_name_unique UNIQUE (`name`);

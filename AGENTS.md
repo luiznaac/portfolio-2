@@ -5,7 +5,7 @@ Development guidelines for anyone (human, agent, or tool) working in this reposi
 Two projects, one repo:
 
 - **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`). Architecture, conventions and rules for evolving it are in [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
-- **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from `frontend/` (`npm --prefix frontend run <script>`). Details in [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react` scaffold (health-check slice only) and will be rewritten from scratch in future plans — its hand-mirrored `src/api/types.ts` is down to the health-check DTO.
+- **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from `frontend/` (`npm --prefix frontend run <script>`). Details in [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react` scaffold (health-check slice only) and will be rewritten from scratch in future plans — its hand-mirrored `src/api/types.ts` tracks the health-check, catalog/quote and institution DTOs.
 
 ## Shared contracts
 
@@ -17,9 +17,9 @@ Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:bui
 
 ## Config & secrets
 
-The env-driven settings are `mysql.*` and `gateways.chameidor.token`, wired into `application.yaml`; the full list with per-variable notes is in [backend/AGENTS.md](backend/AGENTS.md) §Configuration. Locally the IntelliJ run config `backend/.run/BootKt.run.xml` and `docker compose up` supply them — the app does not read `.env` yet. The versioned [`.env.example`](.env.example) is the reference for the vars and their dev fixtures; `.env` is gitignored so real values stay out of git.
+The env-driven settings are `mysql.*`, `gateways.chameidor.token` and `gateways.brapi.token`, wired into `application.yaml`; the full list with per-variable notes is in [backend/AGENTS.md](backend/AGENTS.md) §Configuration. Locally the IntelliJ run config `backend/.run/BootKt.run.xml` and `docker compose up` supply them — the app does not read `.env` yet. The versioned [`.env.example`](.env.example) is the reference for the vars and their dev fixtures; `.env` is gitignored so real values stay out of git.
 
-`MYSQL_*` and `CHAMEIDOR_TOKEN` are required (no default), so a missing value fails the boot. The fixtures are `MYSQL_*` = `localhost` / `root` / empty and `CHAMEIDOR_TOKEN=dev-portfolio-fixture-token`; the single secrets doc is `docs/salgadinhos/secrets.md` in the salgadinhos repo.
+`MYSQL_*` and `CHAMEIDOR_TOKEN` are required (no default), so a missing value fails the boot; `BRAPI_TOKEN` is optional (empty disables current-quote refresh). The fixtures are `MYSQL_*` = `localhost` / `root` / empty, `CHAMEIDOR_TOKEN=dev-portfolio-fixture-token` and `BRAPI_TOKEN=dev-brapi-fixture-token`; the single secrets doc is `docs/salgadinhos/secrets.md` in the salgadinhos repo.
 
 ## Docker
 

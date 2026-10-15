@@ -8,7 +8,7 @@ mysql:
 
 gateways:
   bacen:
-    host: 'http://localhost:3000'
+    host: 'http://localhost:${wiremock.port}'
   chameidor:
-    host: 'http://localhost:3000'
+    host: 'http://localhost:${wiremock.port}'
     token: 'dev-portfolio-fixture-token'

@@ -4,6 +4,7 @@
       <env name="MYSQL_HOST" value="localhost" />
       <env name="MYSQL_USER" value="root" />
       <env name="MYSQL_PASSWORD" value="" />
+      <env name="BRAPI_TOKEN" value="dev-brapi-fixture-token" />
     </envs>
     <module name="portfolio.application.main" />
     <option name="SPRING_BOOT_MAIN_CLASS" value="dev.agner.portfolio.application.BootKt" />

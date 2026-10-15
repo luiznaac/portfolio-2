@@ -2,13 +2,19 @@ package dev.agner.portfolio.integrationTest.config
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
 import com.github.tomakehurst.wiremock.http.RequestMethod
 import dev.agner.portfolio.usecase.configuration.JsonMapper
 
 object HttpMockService {
 
-    private val server = WireMockServer(3000)
+    // A dynamic port keeps the suite clear of whatever else the machine runs on a fixed one (the
+    // old hardcoded 3000 collided with any dev server there). The app under test reaches the mocks
+    // through this port; DockerComposeExtension publishes it before the Spring context loads.
+    private val server = WireMockServer(options().dynamicPort())
     private val mapper = JsonMapper.mapper
+
+    val port: Int get() = server.port()
 
     init {
         server.start()

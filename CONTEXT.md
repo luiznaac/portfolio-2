@@ -116,7 +116,7 @@ _UI:_ "Classe"
 _Avoid_: Caixa as a class (not modeled), category, tipo
 
 **Asset Kind**:
-The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`. Drives tax treatment and UI presentation.
+The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`, plus `UNKNOWN` for a B3 BDI code the catalog does not classify yet. Drives tax treatment and UI presentation.
 _UI:_ "Tipo"
 _Avoid_: Asset class (different concept), mercado
 

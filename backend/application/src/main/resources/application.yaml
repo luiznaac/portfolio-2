@@ -15,5 +15,10 @@ gateways:
     token: ${CHAMEIDOR_TOKEN}
   b3:
     host: 'https://sistemaswebb3-listados.b3.com.br'
+  cotahist:
+    host: 'https://bvmf.bmfbovespa.com.br'
+  brapi:
+    host: 'https://brapi.dev'
+    token: ${BRAPI_TOKEN:}
 
 app-own-host: 'localhost:8080'

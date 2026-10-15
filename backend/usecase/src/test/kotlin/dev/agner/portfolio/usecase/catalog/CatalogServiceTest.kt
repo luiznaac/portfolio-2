@@ -1,0 +1,86 @@
+package dev.agner.portfolio.usecase.catalog
+
+import dev.agner.portfolio.usecase.catalog.gateway.ICotahistSource
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
+import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.model.CotahistRow
+import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
+import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.shouldBe
+import io.mockk.clearAllMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
+import io.mockk.slot
+import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
+
+class CatalogServiceTest : StringSpec({
+    val repository = mockk<ICatalogRepository>(relaxed = true)
+    val source = mockk<ICotahistSource>(relaxed = true)
+    val service = CatalogService(repository, source)
+
+    beforeTest { clearAllMocks() }
+
+    "fetchBy should look the ticker up under its normalized key" {
+        coEvery { repository.fetchBy(any()) } returns null
+
+        service.fetchBy("alup11f")
+
+        coVerify(exactly = 1) { repository.fetchBy("ALUP11") }
+    }
+
+    "refresh should read the latest trading day from the source" {
+        coEvery { source.fetchTradingDay() } returns emptyList()
+        coEvery { repository.upsertAll(any()) } returns 0
+
+        service.refresh()
+
+        coVerify(exactly = 1) { source.fetchTradingDay() }
+    }
+
+    "refresh should derive kind and class from the BDI type and upsert the entries" {
+        val rows = listOf(
+            row(ticker = "PETR4", bdiType = "02"),
+            row(ticker = "MXRF11", bdiType = "12"),
+            row(ticker = "AAPL34", bdiType = "34"),
+        )
+        coEvery { source.fetchTradingDay() } returns rows
+        val captured = slot<List<CatalogEntry>>()
+        coEvery { repository.upsertAll(capture(captured)) } returns rows.size
+
+        service.refresh() shouldBe rows.size
+
+        captured.captured.map { it.ticker to it.assetKind } shouldBe listOf(
+            "PETR4" to AssetKind.STOCK,
+            "MXRF11" to AssetKind.FII,
+            "AAPL34" to AssetKind.BDR,
+        )
+        captured.captured.map { it.assetClass } shouldBe listOf(
+            AssetClass.ACOES,
+            AssetClass.FIIS,
+            AssetClass.ACOES,
+        )
+    }
+
+    "refresh should keep an unclassified BDI as UNKNOWN with no class" {
+        coEvery { source.fetchTradingDay() } returns listOf(row(ticker = "XPTO3", bdiType = "99"))
+        val captured = slot<List<CatalogEntry>>()
+        coEvery { repository.upsertAll(capture(captured)) } returns 1
+
+        service.refresh()
+
+        captured.captured.single().assetKind shouldBe AssetKind.UNKNOWN
+        captured.captured.single().assetClass shouldBe null
+    }
+})
+
+private fun row(ticker: String, bdiType: String, date: String = "2026-10-14") = CotahistRow(
+    ticker = ticker,
+    shortName = ticker,
+    bdiType = bdiType,
+    isin = null,
+    date = LocalDate.parse(date),
+    closePrice = BigDecimal("10.00"),
+)
