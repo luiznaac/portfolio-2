@@ -7,9 +7,12 @@ import dev.agner.portfolio.persistence.bond.BondTable
 import dev.agner.portfolio.persistence.catalog.CatalogTable
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.persistence.configuration.mysqlJdbcUrl
+import dev.agner.portfolio.persistence.import.ImportRowTable
+import dev.agner.portfolio.persistence.import.ImportTable
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.persistence.index.IndexValueTable
 import dev.agner.portfolio.persistence.institution.InstitutionTable
+import dev.agner.portfolio.persistence.listedasset.TradeTable
 import dev.agner.portfolio.persistence.quotes.QuoteTable
 import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
 import org.jetbrains.exposed.v1.core.Table
@@ -33,6 +36,9 @@ val allTables: Array<Table> = arrayOf(
     CatalogTable,
     QuoteTable,
     InstitutionTable,
+    TradeTable,
+    ImportTable,
+    ImportRowTable,
 )
 
 // Authoring half of the migration workflow (backend/AGENTS.md). Diffs `allTables` against a
