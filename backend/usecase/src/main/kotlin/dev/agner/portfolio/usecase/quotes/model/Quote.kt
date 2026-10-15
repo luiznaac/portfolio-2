@@ -3,9 +3,8 @@ package dev.agner.portfolio.usecase.quotes.model
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-// One EOD close for a ticker. The table is keyed on (ticker, date); "current quote" is simply the
-// latest row. COTAHIST is authoritative for a closed day; brapi fills today's row before the
-// COTAHIST file is published.
+// One EOD close for a ticker. The table is keyed on (ticker, date); the latest row is the current
+// quote. COTAHIST is the authoritative source.
 data class Quote(
     val ticker: String,
     val date: LocalDate,
@@ -15,5 +14,4 @@ data class Quote(
 
 enum class QuoteSource {
     COTAHIST,
-    BRAPI,
 }

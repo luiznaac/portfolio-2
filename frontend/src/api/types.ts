@@ -20,7 +20,7 @@ export interface CatalogEntry {
   last_seen: string;
 }
 
-export type QuoteSource = "COTAHIST" | "BRAPI";
+export type QuoteSource = "COTAHIST";
 
 export interface Quote {
   ticker: string;

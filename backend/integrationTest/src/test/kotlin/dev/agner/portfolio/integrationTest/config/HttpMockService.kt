@@ -8,9 +8,9 @@ import dev.agner.portfolio.usecase.configuration.JsonMapper
 
 object HttpMockService {
 
-    // A dynamic port keeps the suite clear of whatever else the machine runs on a fixed one (the
-    // old hardcoded 3000 collided with any dev server there). The app under test reaches the mocks
-    // through this port; DockerComposeExtension publishes it before the Spring context loads.
+    // A dynamic port keeps the suite clear of whatever else the machine runs on a fixed one. The app
+    // under test reaches the mocks through this port; DockerComposeExtension publishes it before the
+    // Spring context loads.
     private val server = WireMockServer(options().dynamicPort())
     private val mapper = JsonMapper.mapper
 

@@ -17,7 +17,7 @@ class QuoteRepository(
 ) : IQuoteRepository {
 
     // Keyed on (ticker, date): a re-sync of the same day overwrites the row (COTAHIST is
-    // authoritative once published; brapi only fills the day before the file exists).
+    // authoritative).
     override suspend fun upsertAll(quotes: List<Quote>): Int = transaction {
         if (quotes.isEmpty()) return@transaction 0
 
@@ -41,13 +41,5 @@ class QuoteRepository(
         QuoteEntity.find { QuoteTable.ticker eq ticker }
             .orderBy(QuoteTable.date to SortOrder.ASC)
             .map { it.toModel() }
-    }
-
-    override suspend fun fetchLatestBy(ticker: String): Quote? = transaction {
-        QuoteEntity.find { QuoteTable.ticker eq ticker }
-            .orderBy(QuoteTable.date to SortOrder.DESC)
-            .limit(1)
-            .firstOrNull()
-            ?.toModel()
     }
 }

@@ -39,14 +39,6 @@ class CatalogController(
             get("/{ticker}/quotes") {
                 call.respond(HttpStatusCode.OK, quoteService.fetchAllBy(call.requiredString("ticker")))
             }
-
-            post("/{ticker}/quotes/refresh") {
-                val quote = quoteService.refreshCurrent(call.requiredString("ticker"))
-                when (quote) {
-                    null -> call.respond(HttpStatusCode.NotFound)
-                    else -> call.respond(HttpStatusCode.OK, quote)
-                }
-            }
         }
     }
 }

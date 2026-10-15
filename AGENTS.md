@@ -17,9 +17,9 @@ Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:bui
 
 ## Config & secrets
 
-The env-driven settings are `mysql.*`, `gateways.chameidor.token` and `gateways.brapi.token`, wired into `application.yaml`; the full list with per-variable notes is in [backend/AGENTS.md](backend/AGENTS.md) §Configuration. Locally the IntelliJ run config `backend/.run/BootKt.run.xml` and `docker compose up` supply them — the app does not read `.env` yet. The versioned [`.env.example`](.env.example) is the reference for the vars and their dev fixtures; `.env` is gitignored so real values stay out of git.
+The env-driven settings are `mysql.*` and `gateways.chameidor.token`, wired into `application.yaml`; the full list with per-variable notes is in [backend/AGENTS.md](backend/AGENTS.md) §Configuration. Locally the IntelliJ run config `backend/.run/BootKt.run.xml` and `docker compose up` supply them — the app does not read `.env` yet. The versioned [`.env.example`](.env.example) is the reference for the vars and their dev fixtures; `.env` is gitignored so real values stay out of git.
 
-`MYSQL_*` and `CHAMEIDOR_TOKEN` are required (no default), so a missing value fails the boot; `BRAPI_TOKEN` is optional (empty disables current-quote refresh). The fixtures are `MYSQL_*` = `localhost` / `root` / empty, `CHAMEIDOR_TOKEN=dev-portfolio-fixture-token` and `BRAPI_TOKEN=dev-brapi-fixture-token`; the single secrets doc is `docs/salgadinhos/secrets.md` in the salgadinhos repo.
+`MYSQL_*` and `CHAMEIDOR_TOKEN` are required (no default), so a missing value fails the boot. The fixtures are `MYSQL_*` = `localhost` / `root` / empty and `CHAMEIDOR_TOKEN=dev-portfolio-fixture-token`; the single secrets doc is `docs/salgadinhos/secrets.md` in the salgadinhos repo.
 
 ## Docker
 
