@@ -99,6 +99,31 @@ class ImportServiceTest : StringSpec({
         coVerify(exactly = 1) { repository.updateStatus(1, ImportStatus.APPLIED) }
     }
 
+    "apply should create/fetch each institution once for rows that share its name" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns listOf(row, row.copy(id = 12, ticker = "VALE3"))
+        coEvery { institutionService.create(InstitutionCreation("XP INVESTIMENTOS")) } returns institution
+        coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedImport
+
+        service.apply(1)
+
+        coVerify(exactly = 1) { institutionService.create(InstitutionCreation("XP INVESTIMENTOS")) }
+        coVerify(exactly = 2) { tradeService.create(any()) }
+    }
+
+    "apply should group institution names that normalize alike" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns
+            listOf(row, row.copy(id = 12, institutionName = "xp  investimentos"))
+        coEvery { institutionService.create(InstitutionCreation("XP INVESTIMENTOS")) } returns institution
+        coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedImport
+
+        service.apply(1)
+
+        coVerify(exactly = 1) { institutionService.create(any()) }
+        coVerify(exactly = 2) { tradeService.create(any()) }
+    }
+
     "apply should reject an import that is not reviewed" {
         coEvery { repository.fetchById(1) } returns stagedImport
 

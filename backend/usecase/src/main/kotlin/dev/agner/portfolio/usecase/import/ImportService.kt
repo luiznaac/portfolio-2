@@ -9,7 +9,9 @@ import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.repository.IImportRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
+import dev.agner.portfolio.usecase.institution.model.Institution
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
+import dev.agner.portfolio.usecase.institution.model.normalizedInstitutionName
 import dev.agner.portfolio.usecase.listedasset.TradeService
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import org.springframework.stereotype.Service
@@ -46,30 +48,37 @@ class ImportService(
     }
 
     // Apply materializes the reviewed rows into the ledger: each error-free row becomes a trade and
-    // its institution is auto-created on first sight. Flagged rows are skipped, so a row-level
-    // problem never blocks the batch. The whole batch runs in one transaction, so a failure part
-    // way through cannot leave a half-applied ledger behind a still-REVIEWED import.
+    // its institution is auto-created on first sight. Rows are grouped by institution name so each
+    // distinct institution is created/fetched once and reused across the rows that share it, rather
+    // than re-resolved per row. Flagged rows are skipped, so a row-level problem never blocks the
+    // batch. The whole batch runs in one transaction, so a failure part way through cannot leave a
+    // half-applied ledger behind a still-REVIEWED import.
     suspend fun apply(id: Int): Import? {
         val import = repository.fetchById(id) ?: return null
         requireStatus(import, ImportStatus.REVIEWED)
 
         return transaction.execute {
-            repository.fetchRows(id)
-                .filter { it.error == null }
-                .forEach { row ->
-                    val institution = institutionService.create(InstitutionCreation(row.institutionName))
-                    tradeService.create(
-                        TradeCreation(
-                            ticker = row.ticker,
-                            side = row.side,
-                            date = row.date,
-                            venue = row.venue,
-                            quantity = row.quantity,
-                            unitPrice = row.unitPrice,
-                            institutionId = institution.id,
-                        ),
-                    )
-                }
+            val rows = repository.fetchRows(id).filter { it.error == null }
+            val institutions = mutableMapOf<String, Institution>()
+
+            rows.forEach { row ->
+                val name = row.institutionName.normalizedInstitutionName()
+                val institution = institutions[name]
+                    ?: institutionService.create(InstitutionCreation(row.institutionName))
+                        .also { institutions[name] = it }
+
+                tradeService.create(
+                    TradeCreation(
+                        ticker = row.ticker,
+                        side = row.side,
+                        date = row.date,
+                        venue = row.venue,
+                        quantity = row.quantity,
+                        unitPrice = row.unitPrice,
+                        institutionId = institution.id,
+                    ),
+                )
+            }
 
             repository.updateStatus(id, ImportStatus.APPLIED)
         }
