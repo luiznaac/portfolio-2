@@ -9,7 +9,6 @@ import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.repository.IImportRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
-import dev.agner.portfolio.usecase.institution.model.Institution
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
 import dev.agner.portfolio.usecase.institution.model.normalizedInstitutionName
 import dev.agner.portfolio.usecase.listedasset.TradeService
@@ -58,27 +57,25 @@ class ImportService(
         requireStatus(import, ImportStatus.REVIEWED)
 
         return transaction.execute {
-            val rows = repository.fetchRows(id).filter { it.error == null }
-            val institutions = mutableMapOf<String, Institution>()
-
-            rows.forEach { row ->
-                val name = row.institutionName.normalizedInstitutionName()
-                val institution = institutions[name]
-                    ?: institutionService.create(InstitutionCreation(row.institutionName))
-                        .also { institutions[name] = it }
-
-                tradeService.create(
-                    TradeCreation(
-                        ticker = row.ticker,
-                        side = row.side,
-                        date = row.date,
-                        venue = row.venue,
-                        quantity = row.quantity,
-                        unitPrice = row.unitPrice,
-                        institutionId = institution.id,
-                    ),
-                )
-            }
+            repository.fetchRows(id)
+                .filter { it.error == null }
+                .groupBy { it.institutionName.normalizedInstitutionName() }
+                .forEach { (_, rows) ->
+                    val institution = institutionService.create(InstitutionCreation(rows.first().institutionName))
+                    rows.forEach { row ->
+                        tradeService.create(
+                            TradeCreation(
+                                ticker = row.ticker,
+                                side = row.side,
+                                date = row.date,
+                                venue = row.venue,
+                                quantity = row.quantity,
+                                unitPrice = row.unitPrice,
+                                institutionId = institution.id,
+                            ),
+                        )
+                    }
+                }
 
             repository.updateStatus(id, ImportStatus.APPLIED)
         }
