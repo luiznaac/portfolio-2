@@ -5,7 +5,7 @@ Development guidelines for anyone (human, agent, or tool) working in this reposi
 Two projects, one repo:
 
 - **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`). Architecture, conventions and rules for evolving it are in [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
-- **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from `frontend/` (`npm --prefix frontend run <script>`). Details in [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react` scaffold (health-check slice only) and will be rewritten from scratch in future plans — its hand-mirrored `src/api/types.ts` is down to the health-check DTO.
+- **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from `frontend/` (`npm --prefix frontend run <script>`). Details in [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react` scaffold (health-check slice only) and will be rewritten from scratch in future plans — its hand-mirrored `src/api/types.ts` tracks the health-check, catalog/quote and institution DTOs.
 
 ## Shared contracts
 
