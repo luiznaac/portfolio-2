@@ -60,8 +60,8 @@ class ImportService(
             repository.fetchRows(id)
                 .filter { it.error == null }
                 .groupBy { it.institutionName.normalizedInstitutionName() }
-                .forEach { (_, rows) ->
-                    val institution = institutionService.create(InstitutionCreation(rows.first().institutionName))
+                .forEach { (institutionName, rows) ->
+                    val institution = institutionService.create(InstitutionCreation(institutionName))
                     rows.forEach { row ->
                         tradeService.create(
                             TradeCreation(
