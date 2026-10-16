@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.agner.portfolio.httpapi.import.IImportParser
 import dev.agner.portfolio.httpapi.import.ImportParserResolver
 import dev.agner.portfolio.usecase.import.ImportService
 import dev.agner.portfolio.usecase.import.model.Import
@@ -54,13 +55,16 @@ class ImportControllerTest : DescribeSpec({
 
         it("returns 201 with the staged import and passes the source, name and content hash") {
             val service = mockk<ImportService>()
+            val parser = mockk<IImportParser>()
             val captured = slot<List<ImportRowPayload>>()
             coEvery {
                 service.stage(ImportSource.B3_TRADES, "neg.xlsx", ABC_HASH, capture(captured))
             } returns stagedImport
+            coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
+            coEvery { parser.parse("neg.xlsx", any()) } returns emptyList()
 
             testApplication {
-                application { installRoutes(ImportController(service, ImportParserResolver(emptyList()))) }
+                application { installRoutes(ImportController(service, ImportParserResolver(listOf(parser)))) }
 
                 val response = client.post("/imports") {
                     setBody(
@@ -82,6 +86,36 @@ class ImportControllerTest : DescribeSpec({
                 response.status shouldBe HttpStatusCode.Created
                 ObjectMapper().readTree(response.bodyAsText()).get("status").asText() shouldBe "STAGED"
                 captured.captured shouldBe emptyList()
+            }
+        }
+
+        it("returns 400 with the canonical error body when no parser recognises the file") {
+            val service = mockk<ImportService>()
+
+            testApplication {
+                application { installRoutes(ImportController(service, ImportParserResolver(emptyList()))) }
+
+                val response = client.post("/imports") {
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append("source", "B3_TRADES")
+                                append(
+                                    "file",
+                                    "abc".toByteArray(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentDisposition, "filename=\"unknown.xlsx\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "unsupported-import-file"
+                coVerify(exactly = 0) { service.stage(any(), any(), any(), any()) }
             }
         }
 

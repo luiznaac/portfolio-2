@@ -73,7 +73,9 @@ class ImportService(
                             TradeCreation(
                                 ticker = row.ticker,
                                 side = row.side,
-                                date = row.date,
+                                date = requireNotNull(row.date) {
+                                    "Import row ${row.id} is error-free but has no date"
+                                },
                                 venue = row.venue,
                                 quantity = row.quantity,
                                 unitPrice = row.unitPrice,

@@ -132,6 +132,25 @@ class ImportServiceTest : StringSpec({
         coVerify(exactly = 2) { tradeService.create(any()) }
     }
 
+    "apply should upsert each distinct error-free ticker exactly once" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns
+            listOf(
+                row,
+                row.copy(id = 12, ticker = "PETR4"),
+                row.copy(id = 13, ticker = "VALE3"),
+                row.copy(id = 14, ticker = "MGLU3", error = "flagged"),
+            )
+        coEvery { institutionService.create(any()) } returns institution
+        coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedImport
+
+        service.apply(1)
+
+        coVerify(exactly = 1) { catalogService.upsertTicker("PETR4") }
+        coVerify(exactly = 1) { catalogService.upsertTicker("VALE3") }
+        coVerify(exactly = 0) { catalogService.upsertTicker("MGLU3") }
+    }
+
     "apply should reject an import that is not reviewed" {
         coEvery { repository.fetchById(1) } returns stagedImport
 
