@@ -43,6 +43,9 @@ private fun trade(quantity: BigDecimal) = Trade.Buy(
     unitPrice = BigDecimal("48.92"),
     institutionId = 1,
     fee = null,
+    source = TradeSource.MANUAL,
+    confirmedByB3 = false,
+    ordinal = 1,
 )
 
 private fun sell(quantity: BigDecimal) = Trade.Sell(
@@ -54,4 +57,7 @@ private fun sell(quantity: BigDecimal) = Trade.Sell(
     unitPrice = BigDecimal("48.92"),
     institutionId = 1,
     fee = null,
+    source = TradeSource.MANUAL,
+    confirmedByB3 = false,
+    ordinal = 1,
 )

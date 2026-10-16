@@ -69,3 +69,31 @@ export interface ImportRow {
   institution_name: string;
   error?: string;
 }
+
+export type TradeSource = "MANUAL" | "B3_IMPORT";
+
+export interface Trade {
+  id: number;
+  ticker: string;
+  date: string;
+  venue: string;
+  side: TradeSide;
+  quantity: number;
+  unit_price: number;
+  institution_id: number;
+  fee?: number;
+  source: TradeSource;
+  confirmed_by_b3: boolean;
+  ordinal: number;
+}
+
+export interface TradeCreation {
+  ticker: string;
+  side: TradeSide;
+  date: string;
+  venue: string;
+  quantity: number;
+  unit_price: number;
+  institution_id: number;
+  fee?: number;
+}

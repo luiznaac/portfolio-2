@@ -86,7 +86,7 @@ class ImportServiceTest : StringSpec({
         service.review(1) shouldBe null
     }
 
-    "apply should create one trade per error-free row and mark the import applied" {
+    "apply should reconcile one error-free row with its own trade and skip the flagged row" {
         coEvery { repository.fetchById(1) } returns reviewedImport
         coEvery { repository.fetchRows(1) } returns listOf(row, errorRow)
         coEvery { institutionService.create(InstitutionCreation("XP INVESTIMENTOS")) } returns institution
@@ -95,12 +95,14 @@ class ImportServiceTest : StringSpec({
         service.apply(1) shouldBe appliedImport
 
         coVerify(exactly = 1) {
-            tradeService.create(
+            tradeService.reconcile(
+                any(),
                 match {
-                    it.ticker == "PETR4" &&
-                        it.side == TradeSide.BUY &&
-                        it.institutionId == 3 &&
-                        it.quantity == BigDecimal("100")
+                    it.size == 1 &&
+                        it.single().ticker == "PETR4" &&
+                        it.single().side == TradeSide.BUY &&
+                        it.single().institutionId == 3 &&
+                        it.single().quantity == BigDecimal("100")
                 },
             )
         }
@@ -116,10 +118,10 @@ class ImportServiceTest : StringSpec({
         service.apply(1)
 
         coVerify(exactly = 1) { institutionService.create(InstitutionCreation("XP INVESTIMENTOS")) }
-        coVerify(exactly = 2) { tradeService.create(any()) }
+        coVerify(exactly = 2) { tradeService.reconcile(any(), any()) }
     }
 
-    "apply should group institution names that normalize alike" {
+    "apply should group rows that normalize to the same natural tuple into one reconciliation" {
         coEvery { repository.fetchById(1) } returns reviewedImport
         coEvery { repository.fetchRows(1) } returns
             listOf(row, row.copy(id = 12, institutionName = "xp  investimentos"))
@@ -129,7 +131,7 @@ class ImportServiceTest : StringSpec({
         service.apply(1)
 
         coVerify(exactly = 1) { institutionService.create(any()) }
-        coVerify(exactly = 2) { tradeService.create(any()) }
+        coVerify(exactly = 1) { tradeService.reconcile(any(), match { it.size == 2 }) }
     }
 
     "apply should upsert each distinct error-free ticker exactly once" {
@@ -156,7 +158,7 @@ class ImportServiceTest : StringSpec({
 
         shouldThrow<InvalidImportStateException> { service.apply(1) }
 
-        coVerify(exactly = 0) { tradeService.create(any()) }
+        coVerify(exactly = 0) { tradeService.reconcile(any(), any()) }
     }
 
     "apply should run the whole batch inside one transaction" {

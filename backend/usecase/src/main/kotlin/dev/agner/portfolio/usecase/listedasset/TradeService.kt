@@ -3,6 +3,8 @@ package dev.agner.portfolio.usecase.listedasset
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
+import dev.agner.portfolio.usecase.listedasset.model.TradeKey
+import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import org.springframework.stereotype.Service
 
@@ -11,12 +13,42 @@ class TradeService(
     private val repository: ITradeRepository,
 ) {
 
-    // The ticker is the ledger's canonical key, so it is normalized at this boundary (ALUP11F and
-    // ALUP11 are the same paper) before the repository persists it.
-    suspend fun create(creation: TradeCreation): Trade =
-        repository.save(creation.copy(ticker = creation.ticker.normalizedTicker()))
+    // A manual entry is refused when a broker import already holds the same natural tuple: the
+    // imported row is the source of truth and the manual copy would double the position.
+    suspend fun createManual(creation: TradeCreation): Trade {
+        val normalized = normalized(creation)
+        val key = normalized.naturalKey()
+        val existing = repository.fetchByKey(key)
+        if (existing.any { it.source == TradeSource.B3_IMPORT }) throw DuplicateTradeException(key)
+        return repository.save(normalized, TradeSource.MANUAL, existing.size + 1)
+    }
+
+    // Reconciles one natural tuple's occurrences from a batch against the ledger. The ledger's
+    // existing occurrences are the ones already applied (their ordinals are contiguous from 1), so
+    // skipping them is the dedup — re-exporting content an earlier import already applied is a
+    // no-op. A skipped occurrence that is an unconfirmed manual trade is marked confirmed by B3:
+    // the manual record wins and keeps its edits. Occurrences past what the ledger holds are new
+    // and are written at that occurrence's ordinal.
+    suspend fun reconcile(key: TradeKey, creations: List<TradeCreation>) {
+        val existing = repository.fetchByKey(key)
+        for ((index, creation) in creations.withIndex()) {
+            val occurrence = index + 1
+            if (occurrence <= existing.size) {
+                val occupant = existing[occurrence - 1]
+                if (occupant.source == TradeSource.MANUAL && !occupant.confirmedByB3) {
+                    repository.confirmByB3(occupant.id)
+                }
+            } else {
+                repository.save(normalized(creation), TradeSource.B3_IMPORT, occurrence)
+            }
+        }
+    }
 
     suspend fun fetchAll() = repository.fetchAll()
 
     suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())
+
+    // The ticker is the ledger's canonical key, so it is normalized at this boundary (ALUP11F and
+    // ALUP11 are the same paper) before the repository persists it.
+    private fun normalized(creation: TradeCreation) = creation.copy(ticker = creation.ticker.normalizedTicker())
 }

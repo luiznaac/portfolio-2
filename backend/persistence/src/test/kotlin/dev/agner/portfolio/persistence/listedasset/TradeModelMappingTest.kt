@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.listedasset
 
 import dev.agner.portfolio.usecase.listedasset.model.Trade
+import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -21,6 +22,9 @@ class TradeModelMappingTest : StringSpec({
             unitPrice = BigDecimal("48.92"),
             institutionId = 3,
             fee = null,
+            source = TradeSource.MANUAL,
+            confirmedByB3 = false,
+            ordinal = 1,
         )
     }
 
@@ -34,6 +38,9 @@ class TradeModelMappingTest : StringSpec({
             unitPrice = BigDecimal("48.92"),
             institutionId = 3,
             fee = null,
+            source = TradeSource.MANUAL,
+            confirmedByB3 = false,
+            ordinal = 1,
         )
     }
 
@@ -51,4 +58,7 @@ private fun tradeModel(quantity: BigDecimal) = tradeModel(
     unitPrice = BigDecimal("48.92"),
     institutionId = 3,
     fee = null,
+    source = TradeSource.MANUAL,
+    confirmedByB3 = false,
+    ordinal = 1,
 )

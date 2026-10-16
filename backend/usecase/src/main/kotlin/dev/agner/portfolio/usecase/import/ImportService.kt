@@ -48,12 +48,14 @@ class ImportService(
         return repository.updateStatus(id, ImportStatus.REVIEWED)
     }
 
-    // Apply materializes the reviewed rows into the ledger: each error-free row becomes a trade and
-    // its institution is auto-created on first sight. Rows are grouped by institution name so each
-    // distinct institution is created/fetched once and reused across the rows that share it, rather
-    // than re-resolved per row. Flagged rows are skipped, so a row-level problem never blocks the
-    // batch. The whole batch runs in one transaction, so a failure part way through cannot leave a
-    // half-applied ledger behind a still-REVIEWED import.
+    // Apply materializes the reviewed rows into the ledger: each error-free row becomes a trade
+    // unless reconciliation says the ledger already holds it. Unknown tickers auto-enter the
+    // catalog and institutions auto-create on first sight. Rows are grouped by institution name to
+    // create/fetch each institution once, and by natural tuple so the occurrence walk sees one
+    // tuple's rows together. A manual trade the import matches is skipped and marked confirmed by
+    // B3; an occurrence the ledger already holds is skipped (dedup). Flagged rows are skipped, so a
+    // row-level problem never blocks the batch. The whole batch runs in one transaction, so a
+    // failure part way through cannot leave a half-applied ledger behind a still-REVIEWED import.
     suspend fun apply(id: Int): Import? {
         val import = repository.fetchById(id) ?: return null
         requireStatus(import, ImportStatus.REVIEWED)
@@ -64,30 +66,33 @@ class ImportService(
             errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
                 catalogService.upsertTicker(ticker)
             }
-            errorFreeRows
+
+            // Each institution is created/fetched once from its group's own normalized key — the
+            // rows in that group map through the institution id the key resolved to.
+            val creations = errorFreeRows
                 .groupBy { it.institutionName.normalizedInstitutionName() }
-                .forEach { (institutionName, rows) ->
-                    val institution = institutionService.create(InstitutionCreation(institutionName))
-                    rows.forEach { row ->
-                        tradeService.create(
-                            TradeCreation(
-                                ticker = row.ticker,
-                                side = row.side,
-                                date = requireNotNull(row.date) {
-                                    "Import row ${row.id} is error-free but has no date"
-                                },
-                                venue = row.venue,
-                                quantity = row.quantity,
-                                unitPrice = row.unitPrice,
-                                institutionId = institution.id,
-                            ),
-                        )
-                    }
+                .flatMap { (name, rows) ->
+                    val institution = institutionService.create(InstitutionCreation(name))
+                    rows.map { it.toCreation(institution.id) }
                 }
+
+            creations
+                .groupBy { it.naturalKey() }
+                .forEach { (key, grouped) -> tradeService.reconcile(key, grouped) }
 
             repository.updateStatus(id, ImportStatus.APPLIED)
         }
     }
+
+    private fun ImportRow.toCreation(institutionId: Int) = TradeCreation(
+        ticker = ticker,
+        side = side,
+        date = requireNotNull(date) { "Import row $id is error-free but has no date" },
+        venue = venue,
+        quantity = quantity,
+        unitPrice = unitPrice,
+        institutionId = institutionId,
+    )
 
     private fun requireStatus(import: Import, expected: ImportStatus) {
         if (import.status != expected) throw InvalidImportStateException(import.id, expected, import.status)
