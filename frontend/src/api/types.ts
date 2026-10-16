@@ -60,7 +60,7 @@ export interface Import {
 export interface ImportRow {
   id: number;
   import_id: number;
-  date: string;
+  date: string | null;
   side: TradeSide;
   venue: string;
   ticker: string;

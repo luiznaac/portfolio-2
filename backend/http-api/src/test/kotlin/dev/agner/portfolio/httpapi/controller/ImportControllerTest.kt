@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.agner.portfolio.httpapi.import.IImportParser
 import dev.agner.portfolio.httpapi.import.ImportParserResolver
 import dev.agner.portfolio.usecase.import.ImportService
 import dev.agner.portfolio.usecase.import.model.Import
@@ -60,7 +61,11 @@ class ImportControllerTest : DescribeSpec({
             } returns stagedImport
 
             testApplication {
-                application { installRoutes(ImportController(service, ImportParserResolver(emptyList()))) }
+                application {
+                    installRoutes(
+                        ImportController(service, ImportParserResolver(listOf(StubParser(claims = true)))),
+                    )
+                }
 
                 val response = client.post("/imports") {
                     setBody(
@@ -82,6 +87,36 @@ class ImportControllerTest : DescribeSpec({
                 response.status shouldBe HttpStatusCode.Created
                 ObjectMapper().readTree(response.bodyAsText()).get("status").asText() shouldBe "STAGED"
                 captured.captured shouldBe emptyList()
+            }
+        }
+
+        it("returns 400 with the canonical error body when no parser recognises the file") {
+            val service = mockk<ImportService>()
+
+            testApplication {
+                application { installRoutes(ImportController(service, ImportParserResolver(emptyList()))) }
+
+                val response = client.post("/imports") {
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append("source", "B3_TRADES")
+                                append(
+                                    "file",
+                                    "abc".toByteArray(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentDisposition, "filename=\"unknown.xlsx\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "unsupported-import-file"
+                coVerify(exactly = 0) { service.stage(any(), any(), any(), any()) }
             }
         }
 
@@ -241,3 +276,12 @@ private val payload = ImportRowPayload(
     unitPrice = BigDecimal("48.92"),
     institutionName = "XP INVESTIMENTOS",
 )
+
+private class StubParser(
+    private val claims: Boolean,
+    private val rows: List<ImportRowPayload> = emptyList(),
+) : IImportParser {
+    override fun shouldExecute(fileName: String, content: ByteArray) = claims
+
+    override fun parse(fileName: String, content: ByteArray) = rows
+}

@@ -13,7 +13,9 @@ import kotlin.time.ExperimentalTime
 @OptIn(ExperimentalTime::class)
 object ImportRowTable : IntIdTable("import_row") {
     val importId = reference("import_id", ImportTable.id)
-    val date = date("date")
+
+    // Nullable: a row whose date is missing or unparseable stages with a null date and an error.
+    val date = date("date").nullable()
     val side = enumerationByName<TradeSide>("side", 4)
     val venue = varchar("venue", 20)
     val ticker = varchar("ticker", 12)
