@@ -35,4 +35,8 @@ npm run build         # tsc -b && vite build
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
 - **Testing scope**: only `src/lib/**` has tests (`vitest.config.ts` restricts `include` to it) — pure logic, no rendering. Don't claim UI coverage beyond what this actually checks.
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

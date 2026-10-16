@@ -62,6 +62,10 @@ Renaming an enum whose values are persisted as strings (an Exposed `enumerationB
 
 **Comments earn their place.** Explain *why* — a non-obvious rule, a deliberate simplification, a trap the next reader would fall into. Don't restate the code, don't number-reference an external planning document that won't be in the reader's hands, and don't leave "this is a guess" scaffolding lying around once it's verified.
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 ## Testing
 
 Kotest `StringSpec`, MockK, `kotest-extensions-spring`. Reuse `testFixtures` builders rather than hand-rolling fixture objects per test. Existing unit test coverage worth using as a style reference: `BondCalculatorTest`, `BondConsolidationServiceTest`, `BondContributionConsolidatorTest`, `YieldRateServiceTest`, `CheckingAccountConsolidatorTest`, `IndexValueServiceTest`, `TaxServiceTest`, `IOFIncidenceCalculatorTest`, `RendaIncidenceCalculatorTest`.
