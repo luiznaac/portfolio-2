@@ -84,6 +84,37 @@ class B3NegotiationParserTest : DescribeSpec({
                 rows.single().unitPrice.compareTo(BigDecimal("48.92")) shouldBe 0
             }
 
+            it("reads columns by position so an extra column cannot shift them") {
+                val headers = listOf(
+                    "Data",
+                    "Coluna Extra",
+                    "Tipo de Movimentação",
+                    "Mercado",
+                    "Ticker",
+                    "Quantidade",
+                    "Preço Unitário",
+                    "Valor Bruto",
+                    "Instituição",
+                )
+                val row = listOf(
+                    LocalDate.parse("2026-10-14"),
+                    "ignored",
+                    "C",
+                    "VISTA",
+                    "ALUP11F",
+                    100,
+                    48.92,
+                    4892.00,
+                    "XP INVESTIMENTOS",
+                )
+
+                val rows = parser.parse("extra-column.xlsx", b3Workbook(headers, listOf(row)))
+
+                rows.single().ticker shouldBe "ALUP11"
+                rows.single().quantity.compareTo(BigDecimal("100")) shouldBe 0
+                rows.single().unitPrice.compareTo(BigDecimal("48.92")) shouldBe 0
+            }
+
             it("strips the fractional-market F suffix from tickers") {
                 val rows = parser.parse("b3-negociacao.xlsx", fixtureBytes)
                 rows[0].ticker shouldBe "ALUP11"
