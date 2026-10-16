@@ -17,14 +17,14 @@ class QuoteRepository(
 ) : IQuoteRepository {
 
     // Keyed on (ticker, date): a re-sync of the same day overwrites the row (COTAHIST is
-    // authoritative).
+    // authoritative). The conflict keys are left implicit — MySQL's ON DUPLICATE KEY UPDATE uses
+    // the table's unique keys (here the (ticker, date) unique index) and rejects an explicit
+    // conflict-column list.
     override suspend fun upsertAll(quotes: List<Quote>): Int = transaction {
         if (quotes.isEmpty()) return@transaction 0
 
         QuoteTable.batchUpsert(
             quotes,
-            QuoteTable.ticker,
-            QuoteTable.date,
             onUpdateExclude = listOf(QuoteTable.createdAt),
         ) { quote ->
             this[QuoteTable.ticker] = quote.ticker

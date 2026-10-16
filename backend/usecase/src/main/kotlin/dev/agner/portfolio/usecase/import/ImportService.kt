@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.import
 
+import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportCreation
@@ -20,6 +21,7 @@ class ImportService(
     private val repository: IImportRepository,
     private val tradeService: TradeService,
     private val institutionService: InstitutionService,
+    private val catalogService: CatalogService,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -57,8 +59,12 @@ class ImportService(
         requireStatus(import, ImportStatus.REVIEWED)
 
         return transaction.execute {
-            repository.fetchRows(id)
-                .filter { it.error == null }
+            val errorFreeRows = repository.fetchRows(id).filter { it.error == null }
+            // Auto-enter unknown tickers into the catalog before creating trades.
+            errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
+                catalogService.upsertTicker(ticker)
+            }
+            errorFreeRows
                 .groupBy { it.institutionName.normalizedInstitutionName() }
                 .forEach { (institutionName, rows) ->
                     val institution = institutionService.create(InstitutionCreation(institutionName))
