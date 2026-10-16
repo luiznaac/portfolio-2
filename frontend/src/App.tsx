@@ -1,11 +1,19 @@
 import type { RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { ImportWizard } from "./pages/ImportWizard.tsx";
+import { Trades } from "./pages/Trades.tsx";
 
 export const routes: RouteObject[] = [
   {
     path: "/",
     element: <Layout />,
-    children: [{ index: true, element: <Dashboard /> }],
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: "imports", element: <ImportWizard /> },
+      // Not `/assets`: the production nginx serves the built bundle's `/assets/` static
+      // directory, which would shadow a sibling SPA route of that name on a deep link.
+      { path: "trades", element: <Trades /> },
+    ],
   },
 ];

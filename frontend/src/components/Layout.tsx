@@ -1,12 +1,13 @@
 import { Outlet } from "react-router-dom";
+import { Sidebar } from "./Sidebar.tsx";
 
 export function Layout() {
   return (
-    <div className="mx-auto min-h-screen max-w-3xl px-4 py-8">
-      <header className="mb-6">
-        <h1 className="text-lg font-semibold">portfolio</h1>
-      </header>
-      <Outlet />
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <main className="flex-1 px-8 py-8">
+        <Outlet />
+      </main>
     </div>
   );
 }
