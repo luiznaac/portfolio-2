@@ -55,17 +55,16 @@ class ImportControllerTest : DescribeSpec({
 
         it("returns 201 with the staged import and passes the source, name and content hash") {
             val service = mockk<ImportService>()
+            val parser = mockk<IImportParser>()
             val captured = slot<List<ImportRowPayload>>()
             coEvery {
                 service.stage(ImportSource.B3_TRADES, "neg.xlsx", ABC_HASH, capture(captured))
             } returns stagedImport
+            coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
+            coEvery { parser.parse("neg.xlsx", any()) } returns emptyList()
 
             testApplication {
-                application {
-                    installRoutes(
-                        ImportController(service, ImportParserResolver(listOf(StubParser(claims = true)))),
-                    )
-                }
+                application { installRoutes(ImportController(service, ImportParserResolver(listOf(parser)))) }
 
                 val response = client.post("/imports") {
                     setBody(
@@ -276,12 +275,3 @@ private val payload = ImportRowPayload(
     unitPrice = BigDecimal("48.92"),
     institutionName = "XP INVESTIMENTOS",
 )
-
-private class StubParser(
-    private val claims: Boolean,
-    private val rows: List<ImportRowPayload> = emptyList(),
-) : IImportParser {
-    override fun shouldExecute(fileName: String, content: ByteArray) = claims
-
-    override fun parse(fileName: String, content: ByteArray) = rows
-}

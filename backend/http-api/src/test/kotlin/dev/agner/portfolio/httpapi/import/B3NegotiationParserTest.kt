@@ -13,7 +13,9 @@ class B3NegotiationParserTest : DescribeSpec({
     describe("B3NegotiationParser") {
 
         val parser = B3NegotiationParser()
-        val fixtureBytes = b3NegotiationFixtureBytes()
+        val fixtureResource = javaClass.classLoader.getResource("b3-negociacao.xlsx")
+            ?: throw IllegalStateException("Fixture b3-negociacao.xlsx not found in test resources")
+        val fixtureBytes = fixtureResource.readBytes()
 
         describe("shouldExecute") {
             it("claims a file by its header row regardless of filename") {
@@ -111,6 +113,18 @@ class B3NegotiationParserTest : DescribeSpec({
                 val row = listOf(LocalDate.parse("2026-10-14"), "C", "VISTA", null, 100, 48.92, 4892.00, "XP")
                 val rows = parser.parse("no-ticker.xlsx", b3Workbook(B3_HEADERS, listOf(row)))
                 rows.single().date shouldBe LocalDate.parse("2026-10-14")
+                rows.single().error.shouldNotBeNull()
+            }
+
+            it("stages a row with an unknown side as a row-level error") {
+                val row = listOf(LocalDate.parse("2026-10-14"), "X", "VISTA", "PETR4", 100, 48.92, 4892.00, "XP")
+                val rows = parser.parse("bad-side.xlsx", b3Workbook(B3_HEADERS, listOf(row)))
+                rows.single().error.shouldNotBeNull()
+            }
+
+            it("stages a row with a non-numeric quantity as a row-level error") {
+                val row = listOf(LocalDate.parse("2026-10-14"), "C", "VISTA", "PETR4", "lots", 48.92, 4892.00, "XP")
+                val rows = parser.parse("bad-quantity.xlsx", b3Workbook(B3_HEADERS, listOf(row)))
                 rows.single().error.shouldNotBeNull()
             }
 

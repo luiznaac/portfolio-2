@@ -17,6 +17,9 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
 
+// A header name mapped to the column index it occupies in the sheet.
+private typealias ColumnIndex = Map<String, Int>
+
 @Component
 class B3NegotiationParser : IImportParser {
 
@@ -38,13 +41,13 @@ class B3NegotiationParser : IImportParser {
             require(EXPECTED_HEADERS.all { it in headers }) {
                 "B3 negotiation XLSX unrecognised layout in $fileName: found headers ${headers.keys}"
             }
-            parseRows(fileName, sheet, headers)
+            parseRows(sheet, headers)
         }
 
     // Columns are located by the header cell's own position, never by an index into a compacted
     // header list: a blank or extra header before a real column would otherwise shift every later
     // column and read the wrong cell.
-    private fun headerColumns(sheet: Sheet): Map<String, Int> {
+    private fun headerColumns(sheet: Sheet): ColumnIndex {
         val headerRow = sheet.getRow(0) ?: return emptyMap()
         return (0..<headerRow.lastCellNum.toInt())
             .mapNotNull { index ->
@@ -57,26 +60,12 @@ class B3NegotiationParser : IImportParser {
             .toMap()
     }
 
-    private fun parseRows(
-        fileName: String,
-        sheet: Sheet,
-        headers: Map<String, Int>,
-    ): List<ImportRowPayload> {
-        val rows = mutableListOf<ImportRowPayload>()
-        for (rowIndex in 1..sheet.lastRowNum) {
-            val row = sheet.getRow(rowIndex) ?: continue
-            if (row.firstCellNum < 0) continue
-            rows.add(parseRow(fileName, rowIndex, row, headers))
+    private fun parseRows(sheet: Sheet, headers: ColumnIndex): List<ImportRowPayload> =
+        (1..sheet.lastRowNum).mapNotNull { rowIndex ->
+            sheet.getRow(rowIndex)?.takeIf { it.firstCellNum >= 0 }?.let { parseRow(it, headers) }
         }
-        return rows
-    }
 
-    private fun parseRow(
-        fileName: String,
-        rowIndex: Int,
-        row: Row,
-        headers: Map<String, Int>,
-    ): ImportRowPayload {
+    private fun parseRow(row: Row, headers: ColumnIndex): ImportRowPayload {
         val date = readDate(cell(row, headers, "Data"))
         val sideText = readText(cell(row, headers, "Tipo de Movimentação"))
         val venue = readText(cell(row, headers, "Mercado")).orEmpty()
@@ -85,38 +74,28 @@ class B3NegotiationParser : IImportParser {
         val quantityText = readText(cell(row, headers, "Quantidade"))
         val unitPriceText = readText(cell(row, headers, "Preço Unitário"))
         val grossText = readText(cell(row, headers, "Valor Bruto"))
-        val normalizedTicker = ticker.normalizedTicker()
-
-        // A missing or unparseable date stages as a null-date error row; it never blocks the file.
-        if (date == null || ticker.isEmpty()) {
-            return ImportRowPayload(
-                date = date,
-                side = TradeSide.BUY,
-                venue = venue,
-                ticker = normalizedTicker,
-                quantity = BigDecimal.ZERO,
-                unitPrice = BigDecimal.ZERO,
-                institutionName = institutionName,
-                error = missingDateOrTicker(date, ticker),
-            )
-        }
-
+        val side = sideFrom(sideText)
         val quantity = quantityText?.toBigDecimalOrNull()
-            ?: throw IllegalArgumentException("Invalid quantity '$quantityText' in $fileName row $rowIndex")
         val unitPrice = unitPriceText?.toBigDecimalOrNull()
-            ?: throw IllegalArgumentException("Invalid unit price '$unitPriceText' in $fileName row $rowIndex")
+
+        // Every row-level problem stages the row with an `error` and a best-effort shape; none of
+        // them blocks the file. A row is applicable only when `error` is null, so apply skips it.
         val error = when {
+            date == null || ticker.isEmpty() -> missingDateOrTicker(date, ticker)
+            side == null -> "Unknown side '$sideText'"
+            quantity == null -> "Invalid quantity '$quantityText'"
+            unitPrice == null -> "Invalid unit price '$unitPriceText'"
             quantity.signum() <= 0 -> "Quantity must be positive"
             else -> grossMismatch(grossText, quantity, unitPrice)
         }
 
         return ImportRowPayload(
             date = date,
-            side = parseSide(sideText, fileName, rowIndex),
+            side = side ?: TradeSide.BUY,
             venue = venue,
-            ticker = normalizedTicker,
-            quantity = quantity,
-            unitPrice = unitPrice,
+            ticker = ticker.normalizedTicker(),
+            quantity = quantity ?: BigDecimal.ZERO,
+            unitPrice = unitPrice ?: BigDecimal.ZERO,
             institutionName = institutionName,
             error = error,
         )
@@ -128,11 +107,11 @@ class B3NegotiationParser : IImportParser {
         else -> "Missing ticker"
     }
 
-    private fun parseSide(sideText: String?, fileName: String, rowIndex: Int): TradeSide =
+    private fun sideFrom(sideText: String?): TradeSide? =
         when (sideText?.trim()?.uppercase()) {
             "C", "COMPRA" -> TradeSide.BUY
             "V", "VENDA" -> TradeSide.SELL
-            else -> throw IllegalArgumentException("Unknown side '$sideText' in $fileName row $rowIndex")
+            else -> null
         }
 
     // Gross is derived (quantity × price), never stored: a mismatch is a row-level error, so the
@@ -162,7 +141,7 @@ class B3NegotiationParser : IImportParser {
     private fun readText(cell: Cell?): String? =
         cell?.let { formatter.formatCellValue(it).trim() }?.takeIf { it.isNotEmpty() }
 
-    private fun cell(row: Row, headers: Map<String, Int>, name: String): Cell? =
+    private fun cell(row: Row, headers: ColumnIndex, name: String): Cell? =
         headers[name]?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
 
     private companion object {

@@ -5,8 +5,9 @@ import org.apache.poi.ss.usermodel.CellStyle
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.ByteArrayOutputStream
-import java.time.LocalDate
 
+// The B3 "Negociação de Ativos" header set, as its own source of truth so a parser test asserts
+// against the layout rather than against the parser's own copy of it.
 internal val B3_HEADERS = listOf(
     "Data",
     "Tipo de Movimentação",
@@ -18,16 +19,8 @@ internal val B3_HEADERS = listOf(
     "Instituição",
 )
 
-// A B3 "Negociação de Ativos" workbook with real cell types: the date column is an Excel date
-// cell and the numeric columns are numeric cells, as a real export produces — not strings.
-internal fun b3NegotiationFixtureBytes(): ByteArray = b3Workbook(
-    headers = B3_HEADERS,
-    rows = listOf(
-        listOf(LocalDate.of(2026, 10, 14), "C", "VISTA", "ALUP11F", 100, 48.92, 4892.00, "XP INVESTIMENTOS"),
-        listOf(LocalDate.of(2026, 10, 14), "V", "FRAC", "PETR4", 50, 35.10, 1755.00, "BTG PACTUAL"),
-    ),
-)
-
+// Builds an XLSX with real cell types — an Excel date cell for the date column and numeric cells
+// for the numbers — so a test exercises POI's type-aware reading, not an all-strings workbook.
 internal fun b3Workbook(headers: List<String?>, rows: List<List<Any?>>): ByteArray {
     val workbook = XSSFWorkbook()
     val sheet = workbook.createSheet("Sheet1")
@@ -53,15 +46,10 @@ private fun writeCell(row: Row, index: Int, value: Any?, dateStyle: CellStyle) {
         null -> Unit
         is String -> row.createCell(index).setCellValue(value)
         is Number -> row.createCell(index).setCellValue(value.toDouble())
-        is LocalDate -> writeDate(row, index, value, dateStyle)
-        is kotlinx.datetime.LocalDate -> writeDate(row, index, value.toJavaLocalDate(), dateStyle)
+        is kotlinx.datetime.LocalDate -> row.createCell(index).apply {
+            setCellValue(value.toJavaLocalDate())
+            cellStyle = dateStyle
+        }
         else -> error("Unsupported fixture cell value: $value")
-    }
-}
-
-private fun writeDate(row: Row, index: Int, value: LocalDate, dateStyle: CellStyle) {
-    row.createCell(index).apply {
-        setCellValue(value)
-        cellStyle = dateStyle
     }
 }
