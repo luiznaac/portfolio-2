@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.import
 
+import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportCreation
@@ -29,8 +30,15 @@ class ImportServiceTest : StringSpec({
     val repository = mockk<IImportRepository>(relaxed = true)
     val tradeService = mockk<TradeService>(relaxed = true)
     val institutionService = mockk<InstitutionService>(relaxed = true)
+    val catalogService = mockk<CatalogService>(relaxed = true)
     val transaction = CountingTransaction()
-    val service = ImportService(repository, tradeService, institutionService, transaction)
+    val service = ImportService(
+        repository,
+        tradeService,
+        institutionService,
+        catalogService,
+        transaction,
+    )
 
     beforeTest {
         clearAllMocks()

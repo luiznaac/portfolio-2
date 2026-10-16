@@ -51,5 +51,8 @@ out/
 ### Kotlin ###
 .kotlin
 
+### Fixtures (development/test only, git-ignored) ###
+/references/
+
 ### Claude Code ###
 .claude/
