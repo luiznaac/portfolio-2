@@ -16,13 +16,14 @@ class CatalogRepository(
 ) : ICatalogRepository {
 
     // Upsert, never delete: on conflict every descriptive column and last_seen move forward,
-    // while first_seen and created_at stay pinned to the ticker's first sighting.
+    // while first_seen and created_at stay pinned to the ticker's first sighting. The conflict
+    // keys are left implicit — MySQL's ON DUPLICATE KEY UPDATE uses the table's unique keys (here
+    // the ticker primary key) and rejects an explicit conflict-column list.
     override suspend fun upsertAll(entries: List<CatalogEntry>): Int = transaction {
         if (entries.isEmpty()) return@transaction 0
 
         CatalogTable.batchUpsert(
             entries,
-            CatalogTable.id,
             onUpdateExclude = listOf(CatalogTable.firstSeen, CatalogTable.createdAt),
         ) { entry ->
             this[CatalogTable.id] = entry.ticker
