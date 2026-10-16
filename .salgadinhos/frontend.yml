@@ -3,6 +3,6 @@
 source: react
 lane: frontend
 applied:
-  revision: 1
-  scaffold_sha: ddb96f9b03312536402783434c046573aa32f086
+  revision: 2
+  scaffold_sha: 5abb4f979bcfd44ff18d73665ca23c60a3cc346c
 allow: []
