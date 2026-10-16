@@ -7,6 +7,10 @@ Two projects, one repo:
 - **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`). Architecture, conventions and rules for evolving it are in [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
 - **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from `frontend/` (`npm --prefix frontend run <script>`). Details in [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react` scaffold (health-check slice only) and will be rewritten from scratch in future plans — its hand-mirrored `src/api/types.ts` tracks the health-check, catalog/quote and institution DTOs.
 
+## Code map
+
+- [`docs/code-map.md`](docs/code-map.md)
+
 ## Shared contracts
 
 Repo-root `contracts/` holds JSON fixtures that are the cross-cutting source of truth for the backend tests. `contracts/error-response.json` is the canonical domain-exception body: the backend's `DomainExceptionContractTest` asserts the API serialises exactly it, so a shape change edits the fixture once.
