@@ -16,8 +16,8 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.time.Instant
 
-// Regression guard for the MySQL conflict-key defect (#198): Exposed's MySQL dialect rejects an
-// UPSERT that names its conflict columns, so both repositories rely on the table's unique keys
+// Regression guard for the MySQL conflict-key defect: Exposed's MySQL dialect rejects an UPSERT
+// that names its conflict columns, so both repositories rely on the table's unique keys
 // implicitly. A mocked unit test cannot see this — only a real MySQL round-trip can.
 @IntegrationTest
 class CatalogAndQuoteUpsertTest : StringSpec({
