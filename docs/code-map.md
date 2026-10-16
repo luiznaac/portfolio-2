@@ -47,12 +47,12 @@ Hand-authored module → key files → seam index, plus the app entry points —
 **Seam(s)**: `DockerComposeExtension` brings up the compose MySQL and migrates it to head before any spec runs; `HttpMockService` (WireMock) stubs the outbound gateways. `MigrationSchemaTest` is the schema guard (see `persistence`). Run via the `integrationTest` Gradle task.
 
 ### `frontend` — React SPA
-**Purpose**: the browser client — currently the `environments/react` scaffold reset to the health-check vertical slice, to be rewritten from scratch later.
-**Files**: `src/main.tsx`, `src/App.tsx`; `src/api/{client,queries,types}.ts`; `src/pages/Dashboard.tsx`; `src/components/{Layout,Panel}.tsx`; `src/lib/format.ts`
+**Purpose**: the browser client — the scaffold's health-check slice plus the first product slice (shell sidebar, B3 import wizard, Ativos trade list); the rest is still scaffold to be rewritten later.
+**Files**: `src/main.tsx`, `src/App.tsx`; `src/api/{client,queries,types}.ts`; `src/pages/{Dashboard,ImportWizard,Trades}.tsx`; `src/components/{Layout,Sidebar,Panel,SituationChip,ImportStatusChip}.tsx`; `src/lib/{format,importSituations,tradeFilters}.ts`
 **Seam(s)**:
 - **Wire contract** — `src/api/types.ts` is the hand-maintained mirror of the backend edge DTOs; any DTO change updates it in the same commit.
-- **Data seam** — `src/api/client.ts` (the `fetch` wrapper and `ApiError`) and `src/api/queries.ts` (TanStack Query hooks) are where a new API call is wired; `pages/Dashboard.tsx` is the reference slice through every layer.
-- **Route seam** — `App.tsx` holds the route table; `main.tsx` mounts the router and QueryClient. Pure helpers in `lib/` are the unit-tested surface (`format.test.ts`); there are no component-render tests yet.
+- **Data seam** — `src/api/client.ts` (the `fetch` wrapper, `ApiError` and the multipart `upload`) and `src/api/queries.ts` (TanStack Query hooks) are where a new API call is wired; `pages/Dashboard.tsx` is the reference read slice and `pages/ImportWizard.tsx` the reference mutation slice.
+- **Route seam** — `App.tsx` holds the route table (`/` health, `/imports`, `/trades`); `main.tsx` mounts the router and QueryClient. Pure helpers in `lib/` are the unit-tested surface (`format.test.ts`, `importSituations.test.ts`, `tradeFilters.test.ts`); there are no component-render tests yet.
 
 ### Repo root — contracts, deploy, CI
 **Purpose**: the cross-cutting fixtures and the packaging/deploy story that bind backend + frontend together.
