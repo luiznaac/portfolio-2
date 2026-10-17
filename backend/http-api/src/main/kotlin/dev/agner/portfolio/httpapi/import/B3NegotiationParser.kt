@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.import
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
+import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import kotlinx.datetime.LocalDate
@@ -17,8 +18,22 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
 
-// A header name mapped to the column index it occupies in the sheet.
-private typealias ColumnIndex = Map<String, Int>
+// The B3 export ships the same negotiation data under two header vocabularies — the broker
+// "Negociação de Ativos" layout and the Área do Investidor "Negociação" layout. A column is
+// identified by any of its names, so either export claims the file.
+private enum class Column(val aliases: Set<String>) {
+    DATE(setOf("Data", "Data do Negócio")),
+    SIDE(setOf("Tipo de Movimentação")),
+    VENUE(setOf("Mercado")),
+    TICKER(setOf("Ticker", "Código de Negociação")),
+    QUANTITY(setOf("Quantidade")),
+    UNIT_PRICE(setOf("Preço Unitário", "Preço")),
+    GROSS(setOf("Valor Bruto", "Valor")),
+    INSTITUTION(setOf("Instituição")),
+}
+
+// A column mapped to the sheet index it occupies.
+private typealias ColumnIndex = Map<Column, Int>
 
 @Component
 class B3NegotiationParser : IImportParser {
@@ -37,12 +52,12 @@ class B3NegotiationParser : IImportParser {
             val sheet = workbook.getSheetAt(0)
             val headers = headerColumns(sheet)
             require(isRecognised(headers)) {
-                "B3 negotiation XLSX unrecognised layout in $fileName: found headers ${headers.keys}"
+                "B3 negotiation XLSX unrecognised layout in $fileName: found headers ${headerNames(sheet)}"
             }
             parseRows(sheet, headers)
         }
 
-    private fun isRecognised(headers: ColumnIndex) = EXPECTED_HEADERS.all { it in headers }
+    private fun isRecognised(headers: ColumnIndex) = Column.entries.all { it in headers }
 
     // Columns are located by the header cell's own position, never by an index into a compacted
     // header list: a blank or extra header before a real column would otherwise shift every later
@@ -55,9 +70,21 @@ class B3NegotiationParser : IImportParser {
                     .getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
                     ?.stringCellValue
                     ?.trim()
-                if (name.isNullOrEmpty()) null else name to index
+                val column = Column.entries.firstOrNull { name != null && name in it.aliases }
+                column?.let { it to index }
             }
             .toMap()
+    }
+
+    private fun headerNames(sheet: Sheet): List<String> {
+        val headerRow = sheet.getRow(0) ?: return emptyList()
+        return (0..<headerRow.lastCellNum.toInt()).mapNotNull { index ->
+            headerRow
+                .getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
+                ?.stringCellValue
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }
     }
 
     private fun parseRows(sheet: Sheet, headers: ColumnIndex): List<ImportRowPayload> {
@@ -72,27 +99,28 @@ class B3NegotiationParser : IImportParser {
     }
 
     private fun parseRow(row: Row, headers: ColumnIndex, formatter: DataFormatter): ImportRowPayload {
-        val date = readDate(cell(row, headers, "Data"), formatter)
-        val sideText = readText(cell(row, headers, "Tipo de Movimentação"), formatter)
-        val venue = readText(cell(row, headers, "Mercado"), formatter).orEmpty()
-        val ticker = readText(cell(row, headers, "Ticker"), formatter).orEmpty()
-        val institutionName = readText(cell(row, headers, "Instituição"), formatter).orEmpty()
-        val quantityText = readText(cell(row, headers, "Quantidade"), formatter)
-        val unitPriceText = readText(cell(row, headers, "Preço Unitário"), formatter)
-        val grossText = readText(cell(row, headers, "Valor Bruto"), formatter)
+        val date = readDate(cell(row, headers, Column.DATE), formatter)
+        val sideText = readText(cell(row, headers, Column.SIDE), formatter)
+        val venue = readText(cell(row, headers, Column.VENUE), formatter).orEmpty()
+        val ticker = readText(cell(row, headers, Column.TICKER), formatter).orEmpty()
+        val institutionName = readText(cell(row, headers, Column.INSTITUTION), formatter).orEmpty()
+        val quantityCell = cell(row, headers, Column.QUANTITY)
+        val unitPriceCell = cell(row, headers, Column.UNIT_PRICE)
+        val grossCell = cell(row, headers, Column.GROSS)
         val side = sideFrom(sideText)
-        val quantity = quantityText?.toBigDecimalOrNull()
-        val unitPrice = unitPriceText?.toBigDecimalOrNull()
+        val quantity = readNumber(quantityCell, formatter)
+        val unitPrice = readNumber(unitPriceCell, formatter)
+        val gross = readNumber(grossCell, formatter)
 
         // Every row-level problem stages the row with an `error` and a best-effort shape; none of
         // them blocks the file. A row is applicable only when `error` is null, so apply skips it.
         val error = when {
             date == null || ticker.isEmpty() -> missingDateOrTicker(date, ticker)
             side == null -> "Unknown side '$sideText'"
-            quantity == null -> "Invalid quantity '$quantityText'"
-            unitPrice == null -> "Invalid unit price '$unitPriceText'"
+            quantity == null -> "Invalid quantity '${readText(quantityCell, formatter)}'"
+            unitPrice == null -> "Invalid unit price '${readText(unitPriceCell, formatter)}'"
             quantity.signum() <= 0 -> "Quantity must be positive"
-            else -> grossError(grossText, quantity, unitPrice)
+            else -> grossError(gross, quantity, unitPrice)
         }
 
         return ImportRowPayload(
@@ -122,8 +150,8 @@ class B3NegotiationParser : IImportParser {
 
     // Gross is derived (quantity × price), never stored: a mismatch is a row-level error, so the
     // file still stages and the row can be reviewed or dropped.
-    private fun grossError(grossText: String?, quantity: BigDecimal, unitPrice: BigDecimal): String? {
-        val gross = grossText?.toBigDecimalOrNull() ?: return "Missing gross value"
+    private fun grossError(gross: BigDecimal?, quantity: BigDecimal, unitPrice: BigDecimal): String? {
+        val gross = gross ?: return "Missing gross value"
         val expected = quantity.multiply(unitPrice).setScale(GROSS_SCALE, RoundingMode.HALF_UP)
         return if (gross.setScale(GROSS_SCALE, RoundingMode.HALF_UP).compareTo(expected) == 0) {
             null
@@ -141,26 +169,27 @@ class B3NegotiationParser : IImportParser {
             return cell.localDateTimeCellValue.toLocalDate().toKotlinLocalDate()
         }
         val text = readText(cell, formatter) ?: return null
+        // The broker layout writes an ISO date; the Área do Investidor layout writes `dd/MM/yyyy`.
         return runCatching { LocalDate.parse(text) }.getOrNull()
+            ?: runCatching { LocalDate.parse(text, brazilianLocalDateFormat) }.getOrNull()
+    }
+
+    // A numeric cell is read as its number, not through `DataFormatter`: a B3 export styles the
+    // money columns (e.g. `R$   26.09`), and the formatted string is not a decimal any parser can
+    // read. A text cell still goes through the formatter for its own value.
+    private fun readNumber(cell: Cell?, formatter: DataFormatter): BigDecimal? = when {
+        cell == null -> null
+        cell.cellType == CellType.NUMERIC -> BigDecimal.valueOf(cell.numericCellValue)
+        else -> readText(cell, formatter)?.toBigDecimalOrNull()
     }
 
     private fun readText(cell: Cell?, formatter: DataFormatter): String? =
         cell?.let { formatter.formatCellValue(it).trim() }?.takeIf { it.isNotEmpty() }
 
-    private fun cell(row: Row, headers: ColumnIndex, name: String): Cell? =
-        headers[name]?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
+    private fun cell(row: Row, headers: ColumnIndex, column: Column): Cell? =
+        headers[column]?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
 
     private companion object {
-        val EXPECTED_HEADERS = listOf(
-            "Data",
-            "Tipo de Movimentação",
-            "Mercado",
-            "Ticker",
-            "Quantidade",
-            "Preço Unitário",
-            "Valor Bruto",
-            "Instituição",
-        )
         const val GROSS_SCALE = 2
     }
 }
