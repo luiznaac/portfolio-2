@@ -1,0 +1,2306 @@
+<!DOCTYPE html>
+<!-- Reference design for portfolio-2: the preferred "Carteira Ideal Console" prototype, cleaned of the Claude host shell and aligned with the adopted spec (issue #91) - the "Importar nota" nav/heading became "Importar extrato", the sidebar footer (Configuracoes link and gateway-health line) was dropped, the Kinvo/PicPay statement-upload drawer was dropped, and the prototype annotation mode was removed. Fonts load from Google Fonts; the product bundles the same families via @fontsource. -->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carteira Ideal Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ============================================================
+   Carteira Ideal Console — protótipo navegável
+   Dark-only por decisão (o SPA de produção é dark-only). Todas
+   as cores e o fundo são pintados explicitamente para a página
+   se sustentar sobre qualquer fundo do host.
+   ============================================================ */
+:root {
+  --ground:      #0B0F14;
+  --surface:     #121A21;
+  --surface-2:   #19232C;
+  --surface-3:   #212F3A;
+  --line:        #263440;
+  --line-soft:   #1C2833;
+
+  --ink:         #E5EBF1;
+  --ink-dim:     #9BA8B4;
+  --ink-faint:   #667581;
+
+  /* dados — semântica fixa, herdada do SPA atual */
+  --principal:   #38bdf8;  /* falta · comprar · delta negativo */
+  --principal-bg:#38bdf81f;
+  --yield:       #34d399;  /* ganho · ok */
+  --yield-bg:    #34d3991f;
+  --tax:         #fb7185;  /* imposto · alerta · bloqueio */
+  --tax-bg:      #fb71851f;
+  --accent:      #f59e0b;  /* excesso · vender · ação primária */
+  --accent-2:    #d97706;
+  --accent-bg:   #f59e0b1f;
+  --violet:      #a78bfa;
+
+  --cdi:   #38bdf8;
+  --selic: #a78bfa;
+  --ipca:  #f472b6;
+
+
+  --f-sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --f-cond: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --sb-w: 236px;
+  --sb-w-collapsed: 60px;
+  --tb-h: 52px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--principal); text-underline-offset: 2px; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+::selection { background: var(--accent-bg); }
+
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.num  { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.pos  { color: var(--accent); }   /* excesso */
+.neg  { color: var(--principal); } /* falta */
+.gain { color: var(--yield); }
+.loss { color: var(--tax); }
+.dim  { color: var(--ink-dim); }
+.faint{ color: var(--ink-faint); }
+
+/* ---------- app shell ---------- */
+.app {
+  display: grid;
+  grid-template-columns: var(--sb-w) 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+.app.collapsed { grid-template-columns: var(--sb-w-collapsed) 1fr; }
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.brand {
+  display: flex; align-items: center; gap: 9px;
+  height: var(--tb-h);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+.brand svg { flex: none; }
+.brand b {
+  font-family: var(--f-cond); font-weight: 700; font-size: 15px;
+  letter-spacing: .01em; white-space: nowrap;
+}
+.app.collapsed .brand b { display: none; }
+
+.nav { flex: 1; overflow-y: auto; padding: 10px 0; }
+.nav-group { padding: 6px 0; }
+.nav-group h5 {
+  margin: 0 0 4px; padding: 0 18px;
+  font-family: var(--f-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.app.collapsed .nav-group h5 { visibility: hidden; }
+.nav a {
+  display: flex; align-items: center; gap: 11px;
+  padding: 7px 18px; margin: 1px 0;
+  color: var(--ink-dim); text-decoration: none; font-size: 13.5px;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+}
+.nav a:hover { color: var(--ink); background: var(--surface-2); }
+.nav a.active {
+  color: var(--ink); background: var(--surface-2);
+  border-left-color: var(--accent);
+}
+.nav a svg { flex: none; opacity: .8; }
+.nav a.active svg { opacity: 1; color: var(--accent); }
+.app.collapsed .nav a { justify-content: center; padding: 9px 0; }
+.app.collapsed .nav a span { display: none; }
+.nav-count {
+  margin-left: auto; font-family: var(--f-mono); font-size: 11px;
+  background: var(--surface-3); color: var(--ink-dim);
+  padding: 0 6px; border-radius: 9px; min-width: 18px; text-align: center;
+}
+.nav a.active .nav-count { background: var(--accent-bg); color: var(--accent); }
+.nav-count.warn { background: var(--tax-bg); color: var(--tax); }
+.app.collapsed .nav-count { display: none; }
+
+/* ---------- main ---------- */
+.main { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.topbar {
+  height: var(--tb-h); flex: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 16px;
+}
+.tb-toggle {
+  background: none; border: 1px solid var(--line); border-radius: 6px;
+  width: 30px; height: 30px; display: grid; place-items: center;
+  cursor: pointer; color: var(--ink-dim); flex: none;
+}
+.tb-toggle:hover { color: var(--ink); border-color: var(--surface-3); }
+.crumb { font-size: 13px; color: var(--ink-dim); }
+.crumb b { color: var(--ink); font-weight: 600; }
+.tb-spacer { flex: 1; }
+
+.month-pill {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 11px; cursor: pointer;
+  font-size: 12.5px;
+}
+.month-pill:hover { border-color: var(--surface-3); }
+.month-pill .mp-status { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); }
+.month-pill .mp-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--yield); }
+.month-pill .mp-step { font-family: var(--f-mono); color: var(--accent); }
+.seg { display: flex; gap: 2px; }
+.seg i { width: 8px; height: 4px; border-radius: 1px; background: var(--surface-3); display: block; }
+.seg i.done { background: var(--yield); }
+.seg i.now  { background: var(--accent); }
+.seg i.block { background: var(--tax); }
+
+.tb-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 10px; cursor: pointer;
+  font-size: 12px; color: var(--ink-dim);
+}
+.tb-btn:hover { color: var(--ink); border-color: var(--surface-3); }
+.tb-btn kbd {
+  font-family: var(--f-mono); font-size: 10.5px; background: var(--surface-3);
+  border-radius: 3px; padding: 1px 4px; color: var(--ink-faint);
+}
+.tb-age { font-size: 11.5px; color: var(--ink-faint); font-family: var(--f-mono); }
+
+/* ---------- view ---------- */
+.view { flex: 1; overflow-y: auto; padding: 22px 26px 60px; }
+.page { max-width: 1180px; margin: 0 auto; }
+.page-head { margin-bottom: 20px; }
+.page-head h1 {
+  font-family: var(--f-cond); font-weight: 700; font-size: 24px;
+  letter-spacing: .005em; margin: 0 0 3px; text-wrap: balance;
+}
+.page-head p { margin: 0; color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; }
+
+h2.sec {
+  font-family: var(--f-cond); font-weight: 700; font-size: 15px;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-dim);
+  margin: 26px 0 12px; padding-bottom: 7px; border-bottom: 1px solid var(--line-soft);
+}
+h2.sec:first-of-type { margin-top: 4px; }
+
+/* ---------- panels / cards ---------- */
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 16px 18px;
+}
+.grid { display: grid; gap: 14px; }
+.g-2 { grid-template-columns: repeat(2, 1fr); }
+.g-3 { grid-template-columns: repeat(3, 1fr); }
+.g-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1080px) { .g-4 { grid-template-columns: repeat(2,1fr); } .g-3 { grid-template-columns: repeat(2,1fr); } }
+
+.kpi {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 14px 16px;
+}
+.kpi .k-label {
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px;
+}
+.kpi .k-value {
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  font-size: 23px; letter-spacing: -.02em; line-height: 1;
+}
+.kpi .k-sub { font-size: 11.5px; color: var(--ink-dim); margin-top: 6px; }
+
+/* ---------- tables ---------- */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-2);
+  font-family: var(--f-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint);
+  text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+thead th.num { text-align: right; }
+tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { background: var(--surface); }
+tbody tr.hoverable:hover { background: var(--surface-2); cursor: pointer; }
+tbody tr.group-row td {
+  background: var(--surface-2); font-family: var(--f-cond); font-weight: 600;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim);
+  padding: 6px 12px;
+}
+.tick { font-family: var(--f-mono); font-weight: 500; letter-spacing: .01em; }
+td.indent-1 .tick { padding-left: 16px; display: inline-block; }
+td.indent-2 .tick { padding-left: 32px; display: inline-block; }
+
+/* ---------- chips / badges ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .02em;
+  padding: 2px 7px; border-radius: 5px;
+  background: var(--surface-3); color: var(--ink-dim);
+  white-space: nowrap;
+}
+.chip.blue  { background: var(--principal-bg); color: var(--principal); }
+.chip.green { background: var(--yield-bg); color: var(--yield); }
+.chip.amber { background: var(--accent-bg); color: var(--accent); }
+.chip.rose  { background: var(--tax-bg); color: var(--tax); }
+.chip.violet{ background: #a78bfa1f; color: var(--violet); }
+
+.badge {
+  font-family: var(--f-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px;
+  background: var(--surface-3); color: var(--ink-dim);
+}
+.badge.ok    { background: var(--yield-bg); color: var(--yield); }
+.badge.warn  { background: var(--accent-bg); color: var(--accent); }
+.badge.crit  { background: var(--tax-bg); color: var(--tax); }
+.badge.info  { background: var(--principal-bg); color: var(--principal); }
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 7px 13px; cursor: pointer;
+  font-size: 12.5px; color: var(--ink); font-weight: 500;
+}
+.btn:hover { border-color: var(--surface-3); background: var(--surface-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1205; font-weight: 600; }
+.btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+.btn.ghost { background: none; }
+.btn.sm { padding: 4px 9px; font-size: 11.5px; }
+.btn.danger { color: var(--tax); border-color: var(--tax-bg); }
+.btn.danger:hover { background: var(--tax-bg); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---------- divergent bar ---------- */
+.divbar { position: relative; height: 16px; min-width: 130px; }
+.divbar .axis { position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--line); }
+.divbar .fill {
+  position: absolute; top: 3px; height: 10px; border-radius: 2px;
+}
+.divbar .fill.neg { right: 50%; background: var(--principal); }
+.divbar .fill.pos { left: 50%; background: var(--accent); }
+
+/* ---------- meter ---------- */
+.meter { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; display: flex; }
+.meter i { display: block; height: 100%; }
+.meter i.executed { background: var(--ink-faint); }
+.meter i.planned  { background: var(--accent); }
+.meter i.fillok   { background: var(--yield); }
+.meter i.filllow  { background: var(--principal); }
+.meter.over i.planned { background: var(--tax); }
+
+/* ---------- segmented control ---------- */
+.segctl { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+.segctl button {
+  background: none; border: 0; border-radius: 6px; padding: 5px 12px;
+  font-size: 12px; color: var(--ink-dim); cursor: pointer;
+}
+.segctl button.on { background: var(--surface-3); color: var(--ink); }
+
+/* ---------- stepper (cockpit) ---------- */
+.stepper { display: flex; flex-direction: column; }
+.step {
+  display: grid; grid-template-columns: 34px 1fr auto; gap: 0 14px;
+  padding: 14px 0; border-top: 1px solid var(--line-soft);
+  align-items: start;
+}
+.step:first-child { border-top: 0; }
+.step .s-mark {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--f-mono); font-size: 12px; font-weight: 600;
+  border: 1.5px solid var(--line); color: var(--ink-faint);
+}
+.step.done .s-mark { background: var(--yield-bg); border-color: var(--yield); color: var(--yield); }
+.step.now  .s-mark { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.step.block .s-mark { border-color: var(--tax); color: var(--tax); }
+.step .s-title { font-family: var(--f-cond); font-weight: 600; font-size: 15px; }
+.step .s-live { font-size: 12.5px; color: var(--ink-dim); margin-top: 2px; }
+.step.block .s-live { color: var(--tax); }
+.step .s-opt { font-size: 10.5px; color: var(--ink-faint); font-family: var(--f-mono); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ---------- alerts ---------- */
+.alert {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; font-size: 12.5px;
+  background: var(--surface-2); border-left: 3px solid var(--line);
+}
+.alert.warn { border-left-color: var(--accent); }
+.alert.crit { border-left-color: var(--tax); }
+.alert.info { border-left-color: var(--principal); }
+.alert .a-ic { color: var(--ink-faint); }
+.alert.warn .a-ic { color: var(--accent); }
+.alert.crit .a-ic { color: var(--tax); }
+.alert.info .a-ic { color: var(--principal); }
+.alert a { font-weight: 500; }
+
+/* ---------- allocation strip ---------- */
+.alloc-strip { display: flex; height: 30px; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); }
+.alloc-strip .seg-c { position: relative; height: 100%; display: flex; align-items: center; justify-content: center; }
+.alloc-strip .seg-c span { font-family: var(--f-mono); font-size: 10.5px; color: #0b0f14; font-weight: 600; }
+.alloc-strip .seg-c .marker { position: absolute; top: 0; bottom: 0; width: 2px; background: #0b0f14cc; }
+
+/* ---------- inbox rows (transfers) ---------- */
+.inbox { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.inbox-row {
+  display: grid; grid-template-columns: 90px 1fr 150px auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border-top: 1px solid var(--line-soft); background: var(--surface);
+}
+.inbox-row:first-child { border-top: 0; }
+.inbox-row.decided { opacity: .5; }
+.inbox-row .ir-route { display: flex; align-items: center; gap: 7px; font-size: 12.5px; flex-wrap: wrap; }
+.inbox-row .ir-why { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+.inbox-row .ir-qty { display: flex; align-items: center; gap: 6px; }
+.inbox-row .ir-qty input {
+  width: 54px; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 5px; padding: 4px 6px; color: var(--ink); font-family: var(--f-mono);
+  font-size: 12px; text-align: right;
+}
+.inbox-row .ir-actions { display: flex; gap: 6px; }
+.arrow { color: var(--ink-faint); }
+
+/* ---------- wizard steps ---------- */
+.wizard-nav { display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.wizard-nav .w-step {
+  flex: 1; padding: 10px 14px; font-size: 12px; color: var(--ink-faint);
+  border-right: 1px solid var(--line-soft); display: flex; align-items: center; gap: 8px;
+}
+.wizard-nav .w-step:last-child { border-right: 0; }
+.wizard-nav .w-step .w-n {
+  width: 19px; height: 19px; border-radius: 50%; border: 1.5px solid var(--line);
+  display: grid; place-items: center; font-family: var(--f-mono); font-size: 10px; flex: none;
+}
+.wizard-nav .w-step.done { color: var(--yield); }
+.wizard-nav .w-step.done .w-n { border-color: var(--yield); background: var(--yield-bg); color: var(--yield); }
+.wizard-nav .w-step.on { color: var(--ink); background: var(--surface-2); }
+.wizard-nav .w-step.on .w-n { border-color: var(--accent); color: var(--accent); }
+
+.dropzone {
+  border: 1.5px dashed var(--line); border-radius: 12px; padding: 44px;
+  text-align: center; color: var(--ink-dim); background: var(--surface);
+}
+.dropzone svg { color: var(--ink-faint); margin-bottom: 10px; }
+
+/* ---------- drawer ---------- */
+.scrim { position: fixed; inset: 0; background: #0007; z-index: 40; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 92vw;
+  background: var(--surface); border-left: 1px solid var(--line); z-index: 41;
+  display: flex; flex-direction: column; box-shadow: -20px 0 50px -20px #000;
+}
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.drawer-head h3 { margin: 0; font-family: var(--f-cond); font-weight: 700; font-size: 16px; }
+.drawer-body { padding: 18px; overflow-y: auto; flex: 1; }
+.drawer-foot { padding: 14px 18px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
+.x-btn { background: none; border: 0; color: var(--ink-faint); cursor: pointer; font-size: 18px; line-height: 1; }
+.x-btn:hover { color: var(--ink); }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 11px; font-family: var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 5px; }
+.field input, .field select {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 8px 10px; color: var(--ink); font: inherit; font-size: 13px;
+}
+.field .hint { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+
+/* ---------- popover ---------- */
+.popover {
+  position: absolute; z-index: 30; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  box-shadow: 0 20px 50px -20px #000; width: 300px; font-size: 12.5px;
+}
+.popover h4 { margin: 0 0 8px; font-family: var(--f-cond); font-size: 13px; }
+.check-line { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; }
+.check-line .c-ic { font-family: var(--f-mono); font-size: 11px; }
+.check-line.done .c-ic { color: var(--yield); }
+.check-line.now .c-ic { color: var(--accent); }
+.check-line.block .c-ic { color: var(--tax); }
+.check-line.pending .c-ic { color: var(--ink-faint); }
+
+/* ---------- command palette ---------- */
+.cmdk-scrim { position: fixed; inset: 0; background: #0009; z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.cmdk {
+  width: 540px; max-width: 92vw; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden; box-shadow: 0 30px 80px -20px #000;
+}
+.cmdk input {
+  width: 100%; border: 0; background: none; padding: 15px 16px; color: var(--ink);
+  font: inherit; font-size: 15px; border-bottom: 1px solid var(--line);
+}
+.cmdk input:focus { outline: none; }
+.cmdk-list { max-height: 340px; overflow-y: auto; padding: 6px; }
+.cmdk-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 7px; font-size: 13px; cursor: pointer; color: var(--ink-dim); }
+.cmdk-item.on, .cmdk-item:hover { background: var(--surface-2); color: var(--ink); }
+.cmdk-item .k-kind { margin-left: auto; font-family: var(--f-mono); font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ---------- master-detail ---------- */
+.md { display: grid; grid-template-columns: 280px 1fr; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-height: 520px; }
+.md-list { border-right: 1px solid var(--line); overflow-y: auto; background: var(--surface); }
+.md-list .ml-group { font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); padding: 12px 14px 5px; }
+.md-list .ml-item { padding: 10px 14px; border-top: 1px solid var(--line-soft); cursor: pointer; }
+.md-list .ml-item:hover { background: var(--surface-2); }
+.md-list .ml-item.on { background: var(--surface-2); border-left: 2px solid var(--accent); padding-left: 12px; }
+.md-list .ml-item .mli-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.md-list .ml-item .mli-name { font-family: var(--f-cond); font-weight: 600; font-size: 13.5px; }
+.md-detail { overflow-y: auto; padding: 18px; }
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.tabs button {
+  background: none; border: 0; padding: 8px 13px; font-size: 12.5px; color: var(--ink-faint);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* ---------- misc ---------- */
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 12.5px; }
+.kv dt { color: var(--ink-faint); font-family: var(--f-mono); font-size: 11px; }
+.kv dd { margin: 0; text-align: right; font-family: var(--f-mono); }
+.spark { display: block; }
+.recon-bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.recon-bar .rb { height: 100%; display: flex; align-items: center; justify-content: center; font-family: var(--f-mono); font-size: 10px; color: #0b0f14; font-weight: 600; }
+.recon-bar .rb.unatt { background: repeating-linear-gradient(45deg, var(--tax) 0 6px, #fb718599 6px 12px); color: #0b0f14; }
+.bullet { position: relative; height: 22px; background: var(--surface-3); border-radius: 4px; }
+.bullet .band { position: absolute; top: 0; bottom: 0; background: var(--line); }
+.bullet .cur { position: absolute; top: 3px; bottom: 3px; background: var(--principal); border-radius: 2px; }
+.bullet .tgt { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
+
+.empty { text-align: center; padding: 48px 20px; color: var(--ink-dim); }
+.empty h3 { font-family: var(--f-cond); margin: 0 0 6px; color: var(--ink); }
+.skeleton { background: linear-gradient(90deg, var(--surface-2) 0 40%, var(--surface-3) 50%, var(--surface-2) 60% 100%); background-size: 300% 100%; animation: sk 1.3s linear infinite; border-radius: 4px; height: 14px; }
+@keyframes sk { to { background-position: -150% 0; } }
+
+.toast-wrap { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.toast { background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--yield); border-radius: 8px; padding: 10px 15px; font-size: 12.5px; box-shadow: 0 12px 30px -12px #000; }
+
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="11" r="9" stroke="var(--accent)" stroke-width="1.6"></circle>
+        <path d="M11 4v7l5 3" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"></path>
+      </svg>
+      <b>Carteira Ideal</b>
+    </div>
+    <nav class="nav" id="nav"></nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="tb-toggle" id="sbToggle" title="Recolher menu">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 4h11M2 7.5h11M2 11h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg>
+      </button>
+      <div class="crumb" id="crumb">Mês · <b>Cockpit do mês</b></div>
+      <div class="tb-spacer"></div>
+      <div class="month-pill" id="monthPill">
+        <span>Setembro 2026</span>
+        <span class="mp-status"><span class="dot"></span>Aberto</span>
+        <span class="mp-step" id="mpStep">3/7</span>
+        <span class="seg" id="mpSeg"><i class=""></i><i class="done"></i><i class="now"></i><i class=""></i><i class=""></i><i class=""></i><i class="block"></i></span>
+      </div>
+      <button class="tb-btn" id="cmdkBtn"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9.5 4.5A2.5 2.5 0 1 0 7 7h5M2.5 7.5A2.5 2.5 0 1 0 5 5H0" stroke="currentColor" stroke-width="1.2"></path></svg> Comandos <kbd>Ctrl K</kbd></button>
+      <span class="tb-age" id="tbAge">consolidado há 2 h</span>
+    </header>
+    <main class="view" id="view"><div class="page">
+    <div class="page-head">
+      <h1>Cockpit de setembro</h1>
+      <p>Onde o mês está e o que fazer agora. O ritual tem 7 passos; quatro deles são decisões suas.</p>
+    </div>
+
+    <div class="grid g-4" style="margin-bottom:22px">
+      <div class="kpi">
+        <div class="k-label">Patrimônio</div>
+        <div class="k-value">R$&nbsp;277.204</div>
+        <div class="k-sub">renda variável a mercado + renda fixa calculada</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Drift total</div>
+        <div class="k-value pos">R$&nbsp;76.464</div>
+        <div class="k-sub">maior desvio: Fundos imob. +R$&nbsp;51.084</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Proventos previstos</div>
+        <div class="k-value gain">R$&nbsp;1.127,05</div>
+        <div class="k-sub">líquido, na posição da data-com</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">IR a pagar</div>
+        <div class="k-value loss">R$&nbsp;468,00</div>
+        <div class="k-sub">DARF 6015 · vence 31/10</div>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns: 1.6fr 1fr; gap:18px; align-items:start">
+      <div class="panel">
+        <h2 class="sec" style="margin-top:0">Fechamento de setembro</h2>
+        <div class="stepper">
+          
+            <div class="step pending">
+              <div class="s-mark">1</div>
+              <div>
+                <div class="s-title">Registrar edições da XP</div>
+                <div class="s-live">4 de 5 estratégias com edição de set/26</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                
+                <button class="btn sm" data-go="/strategies/import">Importar relatórios</button>
+              </div>
+            </div>
+            <div class="step done">
+              <div class="s-mark">✓</div>
+              <div>
+                <div class="s-title">Recalcular o plano de ordens</div>
+                <div class="s-live">Plano recalculado em 10/09 14:32</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                
+                <button class="btn sm" data-go="/orders">Recalcular</button>
+              </div>
+            </div>
+            <div class="step now">
+              <div class="s-mark">3</div>
+              <div>
+                <div class="s-title">Decidir as transferências</div>
+                <div class="s-live">3 transferências pendentes · R$&nbsp;3.353</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                
+                <button class="btn sm" data-go="/orders">Decidir</button>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="s-mark">4</div>
+              <div>
+                <div class="s-title">Gerar a lista de ordens</div>
+                <div class="s-live">12 ordens · R$ 38 mil</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                
+                <button class="btn sm" data-go="/orders">Ver ordens</button>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="s-mark">5</div>
+              <div>
+                <div class="s-title">Importar o extrato B3</div>
+                <div class="s-live">Nenhum negócio de set/26 importado</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                
+                <button class="btn sm" data-go="/import">Importar extrato</button>
+              </div>
+            </div>
+            <div class="step pending">
+              <div class="s-mark">6</div>
+              <div>
+                <div class="s-title">Conciliar proventos</div>
+                <div class="s-live">Previsto R$&nbsp;1.127,05</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                <span class="s-opt">opcional</span>
+                <button class="btn sm" data-go="/income?tab=reconcile">Conciliar</button>
+              </div>
+            </div>
+            <div class="step block">
+              <div class="s-mark">!</div>
+              <div>
+                <div class="s-title">Fechar o mês</div>
+                <div class="s-live">Bloqueado: 3 transferências pendentes</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                
+                <button class="btn sm" data-go="/monthly-close">Fechar o mês</button>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Precisa de atenção</h2>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div class="alert crit"><span class="a-ic">◆</span><div><b>3 ativos com cotas não atribuídas</b> — ITUB4, BTLG11, ROXO34. <a href="/#/assets?filter=pending">Distribuir</a></div></div>
+            <div class="alert warn"><span class="a-ic">▲</span><div>Small Caps sem edição de setembro. <a href="/#/strategies/import">Importar</a></div></div>
+            <div class="alert warn"><span class="a-ic">▲</span><div>ORVR3 fora do plano — sem cotação disponível.</div></div>
+            <div class="alert info"><span class="a-ic">●</span><div>Vendas de ações em 62,0% do teto de isenção este mês.</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Alocação atual × alvo</h2>
+          <div class="alloc-strip">
+    <div class="seg-c" style="width:38.719177530151114%;background:#38bdf8">
+        <span>38,7%</span>
+        <div class="marker" style="left:100%"></div>
+      </div><div class="seg-c" style="width:35.692760664783194%;background:#a78bfa">
+        <span>35,7%</span>
+        <div class="marker" style="left:100%"></div>
+      </div><div class="seg-c" style="width:24.44685207996171%;background:#34d399">
+        <span>24,4%</span>
+        <div class="marker" style="left:100%"></div>
+      </div><div class="seg-c" style="width:3%;background:#f59e0b">
+        <span></span>
+        <div class="marker" style="left:100%"></div>
+      </div><div class="seg-c" style="width:3%;background:#667581">
+        <span></span>
+        <div class="marker" style="left:100%"></div>
+      </div>
+  </div>
+          <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:11px" class="faint">
+            <span>Ações</span><span>Fundos imob.</span><span>Renda fixa</span><span>Alternativos</span><span>Caixa</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Próximos proventos</h2>
+          <table><tbody>
+            <tr><td class="tick">ITSA4</td><td class="dim" style="font-size:11.5px">JCP</td><td class="faint" style="font-size:11.5px">03/11</td><td class="num gain">R$&nbsp;160,65</td></tr><tr><td class="tick">VALE3</td><td class="dim" style="font-size:11.5px">Dividendo</td><td class="faint" style="font-size:11.5px">10/10</td><td class="num gain">R$&nbsp;512,00</td></tr><tr><td class="tick">MCCI11</td><td class="dim" style="font-size:11.5px">Rendimento</td><td class="faint" style="font-size:11.5px">14/10</td><td class="num gain">R$&nbsp;244,40</td></tr><tr><td class="tick">KNCR11</td><td class="dim" style="font-size:11.5px">Rendimento</td><td class="faint" style="font-size:11.5px">14/10</td><td class="num gain">R$&nbsp;210,00</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button class="btn" data-drawer="contribution"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 2v9M2 6.5h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg> Aporte avulso</button>
+    </div>
+  </div></main>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+/* =========================================================================
+   MOCK DATA — formato snake_case, espelhando os DTOs reais do backend.
+   Números escolhidos para serem internamente consistentes; não são dados
+   reais do usuário.
+   ========================================================================= */
+const MONTH = "2026-09";
+const CAPITAL = 245000;
+
+const CLASS_TARGETS = [
+  { asset_class: "STOCKS",       label: "Ações",        ideal_weight: 0.50, color: "#38bdf8" },
+  { asset_class: "REAL_ESTATE",  label: "Fundos imob.", ideal_weight: 0.20, color: "#a78bfa" },
+  { asset_class: "FIXED_INCOME", label: "Renda fixa",   ideal_weight: 0.26, color: "#34d399" },
+  { asset_class: "ALTERNATIVES", label: "Alternativos", ideal_weight: 0.02, color: "#f59e0b" },
+  { asset_class: "CASH",         label: "Caixa",        ideal_weight: 0.02, color: "#667581" },
+];
+const SUBCLASS_TARGETS = [
+  { sub_class: "FLOATING_RATE",    label: "Pós-fixado",  ideal_weight: 0.55 },
+  { sub_class: "INFLATION_LINKED", label: "Inflação",    ideal_weight: 0.30 },
+  { sub_class: "FIXED_RATE",       label: "Pré-fixado",  ideal_weight: 0.15 },
+];
+
+const STRATEGIES = [
+  { id: 1, name: "Top Dividendos",       asset_class: "STOCKS",      weight: 0.34, edition: "2026-09", targets: 11 },
+  { id: 2, name: "Top Ações",            asset_class: "STOCKS",      weight: 0.30, edition: "2026-09", targets: 14 },
+  { id: 3, name: "Dividendos Plus",      asset_class: "STOCKS",      weight: 0.18, edition: "2026-09", targets: 10 },
+  { id: 4, name: "Small Caps",           asset_class: "STOCKS",      weight: 0.18, edition: null,      targets: 12 },
+  { id: 5, name: "Fundamentalista FII",  asset_class: "REAL_ESTATE", weight: 1.00, edition: "2026-09", targets: 16 },
+];
+
+// posição consolidada + atribuição por estratégia
+const ASSETS = [
+  { id: 1,  ticker: "VALE3", kind: "STOCK", name: "Vale",            b3: "VALE",         qty: 400, avg: 58.20, quote: 61.05, quoted_at: "2026-09-10T14:32", attr: [[1, 250], [2, 150]], unattributed: 0 },
+  { id: 2,  ticker: "ITUB4", kind: "STOCK", name: "Itaú Unibanco",   b3: "ITAUUNIBANCO", qty: 300, avg: 30.10, quote: 34.88, quoted_at: "2026-09-10T14:32", attr: [[1, 180], [2, 90]],  unattributed: 30 },
+  { id: 3,  ticker: "PETR4", kind: "STOCK", name: "Petrobras",       b3: "PETROBRAS",    qty: 320, avg: 36.40, quote: 38.71, quoted_at: "2026-09-10T14:32", attr: [[1, 160], [2, 80], [3, 80]], unattributed: 0 },
+  { id: 4,  ticker: "B3SA3", kind: "STOCK", name: "B3",              b3: "B3",           qty: 0,   avg: 0,     quote: 14.27, quoted_at: "2026-09-10T14:32", attr: [], unattributed: 0 },
+  { id: 5,  ticker: "CURY3", kind: "STOCK", name: "Cury",            b3: "CURY",         qty: 500, avg: 22.90, quote: 26.09, quoted_at: "2026-09-10T14:32", attr: [[2, 300], [4, 200]], unattributed: 0 },
+  { id: 6,  ticker: "PRIO3", kind: "STOCK", name: "PRIO",            b3: "PRIO",         qty: 140, avg: 41.10, quote: 39.55, quoted_at: "2026-09-10T14:32", attr: [[2, 80], [4, 60]], unattributed: 0 },
+  { id: 7,  ticker: "EGIE3", kind: "STOCK", name: "Engie Brasil",    b3: "ENGIE",        qty: 260, avg: 40.05, quote: 43.20, quoted_at: "2026-09-10T14:32", attr: [[1, 260]], unattributed: 0 },
+  { id: 8,  ticker: "ITSA4", kind: "STOCK", name: "Itaúsa",          b3: "ITAUSA",       qty: 900, avg: 9.80,  quote: 11.36, quoted_at: "2026-09-10T14:32", attr: [[1, 620], [3, 280]], unattributed: 0 },
+  { id: 9,  ticker: "ORVR3", kind: "STOCK", name: "Orizon",          b3: "ORIZON",       qty: 180, avg: 34.20, quote: 37.90, quoted_at: null,                attr: [[3, 100], [4, 80]], unattributed: 0 },
+  { id: 10, ticker: "SLCE3", kind: "STOCK", name: "SLC Agrícola",    b3: "SLCAGRICOLA",  qty: 0,   avg: 0,     quote: 18.44, quoted_at: "2026-09-10T14:32", attr: [], unattributed: 0 },
+  { id: 11, ticker: "CEAB3", kind: "STOCK", name: "C&A",             b3: "CEAB",         qty: 700, avg: 11.20, quote: 13.05, quoted_at: "2026-09-10T14:32", attr: [[4, 700]], unattributed: 0 },
+  { id: 12, ticker: "CPLE6", kind: "STOCK", name: "Copel",           b3: "COPEL",        qty: 400, avg: 8.10,  quote: 10.62, quoted_at: "2026-09-10T14:32", attr: [[1, 260], [3, 140]], unattributed: 0 },
+  { id: 13, ticker: "MCCI11", kind: "FII",  name: "Mauá Capital Rec.", b3: "MCCI",       qty: 260, avg: 96.50, quote: 98.10, quoted_at: "2026-09-10T14:32", attr: [[5, 260]], unattributed: 0 },
+  { id: 14, ticker: "KNCR11", kind: "FII",  name: "Kinea Rend.",     b3: "KNCR",         qty: 200, avg: 101.20, quote: 103.40, quoted_at: "2026-09-10T14:32", attr: [[5, 200]], unattributed: 0 },
+  { id: 15, ticker: "XPLG11", kind: "FII",  name: "XP Log",          b3: "XPLG",         qty: 150, avg: 104.80, quote: 99.20,  quoted_at: "2026-09-10T14:32", attr: [[5, 150]], unattributed: 0 },
+  { id: 16, ticker: "BTLG11", kind: "FII",  name: "BTG Logística",   b3: "BTLG",         qty: 180, avg: 99.30,  quote: 101.10, quoted_at: "2026-09-10T14:32", attr: [[5, 130]], unattributed: 50 },
+  { id: 17, ticker: "KNRI11", kind: "FII",  name: "Kinea Renda",     b3: "KNRI",         qty: 120, avg: 158.40, quote: 149.90, quoted_at: "2026-09-10T14:32", attr: [[5, 120]], unattributed: 0 },
+  { id: 18, ticker: "MXRF11", kind: "FII",  name: "Maxi Renda",      b3: "MXRF",         qty: 300, avg: 10.05,  quote: 9.44,   quoted_at: "2026-09-10T14:32", attr: [[5, 300]], unattributed: 0 },
+  { id: 19, ticker: "ROXO34", kind: "BDR",  name: "Nubank",          b3: "ROXO",         qty: 80,  avg: 9.90,   quote: 13.20,  quoted_at: "2026-09-10T14:32", attr: [], unattributed: 80 },
+];
+
+function assetById(id){ return ASSETS.find(a => a.id === id); }
+function stratById(id){ return STRATEGIES.find(s => s.id === id); }
+function marketValue(a){ return a.qty * a.quote; }
+function costBasis(a){ return a.qty * a.avg; }
+function unrealized(a){ return marketValue(a) - costBasis(a); }
+
+// plano de ordens (order engine) — proposta de transferências + ordens líquidas
+let TRANSFERS = [
+  { id: 101, listed_asset_id: 5,  ticker: "CURY3", from_strategy_id: 4, to_strategy_id: 2, from_name: "Small Caps",     to_name: "Top Ações",       proposed_quantity: 60, applied_quantity: null, status: "PENDING", avoids: 1565, why: "Small Caps sem edição de setembro; Top Ações abaixo do ideal" },
+  { id: 102, listed_asset_id: 12, ticker: "CPLE6", from_strategy_id: 3, to_strategy_id: 1, from_name: "Dividendos Plus", to_name: "Top Dividendos",  proposed_quantity: 40, applied_quantity: null, status: "PENDING", avoids: 425,  why: "CPLE6 saiu de Dividendos Plus na edição de setembro" },
+  { id: 103, listed_asset_id: 8,  ticker: "ITSA4", from_strategy_id: 3, to_strategy_id: 1, from_name: "Dividendos Plus", to_name: "Top Dividendos",  proposed_quantity: 120, applied_quantity: null, status: "PENDING", avoids: 1363, why: "Rebalanceamento entre estratégias de dividendos" },
+  { id: 104, listed_asset_id: 3,  ticker: "PETR4", from_strategy_id: 2, to_strategy_id: 3, from_name: "Top Ações",       to_name: "Dividendos Plus", proposed_quantity: 12, applied_quantity: 12,  status: "APPLIED", avoids: 464, why: "Abaixo do limite de aprovação automática (R$ 500)" },
+];
+
+const TRANSFER_SETTINGS = { auto_approval_threshold: 500 };
+
+// ganho de capital mensal
+const CAPITAL_GAINS = [
+  { month: "2026-06", is_fii: false, proceeds: 8200,  gross_gain: 940,  exempt: true,  loss_compensated: 0, taxable_gain: 0,    tax_due: 0,      loss_carried_forward: 0 },
+  { month: "2026-07", is_fii: false, proceeds: 12400, gross_gain: -310, exempt: true,  loss_compensated: 0, taxable_gain: 0,    tax_due: 0,      loss_carried_forward: 0 },
+  { month: "2026-08", is_fii: false, proceeds: 26549.84, gross_gain: 3120, exempt: false, loss_compensated: 0, taxable_gain: 3120, tax_due: 468, loss_carried_forward: 0 },
+  { month: "2026-08", is_fii: true,  proceeds: 4100,  gross_gain: -220, exempt: false, loss_compensated: 0, taxable_gain: 0,    tax_due: 0,      loss_carried_forward: 220 },
+  { month: "2026-09", is_fii: false, proceeds: 3899.20, gross_gain: 410, exempt: true,  loss_compensated: 0, taxable_gain: 0,    tax_due: 0,      loss_carried_forward: 0 },
+];
+
+const INCOME_EVENTS = [
+  { listed_asset_id: 8,  ticker: "ITSA4",  type: "JCP",         ex_date: "2026-09-15", payment_date: "2026-11-03", quantity_held: 900, gross_amount: 189.00, retained_tax: 28.35, net_amount: 160.65 },
+  { listed_asset_id: 1,  ticker: "VALE3",  type: "DIVIDEND",    ex_date: "2026-09-22", payment_date: "2026-10-10", quantity_held: 400, gross_amount: 512.00, retained_tax: 0,     net_amount: 512.00 },
+  { listed_asset_id: 13, ticker: "MCCI11", type: "FUND_INCOME", ex_date: "2026-09-30", payment_date: "2026-10-14", quantity_held: 260, gross_amount: 244.40, retained_tax: 0,     net_amount: 244.40 },
+  { listed_asset_id: 14, ticker: "KNCR11", type: "FUND_INCOME", ex_date: "2026-09-30", payment_date: "2026-10-14", quantity_held: 200, gross_amount: 210.00, retained_tax: 0,     net_amount: 210.00 },
+  { listed_asset_id: 7,  ticker: "EGIE3",  type: "DIVIDEND",    ex_date: "2026-10-05", payment_date: "2026-11-20", quantity_held: 260, gross_amount: 358.80, retained_tax: 0,     net_amount: 358.80 },
+];
+
+const EDITIONS = {
+  1: [
+    { reference_date: "2026-07", targets: 11 },
+    { reference_date: "2026-08", targets: 11 },
+    { reference_date: "2026-09", targets: 11,
+      changes_text: "Estamos adicionando CPLE6 e EGIE3 à carteira, ambas com peso de 9%, financiadas pela redução de ITSA4 (de 14% para 10%) e pela saída completa de TAEE11. A tese de elétricas reguladas segue como o núcleo defensivo da carteira.",
+      diff: { entered: [{ ticker: "CPLE6", weight: 0.09 }, { ticker: "EGIE3", weight: 0.09 }],
+              exited: [{ ticker: "TAEE11", weight: 0.08 }],
+              changed: [{ ticker: "ITSA4", before: 0.14, after: 0.10 }, { ticker: "VALE3", before: 0.11, after: 0.12 }] } },
+  ],
+  2: [
+    { reference_date: "2026-08", targets: 14 },
+    { reference_date: "2026-09", targets: 14,
+      changes_text: "Trocamos WEGE3 por PRIO3 (7%). Aumentamos CURY3 de 5% para 8% após o resultado do 2º tri.",
+      diff: { entered: [{ ticker: "PRIO3", weight: 0.07 }], exited: [{ ticker: "WEGE3", weight: 0.06 }],
+              changed: [{ ticker: "CURY3", before: 0.05, after: 0.08, rating_before: "NEUTRO", rating_after: "COMPRA" }] } },
+  ],
+  5: [
+    { reference_date: "2026-08", targets: 16 },
+    { reference_date: "2026-09", targets: 16,
+      changes_text: "Reduzimos a exposição a lajes corporativas: saída de KNRI11 do núcleo e entrada de BTLG11 (logística) com 8%.",
+      diff: { entered: [{ ticker: "BTLG11", weight: 0.08 }], exited: [{ ticker: "KNRI11", weight: 0.07 }], changed: [] } },
+  ],
+};
+
+const STRATEGY_TARGETS = {
+  1: [
+    { ticker: "ITSA4", weight: 0.10, rating: "COMPRA",  target_price: 13.50 },
+    { ticker: "VALE3", weight: 0.12, rating: "COMPRA",  target_price: 72.00 },
+    { ticker: "EGIE3", weight: 0.09, rating: "COMPRA",  target_price: 48.00 },
+    { ticker: "CPLE6", weight: 0.09, rating: "COMPRA",  target_price: 12.80 },
+    { ticker: "ITUB4", weight: 0.11, rating: "NEUTRO",  target_price: 36.00 },
+    { ticker: "PETR4", weight: 0.10, rating: "COMPRA",  target_price: 44.00 },
+  ],
+  5: [
+    { ticker: "MCCI11", weight: 0.11, rating: "COMPRA", target_price: 104.00 },
+    { ticker: "KNCR11", weight: 0.10, rating: "NEUTRO", target_price: 106.00 },
+    { ticker: "BTLG11", weight: 0.08, rating: "COMPRA", target_price: 112.00 },
+    { ticker: "XPLG11", weight: 0.07, rating: "COMPRA", target_price: 110.00 },
+    { ticker: "MXRF11", weight: 0.06, rating: "NEUTRO", target_price: 10.10 },
+  ],
+};
+
+const BONDS = [
+  { id: 1, name: "Tesouro Selic 2029", kind: "BOND", index: "SELIC", sub_class: "FLOATING_RATE", value: 24800, yield_acc: 1310, ir: 262, iof: 0, maturity: "2029-03-01" },
+  { id: 2, name: "CDB Banco Master 110% CDI", kind: "CHECKING_ACCOUNT", index: "CDI", sub_class: "FLOATING_RATE", value: 15250, yield_acc: 890, ir: 178, iof: 0, maturity: "2027-05-10" },
+  { id: 3, name: "Tesouro IPCA+ 2035", kind: "BOND", index: "IPCA", sub_class: "INFLATION_LINKED", value: 19900, yield_acc: -140, ir: 0, iof: 0, maturity: "2035-05-15" },
+  { id: 4, name: "LCA Rural 96% CDI", kind: "CHECKING_ACCOUNT", index: "CDI", sub_class: "FLOATING_RATE", value: 8600, yield_acc: 310, ir: 0, iof: 0, maturity: "2026-12-01" },
+];
+
+const INDEXES = [
+  { id: "CDI",   last: 0.0412, records: 1840, color: "#38bdf8" },
+  { id: "SELIC", last: 0.0415, records: 1840, color: "#a78bfa" },
+  { id: "IPCA",  last: 0.0038, records: 68,   color: "#f472b6" },
+];
+
+// pré-visualização do extrato B3 (Negociação)
+const IMPORT_PREVIEW = {
+  quoted_at: "2026-09-10T14:32",
+  trades: [
+    { ticker: "VALE3", listed_asset_id: 1,  date: "2026-09-08", side: "SELL", quantity: 6,   price: 74.38, notional: 446.28,  resolvable: true,  matches_plan: true,  already_imported: false },
+    { ticker: "ITUB4", listed_asset_id: 2,  date: "2026-09-08", side: "BUY",  quantity: 70,  price: 34.48, notional: 2413.60, resolvable: true,  matches_plan: true,  already_imported: false },
+    { ticker: "B3SA3", listed_asset_id: 4,  date: "2026-09-09", side: "BUY",  quantity: 200, price: 14.27, notional: 2854.00, resolvable: true,  matches_plan: true,  already_imported: false },
+    { ticker: "CURY3", listed_asset_id: 5,  date: "2026-09-09", side: "SELL", quantity: 40,  price: 26.09, notional: 1043.60, resolvable: true,  matches_plan: false, already_imported: false },
+    { ticker: "EGIE3", listed_asset_id: 7,  date: "2026-09-09", side: "SELL", quantity: 20,  price: 43.10, notional: 862.00,  resolvable: true,  matches_plan: true,  already_imported: true  },
+    { ticker: "TAEE11", listed_asset_id: null, date: "2026-09-09", side: "SELL", quantity: 30, price: 38.20, notional: 1146.00, resolvable: false, matches_plan: false, already_imported: false },
+  ],
+  unresolved_tickers: ["TAEE11"],
+};
+
+const TICKER_CATALOG = [
+  { ticker: "TAEE11", name: "Taesa", kind: "STOCK" },
+  { ticker: "TAEE3",  name: "Taesa ON", kind: "STOCK" },
+  { ticker: "WEGE3",  name: "WEG", kind: "STOCK" },
+  { ticker: "TOTS3",  name: "Totvs", kind: "STOCK" },
+  { ticker: "HGLG11", name: "CSHG Logística", kind: "FII" },
+];
+
+/* =========================================================================
+   HELPERS DE FORMATAÇÃO E COMPONENTES
+   ========================================================================= */
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl0 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const _pct1 = new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const num0 = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+function pct1(v) { return _pct1.format(v); }
+function money(v, dp) { return (dp === 0 ? brl0 : brl).format(v); }
+function moneyK(v) { return "R$ " + num0.format(Math.round(v / 1000)) + " mil"; }
+function signed(v, fmt) { const s = v > 0 ? "+" : ""; return s + (fmt ? fmt(v) : v); }
+function cls(...xs){ return xs.filter(Boolean).join(" "); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c])); }
+
+function deltaCell(v) {
+  if (Math.abs(v) < 0.5) return `<span class="dim">—</span>`;
+  const c = v < 0 ? "neg" : "pos";
+  return `<span class="${c}">${signed(v, x => money(x, 0))}</span>`;
+}
+function divergentBar(delta, max) {
+  const p = Math.min(50, Math.abs(delta) / max * 50);
+  const side = delta < 0 ? "neg" : "pos";
+  return `<div class="divbar"><div class="axis"></div><div class="fill ${side}" style="width:${p}%"></div></div>`;
+}
+function ratingChip(r) {
+  if (!r) return "";
+  const m = { COMPRA: "green", NEUTRO: "", VENDA: "rose" };
+  return `<span class="chip ${m[r] || ""}">${r}</span>`;
+}
+function sparkline(vals, w, h, color) {
+  const min = Math.min(...vals), max = Math.max(...vals), rng = max - min || 1;
+  const step = w / (vals.length - 1);
+  const pts = vals.map((v, i) => `${(i * step).toFixed(1)},${(h - (v - min) / rng * (h - 4) - 2).toFixed(1)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/>
+    <circle cx="${(w).toFixed(1)}" cy="${(h - (vals[vals.length-1] - min) / rng * (h - 4) - 2).toFixed(1)}" r="2" fill="${color}"/>
+  </svg>`;
+}
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  document.getElementById("toasts").appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* =========================================================================
+   NAV + ROTEADOR
+   ========================================================================= */
+const NAV = [
+  { group: "Mês", items: [
+    { path: "/", label: "Cockpit", icon: iconGrid },
+    { path: "/orders", label: "Ordens", icon: iconList, count: () => pendingTransfers().length, warn: true },
+    { path: "/import", label: "Importar extrato", icon: iconUpload },
+    { path: "/monthly-close", label: "Fechamento", icon: iconLock },
+  ]},
+  { group: "Carteira", items: [
+    { path: "/allocation", label: "Alocação", icon: iconTarget },
+    { path: "/strategies", label: "Estratégias", icon: iconLayers },
+    { path: "/assets", label: "Ativos", icon: iconCircle, count: () => ASSETS.filter(a => a.unattributed > 0).length, warn: true },
+    { path: "/fixed-income", label: "Renda fixa", icon: iconBank },
+  ]},
+  { group: "Resultados", items: [
+    { path: "/income", label: "Proventos", icon: iconCoins },
+    { path: "/taxes", label: "Impostos", icon: iconReceipt },
+  ]},
+];
+
+const ROUTES = {
+  "/": renderCockpit,
+  "/orders": renderOrders,
+  "/import": renderImport,
+  "/monthly-close": renderMonthlyClose,
+  "/allocation": renderAllocation,
+  "/strategies": renderStrategies,
+  "/assets": renderAssets,
+  "/fixed-income": renderFixedIncome,
+  "/income": renderIncome,
+  "/taxes": renderTaxes,
+};
+const TITLES = {
+  "/": "Cockpit do mês", "/orders": "Ordens de setembro", "/import": "Importar extrato",
+  "/monthly-close": "Fechamento de setembro", "/allocation": "Alocação", "/strategies": "Estratégias",
+  "/assets": "Ativos", "/fixed-income": "Renda fixa", "/income": "Proventos", "/taxes": "Impostos",
+};
+
+function pendingTransfers(){ return TRANSFERS.filter(t => t.status === "PENDING"); }
+
+function currentPath(){
+  const h = location.hash.replace(/^#/, "") || "/";
+  return h.split("?")[0];
+}
+function query(){
+  const q = location.hash.split("?")[1] || "";
+  return Object.fromEntries(new URLSearchParams(q));
+}
+function go(path){ location.hash = path; }
+function setQuery(obj){
+  const p = currentPath();
+  const merged = { ...query(), ...obj };
+  Object.keys(merged).forEach(k => merged[k] == null && delete merged[k]);
+  const qs = new URLSearchParams(merged).toString();
+  location.hash = p + (qs ? "?" + qs : "");
+}
+
+function renderNav(){
+  const path = currentPath();
+  document.getElementById("nav").innerHTML = NAV.map(g => `
+    <div class="nav-group">
+      <h5>${g.group}</h5>
+      ${g.items.map(it => {
+        const active = it.path === path || (it.path !== "/" && path.startsWith(it.path));
+        const c = it.count ? it.count() : 0;
+        return `<a href="#${it.path}" class="${active ? "active" : ""}">
+          ${it.icon()} <span>${it.label}</span>
+          ${c > 0 ? `<span class="nav-count ${it.warn ? "warn" : ""}">${c}</span>` : ""}
+        </a>`;
+      }).join("")}
+    </div>`).join("");
+}
+
+function router(){
+  const path = currentPath();
+  const fn = ROUTES[path] || ROUTES["/"];
+  document.getElementById("view").innerHTML = fn();
+  document.getElementById("crumb").innerHTML = `${navGroupFor(path)} · <b>${TITLES[path] || ""}</b>`;
+  renderNav();
+  window.scrollTo?.(0, 0);
+  document.getElementById("view").scrollTop = 0;
+  bindViewEvents();
+}
+function navGroupFor(path){
+  for (const g of NAV) if (g.items.some(i => i.path === path || (i.path !== "/" && path.startsWith(i.path)))) return g.group;
+  return "Config";
+}
+
+/* =========================================================================
+   ÍCONES (inline, 16px)
+   ========================================================================= */
+function iconGrid(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>`; }
+function iconList(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 4h9M5 8h9M5 12h9M2 4h.01M2 8h.01M2 12h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`; }
+function iconUpload(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 6l3-3 3 3M3 12h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+function iconLock(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.3"/></svg>`; }
+function iconTarget(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.3"/></svg>`; }
+function iconLayers(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3-6 3-6-3 6-3Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 8l6 3 6-3M2 11l6 3 6-3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`; }
+function iconCircle(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/></svg>`; }
+function iconBank(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3H2l6-3ZM3 6v6M6 6v6M10 6v6M13 6v6M2 13h12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`; }
+function iconCoins(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><ellipse cx="6" cy="5" rx="4" ry="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M2 5v3c0 1.2 1.8 2.2 4 2.2M10 8c2.2 0 4-1 4-2.2M6 10.8c0 1.2 1.8 2.2 4 2.2s4-1 4-2.2v-3" stroke="currentColor" stroke-width="1.3"/></svg>`; }
+function iconReceipt(){ return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 2h8v12l-2-1-2 1-2-1-2 1V2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 5h4M6 8h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`; }
+
+/* =========================================================================
+   MODELO DO FECHAMENTO — os 7 passos do ritual mensal (GET /monthly-close/current/progress)
+   ========================================================================= */
+function monthProgress(){
+  const withEdition = STRATEGIES.filter(s => s.edition === MONTH).length;
+  const pend = pendingTransfers().length;
+  const importedTrades = STATE.confirmedImport ? IMPORT_PREVIEW.trades.filter(t => t.resolvable && !t.already_imported).length : 0;
+  const unatt = ASSETS.filter(a => a.unattributed > 0).length;
+  return [
+    { n: 1, title: "Registrar edições da XP", live: `${withEdition} de ${STRATEGIES.length} estratégias com edição de set/26`,
+      status: withEdition === STRATEGIES.length ? "done" : "pending", action: { label: "Importar relatórios", path: "/strategies/import" } },
+    { n: 2, title: "Recalcular o plano de ordens", live: `Plano recalculado em 10/09 14:32`,
+      status: "done", action: { label: "Recalcular", path: "/orders" } },
+    { n: 3, title: "Decidir as transferências", live: pend > 0 ? `${pend} transferências pendentes · ${money(pendingTransfers().reduce((s,t)=>s+t.avoids,0),0)}` : "Todas decididas",
+      status: pend > 0 ? "now" : "done", action: { label: "Decidir", path: "/orders" } },
+    { n: 4, title: "Gerar a lista de ordens", live: `12 ordens · ${moneyK(38400)}`,
+      status: pend > 0 ? "pending" : "now", action: { label: "Ver ordens", path: "/orders" } },
+    { n: 5, title: "Importar o extrato B3", live: STATE.confirmedImport ? `${importedTrades} negócios importados` : "Nenhum negócio de set/26 importado",
+      status: STATE.confirmedImport ? "done" : "pending", action: { label: "Importar extrato", path: "/import" } },
+    { n: 6, title: "Conciliar proventos", live: `Previsto ${money(INCOME_EVENTS.filter(e=>e.ex_date<"2026-10").reduce((s,e)=>s+e.net_amount,0))}`,
+      status: "pending", opt: true, action: { label: "Conciliar", path: "/income?tab=reconcile" } },
+    { n: 7, title: "Fechar o mês", live: pend > 0 ? `Bloqueado: ${pend} transferências pendentes` : "Pronto para fechar",
+      status: pend > 0 ? "block" : "pending", action: { label: "Fechar o mês", path: "/monthly-close" } },
+  ];
+}
+function currentStep(){ const p = monthProgress(); const now = p.find(s => s.status === "now"); return now ? now.n : (p.filter(s=>s.status==="done").length + 1); }
+
+/* =========================================================================
+   TELA — COCKPIT
+   ========================================================================= */
+function renderCockpit(){
+  const steps = monthProgress();
+  const totalMkt = ASSETS.reduce((s,a)=>s+marketValue(a),0) + BONDS.reduce((s,b)=>s+b.value,0);
+  const darf = CAPITAL_GAINS.filter(g=>g.month==="2026-08" && g.tax_due>0).reduce((s,g)=>s+g.tax_due,0);
+  const provPrev = INCOME_EVENTS.filter(e=>e.ex_date<"2026-10").reduce((s,e)=>s+e.net_amount,0);
+  const plan = allocPlan();
+  const driftTotal = plan.classes.reduce((s,c)=>s+Math.abs(c.delta),0);
+  const worstClass = plan.classes.slice().sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta))[0];
+
+  return `<div class="page">
+    <div class="page-head">
+      <h1>Cockpit de setembro</h1>
+      <p>Onde o mês está e o que fazer agora. O ritual tem 7 passos; quatro deles são decisões suas.</p>
+    </div>
+
+    <div class="grid g-4" style="margin-bottom:22px">
+      <div class="kpi">
+        <div class="k-label">Patrimônio</div>
+        <div class="k-value">${money(totalMkt, 0)}</div>
+        <div class="k-sub">renda variável a mercado + renda fixa calculada</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Drift total</div>
+        <div class="k-value ${worstClass.delta<0?'neg':'pos'}">${signed(driftTotal>0?-driftTotal:driftTotal, x=>money(Math.abs(x),0))}</div>
+        <div class="k-sub">maior desvio: ${worstClass.label} ${signed(worstClass.delta, x=>money(x,0))}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Proventos previstos</div>
+        <div class="k-value gain">${money(provPrev)}</div>
+        <div class="k-sub">líquido, na posição da data-com</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">IR a pagar</div>
+        <div class="k-value loss">${money(darf)}</div>
+        <div class="k-sub">DARF 6015 · vence 31/10</div>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns: 1.6fr 1fr; gap:18px; align-items:start">
+      <div class="panel">
+        <h2 class="sec" style="margin-top:0">Fechamento de setembro</h2>
+        <div class="stepper">
+          ${steps.map(s => `
+            <div class="step ${s.status}">
+              <div class="s-mark">${s.status==="done"?"✓":s.status==="block"?"!":s.n}</div>
+              <div>
+                <div class="s-title">${s.title}</div>
+                <div class="s-live">${s.live}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                ${s.opt ? `<span class="s-opt">opcional</span>` : ""}
+                <button class="btn sm" data-go="${s.action.path}">${s.action.label}</button>
+              </div>
+            </div>`).join("")}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Precisa de atenção</h2>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div class="alert crit"><span class="a-ic">◆</span><div><b>${ASSETS.filter(a=>a.unattributed>0).length} ativos com cotas não atribuídas</b> — ITUB4, BTLG11, ROXO34. <a href="#/assets?filter=pending">Distribuir</a></div></div>
+            <div class="alert warn"><span class="a-ic">▲</span><div>Small Caps sem edição de setembro. <a href="#/strategies/import">Importar</a></div></div>
+            <div class="alert warn"><span class="a-ic">▲</span><div>ORVR3 fora do plano — sem cotação disponível.</div></div>
+            <div class="alert info"><span class="a-ic">●</span><div>Vendas de ações em ${pct1(0.62)} do teto de isenção este mês.</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Alocação atual × alvo</h2>
+          ${allocStripHtml(plan)}
+          <div style="display:flex;justify-content:space-between;margin-top:9px;font-size:11px" class="faint">
+            ${plan.classes.map(c=>`<span>${c.label}</span>`).join("")}
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Próximos proventos</h2>
+          <table><tbody>
+            ${INCOME_EVENTS.slice(0,4).map(e=>`<tr><td class="tick">${e.ticker}</td><td class="dim" style="font-size:11.5px">${e.type==="JCP"?"JCP":e.type==="DIVIDEND"?"Dividendo":"Rendimento"}</td><td class="faint" style="font-size:11.5px">${fmtDate(e.payment_date)}</td><td class="num gain">${money(e.net_amount)}</td></tr>`).join("")}
+          </tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button class="btn" data-drawer="contribution"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 2v9M2 6.5h9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> Aporte avulso</button>
+    </div>
+  </div>`;
+}
+
+function allocStripHtml(plan){
+  return `<div class="alloc-strip">
+    ${plan.classes.map(c => {
+      const w = c.current_weight * 100;
+      const tgt = c.ideal_weight * 100;
+      return `<div class="seg-c" style="width:${Math.max(w,3)}%;background:${c.color}">
+        <span>${w>=8?pct1(c.current_weight):""}</span>
+        <div class="marker" style="left:${Math.min(100, tgt / (c.current_weight||0.001) * 100)}%"></div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+function fmtDate(iso){ if(!iso) return "—"; const [y,m,d] = iso.split("-"); return `${d}/${m}`; }
+
+/* =========================================================================
+   MOTOR DE ALOCAÇÃO (cálculo local, espelha RebalanceCalculator)
+   ========================================================================= */
+function classCurrent(ac){
+  if (ac === "STOCKS") return ASSETS.filter(a=>a.kind==="STOCK"||a.kind==="BDR").reduce((s,a)=>s+marketValue(a),0);
+  if (ac === "REAL_ESTATE") return ASSETS.filter(a=>a.kind==="FII").reduce((s,a)=>s+marketValue(a),0);
+  if (ac === "FIXED_INCOME") return BONDS.reduce((s,b)=>s+b.value,0);
+  if (ac === "CASH") return 3200;
+  return 0;
+}
+function allocPlan(extraContribution){
+  const capital = CAPITAL + (extraContribution || 0);
+  const totalCur = CLASS_TARGETS.reduce((s,c)=>s+classCurrent(c.asset_class),0);
+  const classes = CLASS_TARGETS.map(c => {
+    const ideal = c.ideal_weight * capital;
+    const current = classCurrent(c.asset_class);
+    return {
+      asset_class: c.asset_class, label: c.label, color: c.color,
+      ideal_weight: c.ideal_weight, ideal, current,
+      current_weight: totalCur ? current / totalCur : 0,
+      delta: current - ideal,
+      sub_classes: c.asset_class === "FIXED_INCOME" ? SUBCLASS_TARGETS.map(sc => {
+        const scIdeal = sc.ideal_weight * ideal;
+        const scCur = BONDS.filter(b=>b.sub_class===sc.sub_class).reduce((s,b)=>s+b.value,0);
+        return { sub_class: sc.sub_class, label: sc.label, ideal_weight: sc.ideal_weight, ideal: scIdeal, current: scCur, delta: scCur - scIdeal };
+      }) : null,
+    };
+  });
+  return { capital, classes };
+}
+
+/* =========================================================================
+   TELA — ORDENS
+   ========================================================================= */
+function planOrders(){
+  // ordens líquidas derivadas de custódia vs ideal (mock estático + efeito das transferências aplicadas)
+  const base = [
+    { ticker: "ITSA4", kind: "SELL", qty: 90,  ref: 11.36, contrib: [[1,"−40"],[3,"−50"]], day_trade: false, executed: 0 },
+    { ticker: "MXRF11", kind: "EXIT", qty: 300, ref: 9.44,  contrib: [[5,"−300"]], day_trade: false, executed: 0, fii: true },
+    { ticker: "KNRI11", kind: "SELL", qty: 40,  ref: 149.90, contrib: [[5,"−40"]], day_trade: false, executed: 0, fii: true },
+    { ticker: "PRIO3", kind: "SELL", qty: 30,  ref: 39.55, contrib: [[2,"−18"],[4,"−12"]], day_trade: true, executed: 0 },
+    { ticker: "VALE3", kind: "BUY",  qty: 24,  ref: 61.05, contrib: [[1,"+16"],[2,"+8"]], day_trade: false, executed: 6 },
+    { ticker: "ITUB4", kind: "BUY",  qty: 70,  ref: 34.88, contrib: [[1,"+45"],[2,"+25"]], day_trade: false, executed: 70 },
+    { ticker: "B3SA3", kind: "NEW_ENTRY", qty: 200, ref: 14.27, contrib: [[2,"+200"]], day_trade: false, executed: 200 },
+    { ticker: "EGIE3", kind: "BUY",  qty: 30,  ref: 43.20, contrib: [[1,"+30"]], day_trade: false, executed: 0 },
+    { ticker: "SLCE3", kind: "NEW_ENTRY", qty: 120, ref: 18.44, contrib: [[4,"+120"]], day_trade: false, executed: 0 },
+    { ticker: "BTLG11", kind: "BUY", qty: 45, ref: 101.10, contrib: [[5,"+45"]], day_trade: false, executed: 0, fii: true },
+  ];
+  return base;
+}
+function saleCeiling(){
+  const executed = 3899.20 + planOrders().filter(o=>!o.fii && (o.kind==="SELL"||o.kind==="EXIT")).reduce((s,o)=>s+o.executed*o.ref,0);
+  const planned = planOrders().filter(o=>!o.fii && (o.kind==="SELL"||o.kind==="EXIT")).reduce((s,o)=>s+(o.qty-o.executed)*o.ref,0);
+  return { executed, planned, limit: 20000, exceeded: executed + planned > 20000 };
+}
+
+function renderOrders(){
+  const orders = planOrders();
+  const kindFilter = query().kind || "ALL";
+  const shown = orders.filter(o => kindFilter === "ALL" || (kindFilter === "FII" ? o.fii : (kindFilter === "STOCK" ? !o.fii : true)));
+  const buys = orders.filter(o => o.kind === "BUY" || o.kind === "NEW_ENTRY").reduce((s,o)=>s+o.qty*o.ref,0);
+  const sells = orders.filter(o => o.kind === "SELL" || o.kind === "EXIT").reduce((s,o)=>s+o.qty*o.ref,0);
+  const sc = saleCeiling();
+  const scPct = (sc.executed + sc.planned) / sc.limit;
+  const groups = { "Saídas totais": ["EXIT"], "Vendas": ["SELL"], "Compras": ["BUY"], "Novas entradas": ["NEW_ENTRY"] };
+
+  return `<div class="page">
+    <div class="page-head">
+      <h1>Ordens de setembro</h1>
+      <p>Decida as transferências entre estratégias primeiro — cada decisão recalcula a lista de ordens abaixo.</p>
+    </div>
+
+    <div class="panel" style="margin-bottom:18px">
+      <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:space-between">
+        <div style="display:flex;gap:28px;flex-wrap:wrap">
+          <div><div class="k-label" style="font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)">Compras</div><div class="mono" style="font-size:17px">${money(buys,0)}</div></div>
+          <div><div class="k-label" style="font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)">Vendas</div><div class="mono" style="font-size:17px">${money(sells,0)}</div></div>
+          <div><div class="k-label" style="font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)">Caixa necessário</div><div class="mono" style="font-size:17px">${money(buys - sells, 0)}</div><div class="faint" style="font-size:11px">aporte planejado ${moneyK(20000)}</div></div>
+          <div>
+            <div class="k-label" style="font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)">Vendas de ações · teto</div>
+            <div class="mono" style="font-size:17px;color:${scPct>0.8?'var(--tax)':'var(--ink)'}">${moneyK(sc.executed+sc.planned)} <span class="faint" style="font-size:12px">de ${moneyK(sc.limit)}</span></div>
+            <div class="meter ${sc.exceeded?'over':''}" style="width:190px;margin-top:5px">
+              <i class="executed" style="width:${sc.executed/sc.limit*100}%"></i>
+              <i class="planned" style="width:${sc.planned/sc.limit*100}%"></i>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <button class="btn primary" data-action="refresh-plan"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M11 6.5A4.5 4.5 0 1 1 9.6 3.2M11 1.5V4H8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Recalcular</button>
+          <span class="tb-age">cotações de 10/09 14:32</span>
+        </div>
+      </div>
+    </div>
+
+    ${pendingTransfers().length || TRANSFERS.some(t=>t.status!=="PENDING") ? `
+    <h2 class="sec">Transferências a decidir</h2>
+    <div class="inbox">
+      ${TRANSFERS.filter(t=>t.status==="PENDING").map(t => transferRow(t)).join("")}
+      ${TRANSFERS.filter(t=>t.status!=="PENDING").length ? `
+      <details style="border-top:1px solid var(--line-soft)">
+        <summary style="padding:10px 14px;font-size:12px;color:var(--ink-dim);cursor:pointer">Decididas (${TRANSFERS.filter(t=>t.status!=="PENDING").length})</summary>
+        ${TRANSFERS.filter(t=>t.status!=="PENDING").map(t => transferRow(t)).join("")}
+      </details>` : ""}
+    </div>` : ""}
+
+    <h2 class="sec">Lista de ordens</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="segctl">
+        <button class="${kindFilter==='ALL'?'on':''}" data-q-kind="ALL">Todas</button>
+        <button class="${kindFilter==='STOCK'?'on':''}" data-q-kind="STOCK">Ações</button>
+        <button class="${kindFilter==='FII'?'on':''}" data-q-kind="FII">FIIs</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" data-action="copy-orders">Copiar para a corretora</button>
+        <button class="btn sm ghost">Exportar CSV</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Ticker</th><th>Tipo</th><th class="num">Qtd.</th><th class="num">Preço ref.</th><th class="num">Valor</th><th>Estratégias</th><th>Alertas</th><th>Executado</th></tr></thead>
+        <tbody>
+          ${Object.entries(groups).map(([label, kinds]) => {
+            const rows = shown.filter(o => kinds.includes(o.kind));
+            if (!rows.length) return "";
+            return `<tr class="group-row"><td colspan="8">${label}</td></tr>` + rows.map(o => `
+              <tr>
+                <td class="tick">${o.ticker}</td>
+                <td><span class="badge ${o.kind==='SELL'||o.kind==='EXIT'?'warn':o.kind==='NEW_ENTRY'?'info':'ok'}">${({BUY:'Compra',SELL:'Venda',EXIT:'Saída total',NEW_ENTRY:'Nova'})[o.kind]}</span></td>
+                <td class="num">${num0.format(o.qty)}</td>
+                <td class="num">${o.ref.toFixed(2)}</td>
+                <td class="num">${money(o.qty*o.ref,0)}</td>
+                <td>${o.contrib.map(([sid,d])=>`<span class="chip" style="margin-right:3px">${stratById(sid).name.split(" ")[0]} ${d}</span>`).join("")}</td>
+                <td>${o.day_trade?`<span class="chip rose">⚠ day trade</span>`:o.fii&&(o.kind==='SELL'||o.kind==='EXIT')?`<span class="chip amber">IR 20%</span>`:""}</td>
+                <td>${o.executed>0?`<div style="display:flex;align-items:center;gap:7px"><div class="meter" style="width:60px"><i class="fillok" style="width:${o.executed/o.qty*100}%"></i></div><span class="mono" style="font-size:11px">${o.executed}/${o.qty}</span></div>`:`<span class="faint mono" style="font-size:11px">0/${o.qty}</span>`}</td>
+              </tr>`).join("");
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div class="alert warn" style="margin-top:12px"><span class="a-ic">▲</span><div>1 ativo fora do plano por falta de cotação: <b>ORVR3</b>.</div></div>
+  </div>`;
+}
+
+function transferRow(t){
+  const decided = t.status !== "PENDING";
+  return `<div class="inbox-row ${decided?'decided':''}" data-transfer="${t.id}">
+    <div class="tick">${t.ticker}</div>
+    <div>
+      <div class="ir-route">
+        <span class="chip">${t.from_name}</span><span class="arrow">→</span><span class="chip">${t.to_name}</span>
+        <span class="dim" style="font-size:11.5px">evita vender ${money(t.avoids,0)}</span>
+      </div>
+      <div class="ir-why">${t.why}</div>
+    </div>
+    <div class="ir-qty">
+      ${decided
+        ? `<span class="mono">${t.applied_quantity ?? t.proposed_quantity} cotas</span> <span class="badge ${t.status==='APPLIED'?'ok':'crit'}">${t.status==='APPLIED'?'aplicada':'rejeitada'}</span>`
+        : `<input type="number" value="${t.proposed_quantity}" max="${t.proposed_quantity}" min="1"> <span class="faint" style="font-size:11px">/ ${t.proposed_quantity}</span>`}
+    </div>
+    <div class="ir-actions">
+      ${decided ? "" : `
+        <button class="btn sm primary" data-approve="${t.id}">Aprovar</button>
+        <button class="btn sm ghost" data-reject="${t.id}">Rejeitar</button>`}
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   TELA — IMPORTAR EXTRATO
+   ========================================================================= */
+function renderImport(){
+  const step = STATE.importStep;
+  const p = IMPORT_PREVIEW;
+  return `<div class="page">
+    <div class="page-head">
+      <h1>Importar extrato</h1>
+      <p>Pré-visualização reconcilia contra o plano e não grava nada. Confirmar cria os negócios; em seguida o app consolida os ativos afetados.</p>
+    </div>
+    <div class="wizard-nav">
+      ${["Arquivo","Revisar","Confirmar","Atribuir"].map((l,i) => `
+        <div class="w-step ${i+1<step?'done':i+1===step?'on':''}">
+          <span class="w-n">${i+1<step?'✓':i+1}</span> ${l}
+        </div>`).join("")}
+    </div>
+
+    ${step === 1 ? `
+      <div class="dropzone" data-action="import-next">
+        <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M17 24V9M11 15l6-6 6 6M7 26h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>Solte o <b>negociacao-2026-09-10.xlsx</b> da B3 aqui</div>
+        <div class="faint" style="font-size:12px;margin-top:5px">ou clique para escolher · exportação "Negociação de Ativos" da Área do Investidor</div>
+      </div>` : ""}
+
+    ${step === 2 ? `
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="segctl"><button class="on">Todos (${p.trades.length})</button><button data-noop>Só problemas (2)</button></div>
+            <span class="faint" style="font-size:11.5px">cotações de ${fmtDateTime(p.quoted_at)}</span>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th style="width:26px"></th><th>Ticker</th><th>Data</th><th>Lado</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Valor</th><th>Situação</th></tr></thead>
+              <tbody>
+                ${p.trades.map((t,i) => `
+                  <tr>
+                    <td><input type="checkbox" ${t.resolvable && !t.already_imported ? "checked" : ""} ${!t.resolvable?"disabled":""}></td>
+                    <td class="tick">${t.ticker}</td>
+                    <td class="faint mono" style="font-size:11.5px">${fmtDate(t.date)}</td>
+                    <td><span class="badge ${t.side==='SELL'?'warn':'ok'}">${t.side==='SELL'?'Venda':'Compra'}</span></td>
+                    <td class="num">${t.quantity}</td>
+                    <td class="num">${t.price.toFixed(2)}</td>
+                    <td class="num">${money(t.notional)}</td>
+                    <td>${
+                      !t.resolvable ? `<span class="chip rose">não cadastrado</span> <button class="btn sm" data-drawer="register-asset:${t.ticker}">Cadastrar</button>`
+                      : t.already_imported ? `<span class="chip">já importado</span>`
+                      : t.matches_plan ? `<span class="chip green">no plano</span>`
+                      : `<span class="chip amber">fora do plano</span>`
+                    }</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:8px">
+            <button class="btn ghost" data-action="import-back">Voltar</button>
+            <button class="btn primary" data-action="import-next">Continuar</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h4 style="font-family:var(--f-cond);font-size:13px;margin:0 0 10px">Seleção</h4>
+          <dl class="kv">
+            <dt>Negócios</dt><dd>4</dd>
+            <dt>Compras</dt><dd>${money(5267.60,0)}</dd>
+            <dt>Vendas de ações</dt><dd>${money(1489.88,0)}</dd>
+          </dl>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)">
+            <div class="faint" style="font-size:11px;margin-bottom:5px">Impacto no teto de isenção</div>
+            <div class="meter" style="margin-bottom:5px"><i class="executed" style="width:19%"></i><i class="filllow" style="width:7%"></i></div>
+            <div style="font-size:11.5px" class="dim">${money(5389.08)} de ${moneyK(20000)} — sem alerta</div>
+          </div>
+        </div>
+      </div>` : ""}
+
+    ${step === 3 ? `
+      <div class="panel" style="max-width:560px">
+        <h2 class="sec" style="margin-top:0">Confirmar importação</h2>
+        <p class="dim" style="font-size:13px">Serão criados <b>4 negócios</b>. Esta ação grava no razão e não tem desfazer.</p>
+        <div class="tbl-wrap" style="margin:12px 0">
+          <table><tbody>
+            ${p.trades.filter(t=>t.resolvable && !t.already_imported).map(t=>`<tr><td class="tick">${t.ticker}</td><td>${t.side==='SELL'?'Venda':'Compra'} ${t.quantity} @ ${t.price.toFixed(2)}</td><td class="num">${money(t.notional)}</td></tr>`).join("")}
+          </tbody></table>
+        </div>
+        <p class="faint" style="font-size:12px">Depois de confirmar, o app roda <span class="mono">POST /listed-assets/{id}/consolidate</span> nos 4 ativos.</p>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn ghost" data-action="import-back">Voltar</button>
+          <button class="btn primary" data-action="import-confirm">Confirmar e consolidar</button>
+        </div>
+      </div>` : ""}
+
+    ${step === 4 ? `
+      <div style="max-width:640px">
+        <div class="alert info" style="margin-bottom:16px"><span class="a-ic">●</span><div>4 negócios criados · 4 ativos consolidados. Falta atribuir as cotas novas às estratégias.</div></div>
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Atribuir cotas às estratégias</h2>
+          ${[["ITUB4",70,[["Top Dividendos",45],["Top Ações",25]]],["B3SA3",200,[["Top Ações",200]]]].map(([tk,q,split])=>`
+            <div style="padding:12px 0;border-top:1px solid var(--line-soft)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div><b class="tick">${tk}</b> <span class="dim" style="font-size:12px">+${q} cotas na custódia</span></div>
+                <button class="btn sm">Usar sugestão do plano</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto;gap:6px 12px">
+                ${split.map(([s,v])=>`<span style="font-size:12.5px">${s}</span><input class="mono" style="width:64px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:3px 6px;color:var(--ink);text-align:right" value="${v}">`).join("")}
+              </div>
+            </div>`).join("")}
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn ghost" data-go="/">Pular por agora</button>
+            <button class="btn primary" data-action="import-finish">Salvar atribuição</button>
+          </div>
+        </div>
+      </div>` : ""}
+  </div>`;
+}
+function fmtDateTime(iso){ const [d,t] = iso.split("T"); return fmtDate(d) + " " + t; }
+
+/* =========================================================================
+   TELA — ALOCAÇÃO
+   ========================================================================= */
+function renderAllocation(){
+  const extra = STATE.simContribution;
+  const plan = allocPlan(extra);
+  const maxDelta = Math.max(...plan.classes.map(c => Math.abs(c.delta)), 1);
+  const expanded = STATE.allocExpanded;
+
+  const rows = [];
+  rows.push({ level: 0, label: "Capital", weight: null, ideal: plan.capital, current: plan.classes.reduce((s,c)=>s+c.current,0), delta: null, key: "capital" });
+  plan.classes.forEach(c => {
+    rows.push({ level: 1, label: c.label, weight: c.ideal_weight, ideal: c.ideal, current: c.current, delta: c.delta, key: c.asset_class, expandable: c.asset_class === "STOCKS" || c.asset_class === "REAL_ESTATE" || !!c.sub_classes });
+    if (expanded.includes(c.asset_class)) {
+      if (c.sub_classes) c.sub_classes.forEach(sc => rows.push({ level: 2, label: sc.label, weight: sc.ideal_weight, ideal: sc.ideal, current: sc.current, delta: sc.delta, key: sc.sub_class }));
+      else STRATEGIES.filter(s => s.asset_class === c.asset_class).forEach(s => {
+        const sIdeal = s.weight * c.ideal;
+        const sCur = ASSETS.filter(a => (c.asset_class==="STOCKS"?(a.kind==="STOCK"||a.kind==="BDR"):a.kind==="FII")).reduce((sum,a)=>{
+          const at = a.attr.find(x=>x[0]===s.id); return sum + (at ? at[1]*a.quote : 0);
+        }, 0);
+        rows.push({ level: 2, label: s.name, weight: s.weight, ideal: sIdeal, current: sCur, delta: sCur - sIdeal, key: "s"+s.id });
+      });
+    }
+  });
+
+  return `<div class="page">
+    <div class="page-head">
+      <h1>Alocação</h1>
+      <p>Capital → classe → estratégia ou sub-classe → ticker. Ordenado por tamanho do desvio.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Nível</th><th class="num">Alvo</th><th class="num">Ideal</th><th class="num">Atual</th><th style="text-align:center">Δ R$</th><th class="num">Δ p.p.</th></tr></thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr class="${r.expandable ? "hoverable" : ""}" ${r.expandable ? `data-alloc-toggle="${r.key}"` : ""}>
+                <td class="indent-${r.level}">
+                  ${r.expandable ? `<span class="faint mono" style="font-size:10px">${expanded.includes(r.key)?"▾":"▸"}</span> ` : ""}
+                  <span class="${r.level===0?'':'tick'}" style="${r.level===0?'font-family:var(--f-cond);font-weight:700':''}">${r.label}</span>
+                </td>
+                <td class="num">${r.weight!=null?pct1(r.weight):"—"}</td>
+                <td class="num">${money(r.ideal,0)}</td>
+                <td class="num">${money(r.current,0)}</td>
+                <td>${r.delta!=null?`<div style="display:flex;align-items:center;gap:8px;justify-content:center">${divergentBar(r.delta,maxDelta)}<span class="num ${r.delta<0?'neg':'pos'}" style="min-width:78px">${signed(r.delta,x=>money(x,0))}</span></div>`:""}</td>
+                <td class="num">${r.delta!=null&&r.current+r.ideal>0?signed((r.current-r.ideal)/plan.capital, x=>pct1(x)):""}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <h4 style="font-family:var(--f-cond);font-size:13px;margin:0 0 10px">Capital do mês</h4>
+          <dl class="kv" style="margin-bottom:12px">
+            <dt>Saldo externo</dt><dd>${money(225000,0)}</dd>
+            <dt>Aporte planejado</dt><dd>${money(20000,0)}</dd>
+            <dt>Calculado</dt><dd class="dim">${money(238400,0)}</dd>
+          </dl>
+          ${sparkline([210,215,222,228,235,245], 264, 34, "var(--principal)")}
+          <div class="field" style="margin-top:14px;margin-bottom:0">
+            <label>E se eu aportar…</label>
+            <input type="number" id="simContrib" value="${extra || ""}" placeholder="0" step="1000">
+            <div class="hint">${extra ? `capital vai a ${money(plan.capital,0)} · recálculo ao vivo` : "recalcula a árvore sem gravar"}</div>
+          </div>
+        </div>
+        <div class="panel">
+          <button class="btn primary" style="width:100%" data-drawer="edit-targets">Editar alvos por classe</button>
+          <p class="faint" style="font-size:11.5px;margin:10px 0 0">Alvos são versionados por data de vigência — nunca sobrescritos.</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   TELA — ESTRATÉGIAS
+   ========================================================================= */
+function renderStrategies(){
+  const path = currentPath();
+  if (path === "/strategies/import") return renderStrategyImport();
+  const selId = parseInt(query().s) || STRATEGIES[0].id;
+  const sel = stratById(selId);
+  const editions = EDITIONS[selId] || [{ reference_date: MONTH, targets: sel.targets }];
+  const latest = editions[editions.length - 1];
+  const targets = STRATEGY_TARGETS[selId] || [];
+  const byClass = {};
+  STRATEGIES.forEach(s => { (byClass[s.asset_class] ??= []).push(s); });
+
+  return `<div class="page">
+    <div class="page-head">
+      <h1>Estratégias</h1>
+      <p>As carteiras da XP, edição por edição. O diff mês a mês e o texto de alterações do relatório.</p>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button class="btn" data-go="/strategies/import">Importar 5 relatórios</button>
+    </div>
+
+    <div class="md">
+      <div class="md-list">
+        ${Object.entries(byClass).map(([ac, list]) => `
+          <div class="ml-group">${CLASS_TARGETS.find(c=>c.asset_class===ac).label}</div>
+          ${list.map(s => `
+            <div class="ml-item ${s.id===selId?'on':''}" data-strat="${s.id}">
+              <div class="mli-top">
+                <span class="mli-name">${s.name}</span>
+                ${s.edition===MONTH ? `<span class="chip green">set/26 ✓</span>` : `<span class="chip rose">desatualizada</span>`}
+              </div>
+              <div class="faint mono" style="font-size:11px;margin-top:3px">peso ${pct1(s.weight)} · ${s.targets} ativos</div>
+            </div>`).join("")}
+        `).join("")}
+      </div>
+      <div class="md-detail">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+          <div>
+            <h2 style="font-family:var(--f-cond);font-weight:700;font-size:19px;margin:0">${sel.name}</h2>
+            <div class="dim" style="font-size:12.5px">${CLASS_TARGETS.find(c=>c.asset_class===sel.asset_class).label} · peso <b class="mono">${pct1(sel.weight)}</b> do bloco</div>
+          </div>
+          <button class="btn sm" data-drawer="import-report:${sel.id}">Importar relatório</button>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-bottom:16px">
+          ${editions.map((e,i)=>`<span class="chip ${i===editions.length-1?'amber':''}">${e.reference_date.replace("2026-","").replace("-","/")}·26</span>`).join("")}
+        </div>
+
+        ${latest.diff ? `
+          <div class="panel" style="margin-bottom:16px">
+            <h4 style="font-family:var(--f-cond);font-size:13px;margin:0 0 10px">Mudanças de ${latest.reference_date.replace("2026-0","")}/26 vs. edição anterior</h4>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+              ${latest.diff.entered.map(t=>`<span class="chip green">+ ${t.ticker} ${pct1(t.weight)}</span>`).join("")}
+              ${latest.diff.exited.map(t=>`<span class="chip rose">− ${t.ticker}</span>`).join("")}
+              ${latest.diff.changed.map(c=>`<span class="chip">${c.ticker} ${pct1(c.before)}→${pct1(c.after)}${c.rating_after?` · ${c.rating_before}→${c.rating_after}`:""}</span>`).join("")}
+            </div>
+            ${latest.changes_text ? `<p style="font-size:12.5px;color:var(--ink-dim);border-left:2px solid var(--line);padding-left:10px;margin:0;font-style:italic">"${latest.changes_text}"</p>` : ""}
+          </div>` : ""}
+
+        ${targets.length ? `
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Ticker</th><th class="num">Peso-alvo</th><th>Rating</th><th class="num">Preço-alvo</th><th class="num">Cotação</th><th class="num">Upside</th><th class="num">Atrib.</th><th class="num">Ideal</th><th class="num">Δ cotas</th></tr></thead>
+            <tbody>
+              ${targets.map(t => {
+                const a = ASSETS.find(x => x.ticker === t.ticker || x.ticker === t.ticker.replace("6","3"));
+                const quote = a ? a.quote : null;
+                const upside = quote ? (t.target_price - quote) / quote : null;
+                const attrQ = a ? (a.attr.find(x=>x[0]===selId)?.[1] || 0) : 0;
+                const idealQ = quote ? Math.floor(t.weight * sel.weight * allocPlan().classes.find(c=>c.asset_class===sel.asset_class).ideal / quote) : 0;
+                return `<tr>
+                  <td class="tick">${t.ticker}</td>
+                  <td class="num">${pct1(t.weight)}</td>
+                  <td>${ratingChip(t.rating)}</td>
+                  <td class="num">${t.target_price.toFixed(2)}</td>
+                  <td class="num">${quote?quote.toFixed(2):"—"}</td>
+                  <td class="num ${upside>0?'gain':'loss'}">${upside!=null?signed(upside,x=>pct1(x)):"—"}</td>
+                  <td class="num">${attrQ||"—"}</td>
+                  <td class="num">${idealQ||"—"}</td>
+                  <td class="num">${deltaCellQ(attrQ - idealQ)}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>` : `<div class="empty"><h3>Sem edição importada</h3><p>Importe o relatório de setembro para ver os alvos.</p></div>`}
+      </div>
+    </div>
+  </div>`;
+}
+function deltaCellQ(v){ if(!v) return `<span class="dim">—</span>`; return `<span class="${v<0?'neg':'pos'}">${signed(v)}</span>`; }
+
+function renderStrategyImport(){
+  return `<div class="page">
+    <div class="page-head"><h1>Importar relatórios da XP</h1><p>Solte os 5 PDFs de setembro. Cada arquivo recebe uma estratégia sugerida e o status do parse.</p></div>
+    <div class="dropzone" style="margin-bottom:18px">
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M17 24V9M11 15l6-6 6 6M7 26h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div>Solte os PDFs aqui</div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Arquivo</th><th>Estratégia sugerida</th><th>Parser</th><th>Mês</th><th class="num">Alvos</th><th>Soma</th><th>Diff</th></tr></thead>
+        <tbody>
+          ${[
+            ["Carteira Top Dividendos.pdf","Top Dividendos","XpEquityCarteira","09/26",11,"100,0% ✓","+2 −1 ~2"],
+            ["Top Ações.pdf","Top Ações","XpEquityCarteira","09/26",14,"100,0% ✓","+1 −1 ~1"],
+            ["Top Dividendos Plus.pdf","Dividendos Plus","XpQuantCarteira","09/26",10,"99,8% ✓","+0 −2 ~3"],
+            ["Small Caps.pdf","Small Caps","XpEquityCarteira","09/26",12,"100,0% ✓","primeira edição"],
+            ["Carteira-Fundamentalista-XP-09-2026.pdf","Fundamentalista FII","XpFiiCarteira","09/26",16,"100,0% ✓","+1 −1"],
+          ].map(r=>`<tr><td class="mono" style="font-size:11.5px">${r[0]}</td><td>${r[1]}</td><td class="faint mono" style="font-size:11px">${r[2]}</td><td class="mono">${r[3]}</td><td class="num">${r[4]}</td><td><span class="chip green">${r[5]}</span></td><td class="faint" style="font-size:11.5px">${r[6]}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn ghost" data-go="/strategies">Cancelar</button>
+      <button class="btn primary" data-action="strat-import-confirm">Confirmar os 5</button>
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   TELA — ATIVOS
+   ========================================================================= */
+function renderAssets(){
+  const path = currentPath();
+  const m = path.match(/^\/assets\/(\d+)/);
+  if (m) return renderAssetDetail(parseInt(m[1]));
+
+  const q = query();
+  const filter = q.filter, kf = q.kind;
+  let list = ASSETS.filter(a => a.qty > 0 || a.unattributed > 0);
+  if (filter === "pending") list = list.filter(a => a.unattributed > 0);
+  if (kf) list = list.filter(a => a.kind === kf);
+  const totMkt = list.reduce((s,a)=>s+marketValue(a),0);
+
+  return `<div class="page">
+    <div class="page-head"><h1>Ativos</h1><p>Custódia real, preço médio fiscal e a sua atribuição por estratégia lado a lado.</p></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="display:flex;gap:8px">
+        <div class="segctl">
+          <button class="${!kf?'on':''}" data-q-kind="">Todos</button>
+          <button class="${kf==='STOCK'?'on':''}" data-q-kind2="STOCK">Ações</button>
+          <button class="${kf==='FII'?'on':''}" data-q-kind2="FII">FIIs</button>
+        </div>
+        <button class="btn sm ${filter==='pending'?'primary':''}" data-q-filter="${filter==='pending'?'':'pending'}">Só com pendência</button>
+      </div>
+      <button class="btn sm" data-drawer="new-asset">Novo ativo</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Ticker</th><th>Tipo</th><th class="num">Custódia</th><th class="num">Preço médio</th><th class="num">Cotação</th><th class="num">Valor</th><th class="num">Ganho não real.</th><th class="num">% cart.</th><th>Estratégias</th></tr></thead>
+        <tbody>
+          ${list.map(a => `
+            <tr class="hoverable" data-asset="${a.id}">
+              <td class="tick">${a.ticker} ${a.unattributed>0?`<span class="chip rose" title="cotas não atribuídas">⚠</span>`:""}</td>
+              <td><span class="badge">${a.kind}</span></td>
+              <td class="num">${a.qty?num0.format(a.qty):"—"}</td>
+              <td class="num">${a.avg?a.avg.toFixed(2):"—"}</td>
+              <td class="num">${a.quoted_at?a.quote.toFixed(2):`<span class="faint">s/ cotação</span>`}</td>
+              <td class="num">${a.qty?money(marketValue(a),0):"—"}</td>
+              <td class="num ${unrealized(a)>=0?'gain':'loss'}">${a.qty?signed(unrealized(a),x=>money(x,0)):"—"}</td>
+              <td class="num">${a.qty?pct1(marketValue(a)/totMkt):"—"}</td>
+              <td>${a.attr.map(([sid])=>`<span class="chip" style="margin-right:3px">${stratById(sid).name.split(" ")[0]}</span>`).join("") || `<span class="faint" style="font-size:11px">—</span>`}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderAssetDetail(id){
+  const a = assetById(id);
+  if (!a) return `<div class="page"><div class="empty"><h3>Ativo não encontrado</h3></div></div>`;
+  const tab = query().tab || "attribution";
+  const attributed = a.attr.reduce((s,x)=>s+x[1],0);
+
+  return `<div class="page">
+    <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1 style="font-family:var(--f-mono);letter-spacing:0">${a.ticker}</h1>
+        <p>${a.name} · ${a.kind} · <a href="#/assets">todos os ativos</a></p>
+      </div>
+      <button class="btn sm ghost" data-go="/assets">← Voltar</button>
+    </div>
+
+    <div class="grid g-4" style="margin-bottom:18px">
+      <div class="kpi"><div class="k-label">Cotação</div><div class="k-value">${a.quoted_at?a.quote.toFixed(2):"—"}</div><div class="k-sub">${a.quoted_at?"10/09 14:32":"sem cotação"}</div></div>
+      <div class="kpi"><div class="k-label">Valor de mercado</div><div class="k-value">${money(marketValue(a),0)}</div></div>
+      <div class="kpi"><div class="k-label">Preço médio <span class="faint">(fiscal, por CPF)</span></div><div class="k-value">${a.avg.toFixed(2)}</div><div class="k-sub">custo ${money(costBasis(a),0)}</div></div>
+      <div class="kpi"><div class="k-label">Ganho não realizado</div><div class="k-value ${unrealized(a)>=0?'gain':'loss'}">${signed(unrealized(a),x=>money(x,0))}</div></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <b style="font-family:var(--f-cond);font-size:13px">Conciliação — custódia ${a.qty} · atribuído ${attributed} ${a.unattributed>0?`<span class="chip rose">${a.unattributed} não atribuídas</span>`:`<span class="gain">✓</span>`}</b>
+        ${a.unattributed>0?`<button class="btn sm primary" data-drawer="distribute:${a.id}">Distribuir</button>`:""}
+      </div>
+      <div class="recon-bar">
+        ${a.attr.map(([sid,q]) => `<div class="rb" style="width:${q/a.qty*100}%;background:${["#38bdf8","#a78bfa","#34d399","#f59e0b","#f472b6"][sid-1]}">${q/a.qty>0.12?stratById(sid).name.split(" ")[0]:""}</div>`).join("")}
+        ${a.unattributed>0?`<div class="rb unatt" style="width:${a.unattributed/a.qty*100}%">${a.unattributed}</div>`:""}
+      </div>
+    </div>
+
+    <div class="tabs">
+      ${[["attribution","Atribuição"],["trades","Negociações"],["position","Posição"],["income","Proventos"],["strategies","Estratégias"],["corp","Eventos corp."]].map(([k,l])=>`<button class="${tab===k?'on':''}" data-tab="${k}">${l}</button>`).join("")}
+    </div>
+
+    ${tab === "attribution" ? `
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn sm" data-drawer="new-movement:${a.id}">Novo ajuste</button>
+        <button class="btn sm" data-drawer="transfer:${a.id}">Transferir entre estratégias</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Estratégia</th><th>Motivo</th><th class="num">Qtd.</th><th>Nota</th></tr></thead>
+          <tbody>
+            <tr><td class="mono faint" style="font-size:11.5px">08/09</td><td>Top Dividendos</td><td><span class="chip">TRANSFER</span></td><td class="num pos">+40</td><td class="faint" style="font-size:11.5px">proposta #102</td></tr>
+            <tr><td class="mono faint" style="font-size:11.5px">02/09</td><td>Top Ações</td><td><span class="chip">ADJUSTMENT</span></td><td class="num">${a.attr[0]?.[1] || 0}</td><td class="faint" style="font-size:11.5px">semente do mês</td></tr>
+            <tr><td class="mono faint" style="font-size:11.5px">14/08</td><td>Top Dividendos</td><td><span class="chip">BUY</span></td><td class="num pos">+100</td><td class="faint" style="font-size:11.5px">nota 11/08</td></tr>
+          </tbody>
+        </table>
+      </div>` : ""}
+
+    ${tab === "trades" ? `
+      <div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn sm" data-drawer="new-trade:${a.id}">Novo negócio</button></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Lado</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="mono faint" style="font-size:11.5px">11/08</td><td><span class="badge ok">Compra</span></td><td class="num">100</td><td class="num">${(a.avg*0.97).toFixed(2)}</td><td class="num">${money(a.avg*97,0)}</td><td class="num"><button class="btn sm danger">Excluir</button></td></tr>
+            <tr><td class="mono faint" style="font-size:11.5px">03/07</td><td><span class="badge ok">Compra</span></td><td class="num">${a.qty-100}</td><td class="num">${(a.avg*1.01).toFixed(2)}</td><td class="num">${money(a.avg*1.01*(a.qty-100),0)}</td><td class="num"><button class="btn sm danger">Excluir</button></td></tr>
+          </tbody>
+        </table>
+      </div>` : ""}
+
+    ${tab === "position" ? `
+      <div class="panel">
+        ${areaChart([costBasis(a)*0.8, costBasis(a)*0.85, costBasis(a)*0.9, costBasis(a)*0.95, costBasis(a), marketValue(a)],
+                    [0, costBasis(a)*0.02, costBasis(a)*0.05, -costBasis(a)*0.03, costBasis(a)*0.04, unrealized(a)])}
+        <p class="faint" style="font-size:12px;margin:10px 0 0">Custo (base) + ganho não realizado ao longo das consolidações.</p>
+      </div>` : ""}
+
+    ${tab === "income" ? `
+      <div class="tbl-wrap">
+        <table><thead><tr><th>Tipo</th><th>Data-com</th><th class="num">Qtd. na data</th><th class="num">Bruto</th><th class="num">Retido</th><th class="num">Líquido</th></tr></thead>
+        <tbody>${INCOME_EVENTS.filter(e=>e.listed_asset_id===a.id).map(e=>`<tr><td>${e.type}</td><td class="mono faint" style="font-size:11.5px">${fmtDate(e.ex_date)}</td><td class="num">${e.quantity_held}</td><td class="num">${money(e.gross_amount)}</td><td class="num loss">${e.retained_tax?money(-e.retained_tax):"—"}</td><td class="num gain">${money(e.net_amount)}</td></tr>`).join("") || `<tr><td colspan="6" class="faint" style="text-align:center;padding:20px">Nenhum provento no período</td></tr>`}</tbody></table>
+      </div>` : ""}
+
+    ${tab === "strategies" ? `<div class="panel"><p class="dim" style="font-size:13px">Peso-alvo de <b>${a.ticker}</b> em cada estratégia ao longo das edições:</p>
+      <div style="display:flex;gap:24px;margin-top:12px">
+        <div><div class="faint mono" style="font-size:11px;margin-bottom:4px">Top Dividendos</div>${sparkline([8,9,10,10,12],120,30,"#38bdf8")}</div>
+        <div><div class="faint mono" style="font-size:11px;margin-bottom:4px">Top Ações</div>${sparkline([0,0,5,6,8],120,30,"#a78bfa")}</div>
+      </div></div>` : ""}
+
+    ${tab === "corp" ? `<div class="panel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b style="font-family:var(--f-cond);font-size:13px">Eventos corporativos</b><button class="btn sm">Registrar evento</button></div>
+      ${a.ticker==="CPLE6" ? `<div class="alert info"><span class="a-ic">●</span><div>Migração ao Novo Mercado (2024): cada PN virou 1 ON + 1 PNC resgatada a R$ 0,7749. Preço médio da CPLE3 recalculado.</div></div>` : `<p class="faint" style="font-size:12.5px">Nenhum evento registrado.</p>`}
+    </div>` : ""}
+  </div>`;
+}
+
+function areaChart(cost, gain){
+  const w = 600, h = 150, pad = 4;
+  const totals = cost.map((c,i)=>c+gain[i]);
+  const max = Math.max(...totals), min = Math.min(...cost.map((c,i)=>Math.min(c, c+gain[i])));
+  const rng = max - min || 1;
+  const step = (w - pad*2) / (cost.length - 1);
+  const y = v => h - pad - (v - min) / rng * (h - pad*2);
+  const x = i => pad + i * step;
+  const costLine = cost.map((c,i)=>`${x(i).toFixed(1)},${y(c).toFixed(1)}`).join(" ");
+  const totLine = totals.map((t,i)=>`${x(i).toFixed(1)},${y(t).toFixed(1)}`).join(" ");
+  const area = `${totLine} ${x(cost.length-1).toFixed(1)},${y(min).toFixed(1)} ${x(0).toFixed(1)},${y(min).toFixed(1)}`;
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="display:block">
+    <polygon points="${area}" fill="var(--principal-bg)"/>
+    <polyline points="${costLine}" fill="none" stroke="var(--ink-faint)" stroke-width="1.4" stroke-dasharray="3 3"/>
+    <polyline points="${totLine}" fill="none" stroke="var(--principal)" stroke-width="2"/>
+  </svg>`;
+}
+
+/* =========================================================================
+   TELA — PROVENTOS
+   ========================================================================= */
+function renderIncome(){
+  const tab = query().tab || "calendar";
+  const byMonth = {};
+  INCOME_EVENTS.forEach(e => { const m = e.payment_date.slice(0,7); (byMonth[m] ??= []).push(e); });
+
+  return `<div class="page">
+    <div class="page-head"><h1>Proventos</h1><p>Previsto a partir da B3, na posição da data-com. Conciliação contra o extrato "Movimentação".</p></div>
+
+    <div class="tabs">
+      ${[["calendar","Calendário"],["by-asset","Por ativo"],["reconcile","Conciliação"]].map(([k,l])=>`<button class="${tab===k?'on':''}" data-tab="${k}">${l}</button>`).join("")}
+    </div>
+
+    ${tab === "calendar" ? `
+      <div class="panel" style="margin-bottom:16px">
+        ${monthBars([["jun",620],["jul",580],["ago",710],["set",812],["out",1071],["nov",518]], 812)}
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>Pagamento</th><th>Ticker</th><th>Tipo</th><th class="num">Bruto</th><th class="num">Retido</th><th class="num">Líquido</th></tr></thead>
+        <tbody>${INCOME_EVENTS.map(e=>`<tr><td class="mono faint" style="font-size:11.5px">${fmtDate(e.payment_date)}</td><td class="tick">${e.ticker}</td><td>${({JCP:"JCP",DIVIDEND:"Dividendo",FUND_INCOME:"Rendimento"})[e.type]}</td><td class="num">${money(e.gross_amount)}</td><td class="num loss">${e.retained_tax?money(-e.retained_tax):"—"}</td><td class="num gain">${money(e.net_amount)}</td></tr>`).join("")}</tbody></table>
+      </div>` : ""}
+
+    ${tab === "by-asset" ? `
+      <div class="tbl-wrap">
+        <table><thead><tr><th>Ticker</th><th class="num">Total líquido (12m)</th><th class="num">Custo</th><th class="num">Yield on cost</th></tr></thead>
+        <tbody>
+          ${["ITSA4","VALE3","MCCI11","KNCR11","EGIE3"].map(tk=>{const a=ASSETS.find(x=>x.ticker===tk);const net=(INCOME_EVENTS.filter(e=>e.ticker===tk).reduce((s,e)=>s+e.net_amount,0))*4;return `<tr><td class="tick">${tk}</td><td class="num gain">${money(net)}</td><td class="num">${money(costBasis(a),0)}</td><td class="num">${pct1(net/costBasis(a))}</td></tr>`}).join("")}
+        </tbody></table>
+      </div>` : ""}
+
+    ${tab === "reconcile" ? `
+      <div class="alert warn" style="margin-bottom:14px"><span class="a-ic">▲</span><div>O parser da planilha "Movimentação" ainda não tem amostra real — os nomes de coluna são uma suposição documentada.</div></div>
+      <div class="dropzone" style="margin-bottom:14px"><svg width="30" height="30" viewBox="0 0 34 34" fill="none"><path d="M17 24V9M11 15l6-6 6 6M7 26h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><div>Solte movimentacao-2026.xlsx</div></div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>Ticker</th><th>Mês</th><th>Tipo</th><th class="num">Previsto</th><th class="num">Recebido</th><th class="num">Divergência</th></tr></thead>
+        <tbody>
+          <tr><td class="tick">ITSA4</td><td class="mono">08/26</td><td>JCP</td><td class="num">${money(160.65)}</td><td class="num">${money(160.65)}</td><td class="num gain">✓</td></tr>
+          <tr><td class="tick">VALE3</td><td class="mono">08/26</td><td>Dividendo</td><td class="num">${money(480.00)}</td><td class="num">${money(456.00)}</td><td class="num loss">${money(-24.00)}</td></tr>
+        </tbody></table>
+      </div>` : ""}
+  </div>`;
+}
+function monthBars(data, max){
+  return `<div style="display:flex;align-items:flex-end;gap:14px;height:120px">
+    ${data.map(([label,v],i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+      <div class="mono faint" style="font-size:10px">${money(v,0).replace("R$ ","")}</div>
+      <div style="width:100%;background:${i>=4?'var(--principal-bg)':'var(--yield-bg)'};border:1px solid ${i>=4?'var(--principal)':'var(--yield)'};border-bottom:0;height:${v/max*90}px;border-radius:3px 3px 0 0"></div>
+      <div class="faint" style="font-size:11px">${label}</div>
+    </div>`).join("")}
+  </div>`;
+}
+
+/* =========================================================================
+   TELA — IMPOSTOS
+   ========================================================================= */
+function renderTaxes(){
+  const months = [...new Set(CAPITAL_GAINS.map(g=>g.month))].sort();
+  return `<div class="page">
+    <div class="page-head"><h1>Impostos</h1><p>Livro mensal de ganho de capital, ações e FIIs em baldes separados. Planejador de step-up para preencher a isenção.</p></div>
+
+    <h2 class="sec" style="margin-top:0">Vendas de ações × teto mensal</h2>
+    <div class="panel" style="margin-bottom:22px">
+      ${ceilingChart([["jun",8200],["jul",12400],["ago",26550],["set",3899]])}
+    </div>
+
+    <h2 class="sec">Livro mensal</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Mês</th><th>Balde</th><th class="num">Vendas</th><th class="num">Ganho bruto</th><th>Isento</th><th class="num">Compensado</th><th class="num">Tributável</th><th class="num">IR devido</th><th class="num">Prej. acum.</th></tr></thead>
+        <tbody>
+          ${months.map(m => {
+            const rows = CAPITAL_GAINS.filter(g=>g.month===m);
+            return `<tr class="group-row"><td colspan="9">${m.replace("2026-0","")}/2026</td></tr>` + rows.map(g=>`
+              <tr>
+                <td></td>
+                <td>${g.is_fii?"FIIs":"Ações"}</td>
+                <td class="num">${money(g.proceeds,0)}</td>
+                <td class="num ${g.gross_gain>=0?'gain':'loss'}">${signed(g.gross_gain,x=>money(x,0))}</td>
+                <td>${g.exempt?`<span class="chip green">isento</span>`:`<span class="faint">—</span>`}</td>
+                <td class="num">${g.loss_compensated?money(-g.loss_compensated,0):"—"}</td>
+                <td class="num">${g.taxable_gain?money(g.taxable_gain,0):"—"}</td>
+                <td class="num ${g.tax_due?'loss':''}">${g.tax_due?money(g.tax_due):"—"}</td>
+                <td class="num">${g.loss_carried_forward?money(g.loss_carried_forward,0):"—"}</td>
+              </tr>`).join("");
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel" style="margin:16px 0 22px;border-left:3px solid var(--tax)">
+      <b style="font-family:var(--f-cond);font-size:13px">DARF · agosto/2026</b>
+      <div style="display:flex;gap:28px;align-items:center;margin-top:8px">
+        <dl class="kv"><dt>Código</dt><dd>6015</dd><dt>Vencimento</dt><dd>31/10/2026</dd><dt>Valor</dt><dd class="loss">${money(468)}</dd></dl>
+        <button class="btn sm" data-action="copy-darf">Copiar dados</button>
+      </div>
+      <p class="faint" style="font-size:11.5px;margin:8px 0 0">Agosto estourou o teto: R$ 26.549,84 vendidos. Todo o ganho do mês virou tributável a 15%.</p>
+    </div>
+
+    <h2 class="sec">Planejador de step-up</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Ticker</th><th class="num">Qtd.</th><th class="num">Valor</th><th class="num">Ganho realizado</th><th class="num">Recompra</th></tr></thead>
+        <tbody>
+          <tr><td class="tick">ITUB4</td><td class="num">180</td><td class="num">${money(6278)}</td><td class="num gain">${money(860)}</td><td class="mono">11/09 (D+1)</td></tr>
+          <tr><td class="tick">CURY3</td><td class="num">200</td><td class="num">${money(5218)}</td><td class="num gain">${money(638)}</td><td class="mono">11/09 (D+1)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dim" style="font-size:12.5px;margin-top:10px">Consome ${money(11496,0)} do teto — sobrariam ${money(4605,0)} de isenção neste mês. Recomprar sempre em D+1, nunca no mesmo dia.</p>
+  </div>`;
+}
+function ceilingChart(data){
+  const w = 640, h = 160, pad = 26, limit = 20000;
+  const max = 30000;
+  const step = (w - pad*2) / data.length;
+  const y = v => h - pad - v / max * (h - pad*2);
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}">
+    <line x1="${pad}" y1="${y(limit)}" x2="${w-pad}" y2="${y(limit)}" stroke="var(--tax)" stroke-width="1.4" stroke-dasharray="5 3"/>
+    <text x="${w-pad}" y="${y(limit)-5}" text-anchor="end" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="10" fill="var(--tax)">teto R$ 20 mil</text>
+    ${data.map((d,i)=>{
+      const bh = h - pad - y(d[1]);
+      const over = d[1] > limit;
+      return `<rect x="${pad + i*step + step*0.2}" y="${y(d[1])}" width="${step*0.6}" height="${bh}" rx="2" fill="${over?'var(--tax-bg)':'var(--yield-bg)'}" stroke="${over?'var(--tax)':'var(--yield)'}"/>
+      <text x="${pad + i*step + step*0.5}" y="${h-8}" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="10" fill="var(--ink-faint)">${d[0]}</text>
+      <text x="${pad + i*step + step*0.5}" y="${y(d[1])-5}" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="9.5" fill="var(--ink-dim)">${(d[1]/1000).toFixed(0)}k</text>`;
+    }).join("")}
+  </svg>`;
+}
+
+/* =========================================================================
+   TELA — FECHAMENTO
+   ========================================================================= */
+function renderMonthlyClose(){
+  const steps = monthProgress();
+  const blocked = steps.some(s => s.status === "block");
+  const plan = allocPlan();
+  return `<div class="page">
+    <div class="page-head"><h1>Fechamento de setembro</h1><p>Uma máquina de estados curta. Não fecha enquanto houver transferência pendente.</p></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+      <div class="panel">
+        <h2 class="sec" style="margin-top:0">Antes de fechar</h2>
+        ${steps.map(s=>`
+          <div class="check-line ${s.status}" style="padding:7px 0;border-bottom:1px solid var(--line-soft)">
+            <span class="c-ic">${s.status==="done"?"✓":s.status==="block"?"✕":s.status==="now"?"●":"○"}</span>
+            <div style="flex:1"><span style="font-size:12.5px">${s.title}</span><div class="faint" style="font-size:11px">${s.live}</div></div>
+            ${s.status==="block"?`<a href="#${s.action.path}" style="font-size:11.5px">resolver</a>`:""}
+          </div>`).join("")}
+        <button class="btn primary" style="width:100%;margin-top:14px" ${blocked?"disabled":""} data-action="close-month">${blocked?"Bloqueado — 3 transferências pendentes":"Fechar setembro"}</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Resumo do mês</h2>
+          <dl class="kv">
+            <dt>Negócios importados</dt><dd>${STATE.confirmedImport?"4":"0"}</dd>
+            <dt>Vendas de ações</dt><dd>${money(3899.20,0)}</dd>
+            <dt>IR estimado</dt><dd class="loss">${money(0)}</dd>
+            <dt>Proventos previstos</dt><dd class="gain">${money(1127.05)}</dd>
+          </dl>
+        </div>
+        <div class="panel">
+          <h2 class="sec" style="margin-top:0">Drift por classe</h2>
+          ${plan.classes.slice(0,4).map(c=>{
+            const cur = c.current_weight, tgt = c.ideal_weight;
+            const off = Math.abs(cur - tgt) > 0.05;
+            return `<div style="margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:4px"><span>${c.label}</span><span class="mono ${off?'loss':'dim'}">${signed(cur-tgt,x=>pct1(x))}${off?" ⚠":""}</span></div>
+              <div class="bullet">
+                <div class="band" style="left:${Math.max(0,(tgt-0.05))*100}%;width:${0.1*100}%"></div>
+                <div class="cur" style="left:2px;width:${Math.min(98,cur*100)}%"></div>
+                <div class="tgt" style="left:${tgt*100}%"></div>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>
+    </div>
+
+    <h2 class="sec">Meses fechados</h2>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Mês</th><th>Fechado em</th><th class="num">Patrimônio</th><th class="num">IR</th><th></th></tr></thead>
+      <tbody>
+        <tr class="hoverable"><td class="mono">08/2026</td><td class="faint mono" style="font-size:11.5px">02/09 09:14</td><td class="num">${money(238900,0)}</td><td class="num loss">${money(468)}</td><td class="num"><a href="#" style="font-size:11.5px">ver resumo</a></td></tr>
+        <tr class="hoverable"><td class="mono">07/2026</td><td class="faint mono" style="font-size:11.5px">03/08 21:40</td><td class="num">${money(232100,0)}</td><td class="num">${money(0)}</td><td class="num"><a href="#" style="font-size:11.5px">ver resumo</a></td></tr>
+      </tbody></table>
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   TELA — RENDA FIXA
+   ========================================================================= */
+function renderFixedIncome(){
+  const path = currentPath();
+  if (path === "/fixed-income/indexes") return renderIndexes();
+  const m = path.match(/^\/fixed-income\/(bonds|checking-accounts)\/(\d+)/);
+  if (m) return renderBondDetail(parseInt(m[2]));
+
+  return `<div class="page">
+    <div class="page-head"><h1>Renda fixa</h1><p>Títulos e contas na mesma tabela. Detalhe de cada produto com posições, lançamentos e o upload de extrato.</p></div>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:8px">
+      <button class="btn sm" data-go="/fixed-income/indexes">Índices</button>
+      <button class="btn sm" data-drawer="new-bond">Novo produto</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Produto</th><th>Tipo</th><th>Indexador</th><th>Sub-classe</th><th class="num">Valor atual</th><th class="num">Rendimento</th><th class="num">IR</th><th class="num">Vencimento</th></tr></thead>
+        <tbody>
+          ${BONDS.map(b=>`
+            <tr class="hoverable" data-bond="${b.id}" data-bond-kind="${b.kind}">
+              <td>${b.name}</td>
+              <td><span class="badge">${b.kind==="BOND"?"Título":"Conta"}</span></td>
+              <td><span class="chip ${b.index==='CDI'?'blue':b.index==='SELIC'?'violet':'rose'}">${b.index}</span></td>
+              <td class="faint" style="font-size:11.5px">${SUBCLASS_TARGETS.find(s=>s.sub_class===b.sub_class)?.label}</td>
+              <td class="num">${money(b.value,0)}</td>
+              <td class="num ${b.yield_acc>=0?'gain':'loss'}">${signed(b.yield_acc,x=>money(x,0))}</td>
+              <td class="num">${b.ir?money(b.ir):"—"}</td>
+              <td class="mono faint" style="font-size:11.5px">${b.maturity.split("-").reverse().join("/")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderBondDetail(id){
+  const b = BONDS.find(x=>x.id===id);
+  if(!b) return `<div class="page"><div class="empty"><h3>Produto não encontrado</h3></div></div>`;
+  return `<div class="page">
+    <div class="page-head" style="display:flex;justify-content:space-between"><div><h1>${b.name}</h1><p>${b.index} · <a href="#/fixed-income">renda fixa</a></p></div><button class="btn sm ghost" data-go="/fixed-income">← Voltar</button></div>
+    <div class="grid g-3" style="margin-bottom:18px">
+      <div class="kpi"><div class="k-label">Valor atual</div><div class="k-value">${money(b.value,0)}</div></div>
+      <div class="kpi"><div class="k-label">Rendimento acum.</div><div class="k-value ${b.yield_acc>=0?'gain':'loss'}">${signed(b.yield_acc,x=>money(x,0))}</div></div>
+      <div class="kpi"><div class="k-label">IR · IOF</div><div class="k-value">${money(b.ir)} · ${money(b.iof)}</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:16px">${areaChart([b.value*0.9,b.value*0.93,b.value*0.96,b.value*0.98,b.value],[0,b.yield_acc*0.3,b.yield_acc*0.6,b.yield_acc*0.85,b.yield_acc])}</div>
+    <h2 class="sec">Lançamentos</h2>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Data</th><th>Tipo</th><th class="num">Valor</th></tr></thead><tbody>
+        <tr><td class="mono faint" style="font-size:11.5px">15/01/2026</td><td>${b.kind==="BOND"?"Compra":"Depósito"}</td><td class="num">${money(b.value*0.8,0)}</td></tr>
+        <tr><td class="mono faint" style="font-size:11.5px">20/06/2026</td><td>${b.kind==="BOND"?"Compra":"Depósito"}</td><td class="num">${money(b.value*0.2,0)}</td></tr>
+      </tbody></table>
+    </div>
+  </div>`;
+}
+function renderIndexes(){
+  return `<div class="page">
+    <div class="page-head" style="display:flex;justify-content:space-between"><div><h1>Índices</h1><p>CDI, SELIC e IPCA da API do BACEN.</p></div><button class="btn sm ghost" data-go="/fixed-income">← Voltar</button></div>
+    <div class="grid g-3">
+      ${INDEXES.map(ix=>`
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center"><b class="mono">${ix.id}</b><button class="btn sm" data-action="hydrate:${ix.id}">Hidratar</button></div>
+          <div class="mono" style="font-size:20px;margin:8px 0 2px">${pct1(ix.last)}<span class="faint" style="font-size:12px"> a.m.</span></div>
+          <div class="faint" style="font-size:11px;margin-bottom:8px">${num0.format(ix.records)} registros</div>
+          ${sparkline([0.035,0.037,0.04,0.041,0.041,ix.last].map(v=>v*100), 240, 34, ix.color)}
+        </div>`).join("")}
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   ESTADO DA SESSÃO (só do protótipo)
+   ========================================================================= */
+const STATE = {
+  importStep: 1,
+  confirmedImport: false,
+  simContribution: 0,
+  allocExpanded: ["STOCKS"],
+  collapsed: false,
+};
+
+/* =========================================================================
+   DRAWERS
+   ========================================================================= */
+const DRAWERS = {
+  contribution: () => ({ title: "Aporte avulso", body: `
+    <div class="field"><label>Data</label><input type="date" value="2026-09-15"></div>
+    <div class="field"><label>Valor</label><input class="mono" placeholder="R$ 0,00"></div>
+    <p class="faint" style="font-size:12px">O motor roda em modo só-aporte: distribui o dinheiro novo proporcionalmente ao que falta, sem gerar nenhuma venda.</p>`,
+    action: "Registrar e ver plano" }),
+  "edit-targets": () => ({ title: "Editar alvos por classe", body: `
+    ${CLASS_TARGETS.map(c=>`<div class="field"><label>${c.label}</label><input class="mono" value="${(c.ideal_weight*100).toFixed(1)}"></div>`).join("")}
+    <div class="meter" style="margin:4px 0 6px"><i class="fillok" style="width:100%"></i></div>
+    <div style="font-size:11.5px" class="gain">soma 100,0% ✓</div>
+    <div class="field" style="margin-top:12px"><label>Vigência a partir de</label><input type="date" value="2026-09-01"></div>`,
+    action: "Salvar nova versão" }),
+  "new-asset": () => ({ title: "Novo ativo", body: `
+    <div class="field"><label>Buscar no catálogo</label><input placeholder="ticker ou nome" value="TOTS"><div class="hint">TOTS3 · Totvs · STOCK</div></div>
+    <div class="field"><label>Ticker</label><input class="mono" value="TOTS3"></div>
+    <div class="field"><label>Tipo</label><select><option>STOCK</option><option>FII</option><option>ETF</option><option>BDR</option></select></div>
+    <div class="field"><label>Identificador B3</label><input value="TOTVS"></div>`,
+    action: "Cadastrar" }),
+  "new-bond": () => ({ title: "Novo produto de renda fixa", body: `
+    <div class="field"><label>Tipo</label><select><option>Título (Tesouro/CRA/CRI)</option><option>Conta (CDB/LCA/LCI)</option></select></div>
+    <div class="field"><label>Nome</label><input placeholder="Tesouro Selic 2031"></div>
+    <div class="field"><label>Indexador</label><select><option>SELIC</option><option>CDI</option><option>IPCA</option><option>PRÉ</option></select></div>
+    <div class="field"><label>Vencimento</label><input type="date"></div>`,
+    action: "Criar" }),
+};
+function drawerFor(spec){
+  const [key, arg] = spec.split(":");
+  if (DRAWERS[key]) return DRAWERS[key](arg);
+  if (key === "register-asset") return { title: `Cadastrar ${arg}`, body: `
+    <div class="field"><label>Buscar no catálogo</label><input value="${arg}"><div class="hint">${(TICKER_CATALOG.find(t=>t.ticker===arg)||{name:"—",kind:"STOCK"}).name} · ${(TICKER_CATALOG.find(t=>t.ticker===arg)||{kind:"STOCK"}).kind}</div></div>
+    <div class="field"><label>Ticker</label><input class="mono" value="${arg}"></div>
+    <div class="field"><label>Tipo</label><select><option>STOCK</option><option>FII</option></select></div>`,
+    action: "Cadastrar e revisar de novo" };
+  if (key === "import-report") { const s = stratById(parseInt(arg)); return { title: `Importar relatório — ${s.name}`, body: `
+    <div class="dropzone" style="padding:28px"><div>Solte o PDF de ${s.name}</div></div>
+    <div style="margin-top:14px" class="panel">
+      <div class="faint mono" style="font-size:11px;margin-bottom:6px">PRÉVIA (sem gravar)</div>
+      <dl class="kv"><dt>Parser</dt><dd>XpEquityCarteira</dd><dt>Mês</dt><dd>09/2026</dd><dt>Alvos</dt><dd>${s.targets}</dd><dt>Soma</dt><dd class="gain">100,0% ✓</dd></dl>
+    </div>`, action: "Confirmar edição" }; }
+  if (key === "distribute" || key === "transfer" || key === "new-movement") {
+    const a = assetById(parseInt(arg));
+    return { title: key === "transfer" ? `Transferir — ${a.ticker}` : key === "distribute" ? `Distribuir ${a.unattributed} cotas — ${a.ticker}` : `Novo ajuste — ${a.ticker}`, body: `
+      ${key==="transfer"?`<div class="field"><label>De</label><select>${STRATEGIES.map(s=>`<option>${s.name}</option>`).join("")}</select></div><div class="field"><label>Para</label><select>${STRATEGIES.map(s=>`<option>${s.name}</option>`).join("")}</select></div>`:``}
+      ${key==="distribute"?STRATEGIES.filter(s=>s.asset_class===(a.kind==="FII"?"REAL_ESTATE":"STOCKS")).map(s=>`<div class="field"><label>${s.name}</label><input class="mono" value="0"></div>`).join(""):``}
+      ${key==="new-movement"?`<div class="field"><label>Estratégia</label><select>${STRATEGIES.map(s=>`<option>${s.name}</option>`).join("")}</select></div><div class="field"><label>Quantidade (com sinal)</label><input class="mono" placeholder="+10 ou -10"></div><div class="field"><label>Motivo</label><select><option>ADJUSTMENT</option><option>BUY</option><option>SELL</option></select></div>`:``}
+      <div class="field"><label>Quantidade</label><input class="mono" value="${key==="transfer"?10:a.unattributed||10}"></div>`,
+      action: key === "distribute" ? "Distribuir" : "Registrar" };
+  }
+  if (key === "new-trade") return { title: `Novo negócio — ${assetById(parseInt(arg)).ticker}`, body: `
+    <div class="field"><label>Data</label><input type="date"></div>
+    <div class="field"><label>Lado</label><select><option>Compra</option><option>Venda</option></select></div>
+    <div class="field"><label>Quantidade</label><input class="mono"></div>
+    <div class="field"><label>Preço</label><input class="mono"></div>`, action: "Lançar" };
+  return { title: "—", body: "", action: "OK" };
+}
+function openDrawer(spec){
+  const d = drawerFor(spec);
+  const el = document.createElement("div");
+  el.innerHTML = `<div class="scrim" data-close-drawer></div>
+    <div class="drawer" role="dialog" aria-modal="true">
+      <div class="drawer-head"><h3>${d.title}</h3><button class="x-btn" data-close-drawer>×</button></div>
+      <div class="drawer-body">${d.body}</div>
+      <div class="drawer-foot"><button class="btn ghost" data-close-drawer>Cancelar</button><button class="btn primary" data-close-drawer data-toast="${d.action.replace(/"/g,'')} — feito (protótipo)">${d.action}</button></div>
+    </div>`;
+  el.id = "drawerHost";
+  document.body.appendChild(el);
+}
+function closeDrawer(){ document.getElementById("drawerHost")?.remove(); }
+
+/* =========================================================================
+   COMMAND PALETTE
+   ========================================================================= */
+const CMDK_ITEMS = [
+  ...Object.entries(TITLES).map(([p,t]) => ({ label: t, kind: "tela", run: () => go(p) })),
+  ...ASSETS.map(a => ({ label: `${a.ticker} — ${a.name}`, kind: "ativo", run: () => go(`/assets/${a.id}`) })),
+  ...STRATEGIES.map(s => ({ label: s.name, kind: "estratégia", run: () => go(`/strategies?s=${s.id}`) })),
+  { label: "Recalcular plano de ordens", kind: "ação", run: () => { go("/orders"); toast("Plano recalculado"); } },
+  { label: "Importar extrato", kind: "ação", run: () => go("/import") },
+  { label: "Novo aporte avulso", kind: "ação", run: () => { go("/"); setTimeout(()=>openDrawer("contribution"), 50); } },
+  { label: "Consolidar tudo", kind: "ação", run: () => toast("Consolidação agendada") },
+];
+let cmdkSel = 0;
+function openCmdk(){
+  const el = document.createElement("div");
+  el.id = "cmdkHost";
+  el.innerHTML = `<div class="cmdk-scrim" data-close-cmdk>
+    <div class="cmdk" role="dialog" aria-modal="true">
+      <input id="cmdkInput" placeholder="Buscar tela, ticker, estratégia ou ação…" autocomplete="off">
+      <div class="cmdk-list" id="cmdkList"></div>
+    </div></div>`;
+  document.body.appendChild(el);
+  cmdkSel = 0;
+  renderCmdk("");
+  const inp = document.getElementById("cmdkInput");
+  inp.focus();
+  inp.addEventListener("input", () => { cmdkSel = 0; renderCmdk(inp.value); });
+  inp.addEventListener("keydown", e => {
+    const items = cmdkFiltered(inp.value);
+    if (e.key === "ArrowDown") { cmdkSel = Math.min(items.length - 1, cmdkSel + 1); renderCmdk(inp.value); e.preventDefault(); }
+    if (e.key === "ArrowUp") { cmdkSel = Math.max(0, cmdkSel - 1); renderCmdk(inp.value); e.preventDefault(); }
+    if (e.key === "Enter" && items[cmdkSel]) { items[cmdkSel].run(); closeCmdk(); }
+    if (e.key === "Escape") closeCmdk();
+  });
+}
+function cmdkFiltered(q){
+  const s = q.toLowerCase().trim();
+  return s ? CMDK_ITEMS.filter(i => i.label.toLowerCase().includes(s)) : CMDK_ITEMS.slice(0, 8);
+}
+function renderCmdk(q){
+  const items = cmdkFiltered(q);
+  document.getElementById("cmdkList").innerHTML = items.map((i, ix) => `
+    <div class="cmdk-item ${ix === cmdkSel ? "on" : ""}" data-cmdk="${ix}">
+      <span>${esc(i.label)}</span><span class="k-kind">${i.kind}</span>
+    </div>`).join("") || `<div class="cmdk-item">Nada encontrado</div>`;
+  document.querySelectorAll("[data-cmdk]").forEach(el => el.addEventListener("click", () => {
+    cmdkFiltered(document.getElementById("cmdkInput").value)[+el.dataset.cmdk].run();
+    closeCmdk();
+  }));
+}
+function closeCmdk(){ document.getElementById("cmdkHost")?.remove(); }
+
+/* =========================================================================
+   EVENTOS
+   ========================================================================= */
+function bindViewEvents(){
+  const view = document.getElementById("view");
+
+  view.querySelectorAll("[data-go]").forEach(el => el.onclick = () => go(el.dataset.go));
+  view.querySelectorAll("[data-asset]").forEach(el => el.onclick = () => go(`/assets/${el.dataset.asset}`));
+  view.querySelectorAll("[data-strat]").forEach(el => el.onclick = () => setQuery({ s: el.dataset.strat }));
+  view.querySelectorAll("[data-bond]").forEach(el => el.onclick = () => go(`/fixed-income/${el.dataset.bondKind === "BOND" ? "bonds" : "checking-accounts"}/${el.dataset.bond}`));
+  view.querySelectorAll("[data-tab]").forEach(el => el.onclick = () => setQuery({ tab: el.dataset.tab }));
+  view.querySelectorAll("[data-q-kind]").forEach(el => el.onclick = () => setQuery({ kind: el.dataset.qKind || null }));
+  view.querySelectorAll("[data-q-kind2]").forEach(el => el.onclick = () => setQuery({ kind: el.dataset.qKind2 }));
+  view.querySelectorAll("[data-q-filter]").forEach(el => el.onclick = () => setQuery({ filter: el.dataset.qFilter || null }));
+  view.querySelectorAll("[data-drawer]").forEach(el => el.onclick = e => { e.stopPropagation(); openDrawer(el.dataset.drawer); });
+  view.querySelectorAll("[data-alloc-toggle]").forEach(el => el.onclick = () => {
+    const k = el.dataset.allocToggle;
+    STATE.allocExpanded = STATE.allocExpanded.includes(k) ? STATE.allocExpanded.filter(x => x !== k) : [...STATE.allocExpanded, k];
+    router();
+  });
+
+  view.querySelectorAll("[data-approve]").forEach(el => el.onclick = () => decideTransfer(+el.dataset.approve, "APPLIED"));
+  view.querySelectorAll("[data-reject]").forEach(el => el.onclick = () => decideTransfer(+el.dataset.reject, "REJECTED"));
+
+  const sim = document.getElementById("simContrib");
+  if (sim) sim.oninput = () => { STATE.simContribution = parseInt(sim.value) || 0; const p = router; clearTimeout(window._simT); window._simT = setTimeout(router, 220); };
+
+  view.querySelectorAll("[data-action]").forEach(el => el.onclick = () => handleAction(el.dataset.action));
+}
+
+function decideTransfer(id, status){
+  const t = TRANSFERS.find(x => x.id === id);
+  if (!t) return;
+  const input = document.querySelector(`[data-transfer="${id}"] input`);
+  t.applied_quantity = status === "APPLIED" ? (parseInt(input?.value) || t.proposed_quantity) : null;
+  t.status = status;
+  toast(status === "APPLIED" ? `Transferência de ${t.ticker} aplicada` : `Transferência de ${t.ticker} rejeitada`);
+  updateMonthPill();
+  router();
+}
+
+function handleAction(action){
+  const [key, arg] = action.split(":");
+  const map = {
+    "refresh-plan": () => { toast("Plano recalculado — cotações de agora"); router(); },
+    "copy-orders": () => toast("Lista copiada para a área de transferência"),
+    "copy-darf": () => toast("Dados do DARF copiados"),
+    "import-next": () => { STATE.importStep = Math.min(4, STATE.importStep + 1); router(); },
+    "import-back": () => { STATE.importStep = Math.max(1, STATE.importStep - 1); router(); },
+    "import-confirm": () => { STATE.confirmedImport = true; STATE.importStep = 4; toast("4 negócios criados · 4 ativos consolidados"); updateMonthPill(); router(); },
+    "import-finish": () => { toast("Atribuição salva"); go("/"); },
+    "strat-import-confirm": () => { STRATEGIES.forEach(s => s.edition = MONTH); toast("5 edições importadas"); updateMonthPill(); go("/strategies"); },
+    "close-month": () => toast("Setembro fechado — posições e preço médio congelados"),
+    "sync-catalog": () => toast("Catálogo sincronizado — 2013 tickers"),
+    "schedule": () => toast("Consolidação periódica registrada no chameidor"),
+  };
+  if (key === "hydrate") { toast(`${arg} hidratado a partir do BACEN`); return; }
+  (map[action] || (() => {}))();
+}
+
+/* =========================================================================
+   TOPBAR / SHELL
+   ========================================================================= */
+function updateMonthPill(){
+  const step = currentStep();
+  document.getElementById("mpStep").textContent = `${step}/7`;
+  const prog = monthProgress();
+  document.getElementById("mpSeg").innerHTML = prog.map(s =>
+    `<i class="${s.status === "done" ? "done" : s.status === "now" ? "now" : s.status === "block" ? "block" : ""}"></i>`).join("");
+}
+function monthPopover(){
+  const prog = monthProgress();
+  return `<div class="popover" id="monthPop" style="top:52px;right:16px">
+    <h4>Fechamento de setembro</h4>
+    ${prog.map(s => `<div class="check-line ${s.status}">
+      <span class="c-ic">${s.status === "done" ? "✓" : s.status === "block" ? "✕" : s.status === "now" ? "●" : "○"}</span>
+      <span style="flex:1">${s.title}</span>
+    </div>`).join("")}
+  </div>`;
+}
+
+function boot(){
+  updateMonthPill();
+
+  document.getElementById("sbToggle").onclick = () => {
+    STATE.collapsed = !STATE.collapsed;
+    document.getElementById("app").classList.toggle("collapsed", STATE.collapsed);
+  };
+  document.getElementById("cmdkBtn").onclick = openCmdk;
+  document.getElementById("monthPill").onclick = () => {
+    if (document.getElementById("monthPop")) { document.getElementById("monthPop").remove(); return; }
+    document.querySelector(".main").insertAdjacentHTML("beforeend", monthPopover());
+  };
+
+  document.addEventListener("click", e => {
+    if (e.target.matches("[data-close-drawer]")) closeDrawer();
+    if (e.target.matches("[data-close-cmdk]") || e.target.classList.contains("cmdk-scrim")) closeCmdk();
+    if (e.target.dataset && e.target.dataset.toast) toast(e.target.dataset.toast);
+    const pop = document.getElementById("monthPop");
+    if (pop && !e.target.closest("#monthPop") && !e.target.closest("#monthPill")) pop.remove();
+  });
+
+  document.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openCmdk(); }
+    if (e.key === "Escape") { closeDrawer(); closeCmdk(); }
+    if (e.key === "?" && !e.target.matches("input,textarea,select")) toast("g+o Ordens · g+a Ativos · j/k navega · a aprovar · r rejeitar");
+  });
+
+  window.addEventListener("hashchange", router);
+  router();
+}
+boot();
+</script>
+
+</body></html>
