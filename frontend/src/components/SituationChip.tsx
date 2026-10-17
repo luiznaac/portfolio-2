@@ -1,14 +1,14 @@
 import type { ImportRowSituation } from "../lib/importSituations.ts";
+import { Chip, type ChipTone } from "./Chip.tsx";
 
-const STYLES: Record<ImportRowSituation, { label: string; className: string }> = {
-  new: { label: "Novo", className: "bg-emerald-500/15 text-emerald-400" },
-  duplicate: { label: "Duplicado", className: "bg-amber-500/15 text-amber-400" },
-  warning: { label: "Atenção", className: "bg-rose-500/15 text-rose-400" },
+// The per-row review hint renders as a chip (the reference's `.chip`), not a status badge.
+const STYLES: Record<ImportRowSituation, { label: string; tone: ChipTone }> = {
+  new: { label: "Novo", tone: "green" },
+  duplicate: { label: "Duplicado", tone: "amber" },
+  warning: { label: "Atenção", tone: "rose" },
 };
 
 export function SituationChip({ situation }: { situation: ImportRowSituation }) {
-  const { label, className } = STYLES[situation];
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>{label}</span>
-  );
+  const { label, tone } = STYLES[situation];
+  return <Chip tone={tone}>{label}</Chip>;
 }
