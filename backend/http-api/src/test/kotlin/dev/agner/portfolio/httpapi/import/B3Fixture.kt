@@ -3,6 +3,7 @@ package dev.agner.portfolio.httpapi.import
 import kotlinx.datetime.toJavaLocalDate
 import org.apache.poi.ss.usermodel.CellStyle
 import org.apache.poi.ss.usermodel.Row
+import org.apache.poi.ss.usermodel.Workbook
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.ByteArrayOutputStream
 
@@ -33,38 +34,61 @@ internal val B3_INVESTOR_HEADERS = listOf(
     "Valor",
 )
 
-// Builds an XLSX with real cell types — an Excel date cell for the date column and numeric cells
-// for the numbers — so a test exercises POI's type-aware reading, not an all-strings workbook.
-// `numericFormat`, when set, styles the numeric cells (e.g. a B3 export's `R$ #,##0.00`), so a
-// test can exercise a formatter that `toString` would spoil.
+// One sheet of a fabricated workbook: an optional title row, a header row, then data rows. B3's
+// exports put a title above the Negociação headers on some sheets, so the builder can too.
+// `numericFormat`, when set, styles the sheet's numeric cells (e.g. a B3 export's `R$ #,##0.00`),
+// so a test can exercise a formatter that `toString` would spoil.
+internal data class TestSheet(
+    val name: String,
+    val headers: List<String?>,
+    val rows: List<List<Any?>>,
+    val title: String? = null,
+    val numericFormat: String? = null,
+)
+
+// Builds a single-sheet XLSX with real cell types — an Excel date cell for the date column and
+// numeric cells for the numbers — so a test exercises POI's type-aware reading, not an all-strings
+// workbook.
 internal fun b3Workbook(
     headers: List<String?>,
     rows: List<List<Any?>>,
     numericFormat: String? = null,
-): ByteArray {
+): ByteArray =
+    b3Sheets(TestSheet(name = "Sheet1", headers = headers, rows = rows, numericFormat = numericFormat))
+
+// Builds a multi-sheet XLSX so a parser that reads several asset-kind sheets can be exercised.
+internal fun b3Sheets(vararg sheets: TestSheet): ByteArray {
     val workbook = XSSFWorkbook()
-    val sheet = workbook.createSheet("Sheet1")
     val dateStyle = workbook.createCellStyle().apply {
         dataFormat = workbook.creationHelper.createDataFormat().getFormat("yyyy-mm-dd")
     }
-    val numericStyle = numericFormat?.let { format ->
+    sheets.forEach { sheet -> writeSheet(workbook, sheet, dateStyle) }
+    return ByteArrayOutputStream().use { out ->
+        workbook.use { it.write(out) }
+        out.toByteArray()
+    }
+}
+
+private fun writeSheet(workbook: Workbook, sheet: TestSheet, dateStyle: CellStyle) {
+    val ws = workbook.createSheet(sheet.name)
+    val numericStyle = sheet.numericFormat?.let { format ->
         workbook.createCellStyle().apply {
             dataFormat = workbook.creationHelper.createDataFormat().getFormat(format)
         }
     }
-    val headerRow = sheet.createRow(0)
-    headers.forEachIndexed { index, header ->
+    var rowIndex = 0
+    if (sheet.title != null) {
+        ws.createRow(rowIndex++).createCell(0).setCellValue(sheet.title)
+    }
+    val headerRow = ws.createRow(rowIndex++)
+    sheet.headers.forEachIndexed { index, header ->
         if (header != null) headerRow.createCell(index).setCellValue(header)
     }
-    rows.forEachIndexed { rowIndex, values ->
-        val row = sheet.createRow(rowIndex + 1)
+    sheet.rows.forEach { values ->
+        val row = ws.createRow(rowIndex++)
         values.forEachIndexed { columnIndex, value ->
             writeCell(row, columnIndex, value, dateStyle, numericStyle)
         }
-    }
-    return ByteArrayOutputStream().use { out ->
-        workbook.use { it.write(out) }
-        out.toByteArray()
     }
 }
 

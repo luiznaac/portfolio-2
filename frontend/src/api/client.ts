@@ -1,4 +1,12 @@
-import type { HealthCheckResult, Import, ImportRow, ImportSource, Trade } from "./types.ts";
+import type {
+  HealthCheckResult,
+  Import,
+  ImportRow,
+  ImportSource,
+  PositionDetail,
+  Quote,
+  Trade,
+} from "./types.ts";
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
 
@@ -67,5 +75,13 @@ export const api = {
 
   getTrades(): Promise<Trade[]> {
     return request("/trades");
+  },
+
+  getPosition(ticker: string): Promise<PositionDetail> {
+    return request(`/positions/${encodeURIComponent(ticker)}`);
+  },
+
+  getTickerQuotes(ticker: string): Promise<Quote[]> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/quotes`);
   },
 };

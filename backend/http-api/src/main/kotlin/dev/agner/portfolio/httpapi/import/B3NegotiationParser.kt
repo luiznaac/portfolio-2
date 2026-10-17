@@ -32,8 +32,9 @@ private enum class Column(val aliases: Set<String>) {
     INSTITUTION(setOf("Instituição")),
 }
 
-// A column mapped to the sheet index it occupies.
-private typealias ColumnIndex = Map<Column, Int>
+// A header name mapped to the column index it occupies in the sheet. Shared with the position
+// parser — both locate their columns the same way.
+internal typealias ColumnIndex = Map<String, Int>
 
 @Component
 class B3NegotiationParser : IImportParser {
@@ -52,12 +53,13 @@ class B3NegotiationParser : IImportParser {
             val sheet = workbook.getSheetAt(0)
             val headers = headerColumns(sheet)
             require(isRecognised(headers)) {
-                "B3 negotiation XLSX unrecognised layout in $fileName: found headers ${headerNames(sheet)}"
+                "B3 negotiation XLSX unrecognised layout in $fileName: found headers ${headers.keys}"
             }
             parseRows(sheet, headers)
         }
 
-    private fun isRecognised(headers: ColumnIndex) = Column.entries.all { it in headers }
+    private fun isRecognised(headers: ColumnIndex) =
+        Column.entries.all { column -> column.aliases.any { it in headers } }
 
     // Columns are located by the header cell's own position, never by an index into a compacted
     // header list: a blank or extra header before a real column would otherwise shift every later
@@ -70,21 +72,9 @@ class B3NegotiationParser : IImportParser {
                     .getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
                     ?.stringCellValue
                     ?.trim()
-                val column = Column.entries.firstOrNull { name != null && name in it.aliases }
-                column?.let { it to index }
+                if (name.isNullOrEmpty()) null else name to index
             }
             .toMap()
-    }
-
-    private fun headerNames(sheet: Sheet): List<String> {
-        val headerRow = sheet.getRow(0) ?: return emptyList()
-        return (0..<headerRow.lastCellNum.toInt()).mapNotNull { index ->
-            headerRow
-                .getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
-                ?.stringCellValue
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-        }
     }
 
     private fun parseRows(sheet: Sheet, headers: ColumnIndex): List<ImportRowPayload> {
@@ -183,11 +173,9 @@ class B3NegotiationParser : IImportParser {
         else -> readText(cell, formatter)?.toBigDecimalOrNull()
     }
 
-    private fun readText(cell: Cell?, formatter: DataFormatter): String? =
-        cell?.let { formatter.formatCellValue(it).trim() }?.takeIf { it.isNotEmpty() }
-
     private fun cell(row: Row, headers: ColumnIndex, column: Column): Cell? =
-        headers[column]?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
+        column.aliases.firstNotNullOfOrNull { headers[it] }
+            ?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
 
     private companion object {
         const val GROSS_SCALE = 2
