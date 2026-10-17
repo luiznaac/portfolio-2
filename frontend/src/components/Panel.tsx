@@ -1,9 +1,15 @@
 import type { ReactNode } from "react";
 
-export function Panel({ title, children }: { title: string; children: ReactNode }) {
+// The reference panel (`.panel`): surface card on the line border. An optional title is the
+// condensed uppercase section label the reference uses above/inside panels.
+export function Panel({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-      <h2 className="mb-3 text-sm font-medium text-slate-400 uppercase tracking-wide">{title}</h2>
+    <section className="rounded-lg border border-line bg-surface px-[18px] py-4">
+      {title && (
+        <h2 className="mb-3 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
+          {title}
+        </h2>
+      )}
       {children}
     </section>
   );

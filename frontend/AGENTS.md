@@ -9,9 +9,11 @@ The frontend is currently reset to the `environments/react` scaffold: the only v
 ```
 src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
-  components/   Layout.tsx, Panel.tsx — shared chrome
+  components/   Layout.tsx, Sidebar.tsx — shell; Panel/Chip/Badge/Button/Table/WizardStepper —
+                the token-based primitive layer; icons.tsx; *Chip.tsx wrappers
   pages/        route-level components (Dashboard.tsx is the health-check example)
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
+                (navigation.ts holds the sidebar groups + topbar breadcrumb table)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
@@ -30,10 +32,11 @@ npm run build         # tsc -b && vite build
 
 ## Portfolio-2-specific pieces
 
-- **Tailwind v4 config lives in CSS**: `src/index.css` has `@import "tailwindcss";` and an `@theme` block; there is no `tailwind.config.js`.
+- **Tailwind v4 config lives in CSS**: `src/index.css` has `@import "tailwindcss";` and an `@theme` block holding the reference palette, sign convention, radii scale and the three IBM Plex families (`src/fonts.css` bundles them via `@fontsource`); there is no `tailwind.config.js`.
+- **Design reference**: [`design/front-prototype.html`](design/front-prototype.html) (issue #205) is the committed styling source — new pages carry its tokens (no `slate-*`/`emerald-*` defaults) and compose the primitive layer rather than hand-rolling Tailwind.
 - **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; the dev server proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8080`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
-- **Testing scope**: only `src/lib/**` has tests (`vitest.config.ts` restricts `include` to it) — pure logic, no rendering. Don't claim UI coverage beyond what this actually checks.
+- **Testing scope**: only `src/lib/**` has tests (`vitest.config.ts` restricts `include` to it) — pure logic, no rendering. `lib/theme.test.ts` additionally reads source files as a build-time guard (the `@theme` tokens exist; no shipped component carries a scaffold-palette shade). Don't claim UI coverage beyond what this actually checks.
 
 ## Coding standards
 

@@ -47,12 +47,13 @@ Hand-authored module → key files → seam index, plus the app entry points —
 **Seam(s)**: `DockerComposeExtension` brings up the compose MySQL and migrates it to head before any spec runs; `HttpMockService` (WireMock) stubs the outbound gateways. `MigrationSchemaTest` is the schema guard (see `persistence`). Run via the `integrationTest` Gradle task.
 
 ### `frontend` — React SPA
-**Purpose**: the browser client — the scaffold's health-check slice plus the first product slice (shell sidebar, B3 import wizard, Ativos trade list); the rest is still scaffold to be rewritten later.
-**Files**: `src/main.tsx`, `src/App.tsx`; `src/api/{client,queries,types}.ts`; `src/pages/{Dashboard,ImportWizard,Trades}.tsx`; `src/components/{Layout,Sidebar,Panel,SituationChip,ImportStatusChip}.tsx`; `src/lib/{format,importSituations,tradeFilters}.ts`
+**Purpose**: the browser client — the scaffold's health-check slice plus the first product slice (shell sidebar, B3 import wizard, Ativos trade list), now on the reference theme foundation; the rest is still scaffold to be rewritten later.
+**Files**: `src/main.tsx`, `src/App.tsx`; `src/index.css` (`@theme` tokens) + `src/fonts.css` (`@fontsource` IBM Plex); `src/api/{client,queries,types}.ts`; `src/pages/{Dashboard,ImportWizard,Trades}.tsx`; `src/components/{Layout,Sidebar,Panel,Chip,Badge,Button,Table,WizardStepper,icons,SituationChip,ImportStatusChip}.tsx`; `src/lib/{cn,format,importSituations,tradeFilters,navigation}.ts`; `design/front-prototype.html` (the committed reference)
 **Seam(s)**:
 - **Wire contract** — `src/api/types.ts` is the hand-maintained mirror of the backend edge DTOs; any DTO change updates it in the same commit.
 - **Data seam** — `src/api/client.ts` (the `fetch` wrapper, `ApiError` and the multipart `upload`) and `src/api/queries.ts` (TanStack Query hooks) are where a new API call is wired; `pages/Dashboard.tsx` is the reference read slice and `pages/ImportWizard.tsx` the reference mutation slice.
-- **Route seam** — `App.tsx` holds the route table (`/` health, `/imports`, `/trades`); `main.tsx` mounts the router and QueryClient. Pure helpers in `lib/` are the unit-tested surface (`format.test.ts`, `importSituations.test.ts`, `tradeFilters.test.ts`); there are no component-render tests yet.
+- **Route seam** — `App.tsx` holds the route table (`/` health, `/imports`, `/trades`); `main.tsx` mounts the router and QueryClient (importing `fonts.css` then `index.css`). `lib/navigation.ts` holds the nav groups the `Sidebar` renders and the topbar breadcrumb resolves — a new route lands in both from that one table.
+- **Theme seam** — `src/index.css` `@theme` is the single source of the reference palette, the sign convention (`principal`/`yield`/`tax`/`accent`/`violet` → the `Chip`/`Badge` tones), the radii scale and the three font families; the primitive components consume those tokens by name, never a raw colour. Pure helpers in `lib/` are the unit-tested surface (`cn.test.ts`, `format.test.ts`, `importSituations.test.ts`, `tradeFilters.test.ts`, `navigation.test.ts`, `theme.test.ts` — the last a source-scanning guard over the tokens and for scaffold-palette leftovers); there are no component-render tests yet.
 
 ### Repo root — contracts, deploy, CI
 **Purpose**: the cross-cutting fixtures and the packaging/deploy story that bind backend + frontend together.

@@ -1,16 +1,51 @@
 import { useState } from "react";
 import { useTrades } from "../api/queries.ts";
-import type { TradeSide } from "../api/types.ts";
+import type { Trade, TradeSide } from "../api/types.ts";
+import { Badge } from "../components/Badge.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { type Column, Table } from "../components/Table.tsx";
 import { formatNumber, formatTradeSide } from "../lib/format.ts";
 import { type TradeFilters, emptyTradeFilters, filterTrades } from "../lib/tradeFilters.ts";
 
 const FILTER_INPUT =
-  "rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 placeholder:text-slate-500";
+  "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px] text-ink placeholder:text-ink-faint";
 
 const SIDES: { value: TradeSide; label: string }[] = [
   { value: "BUY", label: formatTradeSide("BUY") },
   { value: "SELL", label: formatTradeSide("SELL") },
+];
+
+const COLUMNS: Column<Trade>[] = [
+  { key: "date", header: "Data", render: (trade) => trade.date },
+  {
+    key: "ticker",
+    header: "Ticker",
+    render: (trade) => <span className="font-mono font-medium">{trade.ticker}</span>,
+  },
+  {
+    key: "side",
+    header: "Lado",
+    render: (trade) => (
+      <Badge tone={trade.side === "BUY" ? "ok" : "warn"}>{formatTradeSide(trade.side)}</Badge>
+    ),
+  },
+  {
+    key: "quantity",
+    header: "Qtd",
+    align: "right",
+    render: (trade) => formatNumber(trade.quantity),
+  },
+  {
+    key: "unit_price",
+    header: "Preço",
+    align: "right",
+    render: (trade) => formatNumber(trade.unit_price),
+  },
+  {
+    key: "source",
+    header: "Origem",
+    render: (trade) => (trade.source === "MANUAL" ? "Manual" : "B3"),
+  },
 ];
 
 function parseSide(value: string): TradeSide | "" {
@@ -25,7 +60,7 @@ export function Trades() {
 
   return (
     <section>
-      <h1 className="mb-4 text-lg font-semibold text-slate-100">Ativos</h1>
+      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Ativos</h1>
       <Panel title="Negócios">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <input
@@ -37,7 +72,7 @@ export function Trades() {
             }
             className={FILTER_INPUT}
           />
-          <label className="flex items-center gap-2 text-sm text-slate-400">
+          <label className="flex items-center gap-2 text-[13px] text-ink-dim">
             De
             <input
               type="date"
@@ -48,7 +83,7 @@ export function Trades() {
               className={FILTER_INPUT}
             />
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-400">
+          <label className="flex items-center gap-2 text-[13px] text-ink-dim">
             Até
             <input
               type="date"
@@ -76,46 +111,17 @@ export function Trades() {
         </div>
 
         {trades.isLoading ? (
-          <p className="text-sm text-slate-400">Carregando…</p>
+          <p className="text-[13.5px] text-ink-dim">Carregando…</p>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-slate-400">Nenhum negócio encontrado.</p>
+          <p className="text-[13.5px] text-ink-dim">Nenhum negócio encontrado.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 text-xs text-slate-500 uppercase">
-                  <th className="py-2 pr-3">Data</th>
-                  <th className="pr-3">Ticker</th>
-                  <th className="pr-3">Lado</th>
-                  <th className="pr-3 text-right">Qtd</th>
-                  <th className="pr-3 text-right">Preço</th>
-                  <th>Origem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((trade) => (
-                  <tr key={trade.id} className="border-b border-slate-900">
-                    <td className="py-2 pr-3">{trade.date}</td>
-                    <td className="pr-3">{trade.ticker}</td>
-                    <td
-                      className={
-                        trade.side === "BUY" ? "pr-3 text-emerald-400" : "pr-3 text-rose-400"
-                      }
-                    >
-                      {formatTradeSide(trade.side)}
-                    </td>
-                    <td className="pr-3 text-right">{formatNumber(trade.quantity)}</td>
-                    <td className="pr-3 text-right">{formatNumber(trade.unit_price)}</td>
-                    <td>{trade.source === "MANUAL" ? "Manual" : "B3"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table columns={COLUMNS} rows={filtered} rowKey={(trade) => trade.id} />
         )}
 
         {!trades.isLoading && (
-          <p className="mt-3 text-xs text-slate-500">{filtered.length} negócio(s)</p>
+          <p className="mt-3 font-mono text-[11.5px] text-ink-faint">
+            {filtered.length} negócio(s)
+          </p>
         )}
       </Panel>
     </section>
