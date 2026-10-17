@@ -36,6 +36,60 @@ class B3NegotiationParserTest : DescribeSpec({
             }
         }
 
+        describe("the B3 Área do Investidor negotiation layout") {
+
+            val investorBytes = b3Workbook(
+                B3_INVESTOR_HEADERS,
+                listOf(
+                    listOf(
+                        "11/08/2026",
+                        "Compra",
+                        "Mercado Fracionário",
+                        "-",
+                        "XP INVESTIMENTOS CCTVM S/A.",
+                        "ALOS3F",
+                        7,
+                        26.09,
+                        182.63,
+                    ),
+                    listOf(
+                        "11/08/2026",
+                        "Venda",
+                        "Mercado à Vista",
+                        "-",
+                        "XP INVESTIMENTOS CCTVM S/A.",
+                        "B3SA3",
+                        200,
+                        14.27,
+                        2854,
+                    ),
+                ),
+            )
+
+            it("claims the file by its header row") {
+                parser.shouldExecute(
+                    "negociacao-2026-10-13-09-24-50.xlsx",
+                    investorBytes,
+                ) shouldBe true
+            }
+
+            it("parses its date, ticker, quantity, price and side") {
+                val rows = parser.parse("negociacao-2026-10-13-09-24-50.xlsx", investorBytes)
+
+                rows.size shouldBe 2
+                rows[0].date shouldBe LocalDate.parse("2026-08-11")
+                rows[0].side shouldBe TradeSide.BUY
+                rows[0].ticker shouldBe "ALOS3"
+                rows[0].quantity.compareTo(BigDecimal("7")) shouldBe 0
+                rows[0].unitPrice.compareTo(BigDecimal("26.09")) shouldBe 0
+                rows[0].error shouldBe null
+                rows[1].date shouldBe LocalDate.parse("2026-08-11")
+                rows[1].side shouldBe TradeSide.SELL
+                rows[1].ticker shouldBe "B3SA3"
+                rows[1].error shouldBe null
+            }
+        }
+
         describe("parse") {
             it("parses real numeric and date cells into quantity, unit price and date") {
                 val rows = parser.parse("b3-negociacao.xlsx", fixtureBytes)
@@ -118,6 +172,19 @@ class B3NegotiationParserTest : DescribeSpec({
             it("strips the fractional-market F suffix from tickers") {
                 val rows = parser.parse("b3-negociacao.xlsx", fixtureBytes)
                 rows[0].ticker shouldBe "ALUP11"
+            }
+
+            it("reads currency-formatted numeric cells as numbers, not as formatted text") {
+                val row = listOf(LocalDate.parse("2026-10-14"), "C", "VISTA", "PETR4", 100, 48.92, 4892.00, "XP")
+
+                val rows = parser.parse(
+                    "currency.xlsx",
+                    b3Workbook(B3_HEADERS, listOf(row), numericFormat = "R\$ #,##0.00"),
+                )
+
+                rows.single().quantity.compareTo(BigDecimal("100")) shouldBe 0
+                rows.single().unitPrice.compareTo(BigDecimal("48.92")) shouldBe 0
+                rows.single().error shouldBe null
             }
 
             it("flags a row whose gross does not match quantity times price") {
