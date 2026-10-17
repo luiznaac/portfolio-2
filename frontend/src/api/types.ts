@@ -116,3 +116,47 @@ export interface PositionReconciliation {
   ledger_quantity: number;
   has_drift: boolean;
 }
+
+export type IndexId = "IPCA" | "CDI" | "SELIC";
+
+// The target bucket a fixed-income product allocates to — derived by the backend from the rate kind
+// and the index, never stored (see the backend's FixedIncomeSubClass).
+export type FixedIncomeSubClass = "FIXED_RATE" | "FLOATING_RATE" | "INFLATION_LINKED";
+
+export interface Bond {
+  id: number;
+  name: string;
+  rate: number;
+  maturity_date: string;
+  index_id?: IndexId;
+  sub_class: FixedIncomeSubClass;
+}
+
+export interface CheckingAccount {
+  id: number;
+  name: string;
+  rate: number;
+  index_id: IndexId;
+  maturity_duration: string;
+  sub_class: FixedIncomeSubClass;
+}
+
+export interface FixedRateBondCreation {
+  name: string;
+  rate: number;
+  maturity_date: string;
+}
+
+export interface FloatingRateBondCreation {
+  name: string;
+  rate: number;
+  maturity_date: string;
+  index_id: IndexId;
+}
+
+export interface CheckingAccountCreation {
+  name: string;
+  rate: number;
+  index_id: IndexId;
+  maturity_duration: string;
+}

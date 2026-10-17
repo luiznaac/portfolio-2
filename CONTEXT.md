@@ -185,7 +185,7 @@ _UI:_ "Renda Fixa"
 _Avoid_: Bond as the umbrella term, Caixa
 
 **Fixed-Income Sub-Class**:
-The target bucket an RF product allocates to: `PREFIXADO` (fixed rate), `POSFIXADO` (floating on CDI/SELIC), `INFLACAO` (floating on IPCA).
+The target bucket an RF product allocates to: `FIXED_RATE` ("pré-fixado"), `FLOATING_RATE` ("pós-fixado", floating on CDI/SELIC), `INFLATION_LINKED` ("inflação", floating on IPCA).
 _UI:_ "Sub-classe"
 _Avoid_: Indexador (that is the rate series itself, not the bucket)
 

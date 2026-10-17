@@ -48,3 +48,16 @@ export function IconAssets(props: IconProps) {
     </svg>
   );
 }
+
+export function IconBank(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M8 2l6 3H2l6-3ZM3 6v6M6 6v6M10 6v6M13 6v6M2 13h12"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

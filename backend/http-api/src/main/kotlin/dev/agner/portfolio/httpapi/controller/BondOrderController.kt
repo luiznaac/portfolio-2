@@ -16,7 +16,7 @@ class BondOrderController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/bonds/orders") {
+        route("/fixed-income/bonds/orders") {
             post {
                 val payload = call.receive<BondOrderCreation>()
 
