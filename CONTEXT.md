@@ -24,13 +24,18 @@ The manually entered monthly total value of the Portfolio — current balances i
 _UI:_ "Capital"
 _Avoid_: Patrimônio, total balance, equity
 
+**Month**:
+The planning period the ritual runs in — one open month at a time, carrying that month's Capital, cash Floor and Targets.
+_UI:_ "Mês"
+_Avoid_: Period, cycle
+
 **Aporte**:
 New money added to the Portfolio from outside during a month; part of Capital.
 _UI:_ "Aporte"
 _Avoid_: Deposit (that is an RF movement), contribution
 
 **Target**:
-A percentage a level of the chain is managed against: class, strategy or sub-class share, or ticker weight.
+A percentage a level of the chain is managed against: class, strategy or sub-class share, or ticker weight. Targets belong to a month, never standing config.
 _UI:_ "Alvo"
 _Avoid_: Goal, weight (that is the edition's per-ticker number)
 

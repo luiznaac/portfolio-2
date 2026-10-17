@@ -160,3 +160,59 @@ export interface CheckingAccountCreation {
   index_id: IndexId;
   maturity_duration: string;
 }
+
+export type MonthStatus = "OPEN" | "CLOSED";
+
+export interface Month {
+  id: number;
+  period: string;
+  capital: number;
+  floor: number;
+  status: MonthStatus;
+}
+
+// Target percentages are the percentage number — 50.00 is half (see the backend's Targets).
+export interface ClassTarget {
+  asset_class: AssetClass;
+  percentage: number;
+}
+
+export interface StrategyTarget {
+  asset_class: AssetClass;
+  strategy: string;
+  percentage: number;
+}
+
+export interface SubClassTarget {
+  sub_class: FixedIncomeSubClass;
+  percentage: number;
+}
+
+export interface TickerTarget {
+  strategy: string;
+  ticker: string;
+  percentage: number;
+}
+
+export interface Targets {
+  classes: ClassTarget[];
+  strategies: StrategyTarget[];
+  sub_classes: SubClassTarget[];
+  tickers: TickerTarget[];
+}
+
+export interface CurrentMonth {
+  month: Month;
+  targets: Targets;
+}
+
+export interface MonthCreation {
+  period: string;
+  capital: number;
+  floor: number;
+}
+
+export interface MonthUpdate {
+  capital: number;
+  floor: number;
+}

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import dev.agner.portfolio.usecase.configuration.serializers.KotlinxDatePeriodModule
 import dev.agner.portfolio.usecase.configuration.serializers.KotlinxLocalDateModule
 import dev.agner.portfolio.usecase.configuration.serializers.KotlinxLocalDateTimeModule
+import dev.agner.portfolio.usecase.configuration.serializers.KotlinxYearMonthModule
 import org.springframework.context.annotation.Bean
 import org.springframework.stereotype.Component
 
@@ -22,6 +23,7 @@ object JsonMapper {
         .registerModule(KotlinxLocalDateTimeModule())
         .registerModule(KotlinxLocalDateModule())
         .registerModule(KotlinxDatePeriodModule())
+        .registerModule(KotlinxYearMonthModule())
         .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
         .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./client.ts";
+import { ApiError, api } from "./client.ts";
 import type {
   Bond,
   CheckingAccount,
@@ -7,6 +7,9 @@ import type {
   FixedRateBondCreation,
   FloatingRateBondCreation,
   ImportSource,
+  MonthCreation,
+  MonthUpdate,
+  Targets,
 } from "./types.ts";
 
 // The three create shapes the RF form can produce, tagged so one mutation dispatches to the right
@@ -88,6 +91,45 @@ export function useCreateFixedIncomeProduct() {
       }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["fixed-income"] }),
+  });
+}
+
+export function useCurrentMonth() {
+  return useQuery({
+    queryKey: ["month", "current"],
+    queryFn: async () => {
+      try {
+        return await api.getCurrentMonth();
+      } catch (error) {
+        // No open month is a normal state, not an error — the page offers the opener instead.
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+  });
+}
+
+export function useOpenMonth() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: MonthCreation) => api.openMonth(creation),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["month"] }),
+  });
+}
+
+export function useUpdateCurrentMonth() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (update: MonthUpdate) => api.updateCurrentMonth(update),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["month"] }),
+  });
+}
+
+export function useReplaceTargets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (targets: Targets) => api.replaceCurrentTargets(targets),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["month"] }),
   });
 }
 

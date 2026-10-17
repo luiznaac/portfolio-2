@@ -2,14 +2,18 @@ import type {
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
+  CurrentMonth,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   HealthCheckResult,
   Import,
   ImportRow,
   ImportSource,
+  MonthCreation,
+  MonthUpdate,
   PositionDetail,
   Quote,
+  Targets,
   Trade,
 } from "./types.ts";
 
@@ -117,5 +121,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify(creation),
     });
+  },
+
+  getCurrentMonth(): Promise<CurrentMonth> {
+    return request("/month/current");
+  },
+
+  openMonth(creation: MonthCreation): Promise<CurrentMonth> {
+    return request("/month", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  updateCurrentMonth(update: MonthUpdate): Promise<CurrentMonth> {
+    return request("/month/current", { method: "POST", body: JSON.stringify(update) });
+  },
+
+  replaceCurrentTargets(targets: Targets): Promise<CurrentMonth> {
+    return request("/month/current/targets", { method: "PUT", body: JSON.stringify(targets) });
   },
 };
