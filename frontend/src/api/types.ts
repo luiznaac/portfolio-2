@@ -2,8 +2,9 @@
 // `api-contract` skill. Any DTO change on the backend must update this file in the same commit.
 
 export interface HealthCheckResult {
-  name: string;
+  service_name: string;
   is_healthy: boolean;
+  timestamp: string;
 }
 
 export type AssetKind = "STOCK" | "UNIT" | "FII" | "BDR" | "ETF" | "UNKNOWN";
