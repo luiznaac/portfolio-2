@@ -1,0 +1,236 @@
+// Pure month + targets form helpers — no React imports here (see AGENTS.md). The month-scoped
+// screens map their forms to the backend payloads only through this module, so the parsing rules
+// and the pt-BR labels are unit-tested here rather than inside the page.
+
+import type {
+  AssetClass,
+  FixedIncomeSubClass,
+  Month,
+  MonthCreation,
+  MonthStatus,
+  MonthUpdate,
+  Targets,
+} from "../api/types.ts";
+
+export interface MonthFormState {
+  period: string;
+  capital: string;
+  floor: string;
+}
+
+export function emptyMonthForm(): MonthFormState {
+  return { period: "", capital: "", floor: "" };
+}
+
+// Seeds the edit form from the open month; the period is editable only at open time but kept so the
+// form is one shape.
+export function monthFormFrom(month: Month): MonthFormState {
+  return { period: month.period, capital: String(month.capital), floor: String(month.floor) };
+}
+
+// YYYY-MM with a real month — the ISO form the backend's YearMonth parses.
+const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+// An amount field is valid when blank-as-zero or a finite non-negative number.
+function parseAmount(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseFloor(value: string): number | null {
+  if (value.trim().length === 0) return 0;
+  const parsed = parseAmount(value);
+  return parsed === null || parsed < 0 ? null : parsed;
+}
+
+// The Capital + Floor half every month form shares: a non-negative Capital and a Floor that is
+// blank-as-zero. Null while incomplete, so the caller keeps submit disabled.
+function parseCapitalFloor(form: MonthFormState): { capital: number; floor: number } | null {
+  const capital = parseAmount(form.capital);
+  if (capital === null || capital < 0) return null;
+
+  const floor = parseFloor(form.floor);
+  if (floor === null) return null;
+
+  return { capital, floor };
+}
+
+// Builds the open payload, or null while the form is incomplete — the page keeps submit disabled on
+// null and never opens half a month.
+export function toMonthCreation(form: MonthFormState): MonthCreation | null {
+  if (!PERIOD.test(form.period)) return null;
+
+  const amounts = parseCapitalFloor(form);
+  return amounts === null ? null : { period: form.period, ...amounts };
+}
+
+export function toMonthUpdate(form: MonthFormState): MonthUpdate | null {
+  return parseCapitalFloor(form);
+}
+
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+export function monthPeriodLabel(period: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(period);
+  if (!match) return period;
+
+  const [, year, month] = match;
+  const label = MONTHS[Number(month) - 1];
+  return label === undefined ? period : `${label}/${year}`;
+}
+
+export function monthStatusLabel(status: MonthStatus): string {
+  return status === "OPEN" ? "Aberto" : "Fechado";
+}
+
+const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
+  ACOES: "Ações",
+  FIIS: "Fundos imob.",
+  RENDA_FIXA: "Renda fixa",
+};
+
+export function assetClassLabel(assetClass: AssetClass): string {
+  return ASSET_CLASS_LABELS[assetClass];
+}
+
+// The chain's fixed rungs, in the order the entry form shows them.
+export const ASSET_CLASSES: AssetClass[] = ["ACOES", "FIIS", "RENDA_FIXA"];
+export const RF_SUB_CLASSES: FixedIncomeSubClass[] = [
+  "FIXED_RATE",
+  "FLOATING_RATE",
+  "INFLATION_LINKED",
+];
+
+export interface ClassTargetRow {
+  assetClass: AssetClass;
+  percentage: string;
+}
+
+export interface StrategyTargetRow {
+  assetClass: AssetClass;
+  strategy: string;
+  percentage: string;
+}
+
+export interface SubClassTargetRow {
+  subClass: FixedIncomeSubClass;
+  percentage: string;
+}
+
+export interface TickerTargetRow {
+  strategy: string;
+  ticker: string;
+  percentage: string;
+}
+
+// Every percentage is a string while it is being typed; classes and sub-classes are fixed rows (one
+// per rung), while strategies and tickers are added by the user.
+export interface TargetsFormState {
+  classes: ClassTargetRow[];
+  strategies: StrategyTargetRow[];
+  subClasses: SubClassTargetRow[];
+  tickers: TickerTargetRow[];
+}
+
+export function emptyTargetsForm(): TargetsFormState {
+  return {
+    classes: ASSET_CLASSES.map((assetClass) => ({ assetClass, percentage: "" })),
+    strategies: [],
+    subClasses: RF_SUB_CLASSES.map((subClass) => ({ subClass, percentage: "" })),
+    tickers: [],
+  };
+}
+
+// Seeds the form from stored targets: the fixed rungs always show (blank when the month has no
+// value), the variable rungs carry their stored rows.
+export function targetsFormFrom(targets: Targets): TargetsFormState {
+  const classByKey = new Map(
+    targets.classes.map((target) => [target.asset_class, target.percentage]),
+  );
+  const subClassByKey = new Map(
+    targets.sub_classes.map((target) => [target.sub_class, target.percentage]),
+  );
+
+  return {
+    classes: ASSET_CLASSES.map((assetClass) => ({
+      assetClass,
+      percentage: percentageString(classByKey.get(assetClass)),
+    })),
+    strategies: targets.strategies.map((target) => ({
+      assetClass: target.asset_class,
+      strategy: target.strategy,
+      percentage: String(target.percentage),
+    })),
+    subClasses: RF_SUB_CLASSES.map((subClass) => ({
+      subClass,
+      percentage: percentageString(subClassByKey.get(subClass)),
+    })),
+    tickers: targets.tickers.map((target) => ({
+      strategy: target.strategy,
+      ticker: target.ticker,
+      percentage: String(target.percentage),
+    })),
+  };
+}
+
+function percentageString(value: number | undefined): string {
+  return value === undefined ? "" : String(value);
+}
+
+// Maps the form to the payload the replace-all PUT takes: a row is kept only when it carries a
+// finite percentage (and, for the named rungs, a name); a ticker is normalised to its canonical key.
+export function toTargets(form: TargetsFormState): Targets {
+  return {
+    classes: form.classes
+      .filter(hasPercentage)
+      .map((row) => ({ asset_class: row.assetClass, percentage: Number(row.percentage) })),
+    strategies: form.strategies
+      .filter((row) => row.strategy.trim().length > 0 && hasPercentage(row))
+      .map((row) => ({
+        asset_class: row.assetClass,
+        strategy: row.strategy.trim(),
+        percentage: Number(row.percentage),
+      })),
+    sub_classes: form.subClasses
+      .filter(hasPercentage)
+      .map((row) => ({ sub_class: row.subClass, percentage: Number(row.percentage) })),
+    tickers: form.tickers
+      .filter((row) => row.ticker.trim().length > 0 && hasPercentage(row))
+      .map((row) => ({
+        strategy: row.strategy.trim(),
+        ticker: row.ticker.trim().toUpperCase(),
+        percentage: Number(row.percentage),
+      })),
+  };
+}
+
+function hasPercentage(row: { percentage: string }): boolean {
+  const trimmed = row.percentage.trim();
+  return trimmed.length > 0 && Number.isFinite(Number(trimmed));
+}
+
+// Row add/remove are the entry form's state transitions, kept pure so the page stays a thin
+// renderer and the behaviour is covered here.
+export function addStrategyRow(form: TargetsFormState): TargetsFormState {
+  return {
+    ...form,
+    strategies: [...form.strategies, { assetClass: "ACOES", strategy: "", percentage: "" }],
+  };
+}
+
+export function removeStrategyRow(form: TargetsFormState, index: number): TargetsFormState {
+  return { ...form, strategies: form.strategies.filter((_, position) => position !== index) };
+}
+
+export function addTickerRow(form: TargetsFormState, strategy: string): TargetsFormState {
+  return {
+    ...form,
+    tickers: [...form.tickers, { strategy, ticker: "", percentage: "" }],
+  };
+}
+
+export function removeTickerRow(form: TargetsFormState, index: number): TargetsFormState {
+  return { ...form, tickers: form.tickers.filter((_, position) => position !== index) };
+}
