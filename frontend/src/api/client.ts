@@ -1,4 +1,9 @@
 import type {
+  Bond,
+  CheckingAccount,
+  CheckingAccountCreation,
+  FixedRateBondCreation,
+  FloatingRateBondCreation,
   HealthCheckResult,
   Import,
   ImportRow,
@@ -83,5 +88,34 @@ export const api = {
 
   getTickerQuotes(ticker: string): Promise<Quote[]> {
     return request(`/tickers/${encodeURIComponent(ticker)}/quotes`);
+  },
+
+  getBonds(): Promise<Bond[]> {
+    return request("/fixed-income/bonds");
+  },
+
+  getCheckingAccounts(): Promise<CheckingAccount[]> {
+    return request("/fixed-income/accounts");
+  },
+
+  createFixedRateBond(creation: FixedRateBondCreation): Promise<Bond> {
+    return request("/fixed-income/bonds/fixed", {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
+  },
+
+  createFloatingRateBond(creation: FloatingRateBondCreation): Promise<Bond> {
+    return request("/fixed-income/bonds/floating", {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
+  },
+
+  createCheckingAccount(creation: CheckingAccountCreation): Promise<CheckingAccount> {
+    return request("/fixed-income/accounts", {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
   },
 };

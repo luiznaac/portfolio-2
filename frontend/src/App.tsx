@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
 import { AssetDetail } from "./pages/AssetDetail.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Trades } from "./pages/Trades.tsx";
 
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
       // directory, which would shadow a sibling SPA route of that name on a deep link.
       { path: "trades", element: <Trades /> },
       { path: "trades/:ticker", element: <AssetDetail /> },
+      { path: "fixed-income", element: <FixedIncome /> },
     ],
   },
 ];

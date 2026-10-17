@@ -22,7 +22,7 @@ class BondController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/bonds") {
+        route("/fixed-income/bonds") {
             get {
                 call.respond(HttpStatusCode.OK, service.fetchAll())
             }
