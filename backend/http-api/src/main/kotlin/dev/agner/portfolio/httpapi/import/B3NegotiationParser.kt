@@ -17,8 +17,9 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
 
-// A header name mapped to the column index it occupies in the sheet.
-private typealias ColumnIndex = Map<String, Int>
+// A header name mapped to the column index it occupies in the sheet. Shared with the position
+// parser — both locate their columns the same way.
+internal typealias ColumnIndex = Map<String, Int>
 
 @Component
 class B3NegotiationParser : IImportParser {
@@ -143,12 +144,6 @@ class B3NegotiationParser : IImportParser {
         val text = readText(cell, formatter) ?: return null
         return runCatching { LocalDate.parse(text) }.getOrNull()
     }
-
-    private fun readText(cell: Cell?, formatter: DataFormatter): String? =
-        cell?.let { formatter.formatCellValue(it).trim() }?.takeIf { it.isNotEmpty() }
-
-    private fun cell(row: Row, headers: ColumnIndex, name: String): Cell? =
-        headers[name]?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
 
     private companion object {
         val EXPECTED_HEADERS = listOf(

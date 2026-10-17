@@ -12,6 +12,7 @@ import dev.agner.portfolio.persistence.import.ImportTable
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.persistence.index.IndexValueTable
 import dev.agner.portfolio.persistence.institution.InstitutionTable
+import dev.agner.portfolio.persistence.listedasset.PositionTable
 import dev.agner.portfolio.persistence.listedasset.TradeTable
 import dev.agner.portfolio.persistence.quotes.QuoteTable
 import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
@@ -37,6 +38,7 @@ val allTables: Array<Table> = arrayOf(
     QuoteTable,
     InstitutionTable,
     TradeTable,
+    PositionTable,
     ImportTable,
     ImportRowTable,
 )

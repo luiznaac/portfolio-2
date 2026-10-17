@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useTrades } from "../api/queries.ts";
 import type { Trade, TradeSide } from "../api/types.ts";
 import { Badge } from "../components/Badge.tsx";
@@ -20,7 +21,14 @@ const COLUMNS: Column<Trade>[] = [
   {
     key: "ticker",
     header: "Ticker",
-    render: (trade) => <span className="font-mono font-medium">{trade.ticker}</span>,
+    render: (trade) => (
+      <Link
+        to={`/trades/${encodeURIComponent(trade.ticker)}`}
+        className="font-mono font-medium text-principal hover:underline"
+      >
+        {trade.ticker}
+      </Link>
+    ),
   },
   {
     key: "side",
