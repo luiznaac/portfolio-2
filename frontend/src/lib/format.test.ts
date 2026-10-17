@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHealthStatus, formatNumber, formatTradeSide } from "./format.ts";
+import { formatCurrency, formatHealthStatus, formatNumber, formatTradeSide } from "./format.ts";
 
 describe("formatHealthStatus", () => {
   it("formats a healthy result", () => {
@@ -28,5 +28,15 @@ describe("formatTradeSide", () => {
 
   it("labels a sell", () => {
     expect(formatTradeSide("SELL")).toBe("Venda");
+  });
+});
+
+describe("formatCurrency", () => {
+  it("renders a BRL amount with two decimals", () => {
+    expect(formatCurrency(1234.5)).toBe("R$ 1.234,50");
+  });
+
+  it("renders zero", () => {
+    expect(formatCurrency(0)).toBe("R$ 0,00");
   });
 });

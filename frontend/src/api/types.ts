@@ -97,3 +97,21 @@ export interface TradeCreation {
   institution_id: number;
   fee?: number;
 }
+
+export interface Position {
+  ticker: string;
+  quantity: number;
+  average_price: number;
+}
+
+export interface PositionDetail {
+  position: Position;
+  trades: Trade[];
+}
+
+export interface PositionReconciliation {
+  ticker: string;
+  custody_quantity: number;
+  ledger_quantity: number;
+  has_drift: boolean;
+}

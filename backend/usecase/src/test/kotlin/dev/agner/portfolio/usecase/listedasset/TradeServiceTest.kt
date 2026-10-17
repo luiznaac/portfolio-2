@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.listedasset
 
+import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
@@ -18,9 +19,14 @@ import java.math.BigDecimal
 
 class TradeServiceTest : StringSpec({
     val repository = mockk<ITradeRepository>(relaxed = true)
-    val service = TradeService(repository)
+    val positionService = mockk<PositionService>(relaxed = true)
+    val transaction = CountingTransaction()
+    val service = TradeService(repository, positionService, transaction)
 
-    beforeTest { clearAllMocks() }
+    beforeTest {
+        clearAllMocks()
+        transaction.count = 0
+    }
 
     "createManual normalizes the ticker and saves a manual trade at the next ordinal" {
         coEvery { repository.fetchByKey(any()) } returns emptyList()
@@ -48,6 +54,16 @@ class TradeServiceTest : StringSpec({
         shouldThrow<DuplicateTradeException> { service.createManual(creation()) }
 
         coVerify(exactly = 0) { repository.save(any(), any(), any()) }
+    }
+
+    "createManual reprojects the position inside the transaction" {
+        coEvery { repository.fetchByKey(any()) } returns emptyList()
+        coEvery { repository.save(any(), any(), any()) } returns savedManual
+
+        service.createManual(creation())
+
+        coVerify(exactly = 1) { positionService.reproject("PETR4") }
+        transaction.count shouldBe 1
     }
 
     "reconcile creates the occurrences past the ledger at the next ordinal, normalizing the ticker" {
@@ -89,6 +105,23 @@ class TradeServiceTest : StringSpec({
         coVerify(exactly = 0) { repository.save(any(), any(), any()) }
     }
 
+    "reconcile reprojects the position only when it wrote a new occurrence" {
+        coEvery { repository.fetchByKey(any()) } returns emptyList()
+        coEvery { repository.save(any(), any(), any()) } returns savedImported
+
+        service.reconcile(creation().naturalKey(), listOf(creation()))
+
+        coVerify(exactly = 1) { positionService.reproject("PETR4") }
+    }
+
+    "reconcile leaves the position untouched when nothing new was written" {
+        coEvery { repository.fetchByKey(any()) } returns listOf(importedTrade(1))
+
+        service.reconcile(creation().naturalKey(), listOf(creation()))
+
+        coVerify(exactly = 0) { positionService.reproject(any()) }
+    }
+
     "fetchAllBy looks the ticker up under its normalized key" {
         coEvery { repository.fetchAllBy(any()) } returns emptyList()
 
@@ -97,6 +130,15 @@ class TradeServiceTest : StringSpec({
         coVerify(exactly = 1) { repository.fetchAllBy("PETR4") }
     }
 })
+
+private class CountingTransaction : ITransactionTemplate {
+    var count = 0
+
+    override suspend fun <T> execute(block: suspend () -> T): T {
+        count++
+        return block()
+    }
+}
 
 private fun creation(ticker: String = "PETR4") = TradeCreation(
     ticker = ticker,

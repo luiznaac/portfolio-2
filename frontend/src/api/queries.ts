@@ -27,6 +27,22 @@ export function useTrades() {
   });
 }
 
+export function usePosition(ticker: string) {
+  return useQuery({
+    queryKey: ["positions", ticker],
+    queryFn: () => api.getPosition(ticker),
+    enabled: ticker.length > 0,
+  });
+}
+
+export function useTickerQuotes(ticker: string) {
+  return useQuery({
+    queryKey: ["tickers", ticker, "quotes"],
+    queryFn: () => api.getTickerQuotes(ticker),
+    enabled: ticker.length > 0,
+  });
+}
+
 export function useStageImport() {
   const queryClient = useQueryClient();
   return useMutation({
