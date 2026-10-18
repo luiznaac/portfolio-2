@@ -133,6 +133,21 @@ export function useReplaceTargets() {
   });
 }
 
+export function useCurrentAllocation() {
+  return useQuery({
+    queryKey: ["month", "current", "allocation"],
+    queryFn: async () => {
+      try {
+        return await api.getCurrentAllocation();
+      } catch (error) {
+        // No open month is a normal state, not an error — the page points at the opener instead.
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+  });
+}
+
 export function useStageImport() {
   const queryClient = useQueryClient();
   return useMutation({

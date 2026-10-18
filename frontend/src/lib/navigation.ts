@@ -2,7 +2,7 @@
 // so a route lands in both at once. Pure (no React): icons are named here and resolved to SVG in
 // Sidebar.tsx, which keeps the crumb lookup unit-tested in src/lib.
 
-export type NavIcon = "upload" | "assets" | "bank" | "calendar";
+export type NavIcon = "upload" | "assets" | "bank" | "calendar" | "target";
 
 export interface NavItem {
   to: string;
@@ -28,6 +28,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Carteira",
     items: [
+      { to: "/allocation", label: "Alocação", icon: "target" },
       { to: "/trades", label: "Ativos", icon: "assets" },
       { to: "/fixed-income", label: "Renda fixa", icon: "bank" },
     ],

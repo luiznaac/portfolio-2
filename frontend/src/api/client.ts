@@ -1,4 +1,5 @@
 import type {
+  Allocation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -137,5 +138,9 @@ export const api = {
 
   replaceCurrentTargets(targets: Targets): Promise<CurrentMonth> {
     return request("/month/current/targets", { method: "PUT", body: JSON.stringify(targets) });
+  },
+
+  getCurrentAllocation(): Promise<Allocation> {
+    return request("/month/current/allocation");
   },
 };
