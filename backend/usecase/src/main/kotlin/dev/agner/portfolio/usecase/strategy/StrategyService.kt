@@ -39,7 +39,7 @@ class StrategyService(
         return transaction.execute {
             val previous = editions.fetchLatestActive(strategy.id, before = report.referenceMonth)
             val entries = report.entries.normalizedEntries()
-            val diff = previous?.let { diffCalculator.compute(it.entries, entries) }
+            val diff = previous?.let { diffCalculator.compute(previous = it.entries, current = entries) }
             EditionImport(report.parser, editions.saveStaged(strategy.id, report.referenceMonth, entries, diff))
         }
     }
@@ -62,7 +62,7 @@ class StrategyService(
 
         return transaction.execute {
             val previous = editions.fetchLatestActive(strategy.id, before = referenceMonth)
-            val diff = previous?.let { diffCalculator.compute(it.entries, normalized) }
+            val diff = previous?.let { diffCalculator.compute(previous = it.entries, current = normalized) }
             editions.activate(staged.id, normalized, diff)
         }
     }

@@ -70,7 +70,20 @@ export function toMonthUpdate(form: MonthFormState): MonthUpdate | null {
   return parseCapitalFloor(form);
 }
 
-const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+export const MONTHS = [
+  "jan",
+  "fev",
+  "mar",
+  "abr",
+  "mai",
+  "jun",
+  "jul",
+  "ago",
+  "set",
+  "out",
+  "nov",
+  "dez",
+];
 
 export function monthPeriodLabel(period: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(period);

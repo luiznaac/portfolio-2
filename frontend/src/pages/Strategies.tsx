@@ -259,7 +259,8 @@ function StrategyImportView() {
 
   const list = strategies.data ?? [];
   const preselected = Number(params.get("strategy")) || null;
-  const reviewing = rows.find((row) => row.id === reviewingId)?.edition ?? null;
+  const reviewingRow = rows.find((row) => row.id === reviewingId);
+  const reviewing = reviewingRow?.edition ?? null;
 
   // Every row update replaces one row immutably; the id is the row's identity, so the patch can never
   // land on a different row than the one the handler was bound to.
@@ -436,6 +437,7 @@ function StrategyImportView() {
         <PreviewDrawer
           key={reviewing.id}
           edition={reviewing}
+          parser={reviewingRow?.parser}
           onClose={() => setReviewingId(null)}
         />
       )}
@@ -443,11 +445,22 @@ function StrategyImportView() {
   );
 }
 
-function PreviewDrawer({ edition, onClose }: { edition: Edition; onClose: () => void }) {
+function PreviewDrawer({
+  edition,
+  parser,
+  onClose,
+}: {
+  edition: Edition;
+  parser?: string;
+  onClose: () => void;
+}) {
   const [entries, setEntries] = useState<EditionEntry[]>(() => edition.entries);
   const [validation, setValidation] = useState<string | null>(null);
   const activate = useActivateEdition();
   const sum = editionWeightSum(entries);
+  // The stored diff describes the imported set; once an override lands it no longer does, and the
+  // server recomputes it at activation — so the drawer stops showing the stale delta and says so.
+  const edited = entries.some((entry, index) => entry !== edition.entries[index]);
 
   function submit() {
     if (!isWeightSumValid(entries)) {
@@ -487,17 +500,27 @@ function PreviewDrawer({ edition, onClose }: { edition: Edition; onClose: () => 
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <Chip tone="neutral">{referenceMonthLabel(edition.reference_month)}</Chip>
+            {parser && <Chip tone="neutral">{parser}</Chip>}
             <Chip tone={isWeightSumValid(entries) ? "green" : "rose"}>soma {sum}%</Chip>
-            {edition.diff_from_previous && (
+            {edition.diff_from_previous && !edited && (
               <Chip tone="neutral">{editionDiffSummary(edition.diff_from_previous)}</Chip>
             )}
           </div>
 
-          {edition.diff_from_previous && (
-            <div className="mb-4">
-              <DiffPanel diff={edition.diff_from_previous} />
-            </div>
-          )}
+          {edition.diff_from_previous &&
+            (edited ? (
+              <div className="mb-4">
+                <Panel>
+                  <p className="text-[12.5px] text-ink-dim">
+                    Você editou os alvos; o diff será recalculado ao confirmar a edição.
+                  </p>
+                </Panel>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <DiffPanel diff={edition.diff_from_previous} />
+              </div>
+            ))}
 
           <div className="space-y-2">
             {entries.map((entry, index) => (

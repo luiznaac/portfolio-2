@@ -25,7 +25,7 @@ class XpFiiCarteiraParser : XpTableReportParser() {
     )
 
     override val row = Regex(
-        "(\\d+(?:,\\d+)?)%\\s+(\\S.*?)\\s+([A-Z][A-Z0-9]{3}\\d{1,2})\\s+(COMPRA|NEUTRO|VENDA)\\s+" +
+        "$WEIGHT_GROUP\\s+(\\S.*?)\\s+$TICKER_GROUP\\s+(COMPRA|NEUTRO|VENDA)\\s+" +
             "(.+?)\\s+([\\d.]+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)%\\s+(-?[\\d,]+%)\\s+" +
             "(-?[\\d,]+%)\\s+([\\d,]+%)\\s+(\\d+)\\s*$",
         RegexOption.IGNORE_CASE,

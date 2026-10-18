@@ -39,7 +39,7 @@ class XpGenericReportParser : IStrategyReportParser {
 
     private companion object {
         val ROW = Regex(
-            "([A-Z][A-Z0-9]{3}\\d{1,2})\\s+(\\d+(?:,\\d+)?)%" +
+            "$TICKER_GROUP\\s+$WEIGHT_GROUP" +
                 "(?:\\s+(Compra|Neutro|Venda))?(?:\\s+R\\$\\s*([\\d.,]+))?",
             RegexOption.IGNORE_CASE,
         )

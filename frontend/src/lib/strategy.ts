@@ -6,6 +6,7 @@ import type {
   Rating,
   Strategy,
 } from "../api/types.ts";
+import { ASSET_CLASSES, MONTHS } from "./month.ts";
 
 // Pure helpers for the Estratégias screen — no React imports here (see AGENTS.md). The screen's
 // grouping, labels and diff summary are unit-tested in strategy.test.ts.
@@ -15,36 +16,19 @@ export interface StrategyGroup {
   strategies: Strategy[];
 }
 
-const CLASS_ORDER: AssetClass[] = ["ACOES", "FIIS", "RENDA_FIXA"];
-
 // The list groups by asset class in the chain's order, skipping a class with no strategies. Input
 // order is preserved inside a group.
 export function groupStrategiesByClass(strategies: Strategy[]): StrategyGroup[] {
-  return CLASS_ORDER.map((assetClass) => ({
+  return ASSET_CLASSES.map((assetClass) => ({
     assetClass,
     strategies: strategies.filter((strategy) => strategy.asset_class === assetClass),
   })).filter((group) => group.strategies.length > 0);
 }
 
-const MONTH_LABELS = [
-  "jan",
-  "fev",
-  "mar",
-  "abr",
-  "mai",
-  "jun",
-  "jul",
-  "ago",
-  "set",
-  "out",
-  "nov",
-  "dez",
-];
-
 // "2026-09" -> "set/26", matching the reference's edition chips.
 export function referenceMonthLabel(referenceMonth: string): string {
   const [year, month] = referenceMonth.split("-");
-  const label = MONTH_LABELS[Number(month) - 1] ?? month;
+  const label = MONTHS[Number(month) - 1] ?? month;
   return `${label}/${year.slice(2)}`;
 }
 

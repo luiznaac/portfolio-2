@@ -30,10 +30,7 @@ class EditionRepository(
     }
 
     override suspend fun fetch(strategyId: Int, referenceMonth: YearMonth): EditionDetail? = transaction {
-        EditionEntity.find {
-            (EditionTable.strategyId eq strategyId) and
-                (EditionTable.referenceMonth eq referenceMonth.toString())
-        }.firstOrNull()?.toDetail()
+        find(strategyId, referenceMonth)?.toDetail()
     }
 
     override suspend fun fetchLatestActive(strategyId: Int, before: YearMonth?): EditionDetail? = transaction {
@@ -53,10 +50,7 @@ class EditionRepository(
         entries: List<EditionEntry>,
         diff: EditionDiff?,
     ): EditionDetail = transaction {
-        val existing = EditionEntity.find {
-            (EditionTable.strategyId eq strategyId) and
-                (EditionTable.referenceMonth eq referenceMonth.toString())
-        }.firstOrNull()
+        val existing = find(strategyId, referenceMonth)
 
         val edition = when {
             existing == null -> EditionEntity.new {
@@ -88,6 +82,13 @@ class EditionRepository(
         edition.status = EditionStatus.ACTIVE
         edition.toDetail()
     }
+
+    // The strategy × month identity both reads share; the caller runs inside a transaction.
+    private fun find(strategyId: Int, referenceMonth: YearMonth): EditionEntity? =
+        EditionEntity.find {
+            (EditionTable.strategyId eq strategyId) and
+                (EditionTable.referenceMonth eq referenceMonth.toString())
+        }.firstOrNull()
 
     // An edition's entries are replaced wholesale: a corrected report is the new truth, not a merge.
     private fun replaceEntries(edition: EditionEntity, entries: List<EditionEntry>) {

@@ -16,6 +16,12 @@ import java.math.BigDecimal
 // header line inside that text rather than on a page number, since the summary and detail pages
 // repeat the same table at different offsets.
 
+// The two row fragments every XP layout shares — a ticker token and a pt-BR weight with its percent
+// sign. Each layout composes them into its own row regex (the FII layout prints them reversed), so
+// one change to the token shape moves all four parsers together.
+internal const val TICKER_GROUP = "([A-Z][A-Z0-9]{3}\\d{1,2})"
+internal const val WEIGHT_GROUP = "(\\d+(?:,\\d+)?)%"
+
 internal fun pdfPages(fileName: String, content: ByteArray): List<String> =
     try {
         Loader.loadPDF(content).use { document ->
