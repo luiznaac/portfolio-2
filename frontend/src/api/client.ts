@@ -6,6 +6,7 @@ import type {
   CurrentMonth,
   Edition,
   EditionActivation,
+  EditionImport,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   HealthCheckResult,
@@ -160,7 +161,7 @@ export const api = {
     return request(`/strategies/${strategyId}/editions`);
   },
 
-  importEdition(strategyId: number, file: File): Promise<Edition> {
+  importEdition(strategyId: number, file: File): Promise<EditionImport> {
     const form = new FormData();
     form.append("file", file);
     return upload(`/strategies/${strategyId}/editions/import`, form);

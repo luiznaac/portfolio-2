@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.strategy.model.DiffWeight
 import dev.agner.portfolio.usecase.strategy.model.EditionDetail
 import dev.agner.portfolio.usecase.strategy.model.EditionDiff
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
+import dev.agner.portfolio.usecase.strategy.model.EditionImport
 import dev.agner.portfolio.usecase.strategy.model.EditionStatus
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
@@ -122,7 +123,7 @@ class StrategyControllerTest : DescribeSpec({
             val service = mockk<StrategyService>()
             val parser = mockk<StrategyReportParserResolver>()
             every { parser.resolve("relatorio.pdf", any()) } returns parsedReport
-            coEvery { service.importEdition(1, parsedReport) } returns edition
+            coEvery { service.importEdition(1, parsedReport) } returns EditionImport("XpEquityCarteira", edition)
 
             testApplication {
                 application { installRoutes(StrategyController(service, parser)) }
@@ -144,7 +145,9 @@ class StrategyControllerTest : DescribeSpec({
                 }
 
                 response.status shouldBe HttpStatusCode.Created
-                ObjectMapper().readTree(response.bodyAsText()).get("reference_month").asText() shouldBe "2026-09"
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("parser").asText() shouldBe "XpEquityCarteira"
+                body.get("edition").get("reference_month").asText() shouldBe "2026-09"
                 coVerify(exactly = 1) { service.importEdition(1, parsedReport) }
             }
         }
@@ -246,9 +249,21 @@ private val edition = EditionDetail(
     diffFromPrevious = EditionDiff(
         entered = listOf(DiffWeight("CXSE3", BigDecimal("5.00"))),
         exited = listOf(DiffWeight("B3SA3", BigDecimal("0.00"))),
-        changed = listOf(DiffChange("PETR4", BigDecimal("10.00"), BigDecimal("12.50"), Rating.BUY, Rating.BUY)),
+        changed = listOf(
+            DiffChange(
+                ticker = "PETR4",
+                weightBefore = BigDecimal("10.00"),
+                weightAfter = BigDecimal("12.50"),
+                ratingBefore = Rating.BUY,
+                ratingAfter = Rating.BUY,
+            ),
+        ),
     ),
     entries = listOf(entry),
 )
 
-private val parsedReport = ParsedStrategyReport(YearMonth.parse("2026-09"), listOf(entry))
+private val parsedReport = ParsedStrategyReport(
+    referenceMonth = YearMonth.parse("2026-09"),
+    parser = "XpEquityCarteira",
+    entries = listOf(entry),
+)

@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.strategy.InvalidStrategyReportException
 import dev.agner.portfolio.usecase.strategy.UnsupportedStrategyReportException
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.Rating
+import dev.agner.portfolio.usecase.strategy.model.editionWeightProblem
 import kotlinx.datetime.YearMonth
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
@@ -41,21 +42,11 @@ internal fun parseRating(raw: String): Rating = when (raw.trim().uppercase()) {
     else -> error("unknown rating '$raw'")
 }
 
-// Hard checks a report must pass before it may become an Edition: a table with rows, no ticker
-// twice, and weights summing to 100 ± 0.01. The research is explicit that a silent bad parse is
-// worse than a rejection (issue #93): the reviewer can import a corrected file.
+// Hard checks a report must pass before it may become an Edition (the shared rule lives in
+// editionWeightProblem). The research is explicit that a silent bad parse is worse than a rejection
+// (issue #93): the reviewer can import a corrected file.
 internal fun requireValidWeights(fileName: String, entries: List<EditionEntry>) {
-    if (entries.isEmpty()) throw InvalidStrategyReportException(fileName, "the portfolio table has no rows")
-
-    val duplicated = entries.groupingBy { it.ticker }.eachCount().filterValues { it > 1 }.keys
-    if (duplicated.isNotEmpty()) {
-        throw InvalidStrategyReportException(fileName, "the portfolio table repeats $duplicated")
-    }
-
-    val total = entries.fold(BigDecimal.ZERO) { sum, entry -> sum + entry.weight }
-    if (total.subtract(HUNDRED).abs() > WEIGHT_TOLERANCE) {
-        throw InvalidStrategyReportException(fileName, "weights sum to $total, expected 100")
-    }
+    editionWeightProblem(entries)?.let { throw InvalidStrategyReportException(fileName, it) }
 }
 
 // The cover page always names the publication month ("1 de setembro de 2026" / "Setembro 2026");
@@ -69,9 +60,6 @@ internal fun parseReferenceMonth(text: String): YearMonth? =
 internal fun requireReferenceMonth(fileName: String, pages: List<String>): YearMonth =
     parseReferenceMonth(pages.firstOrNull().orEmpty())
         ?: throw InvalidStrategyReportException(fileName, "the header names no reference month")
-
-private val HUNDRED = BigDecimal("100")
-private val WEIGHT_TOLERANCE = BigDecimal("0.01")
 
 private val MONTH_NUMBERS = mapOf(
     "janeiro" to 1,

@@ -61,6 +61,14 @@ export function editionWeightSum(entries: EditionEntry[]): number {
   return Math.round(total * 100) / 100;
 }
 
+// The weight rule the server also enforces (editionWeightProblem): a portfolio sums to 100 within a
+// cent. The import table and the preview drawer both read it, so the tolerance lives in one place.
+const WEIGHT_TOLERANCE = 0.01;
+
+export function isWeightSumValid(entries: EditionEntry[]): boolean {
+  return Math.abs(editionWeightSum(entries) - 100) <= WEIGHT_TOLERANCE;
+}
+
 export function ratingLabel(rating?: Rating): string {
   switch (rating) {
     case "BUY":

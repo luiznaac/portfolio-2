@@ -23,9 +23,19 @@ class XpStrategyReportParserTest : StringSpec({
         report.referenceMonth shouldBe YearMonth.parse("2026-09")
         report.entries.size shouldBe 11
         report.entries.first { it.ticker == "PETR4" } shouldBe
-            EditionEntry("PETR4", BigDecimal("12.5"), Rating.BUY, BigDecimal("63.00"))
+            EditionEntry(
+                ticker = "PETR4",
+                weight = BigDecimal("12.5"),
+                rating = Rating.BUY,
+                targetPrice = BigDecimal("63.00"),
+            )
         report.entries.first { it.ticker == "B3SA3" } shouldBe
-            EditionEntry("B3SA3", BigDecimal("10.0"), Rating.NEUTRAL, BigDecimal("16.00"))
+            EditionEntry(
+                ticker = "B3SA3",
+                weight = BigDecimal("10.0"),
+                rating = Rating.NEUTRAL,
+                targetPrice = BigDecimal("16.00"),
+            )
         weightSum(report) shouldBe BigDecimal("100.0")
     }
 
@@ -41,7 +51,8 @@ class XpStrategyReportParserTest : StringSpec({
 
         report.referenceMonth shouldBe YearMonth.parse("2026-09")
         report.entries.size shouldBe 10
-        report.entries.first { it.ticker == "ALOS3" } shouldBe EditionEntry("ALOS3", BigDecimal("10"), null, null)
+        report.entries.first { it.ticker == "ALOS3" } shouldBe
+            EditionEntry(ticker = "ALOS3", weight = BigDecimal("10"), rating = null, targetPrice = null)
         report.entries.all { it.rating == null && it.targetPrice == null } shouldBe true
         weightSum(report) shouldBe BigDecimal("100")
     }
@@ -52,7 +63,7 @@ class XpStrategyReportParserTest : StringSpec({
         report.referenceMonth shouldBe YearMonth.parse("2026-09")
         report.entries.size shouldBe 16
         report.entries.first { it.ticker == "MCCI11" } shouldBe
-            EditionEntry("MCCI11", BigDecimal("9.00"), Rating.BUY, null)
+            EditionEntry(ticker = "MCCI11", weight = BigDecimal("9.00"), rating = Rating.BUY, targetPrice = null)
         weightSum(report) shouldBe BigDecimal("100.00")
     }
 
@@ -72,6 +83,14 @@ class XpStrategyReportParserTest : StringSpec({
         fii.claims(fiiPages) shouldBe true
         fii.claims(equityPages) shouldBe false
         fii.claims(quantPages) shouldBe false
+    }
+
+    "each parser stamps its report with the layout's display name" {
+        equity.parse("top-dividendos.pdf", pages("top-dividendos.txt")).parser shouldBe "XpEquityCarteira"
+        quant.parse("plus.pdf", pages("top-dividendos-plus.txt")).parser shouldBe "XpQuantCarteira"
+        fii.parse("fii.pdf", pages("fundamentalista-fii.txt")).parser shouldBe "XpFiiCarteira"
+        generic.parse("unknown.pdf", listOf("Carteira Nova de setembro de 2026\nABCX11 100%"))
+            .parser shouldBe "XpGeneric"
     }
 
     "a report whose weights do not sum to 100 fails loudly" {

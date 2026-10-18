@@ -20,6 +20,7 @@ import {
   editionWeightSum,
   groupStrategiesByClass,
   isEditionForMonth,
+  isWeightSumValid,
   overrideEntry,
   ratingLabel,
   referenceMonthLabel,
@@ -244,6 +245,7 @@ interface ImportRow {
   file: File;
   strategyId: number;
   status: ImportStatus;
+  parser?: string;
   edition?: Edition;
   error?: string;
 }
@@ -253,60 +255,44 @@ function StrategyImportView() {
   const importEdition = useImportEdition();
   const [params] = useSearchParams();
   const [rows, setRows] = useState<ImportRow[]>([]);
-  const [reviewing, setReviewing] = useState<Edition | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const list = strategies.data ?? [];
   const preselected = Number(params.get("strategy")) || null;
+  const reviewing = rows.find((row) => row.id === reviewingId)?.edition ?? null;
+
+  // Every row update replaces one row immutably; the id is the row's identity, so the patch can never
+  // land on a different row than the one the handler was bound to.
+  function updateRow(id: string, patch: Partial<ImportRow>) {
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
 
   function addFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
-    setRows((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: crypto.randomUUID(),
-        file,
-        strategyId: preselected ?? suggestStrategy(list, file.name)?.id ?? 0,
-        status: "pending" as const,
-      })),
-    ]);
+    const additions: ImportRow[] = files.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      strategyId: preselected ?? suggestStrategy(list, file.name)?.id ?? 0,
+      status: "pending",
+    }));
+    setRows((current) => [...current, ...additions]);
     event.target.value = "";
-  }
-
-  function setRowStrategy(id: string, strategyId: number) {
-    setRows((current) => current.map((row) => (row.id === id ? { ...row, strategyId } : row)));
   }
 
   async function importRow(row: ImportRow) {
     if (!row.strategyId) return;
-    setRows((current) =>
-      current.map((candidate) =>
-        candidate.id === row.id
-          ? { ...candidate, status: "importing", error: undefined }
-          : candidate,
-      ),
-    );
+    updateRow(row.id, { status: "importing", error: undefined });
     try {
-      const edition = await importEdition.mutateAsync({
+      const imported = await importEdition.mutateAsync({
         strategyId: row.strategyId,
         file: row.file,
       });
-      setRows((current) =>
-        current.map((candidate) =>
-          candidate.id === row.id ? { ...candidate, status: "staged", edition } : candidate,
-        ),
-      );
+      updateRow(row.id, { status: "staged", edition: imported.edition, parser: imported.parser });
     } catch (error) {
-      setRows((current) =>
-        current.map((candidate) =>
-          candidate.id === row.id
-            ? {
-                ...candidate,
-                status: "failed",
-                error: error instanceof Error ? error.message : "Falha ao importar",
-              }
-            : candidate,
-        ),
-      );
+      updateRow(row.id, {
+        status: "failed",
+        error: error instanceof Error ? error.message : "Falha ao importar",
+      });
     }
   }
 
@@ -332,7 +318,7 @@ function StrategyImportView() {
       render: (row) => (
         <select
           value={row.strategyId}
-          onChange={(event) => setRowStrategy(row.id, Number(event.target.value))}
+          onChange={(event) => updateRow(row.id, { strategyId: Number(event.target.value) })}
           className={FIELD}
         >
           {list.map((strategy) => (
@@ -341,6 +327,13 @@ function StrategyImportView() {
             </option>
           ))}
         </select>
+      ),
+    },
+    {
+      key: "parser",
+      header: "Parser",
+      render: (row) => (
+        <span className="font-mono text-[11.5px] text-ink-dim">{row.parser ?? "—"}</span>
       ),
     },
     {
@@ -360,9 +353,7 @@ function StrategyImportView() {
       align: "right",
       render: (row) =>
         row.edition ? (
-          <Chip
-            tone={Math.abs(editionWeightSum(row.edition.entries) - 100) <= 0.01 ? "green" : "rose"}
-          >
+          <Chip tone={isWeightSumValid(row.edition.entries) ? "green" : "rose"}>
             {editionWeightSum(row.edition.entries)}%
           </Chip>
         ) : (
@@ -391,7 +382,7 @@ function StrategyImportView() {
         }
         if (row.status === "staged") {
           return (
-            <Button variant="default" onClick={() => setReviewing(row.edition ?? null)}>
+            <Button variant="default" onClick={() => setReviewingId(row.id)}>
               Revisar
             </Button>
           );
@@ -442,7 +433,11 @@ function StrategyImportView() {
       )}
 
       {reviewing && (
-        <PreviewDrawer key={reviewing.id} edition={reviewing} onClose={() => setReviewing(null)} />
+        <PreviewDrawer
+          key={reviewing.id}
+          edition={reviewing}
+          onClose={() => setReviewingId(null)}
+        />
       )}
     </section>
   );
@@ -455,7 +450,7 @@ function PreviewDrawer({ edition, onClose }: { edition: Edition; onClose: () => 
   const sum = editionWeightSum(entries);
 
   function submit() {
-    if (Math.abs(sum - 100) > 0.01) {
+    if (!isWeightSumValid(entries)) {
       setValidation("A soma dos pesos deve ser 100%.");
       return;
     }
@@ -492,7 +487,7 @@ function PreviewDrawer({ edition, onClose }: { edition: Edition; onClose: () => 
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <Chip tone="neutral">{referenceMonthLabel(edition.reference_month)}</Chip>
-            <Chip tone={Math.abs(sum - 100) <= 0.01 ? "green" : "rose"}>soma {sum}%</Chip>
+            <Chip tone={isWeightSumValid(entries) ? "green" : "rose"}>soma {sum}%</Chip>
             {edition.diff_from_previous && (
               <Chip tone="neutral">{editionDiffSummary(edition.diff_from_previous)}</Chip>
             )}

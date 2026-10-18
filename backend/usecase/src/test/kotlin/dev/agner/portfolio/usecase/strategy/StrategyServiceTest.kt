@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.strategy.model.DiffWeight
 import dev.agner.portfolio.usecase.strategy.model.EditionDetail
 import dev.agner.portfolio.usecase.strategy.model.EditionDiff
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
+import dev.agner.portfolio.usecase.strategy.model.EditionImport
 import dev.agner.portfolio.usecase.strategy.model.EditionStatus
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
@@ -71,24 +72,24 @@ class StrategyServiceTest : StringSpec({
         coEvery { editions.fetchLatestActive(1, SEPTEMBER) } returns previousEdition
         coEvery { editions.saveStaged(any(), any(), any(), any()) } returns stagedEdition
 
-        service.importEdition(1, report) shouldBe stagedEdition
+        service.importEdition(1, report) shouldBe EditionImport("XpEquityCarteira", stagedEdition)
 
         coVerify(exactly = 1) {
             editions.saveStaged(
                 1,
                 SEPTEMBER,
-                match { it == listOf(petr4("12.50"), cxse3("5.00")) },
+                match { it == listOf(petr4("60.00"), cxse3("40.00")) },
                 match {
                     it == EditionDiff(
-                        entered = listOf(DiffWeight("CXSE3", BigDecimal("5.00"))),
+                        entered = listOf(DiffWeight("CXSE3", BigDecimal("40.00"))),
                         exited = listOf(DiffWeight("VALE3", BigDecimal("0.00"))),
                         changed = listOf(
                             DiffChange(
-                                "PETR4",
-                                BigDecimal("10.00"),
-                                BigDecimal("12.50"),
-                                Rating.BUY,
-                                Rating.BUY,
+                                ticker = "PETR4",
+                                weightBefore = BigDecimal("50.00"),
+                                weightAfter = BigDecimal("60.00"),
+                                ratingBefore = Rating.BUY,
+                                ratingAfter = Rating.BUY,
                             ),
                         ),
                     )
@@ -98,7 +99,7 @@ class StrategyServiceTest : StringSpec({
         transaction.count shouldBe 1
     }
 
-    "importEdition treats the first edition as all entered" {
+    "importEdition stages a first edition with no diff" {
         coEvery { strategies.fetchById(1) } returns strategy
         coEvery { editions.fetchLatestActive(1, SEPTEMBER) } returns null
         coEvery { editions.saveStaged(any(), any(), any(), any()) } returns stagedEdition
@@ -109,8 +110,8 @@ class StrategyServiceTest : StringSpec({
             editions.saveStaged(
                 1,
                 SEPTEMBER,
-                any(),
-                match<EditionDiff> { it.exited.isEmpty() && it.entered.size == 2 },
+                match { it == listOf(petr4("60.00"), cxse3("40.00")) },
+                null,
             )
         }
     }
@@ -119,7 +120,7 @@ class StrategyServiceTest : StringSpec({
         coEvery { strategies.fetchById(1) } returns strategy
         coEvery { editions.fetch(1, SEPTEMBER) } returns null
 
-        service.activateEdition(1, SEPTEMBER, listOf(petr4("12.50"))) shouldBe null
+        service.activateEdition(1, SEPTEMBER, listOf(petr4("100.00"))) shouldBe null
 
         coVerify(exactly = 0) { editions.activate(any(), any(), any()) }
     }
@@ -130,23 +131,35 @@ class StrategyServiceTest : StringSpec({
         coEvery { editions.fetchLatestActive(1, SEPTEMBER) } returns previousEdition
         coEvery { editions.activate(9, any(), any()) } returns activatedEdition
 
-        service.activateEdition(1, SEPTEMBER, listOf(petr4("12.50"), cxse3("5.00"))) shouldBe activatedEdition
+        service.activateEdition(1, SEPTEMBER, listOf(petr4("60.00"), cxse3("40.00"))) shouldBe activatedEdition
 
         coVerify(exactly = 1) {
             editions.activate(
                 9,
-                match { it == listOf(petr4("12.50"), cxse3("5.00")) },
+                match { it == listOf(petr4("60.00"), cxse3("40.00")) },
                 match<EditionDiff> { it.entered.single().ticker == "CXSE3" && it.exited.single().ticker == "VALE3" },
             )
         }
         transaction.count shouldBe 1
     }
 
+    "activateEdition refuses entries whose weights do not sum to 100" {
+        coEvery { strategies.fetchById(1) } returns strategy
+        coEvery { editions.fetch(1, SEPTEMBER) } returns stagedEdition
+
+        val error = runCatching { service.activateEdition(1, SEPTEMBER, listOf(petr4("60.00"), cxse3("30.00"))) }
+            .exceptionOrNull()
+
+        (error is InvalidEditionException) shouldBe true
+        transaction.count shouldBe 0
+        coVerify(exactly = 0) { editions.activate(any(), any(), any()) }
+    }
+
     "activateEdition refuses an edition that is already active" {
         coEvery { strategies.fetchById(1) } returns strategy
         coEvery { editions.fetch(1, SEPTEMBER) } returns stagedEdition.copy(status = EditionStatus.ACTIVE)
 
-        val error = runCatching { service.activateEdition(1, SEPTEMBER, listOf(petr4("12.50"))) }
+        val error = runCatching { service.activateEdition(1, SEPTEMBER, listOf(petr4("100.00"))) }
             .exceptionOrNull()
 
         (error is EditionAlreadyActiveException) shouldBe true
@@ -159,7 +172,7 @@ class StrategyServiceTest : StringSpec({
         coEvery { editions.fetchLatestActive(1, SEPTEMBER) } returns null
         coEvery { editions.activate(9, any(), any()) } returns activatedEdition
 
-        service.activateEdition(1, SEPTEMBER, listOf(EditionEntry("PETR4F", BigDecimal("12.50"))))
+        service.activateEdition(1, SEPTEMBER, listOf(EditionEntry("PETR4F", BigDecimal("100.00"))))
 
         coVerify(exactly = 1) {
             editions.activate(9, match { it.single().ticker == "PETR4" }, any())
@@ -196,9 +209,10 @@ private val creation = StrategyCreation(
 
 private val report = ParsedStrategyReport(
     referenceMonth = SEPTEMBER,
+    parser = "XpEquityCarteira",
     entries = listOf(
-        EditionEntry("PETR4F", BigDecimal("12.50"), Rating.BUY),
-        EditionEntry("CXSE3", BigDecimal("5.00"), Rating.BUY),
+        EditionEntry("PETR4F", BigDecimal("60.00"), Rating.BUY),
+        EditionEntry("CXSE3", BigDecimal("40.00"), Rating.BUY),
     ),
 )
 
@@ -209,8 +223,8 @@ private val previousEdition = EditionDetail(
     status = EditionStatus.ACTIVE,
     diffFromPrevious = null,
     entries = listOf(
-        EditionEntry("PETR4", BigDecimal("10.00"), Rating.BUY),
-        EditionEntry("VALE3", BigDecimal("12.50"), Rating.NEUTRAL),
+        EditionEntry("PETR4", BigDecimal("50.00"), Rating.BUY),
+        EditionEntry("VALE3", BigDecimal("50.00"), Rating.NEUTRAL),
     ),
 )
 
@@ -220,7 +234,7 @@ private val stagedEdition = EditionDetail(
     referenceMonth = SEPTEMBER,
     status = EditionStatus.STAGED,
     diffFromPrevious = null,
-    entries = listOf(EditionEntry("PETR4", BigDecimal("10.00"), Rating.BUY)),
+    entries = listOf(EditionEntry("PETR4", BigDecimal("60.00"), Rating.BUY)),
 )
 
 private val activatedEdition = stagedEdition.copy(status = EditionStatus.ACTIVE)

@@ -5,6 +5,7 @@ import {
   editionWeightSum,
   groupStrategiesByClass,
   isEditionForMonth,
+  isWeightSumValid,
   overrideEntry,
   ratingLabel,
   referenceMonthLabel,
@@ -76,6 +77,27 @@ describe("editionWeightSum", () => {
     ];
 
     expect(editionWeightSum(thirds)).toBe(100);
+  });
+});
+
+describe("isWeightSumValid", () => {
+  it("accepts a portfolio that sums to 100 within a cent", () => {
+    const entries: EditionEntry[] = [
+      { ticker: "AAA3", weight: 33.33, do_not_trade: false },
+      { ticker: "BBB3", weight: 33.33, do_not_trade: false },
+      { ticker: "CCC3", weight: 33.34, do_not_trade: false },
+    ];
+
+    expect(isWeightSumValid(entries)).toBe(true);
+  });
+
+  it("rejects a portfolio that sums away from 100", () => {
+    const entries: EditionEntry[] = [
+      { ticker: "AAA3", weight: 60, do_not_trade: false },
+      { ticker: "BBB3", weight: 30, do_not_trade: false },
+    ];
+
+    expect(isWeightSumValid(entries)).toBe(false);
   });
 });
 

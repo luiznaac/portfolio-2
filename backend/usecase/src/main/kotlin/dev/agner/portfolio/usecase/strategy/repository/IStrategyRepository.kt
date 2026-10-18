@@ -9,7 +9,5 @@ interface IStrategyRepository {
 
     suspend fun fetchById(id: Int): Strategy?
 
-    suspend fun fetchByName(name: String): Strategy?
-
     suspend fun save(creation: StrategyCreation): Strategy
 }

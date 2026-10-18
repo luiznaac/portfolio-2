@@ -27,7 +27,7 @@ class XpGenericReportParser : IStrategyReportParser {
         if (entries.isEmpty()) {
             throw InvalidStrategyReportException(fileName, "the portfolio table has no rows")
         }
-        return ParsedStrategyReport(requireReferenceMonth(fileName, pages), entries)
+        return ParsedStrategyReport(requireReferenceMonth(fileName, pages), name, entries)
     }
 
     private fun MatchResult.toEntry() = EditionEntry(

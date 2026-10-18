@@ -46,11 +46,11 @@ class StrategyController(
                 post("/import") {
                     val upload = call.receiveUpload()
                     val report = parsers.resolve(upload.fileName, upload.content)
-                    val edition = service.importEdition(call.requiredInt("strategy_id"), report)
-                    if (edition == null) {
+                    val imported = service.importEdition(call.requiredInt("strategy_id"), report)
+                    if (imported == null) {
                         call.respond(HttpStatusCode.NotFound)
                     } else {
-                        call.respond(HttpStatusCode.Created, edition)
+                        call.respond(HttpStatusCode.Created, imported)
                     }
                 }
 

@@ -117,9 +117,27 @@ class EditionDiffCalculatorTest : StringSpec({
         diff.entered shouldBe listOf(DiffWeight("CXSE3", BigDecimal("5.00")))
         diff.exited shouldBe listOf(DiffWeight("B3SA3", BigDecimal("0.00")))
         diff.changed shouldBe listOf(
-            DiffChange("PETR4", BigDecimal("10.00"), BigDecimal("12.50"), Rating.BUY, Rating.BUY),
-            DiffChange("ALOS3", BigDecimal("7.50"), BigDecimal("10.00"), Rating.BUY, Rating.BUY),
-            DiffChange("ITUB4", BigDecimal("15.00"), BigDecimal("10.00"), Rating.BUY, Rating.NEUTRAL),
+            DiffChange(
+                ticker = "PETR4",
+                weightBefore = BigDecimal("10.00"),
+                weightAfter = BigDecimal("12.50"),
+                ratingBefore = Rating.BUY,
+                ratingAfter = Rating.BUY,
+            ),
+            DiffChange(
+                ticker = "ALOS3",
+                weightBefore = BigDecimal("7.50"),
+                weightAfter = BigDecimal("10.00"),
+                ratingBefore = Rating.BUY,
+                ratingAfter = Rating.BUY,
+            ),
+            DiffChange(
+                ticker = "ITUB4",
+                weightBefore = BigDecimal("15.00"),
+                weightAfter = BigDecimal("10.00"),
+                ratingBefore = Rating.BUY,
+                ratingAfter = Rating.NEUTRAL,
+            ),
         )
     }
 })

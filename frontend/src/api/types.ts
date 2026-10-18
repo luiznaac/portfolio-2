@@ -326,6 +326,13 @@ export interface Edition {
   entries: EditionEntry[];
 }
 
+// The POST /strategies/{id}/editions/import response: the layout parser that read the report (the
+// reference prototype's "Parser" column) beside the staged edition it produced.
+export interface EditionImport {
+  parser: string;
+  edition: Edition;
+}
+
 export interface EditionActivation {
   reference_month: string;
   entries: EditionEntry[];
