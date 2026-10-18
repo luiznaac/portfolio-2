@@ -4,6 +4,8 @@ import type {
   CheckingAccount,
   CheckingAccountCreation,
   CurrentMonth,
+  Edition,
+  EditionActivation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   HealthCheckResult,
@@ -14,6 +16,8 @@ import type {
   MonthUpdate,
   PositionDetail,
   Quote,
+  Strategy,
+  StrategyCreation,
   Targets,
   Trade,
 } from "./types.ts";
@@ -142,5 +146,30 @@ export const api = {
 
   getCurrentAllocation(): Promise<Allocation> {
     return request("/month/current/allocation");
+  },
+
+  getStrategies(): Promise<Strategy[]> {
+    return request("/strategies");
+  },
+
+  createStrategy(creation: StrategyCreation): Promise<Strategy> {
+    return request("/strategies", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  getEditions(strategyId: number): Promise<Edition[]> {
+    return request(`/strategies/${strategyId}/editions`);
+  },
+
+  importEdition(strategyId: number, file: File): Promise<Edition> {
+    const form = new FormData();
+    form.append("file", file);
+    return upload(`/strategies/${strategyId}/editions/import`, form);
+  },
+
+  activateEdition(strategyId: number, activation: EditionActivation): Promise<Edition> {
+    return request(`/strategies/${strategyId}/editions`, {
+      method: "POST",
+      body: JSON.stringify(activation),
+    });
   },
 };

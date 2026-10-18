@@ -6,6 +6,7 @@ import { Dashboard } from "./pages/Dashboard.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Month } from "./pages/Month.tsx";
+import { Strategies } from "./pages/Strategies.tsx";
 import { Trades } from "./pages/Trades.tsx";
 
 export const routes: RouteObject[] = [
@@ -16,6 +17,8 @@ export const routes: RouteObject[] = [
       { index: true, element: <Dashboard /> },
       { path: "month", element: <Month /> },
       { path: "allocation", element: <Allocation /> },
+      { path: "strategies", element: <Strategies /> },
+      { path: "strategies/import", element: <Strategies /> },
       { path: "imports", element: <ImportWizard /> },
       // Not `/assets`: the production nginx serves the built bundle's `/assets/` static
       // directory, which would shadow a sibling SPA route of that name on a deep link.

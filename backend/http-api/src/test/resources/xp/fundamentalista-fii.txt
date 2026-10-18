@@ -1,0 +1,108 @@
+===== PAGE 1 =====
+0 0 0
+50 52 54
+Research FIIs
+255 188 0
+0 210 197
+64 64 64
+126 126 126
+Carteira Fundamentalista
+Fundos Imobiliários
+Setembro 2026
+Marx Gonçalves Eduardo Bacelar
+Head de Fundos Listados Analista de Fundos Listados
+marx.goncalves@xpi.com.br eduardo.bacelar@xpi.com.br
+XP RESEARCH 1
+
+===== PAGE 2 =====
+Fundos Imobiliários 1 de setembro de 2026
+Research Fundos Listados
+Carteira Fundamentalista
+Setembro 2026
+Objetivo: A Carteira Fundamentalista de Fundos Imobiliários XP é composta por 16 ativos de perfil defensivo e tem como objetivo superar o desempenho do IFIX, índice que mede a performance dos 
+principais fundos imobiliários listados em bolsa, no horizonte de longo prazo. Sua composição é revisada mensalmente pelos analistas da equipe, podendo ou não sofrer alterações a cada mês.
+Performance: Em agosto, a carteira registrou queda de 0,79%, enquanto o IFIX apresentou desempenho de -1,46% no período. Além disso, entregou um dividend yield mensal de 1,03%, equivalente a 12,4% em 
+termos anualizados. Com isso, a carteira acumula valorização de 9,3% nos últimos 12 meses, o que corresponde a 112% do desempenho do IFIX.
+Alterações: Para setembro, reduzimos a alocação em CPTS11 (-1,0 p.p.), PVBI11 (-0,75 p.p.) e LVBI11 (-0,75 p.p.). Em contrapartida, ampliamos a exposição a XPLG11 (+1,25 p.p.), HGBS11 (+1,0 p.p.) e XPCI11 
+(+0,25p.p.). As mudanças refletem ajustes com o objetivo de reduzir a exposição a fundos de tijolo com menor carrego e menos gatilhos de valorização no curto prazo, bem como a um fundo multiestratégia, 
+ao mesmo tempo em que elevam a participação em ativos com portfólio de alta qualidade, menor volatilidade e maior potencial de geração de retorno além de ampliar a exposição a um fundo de recebíveis 
+com carrego atrativo.
+Yield
+Peso % Fundo Valor de Mercado (VM) Cota Valor Patrimonial (VP) VM/VP Performance ¹Risco
+Anualizado
+Por Ticker Segmento Ticker Recomendação Nome (R$ milhões) (R$) (R$/Cota) % No mês Em 12m DY 12m (pts.)
+9,00% Recebíveis MCCI11 COMPRA Mauá Capital Recebíveis 1.621 96 94 102% 1,9% 25,7% 12,6% 21
+7,00% Recebíveis RBRR11 COMPRA Patria Rendimento High Grade 1.206 74 92 81% -1,4% -4,7% 14,6% 21
+11,00% Recebíveis KNCR11 COMPRA Kinea Rendimentos 11.575 108 103 105% 1,2% 17,7% 13,9% 17
+8,75% Recebíveis XPCI11 COMPRA XP Crédito Imobiliário 688 79 87 91% -3,1% 9,2% 14,1% 21
+4,50% Recebíveis PCIP11 COMPRA Patria Crédito Imobiliário IP 1.273 75 92 81% -0,2% 0,7% 16,0% 21
+4,50% Ativos Logísticos BTLG11 COMPRA BTG Logística 7.030 99 107 93% -0,9% 9,1% 9,8% 17
+3,50% Ativos Logísticos LVBI11 COMPRA VBI Logística 1.603 99 120 83% -2,7% 5,3% 9,0% 21
+4,00% Ativos Logísticos BRCO11 COMPRA Bresco Logística 2.054 114 115 99% -0,1% 12,7% 9,6% 21
+8,75% Ativos Logísticos XPLG11 COMPRA XP Logística 4.715 92 105 87% -0,4% 2,0% 10,7% 21
+4,50% Lajes Corporat. PVBI11 COMPRA VBI Prime Offices 1.858 69 105 66% -1,2% -4,0% 7,0% 17
+10,50% Shoppings XPML11 COMPRA XP Malls 6.547 102 110 92% -1,9% 10,8% 10,8% 17
+2,00% Shoppings HSML11 COMPRA HSI Malls 1.805 85 100 85% -2,2% 12,1% 10,6% 21
+3,50% Shoppings HGBS11 COMPRA Hedge Brasil Shopping 2.698 19 20 92% -1,5% 7,7% 10,9% 21
+8,00% FOF/Multiestratégia CPTS11 COMPRA Capitânia Securities 2.715 7 9 87% 0,6% 15,4% 14,5% 17
+9,00% FOF/Multiestratégia RBRX11 COMPRA Patria Plus Multiestratégia Real Estate 1.073 7 9 80% -2,9% 7,3% 14,7% 21
+1,50% Híbrido KNRI11 COMPRA Kinea Renda Imobiliária 4.442 158 163 96% 0,5% 21,8% 8,4% 17
+90% 12,4% 19
+Fontes: Economatica; XP Research / Data base: 31/08/2026.  Performance calculada até dia 31/08/2026; ¹Risco Gênio XP: sistema de pontuação desenvolvido pela XP com base em critérios quantitativos, 2
+como liquidez e risco de mercado. Não se trata, portanto, de uma avaliação dos aspectos qualitativos dos ativos que compõem o portfólio de cada fundo.
+
+===== PAGE 3 =====
+01
+Resumo
+03
+Carteira Fundamentalista de Fundos Imobiliários 
+Índice 04
+Visão setorial
+05
+Performance
+06
+Teses de investimento
+
+===== PAGE 4 =====
+Carteira Fundamentalista de Fundos Imobiliários 1 de setembro de 2026
+Setembro /2026
+Diversificação setorial
+Descrição: A Carteira Fundamentalista é composta por 16 fundos imobiliários selecionados pelos analistas do Research da XP. A 
+estratégia prioriza uma maior alocação em ativos de perfil defensivo, com o objetivo de capturar assimetrias de mercado e, assim, 
+superar a rentabilidade do IFIX no longo prazo. Lajes Corporat.; Híbrido; 1,50%
+4,50%
+Alterações para Setembro: 
+Shoppings; 
+• Reduzimos a alocação em CPTS11 (-1,0 p.p.), PVBI11 (-0,75 p.p.) e LVBI11 (-0,75 p.p.); 16,00%
+Recebíveis; 
+• Ampliamos a exposição a XPLG11 (+1,25 p.p.), HGBS11 (+1,0 p.p.) e XPCI11 (+0,25p.p.). 40,25%
+As mudanças refletem ajustes com o objetivo de reduzir a exposição a fundos de tijolo com menor carrego e menos gatilhos de 
+valorização no curto prazo, bem como a um fundo multiestratégia, ao mesmo tempo em que elevam a participação em ativos com 
+portfólio de alta qualidade, menor volatilidade e maior potencial de geração de retorno além de ampliar a exposição a um fundo de FOF/Multiestratégia; 
+recebíveis com carrego atrativo. 17,00%
+Diversificação: A alocação entre os diferentes segmentos está distribuída da seguinte forma: Recebíveis (40,25%), FOF/Multiestratégia 
+(17%), Ativos Logísticos (20,75%), Shoppings (16,00%), e Lajes Corporativas (4,5%), Híbrido (1,50%). Ativos Logísticos; 
+20,75%
+Figura 2: Carteira Fundamentalista de Fundos Imobiliários
+Peso % Fundo Valor de Mercado (VM) Cota Valor Patrimonial (VP) VM/VP Performance Yield Anualizado ¹Risco
+Por Ticker Segmento Ticker Recomendação Nome (R$ milhões) (R$) (R$/Cota) % No mês Em 12m DY 12m (pts.)
+9,00% Recebíveis MCCI11 COMPRA Mauá Capital Recebíveis 1.621 96 94 102% 1,9% 25,7% 12,6% 21
+7,00% Recebíveis RBRR11 COMPRA Patria Rendimento High Grade 1.206 74 92 81% -1,4% -4,7% 14,6% 21
+11,00% Recebíveis KNCR11 COMPRA Kinea Rendimentos 11.575 108 103 105% 1,2% 17,7% 13,9% 17
+8,75% Recebíveis XPCI11 COMPRA XP Crédito Imobiliário 688 79 87 91% -3,1% 9,2% 14,1% 21
+4,50% Recebíveis PCIP11 COMPRA Patria Crédito Imobiliário IP 1.273 75 92 81% -0,2% 0,7% 16,0% 21
+4,50% Ativos Logísticos BTLG11 COMPRA BTG Logística 7.030 99 107 93% -0,9% 9,1% 9,8% 17
+3,50% Ativos Logísticos LVBI11 COMPRA VBI Logística 1.603 99 120 83% -2,7% 5,3% 9,0% 21
+4,00% Ativos Logísticos BRCO11 COMPRA Bresco Logística 2.054 114 115 99% -0,1% 12,7% 9,6% 21
+8,75% Ativos Logísticos XPLG11 COMPRA XP Logística 4.715 92 105 87% -0,4% 2,0% 10,7% 21
+4,50% Lajes Corporat. PVBI11 COMPRA VBI Prime Offices 1.858 69 105 66% -1,2% -4,0% 7,0% 17
+10,50% Shoppings XPML11 COMPRA XP Malls 6.547 102 110 92% -1,9% 10,8% 10,8% 17
+2,00% Shoppings HSML11 COMPRA HSI Malls 1.805 85 100 85% -2,2% 12,1% 10,6% 21
+3,50% Shoppings HGBS11 COMPRA Hedge Brasil Shopping 2.698 19 20 92% -1,5% 7,7% 10,9% 21
+8,00% FOF/Multiestratégia CPTS11 COMPRA Capitânia Securities 2.715 7 9 87% 0,6% 15,4% 14,5% 17
+9,00% FOF/Multiestratégia RBRX11 COMPRA Patria Plus Multiestratégia 1.073 7 9 80% -2,9% 7,3% 14,7% 21
+1,50% Híbrido KNRI11 COMPRA Kinea Renda Imobiliária 4.442 158 163 96% 0,5% 21,8% 8,4% 17
+90% 12,4% 19
+Fontes: Economatica; XP Research /  Sempre consulte seu assessor de Investimentos. Data base: 31/08/2026. ¹Risco Gênio XP: sistema de pontuação desenvolvido pela XP com base em critérios quantitativos, como liquidez e risco de mercado. 
+Não se trata, portanto, de uma avaliação dos aspectos qualitativos dos ativos que compõem o portfólio de cada fundo.
+
