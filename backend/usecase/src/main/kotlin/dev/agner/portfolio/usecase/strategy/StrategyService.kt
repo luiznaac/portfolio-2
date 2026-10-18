@@ -25,7 +25,12 @@ class StrategyService(
 
     suspend fun fetchAll(): List<Strategy> = strategies.fetchAll()
 
-    suspend fun create(creation: StrategyCreation): Strategy = strategies.save(creation)
+    // The name is the strategy's natural key, so a second strategy under it is rejected here with a
+    // domain error rather than surfacing the unique-index violation as a 500.
+    suspend fun create(creation: StrategyCreation): Strategy {
+        strategies.fetchByName(creation.name)?.let { throw DuplicateStrategyNameException(creation.name) }
+        return strategies.save(creation)
+    }
 
     suspend fun fetchEditions(strategyId: Int): List<EditionDetail>? =
         strategies.fetchById(strategyId)?.let { editions.fetchByStrategy(strategyId) }

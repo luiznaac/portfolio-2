@@ -36,11 +36,21 @@ class StrategyServiceTest : StringSpec({
     }
 
     "create delegates to the repository" {
+        coEvery { strategies.fetchByName("Top Dividendos") } returns null
         coEvery { strategies.save(creation) } returns strategy
 
         service.create(creation) shouldBe strategy
 
         coVerify(exactly = 1) { strategies.save(creation) }
+    }
+
+    "create refuses a name already in use" {
+        coEvery { strategies.fetchByName("Top Dividendos") } returns strategy
+
+        val error = runCatching { service.create(creation) }.exceptionOrNull()
+
+        (error is DuplicateStrategyNameException) shouldBe true
+        coVerify(exactly = 0) { strategies.save(any()) }
     }
 
     "fetchEditions is null when the strategy does not exist" {

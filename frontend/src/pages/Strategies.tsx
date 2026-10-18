@@ -455,18 +455,17 @@ function PreviewDrawer({
   onClose: () => void;
 }) {
   const [entries, setEntries] = useState<EditionEntry[]>(() => edition.entries);
-  const [validation, setValidation] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const activate = useActivateEdition();
   const sum = editionWeightSum(entries);
+  const sumValid = isWeightSumValid(entries);
   // The stored diff describes the imported set; once an override lands it no longer does, and the
   // server recomputes it at activation — so the drawer stops showing the stale delta and says so.
   const edited = entries.some((entry, index) => entry !== edition.entries[index]);
 
   function submit() {
-    if (!isWeightSumValid(entries)) {
-      setValidation("A soma dos pesos deve ser 100%.");
-      return;
-    }
+    setSubmitAttempted(true);
+    if (!sumValid) return;
     activate.mutate(
       {
         strategyId: edition.strategy_id,
@@ -501,7 +500,7 @@ function PreviewDrawer({
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <Chip tone="neutral">{referenceMonthLabel(edition.reference_month)}</Chip>
             {parser && <Chip tone="neutral">{parser}</Chip>}
-            <Chip tone={isWeightSumValid(entries) ? "green" : "rose"}>soma {sum}%</Chip>
+            <Chip tone={sumValid ? "green" : "rose"}>soma {sum}%</Chip>
             {edition.diff_from_previous && !edited && (
               <Chip tone="neutral">{editionDiffSummary(edition.diff_from_previous)}</Chip>
             )}
@@ -591,7 +590,9 @@ function PreviewDrawer({
             ))}
           </div>
 
-          {validation && <p className="mt-3 text-[12.5px] text-tax">{validation}</p>}
+          {!sumValid && submitAttempted && (
+            <p className="mt-3 text-[12.5px] text-tax">A soma dos pesos deve ser 100%.</p>
+          )}
           {activate.error && (
             <p className="mt-3 text-[12.5px] text-tax">{activate.error.message}</p>
           )}
