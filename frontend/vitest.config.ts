@@ -1,10 +1,12 @@
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// Only src/lib/** is under test — pure logic, no React rendering. See AGENTS.md: this scaffold
-// deliberately doesn't set up component/render tests yet.
+// Pure helpers run in node; a component test opts into jsdom per file with a
+// `// @vitest-environment jsdom` docblock. See AGENTS.md.
 export default defineConfig({
+  plugins: [react()],
   test: {
-    include: ["src/lib/**/*.test.ts"],
+    include: ["src/lib/**/*.test.ts", "src/**/*.test.tsx"],
     environment: "node",
   },
 });

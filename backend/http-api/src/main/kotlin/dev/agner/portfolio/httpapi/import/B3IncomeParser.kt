@@ -65,7 +65,7 @@ class B3IncomeParser {
     // lifecycle does not model — contributes nothing. There is no review step behind this parser, so
     // a row it cannot interpret is dropped rather than staged.
     private fun parseRow(row: Row, headers: ColumnIndex, formatter: DataFormatter): IncomeCreation? {
-        val ticker = readText(cell(row, headers, IncomeColumn.PRODUCT.header), formatter)
+        val ticker = tickerFrom(readText(cell(row, headers, IncomeColumn.PRODUCT.header), formatter))
         val type = incomeTypeFrom(readText(cell(row, headers, IncomeColumn.EVENT_TYPE.header), formatter))
         val date = readDate(cell(row, headers, IncomeColumn.PAYABLE_DATE.header), formatter)
         val quantity = readNumber(cell(row, headers, IncomeColumn.QUANTITY.header), formatter)
@@ -85,10 +85,16 @@ class B3IncomeParser {
         )
     }
 
+    // The export's "Produto" cell is "<ticker> - <asset name>"; the canonical key is the leading
+    // ticker token, since the whole cell far overflows the 12-char ticker column. A cell that is a
+    // bare ticker, as some re-exports write it, is returned as-is.
+    private fun tickerFrom(product: String?): String? =
+        product?.substringBefore(' ')?.trim()?.takeIf { it.isNotEmpty() }
+
     private fun incomeTypeFrom(eventType: String?): IncomeType? =
         when (eventType?.trim()?.uppercase()) {
             "DIVIDENDO" -> IncomeType.DIVIDEND
-            "JCP" -> IncomeType.JCP
+            "JCP", "JUROS SOBRE CAPITAL PRÓPRIO" -> IncomeType.JCP
             "RENDIMENTO" -> IncomeType.FUND_INCOME
             else -> null
         }
