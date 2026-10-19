@@ -46,13 +46,13 @@ class AllocationService(
         )
     }
 
-    // A position is valued at the latest stored close; a ticker with no quote yet values at zero. Its
-    // class is the catalog's.
+    // A position is valued at the current quote; a ticker with no close yet values at zero. Its class
+    // is the catalog's.
     private suspend fun toListedHolding(position: Position) = ListedHolding(
         ticker = position.ticker,
         assetClass = catalog.fetchBy(position.ticker)?.assetClass,
         quantity = position.quantity,
-        price = quotes.fetchAllBy(position.ticker).maxByOrNull { it.date }?.close ?: BigDecimal.ZERO,
+        price = quotes.latestClose(position.ticker) ?: BigDecimal.ZERO,
     )
 
     // A product with no consolidated position yet contributes nothing.

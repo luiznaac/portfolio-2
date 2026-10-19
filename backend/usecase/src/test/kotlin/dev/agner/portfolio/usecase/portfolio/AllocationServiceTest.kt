@@ -11,14 +11,13 @@ import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.index.model.IndexId
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Position
+import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.quotes.QuoteService
-import dev.agner.portfolio.usecase.quotes.model.Quote
-import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -56,7 +55,7 @@ class AllocationServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.fetchAllBy("VALE3") } returns listOf(quote("2026-09-10", "10"))
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
         coEvery { bonds.fetchAll() } returns setOf(bond)
         coEvery { bondPositions.getByBondId(1) } returns listOf(bondPosition)
 
@@ -80,15 +79,11 @@ class AllocationServiceTest : StringSpec({
         allocation.actual.plain() shouldBe "5000"
     }
 
-    "values a listed position at the latest stored close" {
+    "values a listed position at the current quote" {
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.fetchAllBy("VALE3") } returns listOf(
-            quote("2026-09-08", "9"),
-            quote("2026-09-12", "12"),
-            quote("2026-09-10", "10"),
-        )
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
         coEvery { bonds.fetchAll() } returns emptySet()
 
         val allocation = service.fetchCurrent()!!
@@ -100,7 +95,7 @@ class AllocationServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.fetchAllBy("VALE3") } returns emptyList()
+        coEvery { quotes.latestClose("VALE3") } returns null
         coEvery { bonds.fetchAll() } returns emptySet()
 
         val allocation = service.fetchCurrent()!!
@@ -168,12 +163,3 @@ private val secondBondPosition = BondPosition(
     yield = BigDecimal("500.00"),
     taxes = BigDecimal("50.00"),
 )
-
-private fun quote(date: String, close: String) = Quote(
-    ticker = "VALE3",
-    date = LocalDate.parse(date),
-    close = BigDecimal(close),
-    source = QuoteSource.COTAHIST,
-)
-
-private fun BigDecimal.plain(): String = stripTrailingZeros().toPlainString()

@@ -5,6 +5,8 @@ import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
+import dev.agner.portfolio.usecase.portfolio.model.EquitiesChain
+import dev.agner.portfolio.usecase.portfolio.model.FixedIncomeChain
 import dev.agner.portfolio.usecase.portfolio.model.StrategyAllocation
 import dev.agner.portfolio.usecase.portfolio.model.SubClassAllocation
 import dev.agner.portfolio.usecase.portfolio.model.Targets
@@ -30,13 +32,10 @@ data class FixedIncomeHolding(
     val value: BigDecimal,
 )
 
-// The rebalancing chain's arithmetic, pure and repository-free so it is unit-tested on hand-worked
-// numbers (backend/AGENTS.md: a calculation-heavy feature gets its own class).
-//
-// Ideal = Capital × the chain (class % × strategy/sub-class share × ticker weight). Actual comes from
-// two sources the engine already holds: the RF consolidation values and Position × current quote.
-// Deficit = Ideal − Actual (positive = short); Drift = (Actual − Ideal) ÷ Capital, in percentage
-// points.
+// The allocation tree's arithmetic. The ideal chain itself lives in TargetChainCalculator (shared
+// with the order plan); this class adds the Actuals — the RF consolidation values and Position ×
+// current quote — and derives Deficit (Ideal − Actual, positive = short) and Drift ((Actual − Ideal)
+// ÷ Capital, in percentage points) at every rung.
 //
 // The listed book is valued at the class level only: the strategy and ticker rungs carry their plan
 // but no attributed value yet, and the whole listed book is the unattributed segment. Attribution is
@@ -57,29 +56,22 @@ object AllocationCalculator {
         listed: List<ListedHolding>,
         fixedIncome: List<FixedIncomeHolding>,
     ): Allocation {
-        val classTargets = targets.classes.associate { it.assetClass to it.percentage }
-
+        val chain = TargetChainCalculator.compute(capital, targets)
         val listedByClass = listed.sumBy({ it.assetClass }, { it.value })
         val unclassified = listed.filter { it.assetClass == null }.sumOf { it.value }.defaultScale()
         val fixedIncomeBySubClass = fixedIncome.sumBy({ it.subClass }, { it.value })
 
-        val classes = AssetClass.entries.map { assetClass ->
-            val classIdeal = proportion(capital, classTargets[assetClass]).defaultScale()
-            if (assetClass == AssetClass.RENDA_FIXA) {
-                fixedIncome(
-                    classIdeal = classIdeal,
-                    classTarget = classTargets[assetClass],
-                    targets = targets,
-                    fixedIncomeBySubClass = fixedIncomeBySubClass,
+        val classes = chain.classes.map { classChain ->
+            when (classChain) {
+                is EquitiesChain -> equities(
+                    chain = classChain,
+                    listedValue = listedByClass[classChain.assetClass] ?: BigDecimal.ZERO,
                     capital = capital,
                 )
-            } else {
-                equities(
-                    assetClass = assetClass,
-                    classIdeal = classIdeal,
-                    classTarget = classTargets[assetClass],
-                    targets = targets,
-                    listedValue = listedByClass[assetClass] ?: BigDecimal.ZERO,
+
+                is FixedIncomeChain -> fixedIncome(
+                    chain = classChain,
+                    fixedIncomeBySubClass = fixedIncomeBySubClass,
                     capital = capital,
                 )
             }
@@ -95,7 +87,7 @@ object AllocationCalculator {
             ideal = ideal,
             actual = actual,
             deficit = (ideal - actual).defaultScale(),
-            drift = drift(actual, ideal, capital),
+            drift = drift(actual = actual, ideal = ideal, capital = capital),
             unattributed = (classes.sumOf { it.unattributed } + unclassified).defaultScale(),
             classes = classes,
         )
@@ -104,44 +96,39 @@ object AllocationCalculator {
     // ACOES/FIIS: the class's listed value is unattributed, so its strategies and their tickers carry
     // the plan (Ideal) with no Actual yet.
     private fun equities(
-        assetClass: AssetClass,
-        classIdeal: BigDecimal,
-        classTarget: BigDecimal?,
-        targets: Targets,
+        chain: EquitiesChain,
         listedValue: BigDecimal,
         capital: BigDecimal,
     ): ClassAllocation {
-        val strategies = targets.strategies.filter { it.assetClass == assetClass }.map { strategy ->
-            val strategyIdeal = proportion(classIdeal, strategy.percentage).defaultScale()
-            val tickers = targets.tickers.filter { it.strategy == strategy.strategy }.map { ticker ->
-                val tickerIdeal = proportion(strategyIdeal, ticker.percentage).defaultScale()
+        val strategies = chain.strategies.map { strategy ->
+            val tickers = strategy.tickers.map { ticker ->
                 TickerAllocation(
                     ticker = ticker.ticker,
-                    target = ticker.percentage,
-                    ideal = tickerIdeal,
+                    target = ticker.target,
+                    ideal = ticker.ideal,
                     actual = BigDecimal.ZERO,
-                    deficit = tickerIdeal,
-                    drift = drift(BigDecimal.ZERO, tickerIdeal, capital),
+                    deficit = ticker.ideal,
+                    drift = drift(actual = BigDecimal.ZERO, ideal = ticker.ideal, capital = capital),
                 )
             }
             StrategyAllocation(
                 strategy = strategy.strategy,
-                target = strategy.percentage,
-                ideal = strategyIdeal,
+                target = strategy.target,
+                ideal = strategy.ideal,
                 actual = BigDecimal.ZERO,
-                deficit = strategyIdeal,
-                drift = drift(BigDecimal.ZERO, strategyIdeal, capital),
+                deficit = strategy.ideal,
+                drift = drift(actual = BigDecimal.ZERO, ideal = strategy.ideal, capital = capital),
                 tickers = tickers,
             )
         }
 
         return ClassAllocation(
-            assetClass = assetClass,
-            target = classTarget,
-            ideal = classIdeal,
+            assetClass = chain.assetClass,
+            target = chain.target,
+            ideal = chain.ideal,
             actual = listedValue.defaultScale(),
-            deficit = (classIdeal - listedValue).defaultScale(),
-            drift = drift(listedValue, classIdeal, capital),
+            deficit = (chain.ideal - listedValue).defaultScale(),
+            drift = drift(actual = listedValue, ideal = chain.ideal, capital = capital),
             unattributed = listedValue.defaultScale(),
             strategies = strategies,
             subClasses = emptyList(),
@@ -151,23 +138,19 @@ object AllocationCalculator {
     // RENDA_FIXA: every RF sub-class is always present, so a product whose sub-class the chain does
     // not target still counts toward the class Actual.
     private fun fixedIncome(
-        classIdeal: BigDecimal,
-        classTarget: BigDecimal?,
-        targets: Targets,
+        chain: FixedIncomeChain,
         fixedIncomeBySubClass: Map<FixedIncomeSubClass, BigDecimal>,
         capital: BigDecimal,
     ): ClassAllocation {
-        val subClasses = FixedIncomeSubClass.entries.map { subClass ->
-            val target = targets.subClasses.firstOrNull { it.subClass == subClass }?.percentage
-            val subClassIdeal = proportion(classIdeal, target).defaultScale()
-            val subClassActual = (fixedIncomeBySubClass[subClass] ?: BigDecimal.ZERO).defaultScale()
+        val subClasses = chain.subClasses.map { subClass ->
+            val actual = (fixedIncomeBySubClass[subClass.subClass] ?: BigDecimal.ZERO).defaultScale()
             SubClassAllocation(
-                subClass = subClass,
-                target = target,
-                ideal = subClassIdeal,
-                actual = subClassActual,
-                deficit = (subClassIdeal - subClassActual).defaultScale(),
-                drift = drift(subClassActual, subClassIdeal, capital),
+                subClass = subClass.subClass,
+                target = subClass.target,
+                ideal = subClass.ideal,
+                actual = actual,
+                deficit = (subClass.ideal - actual).defaultScale(),
+                drift = drift(actual = actual, ideal = subClass.ideal, capital = capital),
             )
         }
 
@@ -175,20 +158,16 @@ object AllocationCalculator {
 
         return ClassAllocation(
             assetClass = AssetClass.RENDA_FIXA,
-            target = classTarget,
-            ideal = classIdeal,
+            target = chain.target,
+            ideal = chain.ideal,
             actual = actual,
-            deficit = (classIdeal - actual).defaultScale(),
-            drift = drift(actual, classIdeal, capital),
+            deficit = (chain.ideal - actual).defaultScale(),
+            drift = drift(actual = actual, ideal = chain.ideal, capital = capital),
             unattributed = BigDecimal.ZERO,
             strategies = emptyList(),
             subClasses = subClasses,
         )
     }
-
-    // A percentage is the number itself (50.00 is half), so a share is the amount × pct ÷ 100.
-    private fun proportion(amount: BigDecimal, percentage: BigDecimal?): BigDecimal =
-        if (percentage == null) BigDecimal.ZERO else amount.multiply(percentage).divide(HUNDRED)
 
     private fun drift(actual: BigDecimal, ideal: BigDecimal, capital: BigDecimal): BigDecimal =
         if (capital.signum() == 0) {
