@@ -83,3 +83,12 @@ export function IconCalendar(props: IconProps) {
     </svg>
   );
 }
+
+export function IconTarget(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <circle cx={8} cy={8} r={6} stroke="currentColor" strokeWidth={1.3} />
+      <circle cx={8} cy={8} r={2.5} stroke="currentColor" strokeWidth={1.3} />
+    </svg>
+  );
+}

@@ -216,3 +216,58 @@ export interface MonthUpdate {
   capital: number;
   floor: number;
 }
+
+// The computed allocation tree (GET /month/current/allocation). Ideal/Actual/Deficit are R$; Drift
+// is in percentage points (Actual − Ideal over Capital) and `target` is the rung's percentage, absent
+// when the month's chain declares none (the backend omits nulls).
+export interface ClassAllocation {
+  asset_class: AssetClass;
+  target?: number;
+  ideal: number;
+  actual: number;
+  deficit: number;
+  drift: number;
+  unattributed: number;
+  strategies: StrategyAllocation[];
+  sub_classes: SubClassAllocation[];
+}
+
+export interface StrategyAllocation {
+  strategy: string;
+  target: number;
+  ideal: number;
+  actual: number;
+  deficit: number;
+  drift: number;
+  tickers: TickerAllocation[];
+}
+
+export interface SubClassAllocation {
+  sub_class: FixedIncomeSubClass;
+  target?: number;
+  ideal: number;
+  actual: number;
+  deficit: number;
+  drift: number;
+}
+
+export interface TickerAllocation {
+  ticker: string;
+  target: number;
+  ideal: number;
+  actual: number;
+  deficit: number;
+  drift: number;
+}
+
+export interface Allocation {
+  period: string;
+  capital: number;
+  floor: number;
+  ideal: number;
+  actual: number;
+  deficit: number;
+  drift: number;
+  unattributed: number;
+  classes: ClassAllocation[];
+}
