@@ -2,7 +2,15 @@ import type { ComponentType, SVGProps } from "react";
 import { NavLink } from "react-router-dom";
 import { cn } from "../lib/cn.ts";
 import { NAV_GROUPS, type NavIcon } from "../lib/navigation.ts";
-import { BrandMark, IconAssets, IconBank, IconCalendar, IconTarget, IconUpload } from "./icons.tsx";
+import {
+  BrandMark,
+  IconAssets,
+  IconBank,
+  IconCalendar,
+  IconLayers,
+  IconTarget,
+  IconUpload,
+} from "./icons.tsx";
 
 // The reference icons are named in the nav table and resolved here.
 const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
@@ -11,6 +19,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   bank: IconBank,
   calendar: IconCalendar,
   target: IconTarget,
+  layers: IconLayers,
 };
 
 // The shell's primary navigation: brand mark, grouped items, 236px wide collapsing to 60px. Groups

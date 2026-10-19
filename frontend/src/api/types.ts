@@ -271,3 +271,69 @@ export interface Allocation {
   unattributed: number;
   classes: ClassAllocation[];
 }
+
+// A strategy report's analyst recommendation — the English key the backend serialises.
+export type Rating = "BUY" | "NEUTRAL" | "SELL";
+
+export type EditionStatus = "STAGED" | "ACTIVE";
+
+export interface Strategy {
+  id: number;
+  name: string;
+  asset_class: AssetClass;
+  weight: number;
+}
+
+export interface StrategyCreation {
+  name: string;
+  asset_class: AssetClass;
+  weight: number;
+}
+
+export interface EditionEntry {
+  ticker: string;
+  weight: number;
+  rating?: Rating;
+  target_price?: number;
+  do_not_trade: boolean;
+}
+
+export interface DiffWeight {
+  ticker: string;
+  weight: number;
+}
+
+export interface DiffChange {
+  ticker: string;
+  weight_before: number;
+  weight_after: number;
+  rating_before?: Rating;
+  rating_after?: Rating;
+}
+
+export interface EditionDiff {
+  entered: DiffWeight[];
+  exited: DiffWeight[];
+  changed: DiffChange[];
+}
+
+export interface Edition {
+  id: number;
+  strategy_id: number;
+  reference_month: string;
+  status: EditionStatus;
+  diff_from_previous?: EditionDiff;
+  entries: EditionEntry[];
+}
+
+// The POST /strategies/{id}/editions/import response: the layout parser that read the report (the
+// reference prototype's "Parser" column) beside the staged edition it produced.
+export interface EditionImport {
+  parser: string;
+  edition: Edition;
+}
+
+export interface EditionActivation {
+  reference_month: string;
+  entries: EditionEntry[];
+}

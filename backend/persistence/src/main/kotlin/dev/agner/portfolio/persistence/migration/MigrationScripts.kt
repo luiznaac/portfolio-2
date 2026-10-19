@@ -17,6 +17,9 @@ import dev.agner.portfolio.persistence.listedasset.TradeTable
 import dev.agner.portfolio.persistence.portfolio.MonthTable
 import dev.agner.portfolio.persistence.portfolio.TargetTable
 import dev.agner.portfolio.persistence.quotes.QuoteTable
+import dev.agner.portfolio.persistence.strategy.EditionEntryTable
+import dev.agner.portfolio.persistence.strategy.EditionTable
+import dev.agner.portfolio.persistence.strategy.StrategyTable
 import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -45,6 +48,9 @@ val allTables: Array<Table> = arrayOf(
     ImportRowTable,
     MonthTable,
     TargetTable,
+    StrategyTable,
+    EditionTable,
+    EditionEntryTable,
 )
 
 // Authoring half of the migration workflow (backend/AGENTS.md). Diffs `allTables` against a

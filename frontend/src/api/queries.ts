@@ -4,11 +4,13 @@ import type {
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
+  EditionActivation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
   ImportSource,
   MonthCreation,
   MonthUpdate,
+  StrategyCreation,
   Targets,
 } from "./types.ts";
 
@@ -173,5 +175,54 @@ export function useApplyImport() {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
       queryClient.invalidateQueries({ queryKey: ["trades"] });
     },
+  });
+}
+
+export function useStrategies() {
+  return useQuery({
+    queryKey: ["strategies"],
+    queryFn: api.getStrategies,
+  });
+}
+
+export function useCreateStrategy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: StrategyCreation) => api.createStrategy(creation),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+  });
+}
+
+export function useEditions(strategyId: number | null) {
+  return useQuery({
+    queryKey: ["strategies", strategyId, "editions"],
+    queryFn: () => {
+      if (strategyId === null) throw new Error("strategyId is required to fetch editions");
+      return api.getEditions(strategyId);
+    },
+    enabled: strategyId !== null,
+  });
+}
+
+export function useImportEdition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ strategyId, file }: { strategyId: number; file: File }) =>
+      api.importEdition(strategyId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+  });
+}
+
+export function useActivateEdition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      strategyId,
+      activation,
+    }: {
+      strategyId: number;
+      activation: EditionActivation;
+    }) => api.activateEdition(strategyId, activation),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
   });
 }

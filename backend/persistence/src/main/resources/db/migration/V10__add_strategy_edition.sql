@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS strategy (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, asset_class VARCHAR(20) NOT NULL, weight DECIMAL(18, 6) NOT NULL, created_at DATETIME(6) NOT NULL);
+ALTER TABLE strategy ADD CONSTRAINT strategy_name_unique UNIQUE (name);
+CREATE TABLE IF NOT EXISTS edition (id INT AUTO_INCREMENT PRIMARY KEY, strategy_id INT NOT NULL, reference_month VARCHAR(7) NOT NULL, status VARCHAR(20) NOT NULL, diff_from_previous_stored TEXT NULL, created_at DATETIME(6) NOT NULL, CONSTRAINT fk_edition_strategy_id__id FOREIGN KEY (strategy_id) REFERENCES strategy(id) ON DELETE RESTRICT ON UPDATE RESTRICT);
+ALTER TABLE edition ADD CONSTRAINT edition_strategy_id_reference_month_unique UNIQUE (strategy_id, reference_month);
+CREATE TABLE IF NOT EXISTS edition_entry (id INT AUTO_INCREMENT PRIMARY KEY, edition_id INT NOT NULL, ticker VARCHAR(12) NOT NULL, weight DECIMAL(18, 6) NOT NULL, rating VARCHAR(20) NULL, target_price DECIMAL(18, 6) NULL, do_not_trade BOOL NOT NULL, CONSTRAINT fk_edition_entry_edition_id__id FOREIGN KEY (edition_id) REFERENCES edition(id) ON DELETE RESTRICT ON UPDATE RESTRICT);

@@ -92,3 +92,22 @@ export function IconTarget(props: IconProps) {
     </svg>
   );
 }
+
+export function IconLayers(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M8 2 2 5l6 3 6-3-6-3Z"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinejoin="round"
+      />
+      <path
+        d="m2 8 6 3 6-3M2 11l6 3 6-3"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
