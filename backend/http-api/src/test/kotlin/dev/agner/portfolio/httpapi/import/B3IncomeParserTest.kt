@@ -166,6 +166,56 @@ class B3IncomeParserTest : DescribeSpec({
                 parser.parse("eventos.xlsx", bytes).map { it.ticker } shouldBe listOf("PETR4")
             }
 
+            // The real XP "Proventos a Receber" export writes the Produto column as "<ticker> - <name>";
+            // only the leading ticker is the canonical key (the full name overflows the 12-char column).
+            it("reads only the ticker out of a Produto cell carrying the asset name") {
+                val bytes = b3Workbook(
+                    PROVENTOS_HEADERS,
+                    listOf(
+                        listOf(
+                            "KNCR11 - KINEA RENDIMENTOS IMOBILIÁRIOS FDO INV IMOB - FII",
+                            "Fundo",
+                            "RENDIMENTO",
+                            "14/10/2026",
+                            "XP INVESTIMENTOS CCTVM S/A.",
+                            "8222202",
+                            38,
+                            1.13,
+                            42.94,
+                        ),
+                    ),
+                )
+
+                val event = parser.parse("eventos.xlsx", bytes).single()
+
+                event.ticker shouldBe "KNCR11"
+                event.type shouldBe IncomeType.FUND_INCOME
+            }
+
+            it("maps the JCP event type the XP export spells out in full") {
+                val bytes = b3Workbook(
+                    PROVENTOS_HEADERS,
+                    listOf(
+                        listOf(
+                            "PETR4 - PETROLEO BRASILEIRO S/A PETROBRAS",
+                            "PN",
+                            "JUROS SOBRE CAPITAL PRÓPRIO",
+                            "23/11/2026",
+                            "XP INVESTIMENTOS CCTVM S/A.",
+                            "8222202",
+                            117,
+                            0.67,
+                            65.06,
+                        ),
+                    ),
+                )
+
+                val event = parser.parse("eventos.xlsx", bytes).single()
+
+                event.ticker shouldBe "PETR4"
+                event.type shouldBe IncomeType.JCP
+            }
+
             it("hard-fails loudly when the header row is missing") {
                 val bytes = b3Workbook(listOf("Unknown", "Columns"), listOf(listOf("a", "b")))
 

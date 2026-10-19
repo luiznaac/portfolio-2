@@ -122,6 +122,7 @@ export interface ClassTargetRow {
 }
 
 export interface StrategyTargetRow {
+  id: string;
   assetClass: AssetClass;
   strategy: string;
   percentage: string;
@@ -133,6 +134,7 @@ export interface SubClassTargetRow {
 }
 
 export interface TickerTargetRow {
+  id: string;
   strategy: string;
   ticker: string;
   percentage: string;
@@ -172,6 +174,7 @@ export function targetsFormFrom(targets: Targets): TargetsFormState {
       percentage: percentageString(classByKey.get(assetClass)),
     })),
     strategies: targets.strategies.map((target) => ({
+      id: newRowId(),
       assetClass: target.asset_class,
       strategy: target.strategy,
       percentage: String(target.percentage),
@@ -181,6 +184,7 @@ export function targetsFormFrom(targets: Targets): TargetsFormState {
       percentage: percentageString(subClassByKey.get(subClass)),
     })),
     tickers: targets.tickers.map((target) => ({
+      id: newRowId(),
       strategy: target.strategy,
       ticker: target.ticker,
       percentage: String(target.percentage),
@@ -190,6 +194,12 @@ export function targetsFormFrom(targets: Targets): TargetsFormState {
 
 function percentageString(value: number | undefined): string {
   return value === undefined ? "" : String(value);
+}
+
+// A stable identity for a variable row, so the page can key its inputs by identity rather than by an
+// editable value — a value-derived key remounts the input on every keystroke and drops focus.
+function newRowId(): string {
+  return crypto.randomUUID();
 }
 
 // Maps the form to the payload the replace-all PUT takes: a row is kept only when it carries a
@@ -229,7 +239,10 @@ function hasPercentage(row: { percentage: string }): boolean {
 export function addStrategyRow(form: TargetsFormState): TargetsFormState {
   return {
     ...form,
-    strategies: [...form.strategies, { assetClass: "ACOES", strategy: "", percentage: "" }],
+    strategies: [
+      ...form.strategies,
+      { id: newRowId(), assetClass: "ACOES", strategy: "", percentage: "" },
+    ],
   };
 }
 
@@ -240,7 +253,7 @@ export function removeStrategyRow(form: TargetsFormState, index: number): Target
 export function addTickerRow(form: TargetsFormState, strategy: string): TargetsFormState {
   return {
     ...form,
-    tickers: [...form.tickers, { strategy, ticker: "", percentage: "" }],
+    tickers: [...form.tickers, { id: newRowId(), strategy, ticker: "", percentage: "" }],
   };
 }
 

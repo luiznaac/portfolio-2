@@ -11,7 +11,8 @@ src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
   components/   Layout.tsx, Sidebar.tsx — shell; Panel/Chip/Badge/Button/Table/WizardStepper —
                 the token-based primitive layer; icons.tsx; *Chip.tsx wrappers
-  pages/        route-level components (Dashboard.tsx is the health-check example)
+  pages/        route-level components (Dashboard.tsx is the health-check example);
+                a page that needs a behaviour test gets a co-located *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
                 (navigation.ts holds the sidebar groups + topbar breadcrumb table)
 ```
@@ -25,7 +26,7 @@ npm run dev         # vite dev server, port 5273
 npm run typecheck    # tsc -b --noEmit
 npm run lint         # biome check
 npm run lint:fix     # biome check --write
-npm run test          # vitest run (src/lib/** and src/api/**)
+npm run test          # vitest run (src/lib/**/*.test.ts + src/**/*.test.tsx)
 npm run check         # typecheck + lint + test — run before considering a change done
 npm run build         # tsc -b && vite build
 ```
@@ -36,7 +37,7 @@ npm run build         # tsc -b && vite build
 - **Design reference**: [`design/front-prototype.html`](design/front-prototype.html) (issue #205) is the committed styling source — new pages carry its tokens (no `slate-*`/`emerald-*` defaults) and compose the primitive layer rather than hand-rolling Tailwind.
 - **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; the dev server proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8080`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
-- **Testing scope**: only `src/lib/**` has tests (`vitest.config.ts` restricts `include` to it) — pure logic, no rendering. `lib/theme.test.ts` additionally reads source files as a build-time guard (the `@theme` tokens exist; no shipped component carries a scaffold-palette shade). Don't claim UI coverage beyond what this actually checks.
+- **Testing scope**: `src/lib/**/*.test.ts` covers the pure helpers in a node environment; a page that needs a behaviour test adds a co-located `src/**/*.test.tsx` render test that opts into jsdom with a `// @vitest-environment jsdom` docblock (Testing Library + `user-event`, asserting user-observable results such as focus or the rendered DOM — not implementation details). `lib/theme.test.ts` additionally reads source files as a build-time guard (the `@theme` tokens exist; no shipped component carries a scaffold-palette shade). Don't claim UI coverage beyond what actually exists.
 
 ## Coding standards
 

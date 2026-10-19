@@ -120,13 +120,18 @@ describe("targets form", () => {
         { assetClass: "RENDA_FIXA" as const, percentage: "0" },
       ],
       strategies: [
-        { assetClass: "ACOES" as const, strategy: "Top Dividendos", percentage: "34" },
-        { assetClass: "ACOES" as const, strategy: "  ", percentage: "10" },
+        {
+          id: "s1",
+          assetClass: "ACOES" as const,
+          strategy: "Top Dividendos",
+          percentage: "34",
+        },
+        { id: "s2", assetClass: "ACOES" as const, strategy: "  ", percentage: "10" },
       ],
       subClasses: [{ subClass: "FLOATING_RATE" as const, percentage: "55" }],
       tickers: [
-        { strategy: "Top Dividendos", ticker: "vale3", percentage: "12" },
-        { strategy: "Top Dividendos", ticker: "", percentage: "5" },
+        { id: "t1", strategy: "Top Dividendos", ticker: "vale3", percentage: "12" },
+        { id: "t2", strategy: "Top Dividendos", ticker: "", percentage: "5" },
       ],
     };
 
@@ -155,10 +160,10 @@ describe("targets form", () => {
       { subClass: "INFLATION_LINKED", percentage: "" },
     ]);
     expect(form.strategies).toEqual([
-      { assetClass: "ACOES", strategy: "Top Dividendos", percentage: "34" },
+      { id: expect.any(String), assetClass: "ACOES", strategy: "Top Dividendos", percentage: "34" },
     ]);
     expect(form.tickers).toEqual([
-      { strategy: "Top Dividendos", ticker: "VALE3", percentage: "12" },
+      { id: expect.any(String), strategy: "Top Dividendos", ticker: "VALE3", percentage: "12" },
     ]);
   });
 });
@@ -172,14 +177,18 @@ describe("assetClassLabel", () => {
 });
 
 describe("targets form rows", () => {
-  const strategyRow = (strategy: string) => ({
+  const strategyRow = (strategy: string, id = strategy) => ({
+    id,
     assetClass: "ACOES" as const,
     strategy,
     percentage: "",
   });
 
   it("appends a blank strategy row", () => {
-    expect(addStrategyRow(emptyTargetsForm()).strategies).toEqual([strategyRow("")]);
+    const [row] = addStrategyRow(emptyTargetsForm()).strategies;
+
+    expect(row).toMatchObject({ assetClass: "ACOES", strategy: "", percentage: "" });
+    expect(row.id).toBeTruthy();
   });
 
   it("removes a strategy row by index and leaves the rest", () => {
@@ -189,22 +198,23 @@ describe("targets form rows", () => {
   });
 
   it("appends a ticker row under the given strategy", () => {
-    expect(addTickerRow(emptyTargetsForm(), "Top Dividendos").tickers).toEqual([
-      { strategy: "Top Dividendos", ticker: "", percentage: "" },
-    ]);
+    const [row] = addTickerRow(emptyTargetsForm(), "Top Dividendos").tickers;
+
+    expect(row).toMatchObject({ strategy: "Top Dividendos", ticker: "", percentage: "" });
+    expect(row.id).toBeTruthy();
   });
 
   it("removes a ticker row by index and leaves the rest", () => {
     const form = {
       ...emptyTargetsForm(),
       tickers: [
-        { strategy: "Top Dividendos", ticker: "VALE3", percentage: "" },
-        { strategy: "Top Dividendos", ticker: "ITUB4", percentage: "" },
+        { id: "v", strategy: "Top Dividendos", ticker: "VALE3", percentage: "" },
+        { id: "i", strategy: "Top Dividendos", ticker: "ITUB4", percentage: "" },
       ],
     };
 
     expect(removeTickerRow(form, 0).tickers).toEqual([
-      { strategy: "Top Dividendos", ticker: "ITUB4", percentage: "" },
+      { id: "i", strategy: "Top Dividendos", ticker: "ITUB4", percentage: "" },
     ]);
   });
 });

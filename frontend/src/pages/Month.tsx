@@ -217,10 +217,7 @@ function TargetsForm({ targets }: { targets: Targets }) {
 
         <Rung title="Estratégias">
           {form.strategies.map((row, index) => (
-            <div
-              key={row.strategy || `strategy-${index}`}
-              className="flex flex-wrap items-end gap-2"
-            >
+            <div key={row.id} className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
                 Classe
                 <select
@@ -286,10 +283,7 @@ function TargetsForm({ targets }: { targets: Targets }) {
 
         <Rung title="Tickers por estratégia">
           {form.tickers.map((row, index) => (
-            <div
-              key={`${row.strategy}-${row.ticker}-${index}`}
-              className="flex flex-wrap items-end gap-2"
-            >
+            <div key={row.id} className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
                 Estratégia
                 <input
