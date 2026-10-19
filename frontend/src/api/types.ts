@@ -117,6 +117,27 @@ export interface PositionReconciliation {
   has_drift: boolean;
 }
 
+// The attribution ledger: slices of the position mapped to strategies, plus the computed
+// remainder that belongs to no strategy. `quantity` on a slice is its current total, not a delta.
+export interface AttributionSlice {
+  strategy_id: number;
+  strategy_name: string;
+  quantity: number;
+}
+
+export interface Attribution {
+  ticker: string;
+  custody_quantity: number;
+  attributed_quantity: number;
+  unattributed_quantity: number;
+  slices: AttributionSlice[];
+}
+
+export interface AttributionSliceCreation {
+  strategy_id: number;
+  quantity: number;
+}
+
 export type IndexId = "IPCA" | "CDI" | "SELIC";
 
 // The target bucket a fixed-income product allocates to — derived by the backend from the rate kind

@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS attribution (id INT AUTO_INCREMENT PRIMARY KEY, ticker VARCHAR(12) NOT NULL, strategy_id INT NOT NULL, quantity DECIMAL(18, 6) NOT NULL, CONSTRAINT fk_attribution_strategy_id__id FOREIGN KEY (strategy_id) REFERENCES strategy(id) ON DELETE RESTRICT ON UPDATE RESTRICT);
+ALTER TABLE attribution ADD CONSTRAINT attribution_ticker_strategy_id_unique UNIQUE (ticker, strategy_id);

@@ -13,6 +13,7 @@ import dev.agner.portfolio.persistence.income.CashMovementTable
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.persistence.index.IndexValueTable
 import dev.agner.portfolio.persistence.institution.InstitutionTable
+import dev.agner.portfolio.persistence.listedasset.AttributionTable
 import dev.agner.portfolio.persistence.listedasset.PositionTable
 import dev.agner.portfolio.persistence.listedasset.TradeTable
 import dev.agner.portfolio.persistence.portfolio.MonthTable
@@ -45,6 +46,7 @@ val allTables: Array<Table> = arrayOf(
     InstitutionTable,
     TradeTable,
     PositionTable,
+    AttributionTable,
     ImportTable,
     ImportRowTable,
     CashMovementTable,

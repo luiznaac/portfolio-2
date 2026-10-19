@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "./client.ts";
 import type {
+  AttributionSliceCreation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -52,6 +53,32 @@ export function usePosition(ticker: string) {
     queryKey: ["positions", ticker],
     queryFn: () => api.getPosition(ticker),
     enabled: ticker.length > 0,
+  });
+}
+
+export function useAttribution(ticker: string) {
+  return useQuery({
+    queryKey: ["positions", ticker, "attribution"],
+    queryFn: () => api.getAttribution(ticker),
+    enabled: ticker.length > 0,
+  });
+}
+
+// Both attribution writes invalidate the whole `positions/{ticker}` branch, so the detail and its
+// attribution ledger refetch together.
+export function useSetAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: AttributionSliceCreation) => api.setAttribution(ticker, creation),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["positions", ticker] }),
+  });
+}
+
+export function useRemoveAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (strategyId: number) => api.removeAttribution(ticker, strategyId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["positions", ticker] }),
   });
 }
 
