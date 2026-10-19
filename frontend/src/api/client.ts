@@ -1,5 +1,7 @@
 import type {
   Allocation,
+  Attribution,
+  AttributionSliceCreation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -95,6 +97,23 @@ export const api = {
 
   getPosition(ticker: string): Promise<PositionDetail> {
     return request(`/positions/${encodeURIComponent(ticker)}`);
+  },
+
+  getAttribution(ticker: string): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution`);
+  },
+
+  setAttribution(ticker: string, creation: AttributionSliceCreation): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution`, {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
+  },
+
+  removeAttribution(ticker: string, strategyId: number): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution/${strategyId}`, {
+      method: "DELETE",
+    });
   },
 
   getTickerQuotes(ticker: string): Promise<Quote[]> {

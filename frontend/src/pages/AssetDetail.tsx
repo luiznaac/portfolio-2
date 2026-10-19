@@ -1,9 +1,16 @@
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
-import { usePosition, useTickerQuotes } from "../api/queries.ts";
+import {
+  useAttribution,
+  usePosition,
+  useRemoveAttribution,
+  useSetAttribution,
+  useStrategies,
+  useTickerQuotes,
+} from "../api/queries.ts";
 import type { Trade } from "../api/types.ts";
+import { AttributionPanel } from "../components/AttributionPanel.tsx";
 import { Badge } from "../components/Badge.tsx";
-import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { formatCurrency, formatNumber, formatTradeSide } from "../lib/format.ts";
@@ -52,13 +59,16 @@ function Kpi({ label, value, hint }: { label: string; value?: string; hint?: str
   );
 }
 
-// The Ativos detail: the stored position (quantity + fiscal average + market value), its trade
-// history, and the attribution slice. Attribution is a later slice — for now the whole position is
-// shown as "não atribuído".
+// The Ativos detail: the stored position (quantity + fiscal average + market value), the
+// attribution ledger, and the trade history.
 export function AssetDetail() {
   const { ticker = "" } = useParams();
   const position = usePosition(ticker);
   const quotes = useTickerQuotes(ticker);
+  const attribution = useAttribution(ticker);
+  const strategies = useStrategies();
+  const setSlice = useSetAttribution(ticker);
+  const removeSlice = useRemoveAttribution(ticker);
 
   if (position.isLoading) return <p className="text-[13.5px] text-ink-dim">Carregando…</p>;
 
@@ -109,15 +119,18 @@ export function AssetDetail() {
         />
       </div>
 
-      <div className="mb-4">
-        <Panel title="Atribuição">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-dim">
-            <Chip tone="amber">{`${formatNumber(current.quantity)} não atribuído`}</Chip>
-            <span className="text-ink-faint">
-              A distribuição por estratégia chega com a fatia de Estratégias.
-            </span>
-          </div>
-        </Panel>
+      <div className="mb-4" data-testid="attribution-panel">
+        <AttributionPanel
+          attribution={attribution.data}
+          loading={attribution.isLoading}
+          loadError={attribution.isError ? attribution.error : null}
+          strategies={strategies.data ?? []}
+          strategiesLoading={strategies.isLoading}
+          pending={setSlice.isPending || removeSlice.isPending}
+          mutationError={setSlice.error ?? removeSlice.error}
+          onSave={(creation) => setSlice.mutateAsync(creation)}
+          onRemove={(strategyId) => removeSlice.mutateAsync(strategyId)}
+        />
       </div>
 
       <Panel title="Negócios">
