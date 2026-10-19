@@ -9,6 +9,7 @@ import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.persistence.configuration.mysqlJdbcUrl
 import dev.agner.portfolio.persistence.import.ImportRowTable
 import dev.agner.portfolio.persistence.import.ImportTable
+import dev.agner.portfolio.persistence.income.CashMovementTable
 import dev.agner.portfolio.persistence.index.IndexTable
 import dev.agner.portfolio.persistence.index.IndexValueTable
 import dev.agner.portfolio.persistence.institution.InstitutionTable
@@ -46,6 +47,7 @@ val allTables: Array<Table> = arrayOf(
     PositionTable,
     ImportTable,
     ImportRowTable,
+    CashMovementTable,
     MonthTable,
     TargetTable,
     StrategyTable,

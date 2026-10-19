@@ -111,3 +111,21 @@ export function IconLayers(props: IconProps) {
     </svg>
   );
 }
+
+export function IconCoins(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <ellipse cx={8} cy={4.5} rx={5.5} ry={2.5} stroke="currentColor" strokeWidth={1.3} />
+      <path
+        d="M2.5 4.5v7c0 1.38 2.46 2.5 5.5 2.5s5.5-1.12 5.5-2.5v-7"
+        stroke="currentColor"
+        strokeWidth={1.3}
+      />
+      <path
+        d="M2.5 8c0 1.38 2.46 2.5 5.5 2.5s5.5-1.12 5.5-2.5"
+        stroke="currentColor"
+        strokeWidth={1.3}
+      />
+    </svg>
+  );
+}

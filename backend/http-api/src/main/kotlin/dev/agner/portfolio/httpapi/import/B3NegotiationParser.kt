@@ -1,15 +1,11 @@
 package dev.agner.portfolio.httpapi.import
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
-import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toKotlinLocalDate
 import org.apache.poi.ss.usermodel.Cell
-import org.apache.poi.ss.usermodel.CellType
 import org.apache.poi.ss.usermodel.DataFormatter
-import org.apache.poi.ss.usermodel.DateUtil
 import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.ss.usermodel.WorkbookFactory
@@ -32,10 +28,6 @@ private enum class Column(val aliases: Set<String>) {
     INSTITUTION(setOf("Instituição")),
 }
 
-// A header name mapped to the column index it occupies in the sheet. Shared with the position
-// parser — both locate their columns the same way.
-internal typealias ColumnIndex = Map<String, Int>
-
 @Component
 class B3NegotiationParser : IImportParser {
 
@@ -44,14 +36,14 @@ class B3NegotiationParser : IImportParser {
     // open (non-xlsx, corrupt) is simply not ours — no throw.
     override fun shouldExecute(fileName: String, content: ByteArray): Boolean = runCatching {
         WorkbookFactory.create(content.inputStream()).use { workbook ->
-            isRecognised(headerColumns(workbook.getSheetAt(0)))
+            isRecognised(columnHeaders(workbook.getSheetAt(0).getRow(0)))
         }
     }.getOrDefault(false)
 
     override fun parse(fileName: String, content: ByteArray): List<ImportRowPayload> =
         WorkbookFactory.create(content.inputStream()).use { workbook ->
             val sheet = workbook.getSheetAt(0)
-            val headers = headerColumns(sheet)
+            val headers = columnHeaders(sheet.getRow(0))
             require(isRecognised(headers)) {
                 "B3 negotiation XLSX unrecognised layout in $fileName: found headers ${headers.keys}"
             }
@@ -60,22 +52,6 @@ class B3NegotiationParser : IImportParser {
 
     private fun isRecognised(headers: ColumnIndex) =
         Column.entries.all { column -> column.aliases.any { it in headers } }
-
-    // Columns are located by the header cell's own position, never by an index into a compacted
-    // header list: a blank or extra header before a real column would otherwise shift every later
-    // column and read the wrong cell.
-    private fun headerColumns(sheet: Sheet): ColumnIndex {
-        val headerRow = sheet.getRow(0) ?: return emptyMap()
-        return (0..<headerRow.lastCellNum.toInt())
-            .mapNotNull { index ->
-                val name = headerRow
-                    .getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
-                    ?.stringCellValue
-                    ?.trim()
-                if (name.isNullOrEmpty()) null else name to index
-            }
-            .toMap()
-    }
 
     private fun parseRows(sheet: Sheet, headers: ColumnIndex): List<ImportRowPayload> {
         // POI's DataFormatter is not thread-safe, so it is per-parse rather than shared on this
@@ -148,29 +124,6 @@ class B3NegotiationParser : IImportParser {
         } else {
             "Gross $gross does not match quantity x price ($expected)"
         }
-    }
-
-    // A real B3 export stores the date as an Excel date cell and the numbers as numeric cells; the
-    // raw `toString()` of a numeric cell is a double ("100.0") and of a date cell an Excel serial,
-    // so cells are read type-aware.
-    private fun readDate(cell: Cell?, formatter: DataFormatter): LocalDate? {
-        if (cell == null) return null
-        if (cell.cellType == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
-            return cell.localDateTimeCellValue.toLocalDate().toKotlinLocalDate()
-        }
-        val text = readText(cell, formatter) ?: return null
-        // The broker layout writes an ISO date; the Área do Investidor layout writes `dd/MM/yyyy`.
-        return runCatching { LocalDate.parse(text) }.getOrNull()
-            ?: runCatching { LocalDate.parse(text, brazilianLocalDateFormat) }.getOrNull()
-    }
-
-    // A numeric cell is read as its number, not through `DataFormatter`: a B3 export styles the
-    // money columns (e.g. `R$   26.09`), and the formatted string is not a decimal any parser can
-    // read. A text cell still goes through the formatter for its own value.
-    private fun readNumber(cell: Cell?, formatter: DataFormatter): BigDecimal? = when {
-        cell == null -> null
-        cell.cellType == CellType.NUMERIC -> BigDecimal.valueOf(cell.numericCellValue)
-        else -> readText(cell, formatter)?.toBigDecimalOrNull()
     }
 
     private fun cell(row: Row, headers: ColumnIndex, column: Column): Cell? =

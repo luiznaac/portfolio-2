@@ -13,6 +13,7 @@ import type {
   Import,
   ImportRow,
   ImportSource,
+  Income,
   MonthCreation,
   MonthUpdate,
   PositionDetail,
@@ -172,5 +173,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(activation),
     });
+  },
+
+  getIncome(): Promise<Income[]> {
+    return request("/income");
+  },
+
+  getUpcomingIncome(): Promise<Income[]> {
+    return request("/income/upcoming");
+  },
+
+  importIncome(file: File): Promise<Income[]> {
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/income/import", form);
   },
 };
