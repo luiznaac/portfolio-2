@@ -5,6 +5,7 @@ import { AssetDetail } from "./pages/AssetDetail.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { ImportWizard } from "./pages/ImportWizard.tsx";
+import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { Trades } from "./pages/Trades.tsx";
@@ -25,6 +26,7 @@ export const routes: RouteObject[] = [
       { path: "trades", element: <Trades /> },
       { path: "trades/:ticker", element: <AssetDetail /> },
       { path: "fixed-income", element: <FixedIncome /> },
+      { path: "income", element: <Income /> },
     ],
   },
 ];

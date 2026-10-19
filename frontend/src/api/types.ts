@@ -337,3 +337,24 @@ export interface EditionActivation {
   reference_month: string;
   entries: EditionEntry[];
 }
+
+// Proventos (Income): a listed asset's cash payment and its lifecycle stage. `tax_nature` is what
+// separates income from corporate-action cash; `provenance` is the record's origin. Amounts arrive
+// exactly as the B3 export gives them — gross and net stored, retained derived as gross − net.
+export type IncomeType = "DIVIDEND" | "JCP" | "FUND_INCOME";
+export type IncomeStatus = "ANNOUNCED" | "PAYABLE" | "RECEIVED" | "RECONCILED";
+export type TaxNature = "INCOME" | "COST_REDUCTION" | "RETURN_OF_CAPITAL" | "OTHER";
+export type Provenance = "B3" | "XP" | "KINVO" | "MANUAL";
+
+export interface Income {
+  id: number;
+  ticker: string;
+  date: string;
+  type: IncomeType;
+  gross_amount: number;
+  retained_amount: number;
+  net_amount: number;
+  tax_nature: TaxNature;
+  provenance: Provenance;
+  status: IncomeStatus;
+}

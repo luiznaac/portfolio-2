@@ -7,6 +7,7 @@ import {
   IconAssets,
   IconBank,
   IconCalendar,
+  IconCoins,
   IconLayers,
   IconTarget,
   IconUpload,
@@ -20,6 +21,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   calendar: IconCalendar,
   target: IconTarget,
   layers: IconLayers,
+  coins: IconCoins,
 };
 
 // The shell's primary navigation: brand mark, grouped items, 236px wide collapsing to 60px. Groups

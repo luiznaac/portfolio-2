@@ -226,3 +226,25 @@ export function useActivateEdition() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
   });
 }
+
+export function useIncome() {
+  return useQuery({
+    queryKey: ["income"],
+    queryFn: api.getIncome,
+  });
+}
+
+export function useUpcomingIncome() {
+  return useQuery({
+    queryKey: ["income", "upcoming"],
+    queryFn: api.getUpcomingIncome,
+  });
+}
+
+export function useImportIncome() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.importIncome(file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["income"] }),
+  });
+}

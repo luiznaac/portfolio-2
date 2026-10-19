@@ -2,9 +2,7 @@ package dev.agner.portfolio.httpapi.import
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.listedasset.model.CustodyPosition
-import org.apache.poi.ss.usermodel.CellType
 import org.apache.poi.ss.usermodel.DataFormatter
-import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.ss.usermodel.Workbook
 import org.apache.poi.ss.usermodel.WorkbookFactory
@@ -46,25 +44,13 @@ class B3PositionParser {
     private fun layoutFor(sheet: Sheet): SheetLayout? {
         for (rowIndex in 0..minOf(sheet.lastRowNum, HEADER_SEARCH_LIMIT)) {
             val row = sheet.getRow(rowIndex) ?: continue
-            val columns = headerColumns(row)
+            val columns = columnHeaders(row)
             if (TICKER_HEADER in columns && QUANTITY_HEADER in columns) {
                 return SheetLayout(sheet, rowIndex, columns)
             }
         }
         return null
     }
-
-    private fun headerColumns(row: Row): ColumnIndex =
-        (0..<row.lastCellNum.toInt())
-            .mapNotNull { index ->
-                val name = row
-                    .getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL)
-                    ?.takeIf { it.cellType == CellType.STRING }
-                    ?.stringCellValue
-                    ?.trim()
-                if (name.isNullOrEmpty()) null else name to index
-            }
-            .toMap()
 
     private fun parseSheet(layout: SheetLayout): List<CustodyPosition> {
         // POI's DataFormatter is not thread-safe, so it is per-parse rather than shared on this
