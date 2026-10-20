@@ -51,7 +51,7 @@ Same shape as chameidor (model in `usecase` → port → service → Exposed per
 
 ## Code style
 
-Same Detekt setup as chameidor: `config/detekt/{config,format}.yml`, `maxIssues: 0`, `autoCorrect: true`, `MaximumLineLength: 120`, trailing commas mandatory, no wildcard imports, `allWarningsAsErrors = true`. Run `./gradlew detekt` before finishing a change.
+Same Detekt setup as chameidor: `config/detekt/{config,format}.yml`, `maxIssues: 0`, `autoCorrect: true`, `MaximumLineLength: 120`, trailing commas mandatory, no wildcard imports, `allWarningsAsErrors = true`. Run `./gradlew detekt --no-daemon` before finishing a change.
 
 **The codebase is written in English.** Identifiers, enum constants, comments, KDoc, log lines, exception messages, test names, commit messages and branch names — all English, with no exceptions for domain jargon. Brazilian financial concepts get their English name plus a one-line gloss where the translation isn't obvious (`FixedIncomeSubClass.FLOATING_RATE`, "IRRF withheld at source"); where there genuinely is no English term, keep the Portuguese one and say so in a comment (`JCP` — *Juros sobre Capital Próprio*). Two things are deliberately **not** translated:
 
@@ -70,10 +70,18 @@ Renaming an enum whose values are persisted as strings (an Exposed `enumerationB
 
 Kotest `StringSpec`, MockK, `kotest-extensions-spring`. Reuse `testFixtures` builders rather than hand-rolling fixture objects per test. Existing unit test coverage worth using as a style reference: `BondCalculatorTest`, `BondConsolidationServiceTest`, `BondContributionConsolidatorTest`, `YieldRateServiceTest`, `CheckingAccountConsolidatorTest`, `IndexValueServiceTest`, `TaxServiceTest`, `IOFIncidenceCalculatorTest`, `RendaIncidenceCalculatorTest`.
 
+Two speeds of verification, two lanes:
+
 ```bash
-./gradlew test                 # unit tests
-./gradlew testCoverageReport   # aggregated JaCoCo report
+npm run be:unit                    # unit lane — `unitTest`: every module except :integrationTest; no Docker
+npm run be:integration             # integration lane — :integrationTest; needs Docker
+./gradlew test --no-daemon         # every test (both lanes)
+./gradlew testCoverageReport --no-daemon  # aggregated JaCoCo report
 ```
+
+The unit lane is the `unitTest` task — the same one the `test (backend, unit)` pre-commit hook runs — so committing never needs Docker; the integration lane stays in CI (`./gradlew clean build`, Docker present). `:integrationTest:dockerPreflight` probes the daemon before any spec starts and fails in seconds with a message that says how to proceed, instead of leaving an opaque Testcontainers error to be found in the HTML report.
+
+Run check commands with `--no-daemon` — the `npm` scripts already do. A Gradle daemon left behind by a failed build inherits the shell's output pipe and keeps the command from returning: that is how a Docker-less `test` appeared to hang for over an hour after its output file already held the failure.
 
 ## Database migrations
 
@@ -105,9 +113,9 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 ## Build, run, deploy
 
 ```bash
-./gradlew clean build
-./gradlew test
-./gradlew testCoverageReport
+./gradlew clean build --no-daemon
+./gradlew test --no-daemon
+./gradlew testCoverageReport --no-daemon
 ```
 
 Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the repo root (or `npm run db`) — MySQL 9.4.0 only, database `portfolio`, empty — run `./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`, `MYSQL_USER=root`, `MYSQL_PASSWORD=`. If you need scheduled-job registration to actually fire, also run chameidor locally on port `8081` and set `CHAMEIDOR_TOKEN` to the token registered for `portfolio` in chameidor (`dev-portfolio-fixture-token` against a local chameidor).

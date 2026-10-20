@@ -9,9 +9,9 @@ repos:
     hooks:
       - id: detekt
         name: detekt
-        entry: sh -c 'cd backend && ./gradlew detekt'
+        entry: sh -c 'cd backend && ./gradlew detekt --no-daemon'
         language: system
-        files: ^backend/.*\.kt$
+        files: ^backend/.*\.(kt|kts)$
         pass_filenames: false
       - id: frontend-typecheck
         name: frontend typecheck
@@ -20,8 +20,8 @@ repos:
         files: ^frontend/.*\.(ts|tsx)$
         pass_filenames: false
       - id: test-backend
-        name: test (backend)
-        entry: sh -c 'cd backend && ./gradlew test'
+        name: test (backend, unit)
+        entry: sh -c 'cd backend && ./gradlew unitTest --no-daemon'
         language: system
         files: ^backend/.*\.(kt|kts)$
         pass_filenames: false

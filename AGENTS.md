@@ -4,7 +4,7 @@ Development guidelines for anyone (human, agent, or tool) working in this reposi
 
 Two projects, one repo:
 
-- **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`). Architecture, conventions and rules for evolving it are in [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
+- **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module, root project name `portfolio`). All backend commands run from `backend/` (`cd backend && ./gradlew <task>`); the root `npm run be:*`/`db:*` scripts make that `cd` for you. Architecture, conventions and rules for evolving it are in [backend/AGENTS.md](backend/AGENTS.md) — read that before touching `backend/`.
 - **`frontend/`** — the React 19 + Vite + TypeScript + Tailwind v4 SPA. Commands run from `frontend/` (`npm --prefix frontend run <script>`). Details in [frontend/README.md](frontend/README.md). It is currently reset to the `environments/react` scaffold (health-check slice only) and will be rewritten from scratch in future plans — its hand-mirrored `src/api/types.ts` tracks the health-check, catalog/quote and institution DTOs.
 
 ## Code map
@@ -17,7 +17,7 @@ Repo-root `contracts/` holds JSON fixtures that are the cross-cutting source of 
 
 ## Tooling
 
-Root `package.json` holds script shims only (`npm run be:check`, `npm run fe:build`, `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate -- -Pname=V5__x`, `npm run up`). It has no dependencies and is not a real package. `.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the git/PR conventions are enforced there, not merely stated (see `salgadinhos/global/AGENTS.md`).
+Root `package.json` holds script shims only (`npm run be:unit`, `npm run be:integration`, `npm run be:check`, `npm run fe:build`, `npm run check`, `npm run db`, `npm run db:migrate`, `npm run db:generate -- -Pname=V5__x`, `npm run up`). It has no dependencies and is not a real package; the `be:*` and `db:*` scripts run Gradle through `scripts/backend-gradle.mjs`, which picks `gradlew.bat` or `./gradlew` for the host, so they work under cmd/PowerShell as well as a POSIX shell. `be:unit` is the Docker-free `unitTest` lane the pre-commit hook also runs; `be:integration` is the Docker-backed one, and `be:check` runs both plus `detekt` with the daemon off. `.pre-commit-config.yaml` lives at the root and scopes hooks by path (`^backend/`, `^frontend/`), and carries `no-commit-to-branch` — the git/PR conventions are enforced there, not merely stated (see `salgadinhos/global/AGENTS.md`).
 
 ## Config & secrets
 
