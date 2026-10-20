@@ -1,12 +1,15 @@
 package dev.agner.portfolio.usecase.portfolio
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
+import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
-import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
-import dev.agner.portfolio.usecase.portfolio.model.SubClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
+import dev.agner.portfolio.usecase.strategyTarget
+import dev.agner.portfolio.usecase.subClassTarget
+import dev.agner.portfolio.usecase.tickerTarget
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.YearMonth
@@ -203,22 +206,8 @@ private fun compute(
 private fun targets(vararg classes: ClassTarget) =
     Targets(classes.toList(), emptyList(), emptyList(), emptyList())
 
-private fun classTarget(assetClass: AssetClass, percentage: String) =
-    ClassTarget(assetClass, BigDecimal(percentage))
-
-private fun strategyTarget(assetClass: AssetClass, strategy: String, percentage: String) =
-    StrategyTarget(assetClass, strategy, BigDecimal(percentage))
-
-private fun subClassTarget(subClass: FixedIncomeSubClass, percentage: String) =
-    SubClassTarget(subClass, BigDecimal(percentage))
-
-private fun tickerTarget(strategy: String, ticker: String, percentage: String) =
-    TickerTarget(strategy, ticker, BigDecimal(percentage))
-
 private fun listed(ticker: String, assetClass: AssetClass?, quantity: String, price: String) =
     ListedHolding(ticker, assetClass, BigDecimal(quantity), BigDecimal(price))
 
 private fun fixedIncome(subClass: FixedIncomeSubClass, value: String) =
     FixedIncomeHolding(subClass, BigDecimal(value))
-
-private fun BigDecimal.plain(): String = stripTrailingZeros().toPlainString()

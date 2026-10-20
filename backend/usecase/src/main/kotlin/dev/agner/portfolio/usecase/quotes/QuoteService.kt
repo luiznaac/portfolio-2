@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 
 @Service
 class QuoteService(
@@ -14,6 +15,11 @@ class QuoteService(
 ) {
 
     suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())
+
+    // The "current quote" every valuation reads: the latest stored close, null when the ticker has
+    // none yet. The rule lives here so the allocation tree and the order plan cannot drift.
+    suspend fun latestClose(ticker: String): BigDecimal? =
+        repository.fetchAllBy(ticker.normalizedTicker()).maxByOrNull { it.date }?.close
 
     // Store the COTAHIST EOD closes for the latest published day — the authoritative close once the
     // market has finished.

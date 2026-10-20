@@ -293,6 +293,72 @@ export interface Allocation {
   classes: ClassAllocation[];
 }
 
+// The order engine's ideal-phase read (GET /month/current/orders?phase=ideals). Ideal/amount are R$;
+// `target_quantity` is the whole-unit floor of a ticker slice and is absent when no quote prices it.
+// Candidates aggregate a ticker's target across strategies; a targeted surplus stays a hold.
+export type OrderPlanPhase = "IDEALS";
+export type OrderSide = "BUY" | "SELL" | "NEW_ENTRY" | "EXIT";
+
+export interface TickerOrderPlan {
+  ticker: string;
+  target: number;
+  ideal: number;
+  price?: number;
+  target_quantity?: number;
+}
+
+export interface StrategyOrderPlan {
+  strategy: string;
+  target: number;
+  ideal: number;
+  tickers: TickerOrderPlan[];
+}
+
+export interface SubClassOrderPlan {
+  sub_class: FixedIncomeSubClass;
+  target?: number;
+  ideal: number;
+}
+
+// The class rung is a variant: equities carry strategies, fixed income carries sub-classes. The
+// backend omits the list that does not apply rather than sending an always-empty one.
+export interface EquitiesOrderPlan {
+  asset_class: Exclude<AssetClass, "RENDA_FIXA">;
+  target?: number;
+  ideal: number;
+  strategies: StrategyOrderPlan[];
+}
+
+export interface FixedIncomeOrderPlan {
+  asset_class: Extract<AssetClass, "RENDA_FIXA">;
+  target?: number;
+  ideal: number;
+  sub_classes: SubClassOrderPlan[];
+}
+
+export type ClassOrderPlan = EquitiesOrderPlan | FixedIncomeOrderPlan;
+
+export interface OrderCandidate {
+  ticker: string;
+  side: OrderSide;
+  quantity: number;
+  price?: number;
+  amount?: number;
+  ideal: number;
+  target_quantity: number;
+  position_quantity: number;
+}
+
+export interface OrderPlan {
+  period: string;
+  phase: OrderPlanPhase;
+  capital: number;
+  floor: number;
+  investable_capital: number;
+  classes: ClassOrderPlan[];
+  candidates: OrderCandidate[];
+}
+
 // A strategy report's analyst recommendation — the English key the backend serialises.
 export type Rating = "BUY" | "NEUTRAL" | "SELL";
 
