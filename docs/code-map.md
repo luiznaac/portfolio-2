@@ -43,8 +43,8 @@ Hand-authored module → key files → seam index, plus the app entry points —
 
 ### `backend/integrationTest` — full-stack tests
 **Purpose**: end-to-end specs that boot the real app against a real MySQL and stubbed external gateways.
-**Files**: `config/{DockerComposeExtension,IntegrationTest,HttpMockService,HttpRequestService,ClockMock,KotestConfig,ResetWiremock,StopKtorServer}.kt`; `helpers/*`; `tests/{Bond,CheckingAccount,Consolidation,MigrationSchema}Test.kt`
-**Seam(s)**: `DockerComposeExtension` brings up the compose MySQL and migrates it to head before any spec runs; `HttpMockService` (WireMock) stubs the outbound gateways. `MigrationSchemaTest` is the schema guard (see `persistence`). Run via the `integrationTest` Gradle task.
+**Files**: `build.gradle.kts` (the module's dependencies plus the `dockerPreflight` task); `config/{DockerComposeExtension,IntegrationTest,HttpMockService,HttpRequestService,ClockMock,KotestConfig,ResetWiremock,StopKtorServer}.kt`; `helpers/*`; `tests/{Bond,CheckingAccount,Consolidation,MigrationSchema}Test.kt`
+**Seam(s)**: `DockerComposeExtension` brings up the compose MySQL and migrates it to head before any spec runs; `HttpMockService` (WireMock) stubs the outbound gateways. `MigrationSchemaTest` is the schema guard (see `persistence`). Run via the `:integrationTest:test` Gradle task (`npm run be:integration`); `dockerPreflight` probes the daemon first and fails in seconds with an actionable message when Docker is unavailable, so the Docker-free unit lane (`unitTest`, `npm run be:unit`) is the pre-commit default and the integration lane stays in CI.
 
 ### `frontend` — React SPA
 **Purpose**: the browser client — the scaffold's health-check slice plus the product slices (shell sidebar, B3 import wizard, Ativos trade list, Renda fixa product list + lançamentos form), now on the reference theme foundation; the rest is still scaffold to be rewritten later.
@@ -57,8 +57,8 @@ Hand-authored module → key files → seam index, plus the app entry points —
 
 ### Repo root — contracts, deploy, CI
 **Purpose**: the cross-cutting fixtures and the packaging/deploy story that bind backend + frontend together.
-**Files**: `contracts/error-response.json`, `contracts/chameidor/tasks-one-time-request.json`; `Dockerfile`, `docker-compose.yml`, `deploy/{entrypoint.sh,supervisord.conf,nginx.conf.template}`; `package.json` (script shims only), `.github/workflows/ci.yml`, `.pre-commit-config.yaml`; `docs/{migrations.md,acceptance-runbook.md,adr/*}`
-**Seam(s)**: `contracts/*` are the versioned wire fixtures the tests pin against. The one image runs the JVM app (`API_PORT`/8080) and nginx (`WEB_PORT`/8081, reverse-proxying `/api`) under supervisord; `deploy/entrypoint.sh` runs `bin/migrate` then the app. `package.json` is a script-only shim (`npm run check`, `npm run db:migrate`, `npm run up`, …), not a real package.
+**Files**: `contracts/error-response.json`, `contracts/chameidor/tasks-one-time-request.json`; `Dockerfile`, `docker-compose.yml`, `deploy/{entrypoint.sh,supervisord.conf,nginx.conf.template}`; `package.json` (script shims only), `scripts/backend-gradle.mjs`, `.github/workflows/ci.yml`, `.pre-commit-config.yaml`; `docs/{migrations.md,acceptance-runbook.md,adr/*}`
+**Seam(s)**: `contracts/*` are the versioned wire fixtures the tests pin against. `scripts/backend-gradle.mjs` is the single crossing from the package scripts and the pre-commit hooks into Gradle — it resolves `gradlew.bat`/`./gradlew` for the host, so a new `be:*`/`db:*` script goes through it rather than re-deriving the wrapper invocation. The one image runs the JVM app (`API_PORT`/8080) and nginx (`WEB_PORT`/8081, reverse-proxying `/api`) under supervisord; `deploy/entrypoint.sh` runs `bin/migrate` then the app. `package.json` is a script-only shim (`npm run be:unit`, `npm run check`, `npm run db:migrate`, `npm run up`, …), not a real package.
 
 ## Entry points
 
