@@ -44,3 +44,11 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 - **DB readiness**: the app section needs no runbook-level DB probe — the mysql section's ready probe plus compose `depends_on: mysql: condition: service_healthy` covers it; the app self-migrates an empty MySQL via Flyway (`bin/migrate` in `deploy/entrypoint.sh`) before serving.
 
 - **chameidor**: not booted; scheduling-side intents are unreachable and fine (job registration is lazy — `ScheduleService` is reached only through consolidation runs).
+- **Candidate-phase seed**: the order-plan candidates phase prices a position from the latest stored close, and the COTAHIST feed is not reachable in acceptance. After the app is healthy, seed the closes and positions the candidate intents read (idempotent — `REPLACE`):
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio \
+    -e "REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 76, 40), ('VALE3', 400, 25); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) \
+        VALUES ('ITUB4', '2027-02-28', 42.62, 'COTAHIST', NOW()), ('VALE3', '2027-02-28', 30, 'COTAHIST', NOW());"
+  ```

@@ -49,8 +49,9 @@ class OrderPlanServiceTest : StringSpec({
         coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
         coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
 
-        val plan = service.computePlan(OrderPlanPhase.IDEALS)!!
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
 
+        plan.phase shouldBe OrderPlanPhase.CANDIDATES
         plan.candidates.associate { it.ticker to (it.side to it.quantity.plain()) } shouldBe mapOf(
             "ITUB4" to (OrderSide.NEW_ENTRY to "250"),
             "VALE3" to (OrderSide.BUY to "406"),

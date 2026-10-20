@@ -69,22 +69,26 @@ data class SubClassOrderPlan(
     val ideal: BigDecimal,
 )
 
-// A leaf order the ideal phase suggests. `quantity` is whole units, floored both ways; the remainder
-// stays uninvested. NEW_ENTRY opens a zero position; EXIT closes a dropped ticker's full
+// A leaf order the candidates phase suggests. `quantity` is whole units, floored both ways; the
+// remainder stays uninvested. NEW_ENTRY opens a zero position; EXIT closes a dropped ticker's full
 // position. A targeted surplus is held, so it never becomes a SELL here.
+//
+// `deficit` is the ticker leaf's Deficit in R$ (Ideal − position × price), so its negative side is the
+// Surplus — null when no quote values the position, alongside `amount`.
 data class OrderCandidate(
     val ticker: String,
     val side: OrderSide,
     val quantity: BigDecimal,
     val price: BigDecimal? = null,
     val amount: BigDecimal? = null,
+    val deficit: BigDecimal? = null,
     val ideal: BigDecimal,
     val targetQuantity: BigDecimal,
     val positionQuantity: BigDecimal,
 )
 
-// The kinds a Suggested Order can take (CONTEXT.md -> Suggested Order). Only the ideal phase's
-// candidates are produced today; SELL joins with the funding slice.
+// The kinds a Suggested Order can take (CONTEXT.md -> Suggested Order). The candidates phase
+// produces BUY, NEW_ENTRY and EXIT; SELL joins with the funding slice.
 enum class OrderSide {
     BUY,
     SELL,

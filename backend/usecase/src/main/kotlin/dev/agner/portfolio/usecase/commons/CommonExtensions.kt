@@ -86,6 +86,9 @@ fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
 
+// A level's Deficit — its Ideal minus its Actual (CONTEXT.md); the negative side is the Surplus.
+fun BigDecimal.deficitAgainst(actual: BigDecimal) = (this - actual).defaultScale()
+
 // BigDecimal.equals() is scale-sensitive (0 != 0.00000000, even though compareTo() says they're
 // equal) — comparing a computed value against BigDecimal.ZERO with == silently misses "zero at a
 // different scale" and, worse, can loop forever on a decrement that never satisfies ==. Use this

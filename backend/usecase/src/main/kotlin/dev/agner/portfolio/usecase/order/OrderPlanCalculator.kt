@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.commons.deficitAgainst
 import dev.agner.portfolio.usecase.order.model.ClassOrderPlan
 import dev.agner.portfolio.usecase.order.model.EquitiesOrderPlan
 import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderPlan
@@ -17,13 +18,14 @@ import dev.agner.portfolio.usecase.portfolio.model.FixedIncomeChain
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-// The rebalancing engine's first layer, pure and repository-free so it is unit-tested on the worked
+// The rebalancing engine's first layers, pure and repository-free so it is unit-tested on the worked
 // acceptance numbers (backend/AGENTS.md: a calculation-heavy feature gets its own class).
 //
 // The ideal chain is scaled against the Investable Capital (Capital − the cash Floor) by the shared
-// TargetChainCalculator. Orders are emitted at the leaves only: one candidate per listed ticker, with
-// its target quantity summed over the strategies that hold it. Whole units floor both ways; the
-// remainder stays in the Uninvested Balance. A targeted surplus is held — SELLs arrive with funding.
+// TargetChainCalculator. The IDEALS phase stops there; CANDIDATES adds the orders the chain implies,
+// emitted at the leaves only: one candidate per listed ticker, with its target quantity summed over
+// the strategies that hold it. Whole units floor both ways; the remainder stays in the Uninvested
+// Balance. A targeted surplus is held — SELLs arrive with funding.
 object OrderPlanCalculator {
 
     fun compute(context: OrderPlanContext): OrderPlan {
@@ -38,11 +40,15 @@ object OrderPlanCalculator {
             floor = context.floor.defaultScale(),
             investableCapital = investableCapital,
             classes = classes,
-            candidates = candidates(
-                classes = classes,
-                positions = context.positions,
-                prices = context.prices,
-            ),
+            candidates = if (context.phase.includesCandidates) {
+                computeCandidates(
+                    classes = classes,
+                    positions = context.positions,
+                    prices = context.prices,
+                )
+            } else {
+                emptyList()
+            },
         )
     }
 
@@ -88,7 +94,7 @@ object OrderPlanCalculator {
 
     // One candidate per listed ticker, at the ticker leaf. `hasWeight` distinguishes a deliberately
     // dropped ticker (weight 0 everywhere) from a targeted one whose Ideal is simply small.
-    private fun candidates(
+    private fun computeCandidates(
         classes: List<ClassOrderPlan>,
         positions: TickerPositions,
         prices: TickerPrices,
@@ -123,17 +129,16 @@ object OrderPlanCalculator {
         price: BigDecimal,
     ): OrderCandidate? {
         val targetQuantity = slices.mapNotNull { it.targetQuantity }.sumOf { it }
-        val net = targetQuantity - position
-        val side = when {
-            position.signum() == 0 && targetQuantity.signum() > 0 -> OrderSide.NEW_ENTRY
-            net.signum() > 0 -> OrderSide.BUY
-            else -> return null
-        }
+        val isNewEntry = position.signum() == 0 && targetQuantity.signum() > 0
+        // Whole units floor the net, so a shortfall under one unit is a fractional leftover with no
+        // order — it stays idle rather than becoming a zero-quantity BUY.
+        val quantity = if (isNewEntry) targetQuantity else wholeUnits(targetQuantity - position)
+        if (quantity.signum() <= 0) return null
 
         return candidate(
             ticker = ticker,
-            side = side,
-            quantity = if (side == OrderSide.NEW_ENTRY) targetQuantity else wholeUnits(net),
+            side = if (isNewEntry) OrderSide.NEW_ENTRY else OrderSide.BUY,
+            quantity = quantity,
             ideal = slices.sumOf { it.ideal },
             targetQuantity = targetQuantity,
             position = position,
@@ -141,8 +146,9 @@ object OrderPlanCalculator {
         )
     }
 
-    // A ticker outside every strategy (or at weight 0 everywhere) is held for attention, and a
-    // manual EXIT defaults to its full position — whole units, so a fractional remainder stays put.
+    // A ticker outside every strategy (or at weight 0 everywhere) is held, and the manual EXIT it
+    // defaults to takes the full position — whole units, so a fractional remainder stays put. This
+    // is not a SELL of a targeted surplus: a covered surplus still emits no candidate.
     private fun exit(ticker: String, position: BigDecimal, price: BigDecimal?): OrderCandidate? {
         val quantity = wholeUnits(position)
         if (quantity.signum() <= 0) return null
@@ -172,6 +178,7 @@ object OrderPlanCalculator {
         quantity = quantity,
         price = price,
         amount = amount(quantity = quantity, price = price),
+        deficit = price?.let { ideal.deficitAgainst(position.multiply(it)) },
         ideal = ideal.defaultScale(),
         targetQuantity = targetQuantity,
         positionQuantity = position,

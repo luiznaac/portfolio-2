@@ -15,6 +15,7 @@ import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.subClassTarget
 import dev.agner.portfolio.usecase.tickerTarget
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
@@ -42,7 +43,7 @@ class OrderPlanCalculatorTest : StringSpec({
             prices = mapOf("ITUB4" to "42.62"),
         )
 
-        plan.phase shouldBe OrderPlanPhase.IDEALS
+        plan.phase shouldBe OrderPlanPhase.CANDIDATES
         plan.investableCapital.plain() shouldBe "33075"
 
         val acoes = plan.classes.filterIsInstance<EquitiesOrderPlan>()
@@ -59,8 +60,24 @@ class OrderPlanCalculatorTest : StringSpec({
         candidate.positionQuantity.plain() shouldBe "76"
         candidate.price!!.plain() shouldBe "42.62"
         candidate.amount!!.plain() shouldBe "426.2"
+        candidate.deficit!!.plain() shouldBe "481.82"
 
         plan.classes.sumOf { it.ideal }.add(plan.floor).plain() shouldBe plan.capital.plain()
+    }
+
+    "previews the chain without candidates in the ideals phase" {
+        val plan = compute(
+            targets = chain(tickers = listOf(tickerTarget("Top", "ITUB4", "10"))),
+            prices = mapOf("ITUB4" to "42.62"),
+            phase = OrderPlanPhase.IDEALS,
+        )
+
+        val ticker = plan.classes.filterIsInstance<EquitiesOrderPlan>()
+            .single { it.assetClass == AssetClass.ACOES }
+            .strategies.single()
+            .tickers.single()
+        ticker.targetQuantity!!.plain() shouldBe "77"
+        plan.candidates shouldBe emptyList()
     }
 
     "opens a NEW_ENTRY when the position is zero" {
@@ -76,6 +93,7 @@ class OrderPlanCalculatorTest : StringSpec({
         candidate.side shouldBe OrderSide.NEW_ENTRY
         candidate.quantity.plain() shouldBe "333"
         candidate.amount!!.plain() shouldBe "9990"
+        candidate.deficit!!.plain() shouldBe "10000"
     }
 
     "floors a BUY to whole units, leaving the remainder idle" {
@@ -90,6 +108,30 @@ class OrderPlanCalculatorTest : StringSpec({
         val candidate = plan.candidates.single()
         candidate.side shouldBe OrderSide.BUY
         candidate.quantity.plain() shouldBe "323"
+    }
+
+    "leaves a shortfall under one whole unit idle" {
+        val plan = compute(
+            capital = "1000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf("VALE3" to "25.9"),
+            prices = mapOf("VALE3" to "38"),
+        )
+
+        plan.candidates shouldBe emptyList()
+    }
+
+    "floors a fractional position's net to whole units" {
+        val plan = compute(
+            capital = "1000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf("VALE3" to "20.9"),
+            prices = mapOf("VALE3" to "38"),
+        )
+
+        plan.candidates.single().quantity.plain() shouldBe "5"
     }
 
     "holds a surplus position and EXITs a dropped ticker at its full position" {
@@ -118,11 +160,29 @@ class OrderPlanCalculatorTest : StringSpec({
             "ITUB4" to OrderSide.EXIT,
             "MXRF11" to OrderSide.EXIT,
         )
+        plan.candidates.map { it.side } shouldNotContain OrderSide.SELL
         plan.candidates.associate { it.ticker to it.quantity.plain() } shouldBe mapOf(
             "ITUB4" to "7",
             "MXRF11" to "25",
         )
         plan.candidates.single { it.ticker == "MXRF11" }.amount!!.plain() shouldBe "250"
+        plan.candidates.single { it.ticker == "MXRF11" }.deficit!!.plain() shouldBe "-250"
+    }
+
+    "leaves a candidate's deficit unset when no quote values the position" {
+        val plan = compute(
+            capital = "10000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf("MXRF11" to "25"),
+        )
+
+        val candidate = plan.candidates.single()
+        candidate.ticker shouldBe "MXRF11"
+        candidate.side shouldBe OrderSide.EXIT
+        candidate.price shouldBe null
+        candidate.amount shouldBe null
+        candidate.deficit shouldBe null
     }
 
     "floors an EXIT to whole units" {
@@ -141,6 +201,7 @@ class OrderPlanCalculatorTest : StringSpec({
         )
 
         plan.candidates.single().quantity.plain() shouldBe "25"
+        plan.candidates.single().deficit!!.plain() shouldBe "-259"
     }
 
     "computes the RF sub-class ideals without leaf orders" {
@@ -193,10 +254,11 @@ private fun compute(
     targets: Targets,
     positions: Map<String, String> = emptyMap(),
     prices: Map<String, String> = emptyMap(),
+    phase: OrderPlanPhase = OrderPlanPhase.CANDIDATES,
 ) = OrderPlanCalculator.compute(
     OrderPlanContext(
         period = YearMonth.parse("2026-10"),
-        phase = OrderPlanPhase.IDEALS,
+        phase = phase,
         capital = BigDecimal(capital),
         floor = BigDecimal(floor),
         targets = targets,
