@@ -17,7 +17,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
@@ -26,14 +25,14 @@ class OrderPlanControllerTest : DescribeSpec({
 
     describe("reading the current order plan") {
 
-        it("serves the ideal plan with snake_case keys and its leaf candidate") {
+        it("serves the ideal chain with snake_case keys and no candidates by default") {
             val service = mockk<OrderPlanService>()
-            coEvery { service.computePlan(OrderPlanPhase.IDEALS) } returns plan
+            coEvery { service.computePlan(OrderPlanPhase.IDEALS) } returns plan(OrderPlanPhase.IDEALS)
 
             testApplication {
                 application { installRoutes(OrderPlanController(service)) }
 
-                val response = client.get("/month/current/orders?phase=ideals")
+                val response = client.get("/month/current/orders")
 
                 response.status shouldBe HttpStatusCode.OK
                 val body = ObjectMapper().readTree(response.bodyAsText())
@@ -44,24 +43,29 @@ class OrderPlanControllerTest : DescribeSpec({
                 val ticker = body.get("classes").get(0).get("strategies").get(0).get("tickers").get(0)
                 ticker.get("ticker").asText() shouldBe "ITUB4"
                 ticker.get("target_quantity").asText() shouldBe "38"
-
-                val candidate = body.get("candidates").get(0)
-                candidate.get("side").asText() shouldBe "BUY"
-                candidate.get("quantity").asText() shouldBe "10"
+                body.get("candidates").size() shouldBe 0
             }
         }
 
-        it("defaults to the ideals phase when the query omits it") {
+        it("serves BUY candidates with their deficit amounts at the candidates phase") {
             val service = mockk<OrderPlanService>()
-            coEvery { service.computePlan(OrderPlanPhase.IDEALS) } returns plan
+            coEvery { service.computePlan(OrderPlanPhase.CANDIDATES) } returns plan(OrderPlanPhase.CANDIDATES)
 
             testApplication {
                 application { installRoutes(OrderPlanController(service)) }
 
-                client.get("/month/current/orders").status shouldBe HttpStatusCode.OK
-            }
+                val response = client.get("/month/current/orders?phase=candidates")
 
-            coVerify(exactly = 1) { service.computePlan(OrderPlanPhase.IDEALS) }
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("phase").asText() shouldBe "CANDIDATES"
+
+                val candidate = body.get("candidates").get(0)
+                candidate.get("ticker").asText() shouldBe "ITUB4"
+                candidate.get("side").asText() shouldBe "BUY"
+                candidate.get("quantity").asText() shouldBe "10"
+                candidate.get("deficit").asText() shouldBe "481.82"
+            }
         }
 
         it("rejects an unknown phase with the canonical error body") {
@@ -70,7 +74,7 @@ class OrderPlanControllerTest : DescribeSpec({
             testApplication {
                 application { installRoutes(OrderPlanController(service)) }
 
-                val response = client.get("/month/current/orders?phase=funding")
+                val response = client.get("/month/current/orders?phase=bogus")
 
                 response.status shouldBe HttpStatusCode.BadRequest
                 val body = ObjectMapper().readTree(response.bodyAsText())
@@ -91,10 +95,10 @@ class OrderPlanControllerTest : DescribeSpec({
     }
 })
 
-private val plan = OrderPlanCalculator.compute(
+private fun plan(phase: OrderPlanPhase) = OrderPlanCalculator.compute(
     OrderPlanContext(
         period = YearMonth.parse("2026-10"),
-        phase = OrderPlanPhase.IDEALS,
+        phase = phase,
         capital = BigDecimal("49075"),
         floor = BigDecimal("16000"),
         targets = Targets(

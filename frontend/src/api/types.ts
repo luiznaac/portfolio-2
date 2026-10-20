@@ -293,10 +293,10 @@ export interface Allocation {
   classes: ClassAllocation[];
 }
 
-// The order engine's ideal-phase read (GET /month/current/orders?phase=ideals). Ideal/amount are R$;
+// The order engine's read (GET /month/current/orders?phase=ideals|candidates). Ideal/amount are R$;
 // `target_quantity` is the whole-unit floor of a ticker slice and is absent when no quote prices it.
 // Candidates aggregate a ticker's target across strategies; a targeted surplus stays a hold.
-export type OrderPlanPhase = "IDEALS";
+export type OrderPlanPhase = "IDEALS" | "CANDIDATES";
 export type OrderSide = "BUY" | "SELL" | "NEW_ENTRY" | "EXIT";
 
 export interface TickerOrderPlan {
@@ -344,6 +344,8 @@ export interface OrderCandidate {
   quantity: number;
   price?: number;
   amount?: number;
+  /** Ideal − position × price in R$; negative side is a surplus; absent without a quote. */
+  deficit?: number;
   ideal: number;
   target_quantity: number;
   position_quantity: number;

@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.portfolio
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.commons.deficitAgainst
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
@@ -86,7 +87,7 @@ object AllocationCalculator {
             floor = floor.defaultScale(),
             ideal = ideal,
             actual = actual,
-            deficit = (ideal - actual).defaultScale(),
+            deficit = ideal.deficitAgainst(actual),
             drift = drift(actual = actual, ideal = ideal, capital = capital),
             unattributed = (classes.sumOf { it.unattributed } + unclassified).defaultScale(),
             classes = classes,
@@ -127,7 +128,7 @@ object AllocationCalculator {
             target = chain.target,
             ideal = chain.ideal,
             actual = listedValue.defaultScale(),
-            deficit = (chain.ideal - listedValue).defaultScale(),
+            deficit = chain.ideal.deficitAgainst(listedValue),
             drift = drift(actual = listedValue, ideal = chain.ideal, capital = capital),
             unattributed = listedValue.defaultScale(),
             strategies = strategies,
@@ -149,7 +150,7 @@ object AllocationCalculator {
                 target = subClass.target,
                 ideal = subClass.ideal,
                 actual = actual,
-                deficit = (subClass.ideal - actual).defaultScale(),
+                deficit = subClass.ideal.deficitAgainst(actual),
                 drift = drift(actual = actual, ideal = subClass.ideal, capital = capital),
             )
         }
@@ -161,7 +162,7 @@ object AllocationCalculator {
             target = chain.target,
             ideal = chain.ideal,
             actual = actual,
-            deficit = (chain.ideal - actual).defaultScale(),
+            deficit = chain.ideal.deficitAgainst(actual),
             drift = drift(actual = actual, ideal = chain.ideal, capital = capital),
             unattributed = BigDecimal.ZERO,
             strategies = emptyList(),
