@@ -3,6 +3,6 @@
 source: kotlin
 lane: backend
 applied:
-  revision: 2
-  scaffold_sha: 5abb4f979bcfd44ff18d73665ca23c60a3cc346c
+  revision: 3
+  scaffold_sha: 067594f9457c912c0d32e5e05bf56c2496e0a105
 allow: []
