@@ -293,11 +293,15 @@ export interface Allocation {
   classes: ClassAllocation[];
 }
 
-// The order engine's read (GET /month/current/orders?phase=ideals|candidates). Ideal/amount are R$;
-// `target_quantity` is the whole-unit floor of a ticker slice and is absent when no quote prices it.
-// Candidates aggregate a ticker's target across strategies; a targeted surplus stays a hold.
-export type OrderPlanPhase = "IDEALS" | "CANDIDATES";
+// The order engine's read (GET /month/current/orders?phase=ideals|candidates|funding). Ideal/amount
+// are R$; `target_quantity` is the whole-unit floor of a ticker slice and is absent when no quote
+// prices it. Candidates aggregate a ticker's target across strategies; a targeted surplus stays a
+// hold unless the funding pass sells it to cover a buy.
+export type OrderPlanPhase = "IDEALS" | "CANDIDATES" | "FUNDING";
 export type OrderSide = "BUY" | "SELL" | "NEW_ENTRY" | "EXIT";
+
+/** Why a funding SELL exists, in the cascade's source order. */
+export type FundingSource = "NEUTRO" | "OUTSIDE_STRATEGY" | "SURPLUS";
 
 export interface TickerOrderPlan {
   ticker: string;
@@ -305,6 +309,12 @@ export interface TickerOrderPlan {
   ideal: number;
   price?: number;
   target_quantity?: number;
+  /** The Edition Entry's "não operar" flag for this (strategy, ticker) slice. */
+  neutro: boolean;
+  /** The stored Attribution slice quantity for this (strategy, ticker). */
+  attributed_quantity: number;
+  /** Ideal − attributed × price, capped by custody; absent when no quote prices it. */
+  deficit?: number;
 }
 
 export interface StrategyOrderPlan {
@@ -349,6 +359,16 @@ export interface OrderCandidate {
   ideal: number;
   target_quantity: number;
   position_quantity: number;
+  /** Set on a SELL the funding pass emits; null on every other candidate. */
+  funding_source?: FundingSource;
+}
+
+/** The funding pass's arithmetic; present from the funding phase on. */
+export interface FundingSummary {
+  buy_amount: number;
+  sell_amount: number;
+  unfunded_amount: number;
+  neutro_deficit: number;
 }
 
 export interface OrderPlan {
@@ -359,6 +379,7 @@ export interface OrderPlan {
   investable_capital: number;
   classes: ClassOrderPlan[];
   candidates: OrderCandidate[];
+  funding?: FundingSummary;
 }
 
 // A strategy report's analyst recommendation — the English key the backend serialises.

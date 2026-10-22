@@ -13,6 +13,7 @@ import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IEditionRepository
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import io.kotest.core.spec.style.StringSpec
@@ -66,6 +67,25 @@ class StrategyServiceTest : StringSpec({
         coEvery { editions.fetchByStrategy(1) } returns listOf(previousEdition, stagedEdition)
 
         service.fetchEditions(1) shouldBe listOf(previousEdition, stagedEdition)
+    }
+
+    "fetchNeutroSlices reads the current edition's doNotTrade entries" {
+        coEvery { strategies.fetchAll() } returns listOf(strategy)
+        coEvery { editions.fetchLatestActive(1, null) } returns previousEdition.copy(
+            entries = listOf(
+                EditionEntry("PETR4", BigDecimal("50.00"), Rating.BUY, doNotTrade = true),
+                EditionEntry("VALE3", BigDecimal("50.00"), Rating.NEUTRAL, doNotTrade = false),
+            ),
+        )
+
+        service.fetchNeutroSlices() shouldBe setOf(StrategyTicker("Top Dividendos", "PETR4"))
+    }
+
+    "fetchNeutroSlices contributes nothing for a strategy with no active edition" {
+        coEvery { strategies.fetchAll() } returns listOf(strategy)
+        coEvery { editions.fetchLatestActive(1, null) } returns null
+
+        service.fetchNeutroSlices() shouldBe emptySet()
     }
 
     "importEdition is null when the strategy does not exist" {

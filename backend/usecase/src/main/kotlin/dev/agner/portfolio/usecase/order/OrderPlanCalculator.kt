@@ -11,10 +11,12 @@ import dev.agner.portfolio.usecase.order.model.OrderSide
 import dev.agner.portfolio.usecase.order.model.StrategyOrderPlan
 import dev.agner.portfolio.usecase.order.model.SubClassOrderPlan
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
+import dev.agner.portfolio.usecase.order.model.targetUnits
 import dev.agner.portfolio.usecase.portfolio.TargetChainCalculator
 import dev.agner.portfolio.usecase.portfolio.model.ClassChain
 import dev.agner.portfolio.usecase.portfolio.model.EquitiesChain
 import dev.agner.portfolio.usecase.portfolio.model.FixedIncomeChain
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -24,14 +26,25 @@ import java.math.RoundingMode
 // The ideal chain is scaled against the Investable Capital (Capital − the cash Floor) by the shared
 // TargetChainCalculator. The IDEALS phase stops there; CANDIDATES adds the orders the chain implies,
 // emitted at the leaves only: one candidate per listed ticker, with its target quantity summed over
-// the strategies that hold it. Whole units floor both ways; the remainder stays in the Uninvested
-// Balance. A targeted surplus is held — SELLs arrive with funding.
+// the strategies that hold it. A NEUTRO slice contributes no buy target, so its deficit stays
+// visible on the leaf and unfunded. Whole units floor both ways; the remainder stays in the
+// Uninvested Balance. A targeted surplus is held — SELLs arrive with funding, which the service
+// composes from FundingCalculator at the funding phase.
 object OrderPlanCalculator {
 
     fun compute(context: OrderPlanContext): OrderPlan {
         val investableCapital = (context.capital - context.floor).defaultScale()
         val chain = TargetChainCalculator.compute(investableCapital, context.targets)
-        val classes = chain.classes.map { toPlan(chain = it, prices = context.prices) }
+        val classes = chain.classes.map { toPlan(chain = it, context = context) }
+        val candidates = if (context.phase.includesCandidates) {
+            computeCandidates(
+                classes = classes,
+                positions = context.positions,
+                prices = context.prices,
+            )
+        } else {
+            emptyList()
+        }
 
         return OrderPlan(
             period = context.period,
@@ -40,21 +53,14 @@ object OrderPlanCalculator {
             floor = context.floor.defaultScale(),
             investableCapital = investableCapital,
             classes = classes,
-            candidates = if (context.phase.includesCandidates) {
-                computeCandidates(
-                    classes = classes,
-                    positions = context.positions,
-                    prices = context.prices,
-                )
-            } else {
-                emptyList()
-            },
+            candidates = candidates,
         )
     }
 
     // The chain's rungs map one-to-one; the order plan adds the quote-derived target quantity at each
-    // ticker leaf. A ticker without a quote still shows its Ideal but has no target units.
-    private fun toPlan(chain: ClassChain, prices: TickerPrices): ClassOrderPlan =
+    // ticker leaf. A ticker without a quote still shows its Ideal but has no target units. The leaf
+    // also carries the NEUTRO flag and the stored attribution quantity its funding math needs.
+    private fun toPlan(chain: ClassChain, context: OrderPlanContext): ClassOrderPlan =
         when (chain) {
             is EquitiesChain -> EquitiesOrderPlan(
                 assetClass = chain.assetClass,
@@ -66,13 +72,19 @@ object OrderPlanCalculator {
                         target = strategy.target,
                         ideal = strategy.ideal,
                         tickers = strategy.tickers.map { ticker ->
-                            val price = prices[ticker.ticker]?.takeIf { it.signum() > 0 }
+                            val price = context.prices[ticker.ticker]?.takeIf { it.signum() > 0 }
+                            val slice = StrategyTicker(strategy.strategy, ticker.ticker)
+                            val attributed = context.attributionBySlice[slice] ?: BigDecimal.ZERO
+                            val custody = attributed.coerceAtMost(context.positions[ticker.ticker] ?: BigDecimal.ZERO)
                             TickerOrderPlan(
                                 ticker = ticker.ticker,
                                 target = ticker.target,
                                 ideal = ticker.ideal,
                                 price = price,
                                 targetQuantity = price?.let { unitsFor(amount = ticker.ideal, price = it) },
+                                neutro = slice in context.neutroSlices,
+                                attributedQuantity = attributed,
+                                deficit = price?.let { ticker.ideal.deficitAgainst(custody.multiply(it)) },
                             )
                         },
                     )
@@ -93,7 +105,11 @@ object OrderPlanCalculator {
         }
 
     // One candidate per listed ticker, at the ticker leaf. `hasWeight` distinguishes a deliberately
-    // dropped ticker (weight 0 everywhere) from a targeted one whose Ideal is simply small.
+    // dropped ticker (weight 0 everywhere) from a targeted one whose Ideal is simply small. A NEUTRO
+    // slice keeps its weight but contributes no buy target; the units attributed to it stay out of
+    // the custody an active slice may net against, so a NEUTRO holding can never mask a sibling
+    // slice's deficit. A ticker held entirely under NEUTRO still counts as targeted, so it is not
+    // mistaken for a dropped ticker and never auto-EXITs.
     private fun computeCandidates(
         classes: List<ClassOrderPlan>,
         positions: TickerPositions,
@@ -114,8 +130,13 @@ object OrderPlanCalculator {
             val hasWeight = tickerSlices.any { it.target.signum() > 0 }
 
             when {
-                hasWeight && price != null ->
-                    buyOrNewEntry(ticker = ticker, slices = tickerSlices, position = position, price = price)
+                hasWeight && price != null -> buyOrNewEntry(
+                    ticker = ticker,
+                    slices = tickerSlices.filterNot { it.neutro },
+                    position = position,
+                    neutroHeld = tickerSlices.filter { it.neutro }.sumOf { it.attributedQuantity },
+                    price = price,
+                )
                 !hasWeight && position.signum() > 0 -> exit(ticker = ticker, position = position, price = price)
                 else -> null
             }
@@ -126,23 +147,29 @@ object OrderPlanCalculator {
         ticker: String,
         slices: List<TickerOrderPlan>,
         position: BigDecimal,
+        neutroHeld: BigDecimal,
         price: BigDecimal,
     ): OrderCandidate? {
-        val targetQuantity = slices.mapNotNull { it.targetQuantity }.sumOf { it }
+        val targetQuantity = slices.targetUnits
         val isNewEntry = position.signum() == 0 && targetQuantity.signum() > 0
+        // Units attributed to a NEUTRO slice are not available to an active slice: they are either
+        // held (the NEUTRO rule) or sold through funding, never counted as meeting an active Ideal.
+        // Without an attribution ledger `neutroHeld` is zero and the whole position nets as before.
+        val availableCustody = (position - neutroHeld.coerceAtMost(position)).coerceAtLeast(BigDecimal.ZERO)
         // Whole units floor the net, so a shortfall under one unit is a fractional leftover with no
         // order — it stays idle rather than becoming a zero-quantity BUY.
-        val quantity = if (isNewEntry) targetQuantity else wholeUnits(targetQuantity - position)
+        val quantity = if (isNewEntry) targetQuantity else wholeUnits(targetQuantity - availableCustody)
         if (quantity.signum() <= 0) return null
 
-        return candidate(
-            ticker = ticker,
+        return OrderCandidate.traded(
             side = if (isNewEntry) OrderSide.NEW_ENTRY else OrderSide.BUY,
+            ticker = ticker,
             quantity = quantity,
+            price = price,
             ideal = slices.sumOf { it.ideal },
             targetQuantity = targetQuantity,
             position = position,
-            price = price,
+            custody = availableCustody,
         )
     }
 
@@ -153,39 +180,16 @@ object OrderPlanCalculator {
         val quantity = wholeUnits(position)
         if (quantity.signum() <= 0) return null
 
-        return candidate(
-            ticker = ticker,
+        return OrderCandidate.traded(
             side = OrderSide.EXIT,
+            ticker = ticker,
             quantity = quantity,
+            price = price,
             ideal = BigDecimal.ZERO,
             targetQuantity = BigDecimal.ZERO,
             position = position,
-            price = price,
         )
     }
-
-    private fun candidate(
-        ticker: String,
-        side: OrderSide,
-        quantity: BigDecimal,
-        ideal: BigDecimal,
-        targetQuantity: BigDecimal,
-        position: BigDecimal,
-        price: BigDecimal?,
-    ) = OrderCandidate(
-        ticker = ticker,
-        side = side,
-        quantity = quantity,
-        price = price,
-        amount = amount(quantity = quantity, price = price),
-        deficit = price?.let { ideal.deficitAgainst(position.multiply(it)) },
-        ideal = ideal.defaultScale(),
-        targetQuantity = targetQuantity,
-        positionQuantity = position,
-    )
-
-    private fun amount(quantity: BigDecimal, price: BigDecimal?): BigDecimal? =
-        price?.let { quantity.multiply(it).defaultScale() }
 
     // Whole units floor down, so a sub-unit remainder is never bought or sold.
     private fun unitsFor(amount: BigDecimal, price: BigDecimal): BigDecimal =

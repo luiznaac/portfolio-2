@@ -69,6 +69,16 @@ A proposed trade the engine generates to close a deficit — kinds `BUY`, `SELL`
 _UI:_ "Ordem"
 _Avoid_: Trade (that is the executed record), order plan
 
+**NEUTRO**:
+The "não operar" flag on an Edition Entry, applied per (Strategy, ticker): the slice generates no BUY and its Deficit stays visible and unfunded; its units are sold only to fund other buys.
+_UI:_ "Não operar"
+_Avoid_: Neutral (that is the analyst Rating), blocked, inactive
+
+**Funding**:
+Selling positions to cover BUYs the Uninvested Balance cannot pay for, in a fixed source order: NEUTRO slices, positions outside every Strategy, then the largest Surpluses by R$. Sells fund buys — never a Surplus on its own.
+_UI:_ —
+_Avoid_: Rebalancing (that is the whole plan), liquidation
+
 **Attribution Transfer**:
 Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind.
 _UI:_ "Transferência"

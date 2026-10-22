@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.strategy
 
+import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.strategy.model.EditionDetail
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
@@ -8,10 +9,12 @@ import dev.agner.portfolio.usecase.strategy.model.EditionStatus
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.model.editionWeightProblem
 import dev.agner.portfolio.usecase.strategy.model.normalizedEntries
 import dev.agner.portfolio.usecase.strategy.repository.IEditionRepository
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import kotlinx.coroutines.awaitAll
 import kotlinx.datetime.YearMonth
 import org.springframework.stereotype.Service
 
@@ -34,6 +37,20 @@ class StrategyService(
 
     suspend fun fetchEditions(strategyId: Int): List<EditionDetail>? =
         strategies.fetchById(strategyId)?.let { editions.fetchByStrategy(strategyId) }
+
+    // The "não operar" slices of every strategy's current (latest active) edition. A strategy with
+    // no active edition contributes none — an absent report never blocks trading.
+    suspend fun fetchNeutroSlices(): Set<StrategyTicker> = strategies.fetchAll()
+        .mapAsync { strategy ->
+            editions.fetchLatestActive(strategy.id)
+                ?.entries
+                .orEmpty()
+                .filter { it.doNotTrade }
+                .map { entry -> StrategyTicker(strategy.name, entry.ticker) }
+        }
+        .awaitAll()
+        .flatten()
+        .toSet()
 
     // Stages a parsed report as a STAGED edition, diffed against the strategy's previous active one.
     // The diff is computed over canonical tickers, since the report may print a fractional-market

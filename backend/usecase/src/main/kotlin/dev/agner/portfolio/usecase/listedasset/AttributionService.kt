@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -24,6 +25,17 @@ class AttributionService(
     private val strategies: IStrategyRepository,
     private val transaction: ITransactionTemplate,
 ) {
+
+    // The whole ledger keyed by (strategy name, ticker), the way the order engine's funding pass
+    // consumes it — the id-to-name projection belongs here, beside the other reads that join it.
+    suspend fun fetchLedger(): Map<StrategyTicker, BigDecimal> {
+        val names = strategies.fetchAll().associate { it.id to it.name }
+        return attributions.fetchAll()
+            .mapNotNull { row ->
+                names[row.strategyId]?.let { name -> StrategyTicker(name, row.ticker) to row.quantity }
+            }
+            .toMap()
+    }
 
     suspend fun fetchSummary(ticker: String): AttributionSummary? {
         val normalized = ticker.normalizedTicker()
