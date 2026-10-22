@@ -5,6 +5,7 @@ import type {
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
+  CorporateAction,
   CurrentMonth,
   Edition,
   EditionActivation,
@@ -18,6 +19,7 @@ import type {
   Income,
   MonthCreation,
   MonthUpdate,
+  MovementsImportResult,
   PositionDetail,
   Quote,
   Strategy,
@@ -206,5 +208,15 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return upload("/income/import", form);
+  },
+
+  getCorporateActions(): Promise<CorporateAction[]> {
+    return request("/corporate-actions");
+  },
+
+  importMovements(file: File): Promise<MovementsImportResult> {
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/corporate-actions/import", form);
   },
 };

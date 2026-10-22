@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -40,6 +41,14 @@ class IncomeRepository(
                 status = IncomeStatus.ANNOUNCED
                 createdAt = LocalDateTime.now(clock)
             }.toModel()
+        }
+    }
+
+    override suspend fun markReconciled(ids: List<Int>) {
+        if (ids.isEmpty()) return
+        transaction {
+            CashMovementEntity.find { CashMovementTable.id inList ids }
+                .forEach { it.status = IncomeStatus.RECONCILED }
         }
     }
 }

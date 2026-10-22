@@ -175,6 +175,11 @@ A buy or a sell of a listed asset: side, quantity, price, date, institution and 
 _UI:_ "Negócio"
 _Avoid_: Order (that is a suggested order), movimentação (the umbrella file word)
 
+**Corporate Action**:
+An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue.
+_UI:_ "Evento corporativo"
+_Avoid_: Provento (that is cash income), trade, movimentação (the umbrella file word)
+
 **Income**:
 Money a listed asset pays its holder — dividend, JCP, FII rendimento — fed automatically from exports, tracked through a lifecycle (announced, payable, received, reconciled) with gross, retained and net amounts.
 _UI:_ "Provento"

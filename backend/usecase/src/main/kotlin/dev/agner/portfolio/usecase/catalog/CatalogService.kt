@@ -56,4 +56,23 @@ class CatalogService(
     }
 
     private val log = logger()
+
+    // A ticker change is an identity remap, not a new paper: the new code inherits the old entry's
+    // ISIN, kind and class, while the old code stays resolvable for its historical rows. The new
+    // ticker's first sighting is today; a ticker equal to the old one is a no-op.
+    suspend fun remapTicker(from: String, to: String) {
+        val old = from.normalizedTicker()
+        val new = to.normalizedTicker()
+        if (old == new) return
+        val source = repository.fetchBy(old) ?: return
+        val today = LocalDate.today(clock)
+        repository.upsertAll(
+            listOf(
+                source.copy(ticker = new, firstSeen = today, lastSeen = today),
+                // The identity moves with the new code: the old row stays resolvable for its
+                // historical trades but no longer claims the ISIN.
+                source.copy(isin = null, lastSeen = today),
+            ),
+        )
+    }
 }
