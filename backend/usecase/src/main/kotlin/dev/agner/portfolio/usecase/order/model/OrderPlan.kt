@@ -13,6 +13,10 @@ import java.math.BigDecimal
 // `funding` is the payload of the requested depth: it is absent when a shallower phase was asked
 // for, because the phase is a query dimension rather than a variant of the plan's value (the same
 // shape `EditionDetail.diffFromPrevious` takes for a first edition).
+//
+// `outsideStrategy` lists the held tickers no Target names (dropped tickers), held for attention
+// rather than auto-exited. It is absent at the ideals phase, which carries the chain alone.
+// `proRata`, `attribution` and `transfers` arrive with the full phase.
 data class OrderPlan(
     val period: YearMonth,
     val phase: OrderPlanPhase,
@@ -22,6 +26,10 @@ data class OrderPlan(
     val classes: List<ClassOrderPlan>,
     val candidates: List<OrderCandidate>,
     val funding: FundingSummary? = null,
+    val outsideStrategy: List<OutsideStrategyHolding> = emptyList(),
+    val proRata: ProRataSummary? = null,
+    val attribution: List<AttributionMove> = emptyList(),
+    val transfers: List<AttributionTransfer> = emptyList(),
 )
 
 // One class rung of the ideal chain. ACOES/FIIS carry `strategies`; RENDA_FIXA carries
@@ -60,13 +68,16 @@ data class StrategyOrderPlan(
 // of that slice (null when no quote prices it yet). A ticker under several strategies gets one
 // candidate with the summed target quantity — orders are emitted at the ticker leaves only.
 //
-// `neutro` is the Edition Entry's "não operar" flag for this (strategy, ticker): the slice never
-// becomes a buy, and its attributed units are only sold to fund other buys. `attributedQuantity` is
-// the stored Attribution slice's quantity, and `deficit` is Ideal − attributed × price, capped by
-// custody — the badge the NEUTRO rule leaves visible even without a candidate. Both are null-safe
-// for an unpriced ticker, whose deficit cannot be measured in R$.
+// `strategy` names the slice's Strategy — the key the Attribution ledger is stored under, so the
+// attribution pass can address the slice. `neutro` is the Edition Entry's "não operar" flag for this
+// (strategy, ticker): the slice never becomes a buy, and its attributed units are only sold to fund
+// other buys. `attributedQuantity` is the stored Attribution slice's quantity, and `deficit` is
+// Ideal − attributed × price, capped by custody — the badge the NEUTRO rule leaves visible even
+// without a candidate. Both are null-safe for an unpriced ticker, whose deficit cannot be measured
+// in R$.
 data class TickerOrderPlan(
     val ticker: String,
+    val strategy: String,
     val target: BigDecimal,
     val ideal: BigDecimal,
     val price: BigDecimal?,
@@ -77,11 +88,17 @@ data class TickerOrderPlan(
 )
 
 // The RF sub-class rung — the second and last rung of RENDA_FIXA. All three sub-classes are always
-// present, so `target` is null when the chain declares none.
+// present, so `target` is null when the chain declares none. `actual`, `deficit` and `orders` arrive
+// with the full phase only — a shallower read does not value the RF book. An order is only sized for
+// a targeted sub-class: a null target means the chain declares no percentage, and an untargeted
+// surplus is held like any other.
 data class SubClassOrderPlan(
     val subClass: FixedIncomeSubClass,
     val target: BigDecimal?,
     val ideal: BigDecimal,
+    val actual: BigDecimal? = null,
+    val deficit: BigDecimal? = null,
+    val orders: List<FixedIncomeOrder> = emptyList(),
 )
 
 // A leaf order the candidates phase suggests, or the funding pass adds. The side is a sealed
@@ -105,6 +122,13 @@ sealed class OrderCandidate(
 ) {
     abstract val side: OrderSide
 
+    // A pro-rata-scaled candidate keeps its price and deficit; only the traded quantity and its R$
+    // amount shrink. Each variant rebuilds itself so no caller has to branch on the side.
+    abstract fun withQuantity(quantity: BigDecimal): OrderCandidate
+
+    // The R$ amount a quantity trades at — the one place the scaled variants derive it.
+    protected fun amountFor(quantity: BigDecimal): BigDecimal? = price?.multiply(quantity)?.defaultScale()
+
     data class Buy(
         override val ticker: String,
         override val quantity: BigDecimal,
@@ -116,6 +140,9 @@ sealed class OrderCandidate(
         override val positionQuantity: BigDecimal,
     ) : OrderCandidate(ticker, quantity, price, amount, deficit, ideal, targetQuantity, positionQuantity) {
         override val side: OrderSide = OrderSide.BUY
+
+        override fun withQuantity(quantity: BigDecimal): OrderCandidate =
+            copy(quantity = quantity, amount = amountFor(quantity))
     }
 
     data class NewEntry(
@@ -129,6 +156,9 @@ sealed class OrderCandidate(
         override val positionQuantity: BigDecimal,
     ) : OrderCandidate(ticker, quantity, price, amount, deficit, ideal, targetQuantity, positionQuantity) {
         override val side: OrderSide = OrderSide.NEW_ENTRY
+
+        override fun withQuantity(quantity: BigDecimal): OrderCandidate =
+            copy(quantity = quantity, amount = amountFor(quantity))
     }
 
     data class Exit(
@@ -142,6 +172,9 @@ sealed class OrderCandidate(
         override val positionQuantity: BigDecimal,
     ) : OrderCandidate(ticker, quantity, price, amount, deficit, ideal, targetQuantity, positionQuantity) {
         override val side: OrderSide = OrderSide.EXIT
+
+        override fun withQuantity(quantity: BigDecimal): OrderCandidate =
+            copy(quantity = quantity, amount = amountFor(quantity))
     }
 
     data class FundingSell(
@@ -156,6 +189,9 @@ sealed class OrderCandidate(
         val fundingSource: FundingSource,
     ) : OrderCandidate(ticker, quantity, price, amount, deficit, ideal, targetQuantity, positionQuantity) {
         override val side: OrderSide = OrderSide.SELL
+
+        override fun withQuantity(quantity: BigDecimal): OrderCandidate =
+            copy(quantity = quantity, amount = amountFor(quantity))
     }
 
     companion object {

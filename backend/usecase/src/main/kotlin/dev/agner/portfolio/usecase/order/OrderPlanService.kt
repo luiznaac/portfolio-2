@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.order
 
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.listedasset.AttributionService
 import dev.agner.portfolio.usecase.listedasset.PositionService
@@ -8,6 +9,7 @@ import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
 import dev.agner.portfolio.usecase.order.model.tickerSlices
 import dev.agner.portfolio.usecase.portfolio.AllocationService
 import dev.agner.portfolio.usecase.portfolio.MonthService
+import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import kotlinx.coroutines.awaitAll
@@ -18,8 +20,9 @@ import java.math.BigDecimal
 // positions and the latest close for every ticker the chain can leaf on, plus the NEUTRO and
 // Attribution inputs the leaf carries, then hands them to the pure calculator. At the funding phase
 // it adds the funding pass, whose Uninvested Balance is the one input that needs the whole book's
-// value — a shallower read never touches that path. computePlan never writes — the persisted order
-// lifecycle is a separate slice.
+// value — a shallower read never touches that path. The full phase then applies the pro-rata scaling,
+// the attribution bias and transfers, and the RF sub-class orders. computePlan never writes — the
+// persisted order lifecycle is a separate slice.
 @Service
 class OrderPlanService(
     private val months: MonthService,
@@ -45,6 +48,10 @@ class OrderPlanService(
             .mapNotNull { (ticker, price) -> if (price == null) null else ticker to price }
             .toMap()
 
+        // The funding pass and the full phase need the whole book's Actual: its listed part prices the
+        // Uninvested Balance and its RF part sizes the sub-class orders.
+        val allocation = if (phase.includesFunding) allocations.fetchCurrent() ?: return null else null
+
         val plan = OrderPlanCalculator.compute(
             OrderPlanContext(
                 period = current.month.period,
@@ -56,15 +63,17 @@ class OrderPlanService(
                 prices = prices,
                 neutroSlices = strategies.fetchNeutroSlices(),
                 attributionBySlice = attributions.fetchLedger(),
+                fixedIncomeActualBySubClass = allocation?.fixedIncomeActual.orEmpty(),
             ),
         )
-        if (!phase.includesFunding) return plan
+        if (allocation == null) return plan
 
-        return plan.withFunding(
-            holdingsValue = allocations.fetchCurrent()?.actual ?: return null,
+        val funded = plan.withFunding(
+            holdingsValue = allocation.actual,
             positions = positionByTicker,
             prices = prices,
         )
+        return if (phase.isFull) funded.withFullPlan() else funded
     }
 
     // The whole book's Actual is exactly the holdings the Capital is not sitting in cash; the
@@ -87,4 +96,31 @@ class OrderPlanService(
         )
         return copy(candidates = candidates + funding.sells, funding = funding.summary)
     }
+
+    // The full phase's last two layers: scale the buys to what the funding pass could deploy, then
+    // aim the attribution at the scaled orders and finish with the cross-slice transfers. The funding
+    // summary is restated in scaled terms so the plan never reports buying more than it can fund.
+    private fun OrderPlan.withFullPlan(): OrderPlan {
+        val funding = funding ?: return this
+        val proRata = ProRataCalculator.compute(candidates = candidates, funding = funding)
+        val attribution = AttributionPlanner.compute(slices = tickerSlices, candidates = proRata.candidates)
+        return copy(
+            candidates = proRata.candidates,
+            funding = funding.copy(
+                buyAmount = proRata.summary.buyAmount,
+                unfundedAmount = proRata.summary.unfundedAmount,
+            ),
+            proRata = proRata.summary,
+            attribution = attribution.moves,
+            transfers = attribution.transfers,
+        )
+    }
 }
+
+// The RF sub-class Actuals the full phase's orders need, keyed the way the chain addresses them.
+private val Allocation.fixedIncomeActual: SubClassAmounts
+    get() = classes
+        .firstOrNull { it.assetClass == AssetClass.RENDA_FIXA }
+        ?.subClasses
+        ?.associate { it.subClass to it.actual }
+        .orEmpty()

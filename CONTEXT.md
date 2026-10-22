@@ -65,9 +65,14 @@ _UI:_ "Caixa" (residual display only)
 _Avoid_: Caixa as a class (not modeled), cash account
 
 **Suggested Order**:
-A proposed trade the engine generates to close a deficit — kinds `BUY`, `SELL`, `EXIT` (full position out), `NEW_ENTRY` — with a lifecycle from suggested to executed (derived by matching imported trades, overridable) to imported.
+A proposed trade the engine generates to close a deficit — kinds `BUY`, `SELL`, `EXIT` (manual, full position out), `NEW_ENTRY`, and the RF order's `CONTRIBUTE`/`REDEEM` — with a lifecycle from suggested to executed (derived by matching imported trades, overridable) to imported.
 _UI:_ "Ordem"
 _Avoid_: Trade (that is the executed record), order plan
+
+**RF Order**:
+A suggested order at a Renda Fixa sub-class leaf, sized as "contribute R$X" or "redeem R$Y"; the product and its details are chosen manually when the order is executed, not planned ahead.
+_UI:_ "Ordem" (RF)
+_Avoid_: Product order (no product is named yet)
 
 **NEUTRO**:
 The "não operar" flag on an Edition Entry, applied per (Strategy, ticker): the slice generates no BUY and its Deficit stays visible and unfunded; its units are sold only to fund other buys.
@@ -80,9 +85,19 @@ _UI:_ —
 _Avoid_: Rebalancing (that is the whole plan), liquidation
 
 **Attribution Transfer**:
-Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind.
+Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind. Suggested whenever two slices of a ticker sit ≥ 1 whole unit off their Ideal.
 _UI:_ "Transferência"
 _Avoid_: Custody transfer (that is between institutions, ticketed separately), reallocation
+
+**Dropped Ticker (Outside Strategy)**:
+A ticker that reached weight 0 everywhere in the current Edition while still held: the engine holds it and surfaces it for attention, never auto-exits it, and a manual EXIT defaults to the full position.
+_UI:_ "Fora da estratégia"
+_Avoid_: Exited (that is the manual act), untracked
+
+**Pro-rata Scaling**:
+The full plan's last resort when funding still cannot cover the buys: every BUY is scaled by the same fraction of its demand, floored to whole units, leaving the remainder unfunded; NEUTRO never participates.
+_UI:_ "Pro-rata"
+_Avoid_: Partial order (that is a lifecycle state), proportional cut
 
 **Monthly Close**:
 Marking a month as done: locks that month's state and persists a Snapshot.

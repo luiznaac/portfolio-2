@@ -10,8 +10,9 @@ import org.springframework.stereotype.Component
 
 // The month-scoped order plan read: the ideal chain and its leaf candidates, computed on read from
 // the open month's Capital, Floor and Targets, the projected positions and the latest closes; the
-// funding phase adds the sells that cover the buys. The phase query defaults to `ideals`; the full
-// phase joins in a later slice.
+// funding phase adds the sells that cover the buys, and the full phase adds the pro-rata scaling,
+// the attribution bias and transfers, and the RF sub-class orders. The phase query defaults to
+// `ideals`.
 @Component
 class OrderPlanController(
     private val service: OrderPlanService,

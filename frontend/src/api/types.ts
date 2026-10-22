@@ -293,11 +293,12 @@ export interface Allocation {
   classes: ClassAllocation[];
 }
 
-// The order engine's read (GET /month/current/orders?phase=ideals|candidates|funding). Ideal/amount
+// The order engine's read (GET /month/current/orders?phase=ideals|candidates|funding|full). Ideal/amount
 // are R$; `target_quantity` is the whole-unit floor of a ticker slice and is absent when no quote
 // prices it. Candidates aggregate a ticker's target across strategies; a targeted surplus stays a
-// hold unless the funding pass sells it to cover a buy.
-export type OrderPlanPhase = "IDEALS" | "CANDIDATES" | "FUNDING";
+// hold unless the funding pass sells it to cover a buy. The full phase adds the pro-rata scaling, the
+// attribution bias/transfers and the RF sub-class orders.
+export type OrderPlanPhase = "IDEALS" | "CANDIDATES" | "FUNDING" | "FULL";
 export type OrderSide = "BUY" | "SELL" | "NEW_ENTRY" | "EXIT";
 
 /** Why a funding SELL exists, in the cascade's source order. */
@@ -305,6 +306,8 @@ export type FundingSource = "NEUTRO" | "OUTSIDE_STRATEGY" | "SURPLUS";
 
 export interface TickerOrderPlan {
   ticker: string;
+  /** The Strategy this slice belongs to — the Attribution ledger's key. */
+  strategy: string;
   target: number;
   ideal: number;
   price?: number;
@@ -324,10 +327,24 @@ export interface StrategyOrderPlan {
   tickers: TickerOrderPlan[];
 }
 
+/** How an RF sub-class order moves money. */
+export type FixedIncomeOrderSide = "CONTRIBUTE" | "REDEEM";
+
+export interface FixedIncomeOrder {
+  sub_class: FixedIncomeSubClass;
+  side: FixedIncomeOrderSide;
+  /** Positive R$; the side carries the direction. */
+  amount: number;
+}
+
 export interface SubClassOrderPlan {
   sub_class: FixedIncomeSubClass;
   target?: number;
   ideal: number;
+  /** Present from the full phase on. */
+  actual?: number;
+  deficit?: number;
+  orders: FixedIncomeOrder[];
 }
 
 // The class rung is a variant: equities carry strategies, fixed income carries sub-classes. The
@@ -363,12 +380,50 @@ export interface OrderCandidate {
   funding_source?: FundingSource;
 }
 
-/** The funding pass's arithmetic; present from the funding phase on. */
+/** The funding pass's arithmetic; present from the funding phase on, restated in scaled terms at full. */
 export interface FundingSummary {
   buy_amount: number;
   sell_amount: number;
   unfunded_amount: number;
   neutro_deficit: number;
+}
+
+/** The pro-rata pass's arithmetic at the full phase; factor 1 means every buy was funded. */
+export interface ProRataSummary {
+  original_buy_amount: number;
+  factor: number;
+  buy_amount: number;
+  unfunded_amount: number;
+}
+
+/** A held ticker no Target names; held for attention, never auto-exited. */
+export interface OutsideStrategyHolding {
+  ticker: string;
+  quantity: number;
+  price?: number;
+  amount?: number;
+  /** The full-position manual EXIT default, floored to whole units. */
+  suggested_exit_quantity: number;
+}
+
+export type AttributionSide = "ALLOCATE" | "DEALLOCATE";
+
+/** A suggested change to the Attribution ledger caused by a buy or a sell. */
+export interface AttributionMove {
+  ticker: string;
+  strategy: string;
+  side: AttributionSide;
+  quantity: number;
+}
+
+/** A bookkeeping move between two slices of the same ticker — no tax effect, no custody movement. */
+export interface AttributionTransfer {
+  ticker: string;
+  from_strategy: string;
+  to_strategy: string;
+  quantity: number;
+  price?: number;
+  amount?: number;
 }
 
 export interface OrderPlan {
@@ -380,6 +435,11 @@ export interface OrderPlan {
   classes: ClassOrderPlan[];
   candidates: OrderCandidate[];
   funding?: FundingSummary;
+  outside_strategy: OutsideStrategyHolding[];
+  /** Present from the full phase on. */
+  pro_rata?: ProRataSummary;
+  attribution: AttributionMove[];
+  transfers: AttributionTransfer[];
 }
 
 // A strategy report's analyst recommendation — the English key the backend serialises.

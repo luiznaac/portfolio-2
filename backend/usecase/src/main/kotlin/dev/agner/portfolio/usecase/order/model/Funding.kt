@@ -20,3 +20,14 @@ data class FundingSummary(
     val unfundedAmount: BigDecimal,
     val neutroDeficit: BigDecimal,
 )
+
+// The pro-rata pass's arithmetic, present on the full plan. When funding still leaves a shortfall,
+// every buy is scaled by `factor` = deployable ÷ demand; `buyAmount` is what the scaled plan spends
+// and `unfundedAmount` is the demand the scaling left out (the original shortfall plus the whole-unit
+// rounding). A factor of 1 means the funding pass already covered every buy.
+data class ProRataSummary(
+    val originalBuyAmount: BigDecimal,
+    val factor: BigDecimal,
+    val buyAmount: BigDecimal,
+    val unfundedAmount: BigDecimal,
+)

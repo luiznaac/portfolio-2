@@ -3,13 +3,23 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
+import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.order.FundingCalculator
 import dev.agner.portfolio.usecase.order.FundingContext
 import dev.agner.portfolio.usecase.order.OrderPlanCalculator
 import dev.agner.portfolio.usecase.order.OrderPlanContext
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.AttributionMove
+import dev.agner.portfolio.usecase.order.model.AttributionSide
+import dev.agner.portfolio.usecase.order.model.AttributionTransfer
+import dev.agner.portfolio.usecase.order.model.FixedIncomeOrder
+import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderPlan
+import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderSide
 import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
+import dev.agner.portfolio.usecase.order.model.OutsideStrategyHolding
+import dev.agner.portfolio.usecase.order.model.ProRataSummary
+import dev.agner.portfolio.usecase.order.model.SubClassOrderPlan
 import dev.agner.portfolio.usecase.order.model.tickerSlices
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.strategyTarget
@@ -95,6 +105,32 @@ class OrderPlanControllerTest : DescribeSpec({
                 funding.get("sell_amount").decimalValue().compareTo(BigDecimal("1000")) shouldBe 0
                 funding.get("unfunded_amount").decimalValue().compareTo(BigDecimal.ZERO) shouldBe 0
                 funding.get("neutro_deficit").decimalValue().compareTo(BigDecimal.ZERO) shouldBe 0
+            }
+        }
+
+        it("serves the complete plan at the full phase") {
+            val service = mockk<OrderPlanService>()
+            coEvery { service.computePlan(OrderPlanPhase.FULL) } returns fullPlan()
+
+            testApplication {
+                application { installRoutes(OrderPlanController(service)) }
+
+                val response = client.get("/month/current/orders?phase=full")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("phase").asText() shouldBe "FULL"
+
+                body.get("pro_rata").get("factor").decimalValue().compareTo(BigDecimal("0.9")) shouldBe 0
+                body.get("outside_strategy").get(0).get("ticker").asText() shouldBe "MXRF11"
+                body.get("outside_strategy").get(0).get("suggested_exit_quantity").asInt() shouldBe 25
+                body.get("attribution").get(0).get("side").asText() shouldBe "ALLOCATE"
+                body.get("transfers").get(0).get("from_strategy").asText() shouldBe "Dividendos Plus"
+
+                val fixedIncome = body.get("classes").single { it.get("asset_class").asText() == "RENDA_FIXA" }
+                val order = fixedIncome.get("sub_classes").get(0).get("orders").get(0)
+                order.get("side").asText() shouldBe "CONTRIBUTE"
+                order.get("amount").decimalValue().compareTo(BigDecimal("100")) shouldBe 0
             }
         }
 
@@ -186,3 +222,67 @@ private fun fundingPlan(): OrderPlan {
     )
     return plan.copy(candidates = plan.candidates + funding.sells, funding = funding.summary)
 }
+
+// The full phase's plan: the funding plan plus the pro-rata arithmetic, the dropped-ticker attention,
+// the attribution moves and transfers, and the RF leaf orders.
+private fun fullPlan(): OrderPlan {
+    val funded = fundingPlan()
+    return funded.copy(
+        phase = OrderPlanPhase.FULL,
+        classes = funded.classes.map { if (it is FixedIncomeOrderPlan) fixedIncomePlan() else it },
+        proRata = ProRataSummary(
+            originalBuyAmount = BigDecimal("5000"),
+            factor = BigDecimal("0.9"),
+            buyAmount = BigDecimal("4500"),
+            unfundedAmount = BigDecimal("500"),
+        ),
+        outsideStrategy = listOf(
+            OutsideStrategyHolding(
+                ticker = "MXRF11",
+                quantity = BigDecimal("25"),
+                price = BigDecimal("10"),
+                amount = BigDecimal("250"),
+                suggestedExitQuantity = BigDecimal("25"),
+            ),
+        ),
+        attribution = listOf(
+            AttributionMove(
+                ticker = "ITUB4",
+                strategy = "Top",
+                side = AttributionSide.ALLOCATE,
+                quantity = BigDecimal("249"),
+            ),
+        ),
+        transfers = listOf(
+            AttributionTransfer(
+                ticker = "ITUB4",
+                fromStrategy = "Dividendos Plus",
+                toStrategy = "Top",
+                quantity = BigDecimal.ONE,
+                price = BigDecimal("50"),
+                amount = BigDecimal("50"),
+            ),
+        ),
+    )
+}
+
+private fun fixedIncomePlan(): FixedIncomeOrderPlan = FixedIncomeOrderPlan(
+    target = BigDecimal("10"),
+    ideal = BigDecimal("100"),
+    subClasses = listOf(
+        SubClassOrderPlan(
+            subClass = FixedIncomeSubClass.FLOATING_RATE,
+            target = BigDecimal("100"),
+            ideal = BigDecimal("100"),
+            actual = BigDecimal.ZERO,
+            deficit = BigDecimal("100"),
+            orders = listOf(
+                FixedIncomeOrder(
+                    subClass = FixedIncomeSubClass.FLOATING_RATE,
+                    side = FixedIncomeOrderSide.CONTRIBUTE,
+                    amount = BigDecimal("100"),
+                ),
+            ),
+        ),
+    ),
+)

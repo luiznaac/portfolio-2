@@ -184,12 +184,14 @@ private fun exit(ticker: String, quantity: String, price: String) = OrderCandida
 
 private fun slice(
     ticker: String,
+    strategy: String = "Top",
     target: String = "100",
     targetQuantity: String,
     neutro: Boolean = false,
     attributed: String = "0",
 ) = TickerOrderPlan(
     ticker = ticker,
+    strategy = strategy,
     target = BigDecimal(target),
     ideal = BigDecimal.ZERO,
     price = null,

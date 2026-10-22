@@ -4,10 +4,13 @@ import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.deficitAgainst
 import dev.agner.portfolio.usecase.order.model.ClassOrderPlan
 import dev.agner.portfolio.usecase.order.model.EquitiesOrderPlan
+import dev.agner.portfolio.usecase.order.model.FixedIncomeOrder
 import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderPlan
+import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderSide
 import dev.agner.portfolio.usecase.order.model.OrderCandidate
 import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.OrderSide
+import dev.agner.portfolio.usecase.order.model.OutsideStrategyHolding
 import dev.agner.portfolio.usecase.order.model.StrategyOrderPlan
 import dev.agner.portfolio.usecase.order.model.SubClassOrderPlan
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
@@ -16,6 +19,7 @@ import dev.agner.portfolio.usecase.portfolio.TargetChainCalculator
 import dev.agner.portfolio.usecase.portfolio.model.ClassChain
 import dev.agner.portfolio.usecase.portfolio.model.EquitiesChain
 import dev.agner.portfolio.usecase.portfolio.model.FixedIncomeChain
+import dev.agner.portfolio.usecase.portfolio.model.SubClassChain
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -30,6 +34,10 @@ import java.math.RoundingMode
 // visible on the leaf and unfunded. Whole units floor both ways; the remainder stays in the
 // Uninvested Balance. A targeted surplus is held — SELLs arrive with funding, which the service
 // composes from FundingCalculator at the funding phase.
+//
+// A held ticker no Target names (a dropped ticker) is reported as an OutsideStrategyHolding with a
+// full-position manual EXIT default; it is never auto-exited. RF orders are sized per sub-class at
+// the full phase.
 object OrderPlanCalculator {
 
     fun compute(context: OrderPlanContext): OrderPlan {
@@ -45,6 +53,11 @@ object OrderPlanCalculator {
         } else {
             emptyList()
         }
+        val outsideStrategy = if (context.phase.includesCandidates) {
+            computeOutsideStrategy(classes = classes, positions = context.positions, prices = context.prices)
+        } else {
+            emptyList()
+        }
 
         return OrderPlan(
             period = context.period,
@@ -54,6 +67,7 @@ object OrderPlanCalculator {
             investableCapital = investableCapital,
             classes = classes,
             candidates = candidates,
+            outsideStrategy = outsideStrategy,
         )
     }
 
@@ -78,6 +92,7 @@ object OrderPlanCalculator {
                             val custody = attributed.coerceAtMost(context.positions[ticker.ticker] ?: BigDecimal.ZERO)
                             TickerOrderPlan(
                                 ticker = ticker.ticker,
+                                strategy = strategy.strategy,
                                 target = ticker.target,
                                 ideal = ticker.ideal,
                                 price = price,
@@ -95,10 +110,23 @@ object OrderPlanCalculator {
                 target = chain.target,
                 ideal = chain.ideal,
                 subClasses = chain.subClasses.map { subClass ->
+                    val actual = if (context.phase.isFull) {
+                        context.fixedIncomeActualBySubClass[subClass.subClass] ?: BigDecimal.ZERO
+                    } else {
+                        null
+                    }
+                    val deficit = actual?.let { subClass.ideal.deficitAgainst(it) }
                     SubClassOrderPlan(
                         subClass = subClass.subClass,
                         target = subClass.target,
                         ideal = subClass.ideal,
+                        actual = actual,
+                        deficit = deficit,
+                        orders = if (context.phase.isFull) {
+                            fixedIncomeOrders(subClass = subClass, deficit = deficit)
+                        } else {
+                            emptyList()
+                        },
                     )
                 },
             )
@@ -109,17 +137,14 @@ object OrderPlanCalculator {
     // slice keeps its weight but contributes no buy target; the units attributed to it stay out of
     // the custody an active slice may net against, so a NEUTRO holding can never mask a sibling
     // slice's deficit. A ticker held entirely under NEUTRO still counts as targeted, so it is not
-    // mistaken for a dropped ticker and never auto-EXITs.
+    // mistaken for a dropped ticker and never becomes an outside-strategy holding.
     private fun computeCandidates(
         classes: List<ClassOrderPlan>,
         positions: TickerPositions,
         prices: TickerPrices,
     ): List<OrderCandidate> {
-        val slices = classes
-            .filterIsInstance<EquitiesOrderPlan>()
-            .flatMap { it.strategies }
-            .flatMap { it.tickers }
-            .groupBy { it.ticker }
+        val slices = tickerSlices(classes).groupBy { it.ticker }
+        val targeted = targetedTickers(classes)
         val tickers = (slices.keys + positions.keys)
             .sorted()
             .associateWith { slices[it].orEmpty() }
@@ -127,20 +152,45 @@ object OrderPlanCalculator {
         return tickers.mapNotNull { (ticker, tickerSlices) ->
             val position = positions[ticker] ?: BigDecimal.ZERO
             val price = prices[ticker]?.takeIf { it.signum() > 0 }
-            val hasWeight = tickerSlices.any { it.target.signum() > 0 }
+            val hasWeight = ticker in targeted
 
-            when {
-                hasWeight && price != null -> buyOrNewEntry(
+            if (hasWeight && price != null) {
+                buyOrNewEntry(
                     ticker = ticker,
                     slices = tickerSlices.filterNot { it.neutro },
                     position = position,
                     neutroHeld = tickerSlices.filter { it.neutro }.sumOf { it.attributedQuantity },
                     price = price,
                 )
-                !hasWeight && position.signum() > 0 -> exit(ticker = ticker, position = position, price = price)
-                else -> null
+            } else {
+                null
             }
         }
+    }
+
+    // Every held ticker the chain does not name: a dropped ticker (weight 0 everywhere) or a position
+    // from before the current Edition. Held for attention, with a manual EXIT defaulting to the full
+    // whole-unit position — the engine emits no order here.
+    private fun computeOutsideStrategy(
+        classes: List<ClassOrderPlan>,
+        positions: TickerPositions,
+        prices: TickerPrices,
+    ): List<OutsideStrategyHolding> {
+        val targeted = targetedTickers(classes)
+
+        return positions.entries
+            .filter { (ticker, position) -> position.signum() > 0 && ticker !in targeted }
+            .map { (ticker, position) ->
+                val price = prices[ticker]?.takeIf { it.signum() > 0 }
+                OutsideStrategyHolding(
+                    ticker = ticker,
+                    quantity = position,
+                    price = price,
+                    amount = price?.let { position.multiply(it).defaultScale() },
+                    suggestedExitQuantity = wholeUnits(position),
+                )
+            }
+            .sortedBy { it.ticker }
     }
 
     private fun buyOrNewEntry(
@@ -173,27 +223,30 @@ object OrderPlanCalculator {
         )
     }
 
-    // A ticker outside every strategy (or at weight 0 everywhere) is held, and the manual EXIT it
-    // defaults to takes the full position — whole units, so a fractional remainder stays put. This
-    // is not a SELL of a targeted surplus: a covered surplus still emits no candidate.
-    private fun exit(ticker: String, position: BigDecimal, price: BigDecimal?): OrderCandidate? {
-        val quantity = wholeUnits(position)
-        if (quantity.signum() <= 0) return null
-
-        return OrderCandidate.traded(
-            side = OrderSide.EXIT,
-            ticker = ticker,
-            quantity = quantity,
-            price = price,
-            ideal = BigDecimal.ZERO,
-            targetQuantity = BigDecimal.ZERO,
-            position = position,
-        )
-    }
-
     // Whole units floor down, so a sub-unit remainder is never bought or sold.
     private fun unitsFor(amount: BigDecimal, price: BigDecimal): BigDecimal =
         amount.divide(price, 0, RoundingMode.FLOOR)
 
     private fun wholeUnits(quantity: BigDecimal): BigDecimal = quantity.setScale(0, RoundingMode.FLOOR)
+
+    // The RF leaf orders: a targeted sub-class contributes its deficit or redeems its surplus, in
+    // whole reais. A sub-class the chain does not target has no order — an untargeted surplus is held.
+    private fun fixedIncomeOrders(subClass: SubClassChain, deficit: BigDecimal?): List<FixedIncomeOrder> {
+        if (subClass.target == null || deficit == null || deficit.signum() == 0) return emptyList()
+        return listOf(
+            FixedIncomeOrder(
+                subClass = subClass.subClass,
+                side = if (deficit.signum() > 0) FixedIncomeOrderSide.CONTRIBUTE else FixedIncomeOrderSide.REDEEM,
+                amount = deficit.abs().defaultScale(),
+            ),
+        )
+    }
+
+    // The listed ticker leaves, in chain order.
+    private fun tickerSlices(classes: List<ClassOrderPlan>): List<TickerOrderPlan> =
+        classes.filterIsInstance<EquitiesOrderPlan>().flatMap { it.strategies }.flatMap { it.tickers }
+
+    // The tickers the chain still targets (weight > 0): everything else held is outside the strategy.
+    private fun targetedTickers(classes: List<ClassOrderPlan>): Set<String> =
+        tickerSlices(classes).filter { it.target.signum() > 0 }.map { it.ticker }.toSet()
 }
