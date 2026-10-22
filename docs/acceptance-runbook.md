@@ -44,25 +44,34 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 - **DB readiness**: the app section needs no runbook-level DB probe — the mysql section's ready probe plus compose `depends_on: mysql: condition: service_healthy` covers it; the app self-migrates an empty MySQL via Flyway (`bin/migrate` in `deploy/entrypoint.sh`) before serving.
 
 - **chameidor**: not booted; scheduling-side intents are unreachable and fine (job registration is lazy — `ScheduleService` is reached only through consolidation runs).
-- **Order-plan seed**: the order plan prices positions from the latest stored close and reads the NEUTRO flag from a strategy's active Edition; the COTAHIST feed and a report import are not reachable in acceptance. After the app is healthy, reset the order-plan tables and seed the scenario the candidate and funding intents read. The month and its chain are posted over HTTP afterwards, so this seed clears them too. The scenario: strategy `Dividendos` holds VALE3 50 / ITUB4 40 / B3SA3 10, B3SA3 is `não operar`, ITUB4 is over its target and B3SA3 carries an attribution slice:
+- **Order-plan seed**: the order plan prices positions from the latest stored close and reads the NEUTRO flag from a strategy's active Edition; the COTAHIST feed and a report import are not reachable in acceptance. After the app is healthy, reset the order tables and seed the scenario the plan, lifecycle and transfer intents read. The month and its chain are seeded here too (not posted over HTTP) so the run is deterministic. The scenario: two strategies (Dividendos / Small Caps) share ITUB4, B3SA3 and CSNA3 at a R$10 close; ITUB4 sits below its target (a BUY candidate the seeded manual trade executes), B3SA3 and CSNA3 sit above theirs (funding sells), and the Dividendos attribution is off-ideal against Small Caps so the refresh proposes one auto-approved transfer (ITUB4, R$200) and two pending ones (B3SA3 and CSNA3, R$600 each):
 
   ```
   docker compose exec -T mysql mysql -uroot portfolio \
-    -e "DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM strategy; \
-        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
-        INSERT INTO strategy (name, asset_class, weight, created_at) VALUES ('Dividendos', 'ACOES', 100, NOW()); \
-        SET @strategy := LAST_INSERT_ID(); \
-        INSERT INTO edition (strategy_id, reference_month, status, diff_from_previous_stored, created_at) \
-          VALUES (@strategy, '2027-04', 'ACTIVE', NULL, NOW()); \
-        SET @edition := LAST_INSERT_ID(); \
-        INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES \
-          (@edition, 'VALE3', 50, 'BUY', NULL, FALSE), \
-          (@edition, 'ITUB4', 40, 'BUY', NULL, FALSE), \
-          (@edition, 'B3SA3', 10, 'NEUTRAL', NULL, TRUE); \
-        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('B3SA3', @strategy, 20); \
-        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 100, 40), ('B3SA3', 20, 15); \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (name, asset_class, weight, created_at) VALUES ('Dividendos','ACOES',50,NOW()), ('Small Caps','ACOES',50,NOW()); \
+        SET @div := (SELECT id FROM strategy WHERE name='Dividendos'); \
+        INSERT INTO \`month\` (period, capital, \`floor\`, status, created_at) VALUES ('2027-04', 4000, 0, 'OPEN', NOW()); \
+        SET @month := LAST_INSERT_ID(); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (@month,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (@month,'STRATEGY','ACOES','Dividendos',NULL,NULL,50,NOW()), \
+          (@month,'STRATEGY','ACOES','Small Caps',NULL,NULL,50,NOW()), \
+          (@month,'TICKER','ACOES','Dividendos',NULL,'ITUB4',40,NOW()), \
+          (@month,'TICKER','ACOES','Dividendos',NULL,'B3SA3',30,NOW()), \
+          (@month,'TICKER','ACOES','Dividendos',NULL,'CSNA3',30,NOW()), \
+          (@month,'TICKER','ACOES','Small Caps',NULL,'ITUB4',40,NOW()), \
+          (@month,'TICKER','ACOES','Small Caps',NULL,'B3SA3',30,NOW()), \
+          (@month,'TICKER','ACOES','Small Caps',NULL,'CSNA3',30,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8), ('B3SA3',260,8), ('CSNA3',150,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4',@div,120), ('B3SA3',@div,260), ('CSNA3',@div,150); \
         REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
-          ('VALE3', '2027-02-28', 10, 'COTAHIST', NOW()), \
-          ('ITUB4', '2027-02-28', 50, 'COTAHIST', NOW()), \
-          ('B3SA3', '2027-02-28', 17.58, 'COTAHIST', NOW());"
+          ('ITUB4','2027-02-28',10,'COTAHIST',NOW()), ('B3SA3','2027-02-28',10,'COTAHIST',NOW()), ('CSNA3','2027-02-28',10,'COTAHIST',NOW()); \
+        INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+        SET @inst := LAST_INSERT_ID(); \
+        INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+          ('ITUB4','2027-04-05','B3', 60, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('B3SA3','2027-04-06','B3',-60, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());"
   ```

@@ -84,6 +84,19 @@ export function IconCalendar(props: IconProps) {
   );
 }
 
+export function IconList(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function IconTarget(props: IconProps) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
