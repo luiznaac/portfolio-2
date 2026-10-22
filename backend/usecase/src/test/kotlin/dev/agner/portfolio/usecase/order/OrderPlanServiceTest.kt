@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.listedasset.AttributionService
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Position
+import dev.agner.portfolio.usecase.order.model.AttributionSide
 import dev.agner.portfolio.usecase.order.model.EquitiesOrderPlan
 import dev.agner.portfolio.usecase.order.model.FundingSource
 import dev.agner.portfolio.usecase.order.model.OrderCandidate
@@ -129,6 +130,27 @@ class OrderPlanServiceTest : StringSpec({
         plan.funding!!.buyAmount.plain() shouldBe "5000"
         plan.funding!!.sellAmount.plain() shouldBe "996"
         plan.funding!!.unfundedAmount.plain() shouldBe "4"
+    }
+
+    "scales the buys and aims the attribution at the full phase" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { allocations.fetchCurrent() } returns allocation(actual = "6000")
+        coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("500"), BigDecimal("8")))
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+
+        val plan = service.computePlan(OrderPlanPhase.FULL)!!
+
+        plan.phase shouldBe OrderPlanPhase.FULL
+        plan.candidates.single { it.ticker == "ITUB4" }.quantity.plain() shouldBe "249"
+        plan.proRata!!.factor.plain() shouldBe "0.9992"
+        plan.proRata!!.buyAmount.plain() shouldBe "4980"
+        plan.funding!!.buyAmount.plain() shouldBe "4980"
+        plan.funding!!.unfundedAmount.plain() shouldBe "20"
+        plan.attribution.map { Triple(it.ticker, it.strategy, it.side) } shouldBe listOf(
+            Triple("ITUB4", "Top", AttributionSide.ALLOCATE),
+        )
+        plan.attribution.single().quantity.plain() shouldBe "249"
     }
 })
 

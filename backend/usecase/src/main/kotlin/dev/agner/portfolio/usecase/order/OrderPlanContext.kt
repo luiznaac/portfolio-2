@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.order
 
+import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.order.model.OrderCandidate
 import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
@@ -13,6 +14,9 @@ typealias TickerPositions = Map<String, BigDecimal>
 typealias TickerPrices = Map<String, BigDecimal>
 typealias TickerSlices = Map<String, List<TickerOrderPlan>>
 
+// RF sub-class Actuals, keyed the way the chain addresses them.
+typealias SubClassAmounts = Map<FixedIncomeSubClass, BigDecimal>
+
 // Everything the pure order-plan calculation needs: the open month's Capital and cash Floor, its
 // Target chain (already canonical — MonthService normalizes it), the projected listed positions and
 // the latest close for every ticker the chain can leaf on. Bundled as one context rather than a long
@@ -20,8 +24,9 @@ typealias TickerSlices = Map<String, List<TickerOrderPlan>>
 //
 // `neutroSlices` is the Edition Entries flagged "não operar" and `attributionBySlice` maps each
 // (strategy, ticker) slice to its stored Attribution quantity — the only way to size a NEUTRO slice's
-// sell. The funding pass's cash input lives in FundingContext, so a phase that does not fund never
-// touches the whole-book valuation.
+// sell. `fixedIncomeActualBySubClass` values the RF book for the full phase's sub-class orders; not
+// every phase reads it. The funding pass's cash input lives in FundingContext, so a phase that does
+// not fund never touches the whole-book valuation.
 data class OrderPlanContext(
     val period: YearMonth,
     val phase: OrderPlanPhase,
@@ -32,6 +37,7 @@ data class OrderPlanContext(
     val prices: TickerPrices,
     val neutroSlices: Set<StrategyTicker> = emptySet(),
     val attributionBySlice: Map<StrategyTicker, BigDecimal> = emptyMap(),
+    val fixedIncomeActualBySubClass: SubClassAmounts = emptyMap(),
 )
 
 // The funding pass's inputs, bundled so the cascade keeps the repo's context-object shape: the

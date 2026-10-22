@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.order.model.EquitiesOrderPlan
 import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderPlan
+import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderSide
 import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
 import dev.agner.portfolio.usecase.order.model.OrderSide
 import dev.agner.portfolio.usecase.plain
@@ -16,7 +17,6 @@ import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.subClassTarget
 import dev.agner.portfolio.usecase.tickerTarget
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
@@ -135,7 +135,7 @@ class OrderPlanCalculatorTest : StringSpec({
         plan.candidates.single().quantity.plain() shouldBe "5"
     }
 
-    "holds a surplus position and EXITs a dropped ticker at its full position" {
+    "holds a surplus position and reports dropped tickers outside the strategy" {
         val plan = compute(
             capital = "10000",
             floor = "0",
@@ -157,20 +157,43 @@ class OrderPlanCalculatorTest : StringSpec({
             ),
         )
 
-        plan.candidates.map { it.ticker to it.side } shouldBe listOf(
-            "ITUB4" to OrderSide.EXIT,
-            "MXRF11" to OrderSide.EXIT,
-        )
-        plan.candidates.map { it.side } shouldNotContain OrderSide.SELL
-        plan.candidates.associate { it.ticker to it.quantity.plain() } shouldBe mapOf(
+        plan.candidates shouldBe emptyList()
+        plan.outsideStrategy.associate { it.ticker to it.quantity.plain() } shouldBe mapOf(
             "ITUB4" to "7",
             "MXRF11" to "25",
         )
-        plan.candidates.single { it.ticker == "MXRF11" }.amount!!.plain() shouldBe "250"
-        plan.candidates.single { it.ticker == "MXRF11" }.deficit!!.plain() shouldBe "-250"
+        plan.outsideStrategy.single { it.ticker == "MXRF11" }.amount!!.plain() shouldBe "250"
+        plan.outsideStrategy.single { it.ticker == "ITUB4" }.suggestedExitQuantity.plain() shouldBe "7"
     }
 
-    "leaves a candidate's deficit unset when no quote values the position" {
+    "lists a held FII outside the strategy without emitting an order" {
+        val plan = compute(
+            capital = "10000",
+            floor = "0",
+            targets = chain(
+                assetClass = AssetClass.FIIS,
+                tickers = listOf(tickerTarget("Top", "BTLG11", "100")),
+            ),
+            positions = mapOf(
+                "MXRF11" to "300",
+                "RBRP11" to "35",
+                "VILG11" to "25",
+            ),
+            prices = mapOf(
+                "MXRF11" to "10",
+                "RBRP11" to "40",
+                "VILG11" to "100",
+            ),
+        )
+
+        val outside = plan.outsideStrategy.associateBy { it.ticker }
+        outside.keys shouldBe setOf("MXRF11", "RBRP11", "VILG11")
+        outside.getValue("MXRF11").suggestedExitQuantity.plain() shouldBe "300"
+        outside.getValue("RBRP11").amount!!.plain() shouldBe "1400"
+        plan.candidates shouldBe emptyList()
+    }
+
+    "keeps an unpriced outside-strategy holding without an amount" {
         val plan = compute(
             capital = "10000",
             floor = "0",
@@ -178,15 +201,13 @@ class OrderPlanCalculatorTest : StringSpec({
             positions = mapOf("MXRF11" to "25"),
         )
 
-        val candidate = plan.candidates.single()
-        candidate.ticker shouldBe "MXRF11"
-        candidate.side shouldBe OrderSide.EXIT
-        candidate.price shouldBe null
-        candidate.amount shouldBe null
-        candidate.deficit shouldBe null
+        val holding = plan.outsideStrategy.single()
+        holding.ticker shouldBe "MXRF11"
+        holding.price shouldBe null
+        holding.amount shouldBe null
     }
 
-    "floors an EXIT to whole units" {
+    "floors a manual EXIT default to whole units" {
         val plan = compute(
             capital = "10000",
             floor = "0",
@@ -201,8 +222,45 @@ class OrderPlanCalculatorTest : StringSpec({
             ),
         )
 
-        plan.candidates.single().quantity.plain() shouldBe "25"
-        plan.candidates.single().deficit!!.plain() shouldBe "-259"
+        val holding = plan.outsideStrategy.single()
+        holding.quantity.plain() shouldBe "25.9"
+        holding.suggestedExitQuantity.plain() shouldBe "25"
+    }
+
+    "sizes a Renda Fixa order per targeted sub-class at the full phase" {
+        val plan = compute(
+            capital = "100000",
+            floor = "0",
+            phase = OrderPlanPhase.FULL,
+            targets = Targets(
+                classes = listOf(classTarget(AssetClass.RENDA_FIXA, "100")),
+                strategies = emptyList(),
+                subClasses = listOf(
+                    subClassTarget(FixedIncomeSubClass.FLOATING_RATE, "60"),
+                    subClassTarget(FixedIncomeSubClass.INFLATION_LINKED, "40"),
+                ),
+                tickers = emptyList(),
+            ),
+            fixedIncomeActualBySubClass = mapOf(
+                FixedIncomeSubClass.FLOATING_RATE to BigDecimal("50000"),
+                FixedIncomeSubClass.INFLATION_LINKED to BigDecimal("45000"),
+            ),
+        )
+
+        val orders = plan.classes.filterIsInstance<FixedIncomeOrderPlan>()
+            .single()
+            .subClasses
+            .associate { subClass -> subClass.subClass to subClass.orders.singleOrNull() }
+
+        val floating = orders.getValue(FixedIncomeSubClass.FLOATING_RATE)
+        floating!!.side shouldBe FixedIncomeOrderSide.CONTRIBUTE
+        floating.amount.plain() shouldBe "10000"
+
+        val inflation = orders.getValue(FixedIncomeSubClass.INFLATION_LINKED)
+        inflation!!.side shouldBe FixedIncomeOrderSide.REDEEM
+        inflation.amount.plain() shouldBe "5000"
+
+        orders.getValue(FixedIncomeSubClass.FIXED_RATE) shouldBe null
     }
 
     "computes the RF sub-class ideals without leaf orders" {
@@ -329,6 +387,7 @@ private fun compute(
     phase: OrderPlanPhase = OrderPlanPhase.CANDIDATES,
     neutroSlices: Set<StrategyTicker> = emptySet(),
     attributionBySlice: Map<StrategyTicker, BigDecimal> = emptyMap(),
+    fixedIncomeActualBySubClass: Map<FixedIncomeSubClass, BigDecimal> = emptyMap(),
 ) = OrderPlanCalculator.compute(
     OrderPlanContext(
         period = YearMonth.parse("2026-10"),
@@ -340,14 +399,16 @@ private fun compute(
         prices = prices.mapValues { BigDecimal(it.value) },
         neutroSlices = neutroSlices,
         attributionBySlice = attributionBySlice,
+        fixedIncomeActualBySubClass = fixedIncomeActualBySubClass,
     ),
 )
 
 private fun chain(
-    strategies: List<StrategyTarget> = listOf(strategyTarget(AssetClass.ACOES, "Top", "100")),
+    assetClass: AssetClass = AssetClass.ACOES,
+    strategies: List<StrategyTarget> = listOf(strategyTarget(assetClass, "Top", "100")),
     tickers: List<TickerTarget>,
 ) = Targets(
-    classes = listOf(classTarget(AssetClass.ACOES, "100")),
+    classes = listOf(classTarget(assetClass, "100")),
     strategies = strategies,
     subClasses = emptyList(),
     tickers = tickers,
