@@ -13,6 +13,8 @@ interface ITradeRepository {
 
     suspend fun fetchAll(): List<Trade>
 
+    suspend fun fetchById(id: Int): Trade?
+
     suspend fun fetchAllBy(ticker: String): List<Trade>
 
     // Every trade matching the natural tuple, ordered by ordinal ascending — the list's position is

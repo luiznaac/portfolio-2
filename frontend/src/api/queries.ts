@@ -11,8 +11,11 @@ import type {
   ImportSource,
   MonthCreation,
   MonthUpdate,
+  OrderList,
   StrategyCreation,
+  SuggestedOrder,
   Targets,
+  TransferProposal,
 } from "./types.ts";
 
 // The three create shapes the RF form can produce, tagged so one mutation dispatches to the right
@@ -174,6 +177,50 @@ export function useCurrentAllocation() {
         throw error;
       }
     },
+  });
+}
+
+export function useOrders() {
+  return useQuery({
+    queryKey: ["orders"],
+    queryFn: async () => {
+      try {
+        return await api.getOrders();
+      } catch (error) {
+        // No open month is a normal state, not an error — the page points at the month opener.
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+  });
+}
+
+export function useRefreshOrders() {
+  const queryClient = useQueryClient();
+  return useMutation<OrderList, Error, void>({
+    mutationFn: () => api.refreshOrders(),
+    onSuccess: (list) => {
+      queryClient.setQueryData(["orders"], list);
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+    },
+  });
+}
+
+// One decision hook for both buttons; the inbox row is replaced by the server's decided proposal.
+export function useDecideTransfer() {
+  const queryClient = useQueryClient();
+  return useMutation<TransferProposal, Error, { id: number; decision: "approve" | "reject" }>({
+    mutationFn: ({ id, decision }) =>
+      decision === "approve" ? api.approveTransfer(id) : api.rejectTransfer(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
+export function useOverrideOrderMatch() {
+  const queryClient = useQueryClient();
+  return useMutation<SuggestedOrder, Error, { orderId: number; tradeId: number | null }>({
+    mutationFn: ({ orderId, tradeId }) => api.overrideOrderMatch(orderId, { trade_id: tradeId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
   });
 }
 

@@ -10,6 +10,10 @@ describe("navCrumb", () => {
     expect(navCrumb("/trades")).toEqual({ group: "Carteira", title: "Ativos" });
   });
 
+  it("resolves the Ordens route under Mês", () => {
+    expect(navCrumb("/orders")).toEqual({ group: "Mês", title: "Ordens" });
+  });
+
   it("matches a nested path under an item's route", () => {
     expect(navCrumb("/imports/42")).toEqual({ group: "Mês", title: "Importar extrato" });
   });

@@ -18,12 +18,16 @@ import type {
   Income,
   MonthCreation,
   MonthUpdate,
+  OrderList,
+  OrderMatchUpdate,
   PositionDetail,
   Quote,
   Strategy,
   StrategyCreation,
+  SuggestedOrder,
   Targets,
   Trade,
+  TransferProposal,
 } from "./types.ts";
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
@@ -167,6 +171,26 @@ export const api = {
 
   getCurrentAllocation(): Promise<Allocation> {
     return request("/month/current/allocation");
+  },
+
+  getOrders(): Promise<OrderList> {
+    return request("/orders");
+  },
+
+  refreshOrders(): Promise<OrderList> {
+    return request("/orders/plan/refresh", { method: "POST" });
+  },
+
+  approveTransfer(id: number): Promise<TransferProposal> {
+    return request(`/orders/transfers/${id}/approve`, { method: "POST" });
+  },
+
+  rejectTransfer(id: number): Promise<TransferProposal> {
+    return request(`/orders/transfers/${id}/reject`, { method: "POST" });
+  },
+
+  overrideOrderMatch(orderId: number, update: OrderMatchUpdate): Promise<SuggestedOrder> {
+    return request(`/orders/${orderId}/match`, { method: "PUT", body: JSON.stringify(update) });
   },
 
   getStrategies(): Promise<Strategy[]> {
