@@ -8,6 +8,7 @@ import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
+import { Orders } from "./pages/Orders.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { Trades } from "./pages/Trades.tsx";
 
@@ -18,6 +19,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Dashboard /> },
       { path: "month", element: <Month /> },
+      { path: "orders", element: <Orders /> },
       { path: "allocation", element: <Allocation /> },
       { path: "strategies", element: <Strategies /> },
       { path: "strategies/import", element: <Strategies /> },

@@ -10,7 +10,8 @@ export type NavIcon =
   | "target"
   | "layers"
   | "coins"
-  | "event";
+  | "event"
+  | "list";
 
 export interface NavItem {
   to: string;
@@ -30,6 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Mês",
     items: [
       { to: "/month", label: "Capital e alvos", icon: "calendar" },
+      { to: "/orders", label: "Ordens", icon: "list" },
       { to: "/imports", label: "Importar extrato", icon: "upload" },
     ],
   },

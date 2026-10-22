@@ -572,3 +572,51 @@ export interface MovementsImportResult {
   incomes: number;
   corporate_actions: CorporateAction[];
 }
+
+// Ordens: the persisted month plan. A suggested order's lifecycle is the server's match against the
+// month's trade ledger (suggested → executed → imported); the frontend only renders the state.
+export type SuggestedOrderStatus = "SUGGESTED" | "EXECUTED" | "IMPORTED";
+export type TransferStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface SuggestedOrder {
+  id: number;
+  ticker: string;
+  side: OrderSide;
+  quantity: number;
+  suggested_price?: number;
+  executed_quantity: number;
+  status: SuggestedOrderStatus;
+  matched_trade_id?: number;
+}
+
+// An Attribution Transfer proposal: bookkeeping only, sized in whole units at the ticker's quote.
+export interface TransferProposal {
+  id: number;
+  ticker: string;
+  from_strategy_id: number;
+  from_strategy: string;
+  to_strategy_id: number;
+  to_strategy: string;
+  quantity: number;
+  amount?: number;
+  auto_approved: boolean;
+  status: TransferStatus;
+}
+
+export interface UnplannedTrade {
+  id: number;
+  ticker: string;
+  side: TradeSide;
+  quantity: number;
+}
+
+export interface OrderList {
+  period: string;
+  orders: SuggestedOrder[];
+  transfers: TransferProposal[];
+  unplanned_trades: UnplannedTrade[];
+}
+
+export interface OrderMatchUpdate {
+  trade_id?: number | null;
+}

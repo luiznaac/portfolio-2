@@ -17,6 +17,8 @@ import dev.agner.portfolio.persistence.institution.InstitutionTable
 import dev.agner.portfolio.persistence.listedasset.AttributionTable
 import dev.agner.portfolio.persistence.listedasset.PositionTable
 import dev.agner.portfolio.persistence.listedasset.TradeTable
+import dev.agner.portfolio.persistence.order.SuggestedOrderTable
+import dev.agner.portfolio.persistence.order.TransferProposalTable
 import dev.agner.portfolio.persistence.portfolio.MonthTable
 import dev.agner.portfolio.persistence.portfolio.TargetTable
 import dev.agner.portfolio.persistence.quotes.QuoteTable
@@ -57,6 +59,8 @@ val allTables: Array<Table> = arrayOf(
     StrategyTable,
     EditionTable,
     EditionEntryTable,
+    SuggestedOrderTable,
+    TransferProposalTable,
 )
 
 // Authoring half of the migration workflow (backend/AGENTS.md). Diffs `allTables` against a

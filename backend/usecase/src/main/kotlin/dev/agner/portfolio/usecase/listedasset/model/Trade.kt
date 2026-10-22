@@ -95,6 +95,10 @@ sealed class Trade(
     }
 }
 
+// Whether the trade's execution is on the ledger through a B3 import — directly, or because the
+// import later confirmed the manual record. The one definition the order lifecycle reads.
+val Trade.isImported: Boolean get() = source == TradeSource.B3_IMPORT || confirmedByB3
+
 private fun requirePositiveQuantity(quantity: BigDecimal) {
     require(quantity.signum() > 0) { "Trade quantity must be positive but was $quantity" }
 }

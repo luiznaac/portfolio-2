@@ -43,6 +43,10 @@ class TradeRepository(
             .map { it.toModel() }
     }
 
+    override suspend fun fetchById(id: Int): Trade? = transaction {
+        TradeEntity.findById(id)?.toModel()
+    }
+
     override suspend fun fetchAllBy(ticker: String): List<Trade> = transaction {
         TradeEntity.find { TradeTable.ticker eq ticker }
             .orderBy(TradeTable.date to SortOrder.ASC)

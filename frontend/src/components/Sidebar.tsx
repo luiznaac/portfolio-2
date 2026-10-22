@@ -10,6 +10,7 @@ import {
   IconCoins,
   IconEvent,
   IconLayers,
+  IconList,
   IconTarget,
   IconUpload,
 } from "./icons.tsx";
@@ -24,6 +25,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   layers: IconLayers,
   coins: IconCoins,
   event: IconEvent,
+  list: IconList,
 };
 
 // The shell's primary navigation: brand mark, grouped items, 236px wide collapsing to 60px. Groups
