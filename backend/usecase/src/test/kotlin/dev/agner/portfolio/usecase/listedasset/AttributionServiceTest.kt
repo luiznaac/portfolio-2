@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -48,6 +49,19 @@ class AttributionServiceTest : StringSpec({
         summary.slices.map { it.strategyName } shouldBe listOf("Top Ações", "Top Dividendos")
         summary.strategyQuantity("Top Dividendos").compareTo(BigDecimal("60")) shouldBe 0
         summary.strategyQuantity("Top Ações").compareTo(BigDecimal("10")) shouldBe 0
+    }
+
+    "fetchLedger keys the ledger by strategy name and ticker" {
+        coEvery { attributions.fetchAll() } returns listOf(
+            attribution(strategyId = 1, quantity = "60"),
+            Attribution(ticker = "VALE3", strategyId = 2, quantity = BigDecimal("5")),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        service.fetchLedger() shouldBe mapOf(
+            StrategyTicker("Top Dividendos", "PETR4") to BigDecimal("60"),
+            StrategyTicker("Top Ações", "VALE3") to BigDecimal("5"),
+        )
     }
 
     "fetchSummary is null when the ticker has no position" {

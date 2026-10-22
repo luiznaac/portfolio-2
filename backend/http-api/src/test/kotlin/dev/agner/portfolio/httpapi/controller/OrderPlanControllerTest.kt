@@ -3,10 +3,14 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
+import dev.agner.portfolio.usecase.order.FundingCalculator
+import dev.agner.portfolio.usecase.order.FundingContext
 import dev.agner.portfolio.usecase.order.OrderPlanCalculator
 import dev.agner.portfolio.usecase.order.OrderPlanContext
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
+import dev.agner.portfolio.usecase.order.model.tickerSlices
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.tickerTarget
@@ -68,6 +72,32 @@ class OrderPlanControllerTest : DescribeSpec({
             }
         }
 
+        it("serves the funding summary and the funding SELLs at the funding phase") {
+            val service = mockk<OrderPlanService>()
+            coEvery { service.computePlan(OrderPlanPhase.FUNDING) } returns fundingPlan()
+
+            testApplication {
+                application { installRoutes(OrderPlanController(service)) }
+
+                val response = client.get("/month/current/orders?phase=funding")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("phase").asText() shouldBe "FUNDING"
+
+                val sell = body.get("candidates").single { it.get("side").asText() == "SELL" }
+                sell.get("ticker").asText() shouldBe "ITUB4"
+                sell.get("quantity").decimalValue().compareTo(BigDecimal("20")) shouldBe 0
+                sell.get("funding_source").asText() shouldBe "SURPLUS"
+
+                val funding = body.get("funding")
+                funding.get("buy_amount").decimalValue().compareTo(BigDecimal("5000")) shouldBe 0
+                funding.get("sell_amount").decimalValue().compareTo(BigDecimal("1000")) shouldBe 0
+                funding.get("unfunded_amount").decimalValue().compareTo(BigDecimal.ZERO) shouldBe 0
+                funding.get("neutro_deficit").decimalValue().compareTo(BigDecimal.ZERO) shouldBe 0
+            }
+        }
+
         it("rejects an unknown phase with the canonical error body") {
             val service = mockk<OrderPlanService>()
 
@@ -119,3 +149,40 @@ private fun plan(phase: OrderPlanPhase) = OrderPlanCalculator.compute(
         prices = mapOf("ITUB4" to BigDecimal("42.62")),
     ),
 )
+
+// The funding phase's plan, composed the way OrderPlanService composes it: the chain and candidates
+// from the calculator, then the funding pass with the whole-book cash.
+private fun fundingPlan(): OrderPlan {
+    val positions = mapOf("ITUB4" to BigDecimal("120"))
+    val prices = mapOf("VALE3" to BigDecimal("100"), "ITUB4" to BigDecimal("50"))
+    val plan = OrderPlanCalculator.compute(
+        OrderPlanContext(
+            period = YearMonth.parse("2026-10"),
+            phase = OrderPlanPhase.FUNDING,
+            capital = BigDecimal("10000"),
+            floor = BigDecimal("0"),
+            targets = Targets(
+                classes = listOf(classTarget(AssetClass.ACOES, "100")),
+                strategies = listOf(strategyTarget(AssetClass.ACOES, "Top", "100")),
+                subClasses = emptyList(),
+                tickers = listOf(
+                    tickerTarget("Top", "VALE3", "50"),
+                    tickerTarget("Top", "ITUB4", "50"),
+                ),
+            ),
+            positions = positions,
+            prices = prices,
+        ),
+    )
+    val funding = FundingCalculator.compute(
+        FundingContext(
+            candidates = plan.candidates,
+            slices = plan.tickerSlices,
+            positions = positions,
+            prices = prices,
+            floor = BigDecimal.ZERO,
+            uninvestedBalance = BigDecimal("4000"),
+        ),
+    )
+    return plan.copy(candidates = plan.candidates + funding.sells, funding = funding.summary)
+}

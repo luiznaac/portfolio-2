@@ -11,6 +11,7 @@ import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.subClassTarget
 import dev.agner.portfolio.usecase.tickerTarget
@@ -246,6 +247,77 @@ class OrderPlanCalculatorTest : StringSpec({
         ticker.targetQuantity shouldBe null
         plan.candidates shouldBe emptyList()
     }
+
+    "blocks the buy for a NEUTRO slice and reports its deficit unfunded" {
+        val plan = compute(
+            capital = "8262.60",
+            floor = "0",
+            targets = chain(
+                strategies = listOf(strategyTarget(AssetClass.ACOES, "Dividendos", "100")),
+                tickers = listOf(tickerTarget("Dividendos", "B3SA3", "10")),
+            ),
+            prices = mapOf("B3SA3" to "17.58"),
+            neutroSlices = setOf(StrategyTicker("Dividendos", "B3SA3")),
+        )
+
+        val slice = plan.classes.filterIsInstance<EquitiesOrderPlan>()
+            .single { it.assetClass == AssetClass.ACOES }
+            .strategies.single()
+            .tickers.single()
+        slice.neutro shouldBe true
+        slice.targetQuantity!!.plain() shouldBe "47"
+        slice.deficit!!.plain() shouldBe "826.26"
+        plan.candidates shouldBe emptyList()
+    }
+
+    "keeps a NEUTRO holding out of a sibling slice's buy sizing" {
+        val plan = compute(
+            capital = "1000",
+            floor = "0",
+            targets = chain(
+                strategies = listOf(
+                    strategyTarget(AssetClass.ACOES, "Top", "50"),
+                    strategyTarget(AssetClass.ACOES, "Dividendos", "50"),
+                ),
+                tickers = listOf(
+                    tickerTarget("Top", "VALE3", "100"),
+                    tickerTarget("Dividendos", "VALE3", "100"),
+                ),
+            ),
+            positions = mapOf("VALE3" to "100"),
+            prices = mapOf("VALE3" to "10"),
+            neutroSlices = setOf(StrategyTicker("Dividendos", "VALE3")),
+            attributionBySlice = mapOf(StrategyTicker("Dividendos", "VALE3") to BigDecimal("100")),
+        )
+
+        val candidate = plan.candidates.single()
+        candidate.side shouldBe OrderSide.BUY
+        candidate.quantity.plain() shouldBe "50"
+    }
+
+    "leaves the non-NEUTRO slices of a ticker buyable" {
+        val plan = compute(
+            capital = "2000",
+            floor = "0",
+            targets = chain(
+                strategies = listOf(
+                    strategyTarget(AssetClass.ACOES, "Top", "50"),
+                    strategyTarget(AssetClass.ACOES, "Dividendos", "50"),
+                ),
+                tickers = listOf(
+                    tickerTarget("Top", "ITUB4", "10"),
+                    tickerTarget("Dividendos", "ITUB4", "10"),
+                ),
+            ),
+            prices = mapOf("ITUB4" to "10"),
+            neutroSlices = setOf(StrategyTicker("Top", "ITUB4")),
+        )
+
+        val candidate = plan.candidates.single()
+        candidate.side shouldBe OrderSide.NEW_ENTRY
+        candidate.quantity.plain() shouldBe "10"
+        candidate.targetQuantity.plain() shouldBe "10"
+    }
 })
 
 private fun compute(
@@ -255,6 +327,8 @@ private fun compute(
     positions: Map<String, String> = emptyMap(),
     prices: Map<String, String> = emptyMap(),
     phase: OrderPlanPhase = OrderPlanPhase.CANDIDATES,
+    neutroSlices: Set<StrategyTicker> = emptySet(),
+    attributionBySlice: Map<StrategyTicker, BigDecimal> = emptyMap(),
 ) = OrderPlanCalculator.compute(
     OrderPlanContext(
         period = YearMonth.parse("2026-10"),
@@ -264,6 +338,8 @@ private fun compute(
         targets = targets,
         positions = positions.mapValues { BigDecimal(it.value) },
         prices = prices.mapValues { BigDecimal(it.value) },
+        neutroSlices = neutroSlices,
+        attributionBySlice = attributionBySlice,
     ),
 )
 

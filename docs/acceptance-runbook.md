@@ -44,11 +44,25 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 - **DB readiness**: the app section needs no runbook-level DB probe — the mysql section's ready probe plus compose `depends_on: mysql: condition: service_healthy` covers it; the app self-migrates an empty MySQL via Flyway (`bin/migrate` in `deploy/entrypoint.sh`) before serving.
 
 - **chameidor**: not booted; scheduling-side intents are unreachable and fine (job registration is lazy — `ScheduleService` is reached only through consolidation runs).
-- **Candidate-phase seed**: the order-plan candidates phase prices a position from the latest stored close, and the COTAHIST feed is not reachable in acceptance. After the app is healthy, seed the closes and positions the candidate intents read (idempotent — `REPLACE`):
+- **Order-plan seed**: the order plan prices positions from the latest stored close and reads the NEUTRO flag from a strategy's active Edition; the COTAHIST feed and a report import are not reachable in acceptance. After the app is healthy, reset the order-plan tables and seed the scenario the candidate and funding intents read. The month and its chain are posted over HTTP afterwards, so this seed clears them too. The scenario: strategy `Dividendos` holds VALE3 50 / ITUB4 40 / B3SA3 10, B3SA3 is `não operar`, ITUB4 is over its target and B3SA3 carries an attribution slice:
 
   ```
   docker compose exec -T mysql mysql -uroot portfolio \
-    -e "REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 76, 40), ('VALE3', 400, 25); \
-        REPLACE INTO quote (ticker, date, close, source, created_at) \
-        VALUES ('ITUB4', '2027-02-28', 42.62, 'COTAHIST', NOW()), ('VALE3', '2027-02-28', 30, 'COTAHIST', NOW());"
+    -e "DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM strategy; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        INSERT INTO strategy (name, asset_class, weight, created_at) VALUES ('Dividendos', 'ACOES', 100, NOW()); \
+        SET @strategy := LAST_INSERT_ID(); \
+        INSERT INTO edition (strategy_id, reference_month, status, diff_from_previous_stored, created_at) \
+          VALUES (@strategy, '2027-04', 'ACTIVE', NULL, NOW()); \
+        SET @edition := LAST_INSERT_ID(); \
+        INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES \
+          (@edition, 'VALE3', 50, 'BUY', NULL, FALSE), \
+          (@edition, 'ITUB4', 40, 'BUY', NULL, FALSE), \
+          (@edition, 'B3SA3', 10, 'NEUTRAL', NULL, TRUE); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('B3SA3', @strategy, 20); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 100, 40), ('B3SA3', 20, 15); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('VALE3', '2027-02-28', 10, 'COTAHIST', NOW()), \
+          ('ITUB4', '2027-02-28', 50, 'COTAHIST', NOW()), \
+          ('B3SA3', '2027-02-28', 17.58, 'COTAHIST', NOW());"
   ```

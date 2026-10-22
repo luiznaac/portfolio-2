@@ -18,6 +18,12 @@ class AttributionRepository : IAttributionRepository {
             .map { it.toModel() }
     }
 
+    override suspend fun fetchAll(): List<Attribution> = transaction {
+        AttributionEntity.all()
+            .orderBy(AttributionTable.ticker to SortOrder.ASC, AttributionTable.strategyId to SortOrder.ASC)
+            .map { it.toModel() }
+    }
+
     override suspend fun save(attribution: Attribution) {
         transaction {
             val existing = AttributionEntity.find {
