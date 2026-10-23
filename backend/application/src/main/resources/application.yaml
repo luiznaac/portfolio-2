@@ -8,6 +8,8 @@ mysql:
   password: ${MYSQL_PASSWORD}
 
 gateways:
+  sgs:
+    host: 'https://api.bcb.gov.br'
   bacen:
     host: 'https://api.bcb.gov.br'
   chameidor:

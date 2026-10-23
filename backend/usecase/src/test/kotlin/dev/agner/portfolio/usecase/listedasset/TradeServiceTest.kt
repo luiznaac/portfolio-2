@@ -21,7 +21,8 @@ class TradeServiceTest : StringSpec({
     val repository = mockk<ITradeRepository>(relaxed = true)
     val positionService = mockk<PositionService>(relaxed = true)
     val transaction = CountingTransaction()
-    val service = TradeService(repository, positionService, transaction)
+    val gaps = mockk<GapService>(relaxed = true)
+    val service = TradeService(repository, positionService, gaps, transaction)
 
     beforeTest {
         clearAllMocks()

@@ -13,6 +13,7 @@ import dev.agner.portfolio.usecase.monthlyclose.model.IncomeTotals
 import dev.agner.portfolio.usecase.monthlyclose.model.OrdersSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.Snapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.TaxCloseSnapshot
+import dev.agner.portfolio.usecase.monthlyclose.model.TickerIncomeSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.repository.ISnapshotRepository
 import dev.agner.portfolio.usecase.order.OrderLifecycleService
 import dev.agner.portfolio.usecase.order.model.OrderList
@@ -96,11 +97,13 @@ class MonthlyCloseService(
         period = month.period,
         capital = month.capital.defaultScale(),
         floor = month.floor.defaultScale(),
+        aportes = month.aportes.defaultScale(),
         caixa = (month.capital - allocation.actual).defaultScale(),
         holdings = holdingSnapshots(),
         attributions = attributionSnapshots(),
         classes = allocation.classes.map { it.toSnapshot() },
         income = incomeTotals(month.period),
+        incomeByTicker = incomeByTicker(month.period),
         orders = OrdersSnapshot(
             orders = orderList.orders,
             transfers = orderList.transfers,
@@ -128,13 +131,22 @@ class MonthlyCloseService(
     }
 
     private suspend fun incomeTotals(period: YearMonth): IncomeTotals {
-        val ofMonth = income.fetchAll().filter { it.date.year == period.year && it.date.month == period.month }
+        val ofMonth = incomeOfMonth(period)
         return IncomeTotals(
             gross = ofMonth.sumOf { it.grossAmount }.defaultScale(),
             retained = ofMonth.sumOf { it.retainedAmount }.defaultScale(),
             net = ofMonth.sumOf { it.netAmount }.defaultScale(),
         )
     }
+
+    private suspend fun incomeByTicker(period: YearMonth): List<TickerIncomeSnapshot> =
+        incomeOfMonth(period)
+            .groupBy { it.ticker }
+            .map { (ticker, rows) -> TickerIncomeSnapshot(ticker, rows.sumOf { it.netAmount }.defaultScale()) }
+            .sortedBy { it.ticker }
+
+    private suspend fun incomeOfMonth(period: YearMonth) =
+        income.fetchAll().filter { it.date.year == period.year && it.date.month == period.month }
 }
 
 private fun ClassAllocation.toSnapshot() = ClassTotalSnapshot(

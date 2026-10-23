@@ -39,6 +39,7 @@ class MonthRepository(
             period = creation.period.toString()
             capital = creation.capital
             floor = creation.floor
+            aportes = creation.aportes
             status = MonthStatus.OPEN
             createdAt = LocalDateTime.now(clock)
         }.toModel()
@@ -50,6 +51,7 @@ class MonthRepository(
             ?.apply {
                 capital = update.capital
                 floor = update.floor
+                update.aportes?.let { aportes = it }
             }
             ?.toModel()
     }

@@ -2,6 +2,8 @@ ktor:
   port: 80
 
 gateways:
+  sgs:
+    host: 'https://api.bcb.gov.br'
   bacen:
     host: 'https://api.bcb.gov.br'
   chameidor:

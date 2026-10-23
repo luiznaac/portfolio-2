@@ -12,4 +12,7 @@ interface ISnapshotRepository {
     suspend fun save(monthId: Int, state: CloseState): Snapshot
 
     suspend fun fetchByMonth(monthId: Int): Snapshot?
+
+    // Every closed month's snapshot, oldest period first — the series the performance reads replay.
+    suspend fun fetchAll(): List<Snapshot>
 }

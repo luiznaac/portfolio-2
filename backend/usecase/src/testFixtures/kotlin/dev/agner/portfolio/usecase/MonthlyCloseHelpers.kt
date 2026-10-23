@@ -20,6 +20,7 @@ fun monthFixture(status: MonthStatus = MonthStatus.OPEN) = Month(
     capital = BigDecimal("245000.00"),
     floor = BigDecimal("20000.00"),
     status = status,
+    aportes = BigDecimal.ZERO,
 )
 
 // The blocked close's proposal: 50 units at R$10 is exactly the R$500 threshold, so the inbox
@@ -46,6 +47,7 @@ fun closeStateFixture() = CloseState(
     period = YearMonth.parse("2026-10"),
     capital = BigDecimal("245000.00"),
     floor = BigDecimal("20000.00"),
+    aportes = BigDecimal.ZERO,
     caixa = BigDecimal("45000.00"),
     holdings = emptyList(),
     attributions = emptyList(),

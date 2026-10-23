@@ -153,6 +153,8 @@ class MonthlyCloseServiceTest : StringSpec({
         persisted.income.gross.plain() shouldBe "100"
         persisted.income.retained.plain() shouldBe "15"
         persisted.income.net.plain() shouldBe "85"
+        persisted.incomeByTicker.single().ticker shouldBe "ITUB4"
+        persisted.incomeByTicker.single().net.plain() shouldBe "85"
         persisted.orders.orders.single().ticker shouldBe "ITUB4"
         persisted.orders.transfers.single().status shouldBe TransferStatus.APPROVED
         persisted.orders.unplannedTrades.single().ticker shouldBe "CURY3"

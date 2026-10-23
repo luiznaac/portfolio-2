@@ -2,6 +2,8 @@ package dev.agner.portfolio.usecase.listedasset
 
 import dev.agner.portfolio.usecase.corporateaction.CorporateActionCalculator
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
+import dev.agner.portfolio.usecase.listedasset.model.Gap
+import dev.agner.portfolio.usecase.listedasset.model.GapStatus
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import java.math.BigDecimal
@@ -27,8 +29,9 @@ object PositionCalculator {
         ticker: String,
         trades: List<Trade>,
         corporateActions: List<CorporateAction> = emptyList(),
+        gaps: List<Gap> = emptyList(),
     ): Position =
-        entries(trades, corporateActions)
+        entries(trades, corporateActions, gaps)
             .sortedBy { it.key }
             .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
 
@@ -40,9 +43,10 @@ object PositionCalculator {
         trades: List<Trade>,
         corporateActions: List<CorporateAction>,
         action: CorporateAction,
+        gaps: List<Gap> = emptyList(),
     ): Position = replayBefore(
         ticker,
-        entries(trades, corporateActions),
+        entries(trades, corporateActions, gaps),
         TimelineKey(action.exDate, ACTION_PRIORITY, action.ordinal, action.id),
     )
 
@@ -54,9 +58,10 @@ object PositionCalculator {
         trades: List<Trade>,
         corporateActions: List<CorporateAction>,
         trade: Trade,
+        gaps: List<Gap> = emptyList(),
     ): Position = replayBefore(
         ticker,
-        entries(trades, corporateActions),
+        entries(trades, corporateActions, gaps),
         TimelineKey(trade.date, TRADE_PRIORITY, trade.ordinal, trade.id),
     )
 
@@ -66,8 +71,14 @@ object PositionCalculator {
             .sortedBy { it.key }
             .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
 
-    private fun entries(trades: List<Trade>, corporateActions: List<CorporateAction>): List<LedgerEntry> =
-        trades.map { LedgerEntry.of(it) } + corporateActions.map { LedgerEntry.of(it) }
+    private fun entries(
+        trades: List<Trade>,
+        corporateActions: List<CorporateAction>,
+        gaps: List<Gap>,
+    ): List<LedgerEntry> =
+        trades.map { LedgerEntry.of(it) } +
+            corporateActions.map { LedgerEntry.of(it) } +
+            gaps.filter { it.status == GapStatus.OPEN }.map { LedgerEntry.of(it) }
 
     private fun apply(position: Position, trade: Trade): Position = when (trade) {
         is Trade.Buy -> buy(position, trade.quantity, trade.unitPrice)
@@ -118,12 +129,22 @@ object PositionCalculator {
                 if (action.isApplied) CorporateActionCalculator.apply(position, action) else position
         }
 
+        data class GapEntry(val gap: Gap) : LedgerEntry() {
+            override val key get() = TimelineKey(gap.date, GAP_PRIORITY, 0, gap.id)
+            override fun apply(position: Position) = when (gap) {
+                is Gap.Buy -> buy(position, gap.quantity, gap.unitPrice)
+                is Gap.Sell -> sell(position, gap.quantity)
+            }
+        }
+
         companion object {
             fun of(trade: Trade) = TradeEntry(trade)
             fun of(action: CorporateAction) = ActionEntry(action)
+            fun of(gap: Gap) = GapEntry(gap)
         }
     }
 
     private const val ACTION_PRIORITY = 0
-    private const val TRADE_PRIORITY = 1
+    private const val GAP_PRIORITY = 1
+    private const val TRADE_PRIORITY = 2
 }

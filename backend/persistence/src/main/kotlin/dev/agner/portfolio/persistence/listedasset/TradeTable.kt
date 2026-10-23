@@ -36,6 +36,9 @@ object TradeTable : IntIdTable("trade") {
     // The natural tuple is not unique: the same execution can repeat, so the occurrence ordinal
     // disambiguates. Existing rows are all the first occurrence.
     val ordinal = integer("ordinal").default(1)
+
+    // The part of an OPENING seed the backfill has already absorbed; regular trades stay at zero.
+    val absorbedQuantity = decimal("absorbed_quantity", 18, 6).default(BigDecimal.ZERO)
     val createdAt = datetime("created_at")
 }
 
@@ -53,6 +56,7 @@ class TradeEntity(id: EntityID<Int>) : IntEntity(id) {
     var sourceType by TradeTable.sourceType
     var confirmedByB3 by TradeTable.confirmedByB3
     var ordinal by TradeTable.ordinal
+    var absorbedQuantity by TradeTable.absorbedQuantity
     var createdAt by TradeTable.createdAt
 
     fun toModel() = tradeModel(
@@ -67,6 +71,7 @@ class TradeEntity(id: EntityID<Int>) : IntEntity(id) {
         source = sourceType,
         confirmedByB3 = confirmedByB3,
         ordinal = ordinal,
+        absorbedQuantity = absorbedQuantity,
     )
 }
 
@@ -83,8 +88,23 @@ internal fun tradeModel(
     source: TradeSource,
     confirmedByB3: Boolean,
     ordinal: Int,
+    absorbedQuantity: BigDecimal,
 ): Trade = when (quantity.signum()) {
-    1 -> Trade.Buy(id, ticker, date, venue, quantity, unitPrice, institutionId, fee, source, confirmedByB3, ordinal)
+    1 -> Trade.Buy(
+        id,
+        ticker,
+        date,
+        venue,
+        quantity,
+        unitPrice,
+        institutionId,
+        fee,
+        source,
+        confirmedByB3,
+        ordinal,
+        absorbedQuantity,
+    )
+
     -1 -> Trade.Sell(
         id,
         ticker,
@@ -97,6 +117,7 @@ internal fun tradeModel(
         source,
         confirmedByB3,
         ordinal,
+        absorbedQuantity,
     )
     else -> throw IllegalStateException("Trade $id has a zero quantity")
 }

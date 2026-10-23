@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRe
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import io.kotest.core.spec.style.StringSpec
@@ -22,7 +23,7 @@ class PositionServiceTest : StringSpec({
     val positions = mockk<IPositionRepository>(relaxed = true)
     val trades = mockk<ITradeRepository>(relaxed = true)
     val corporateActions = mockk<ICorporateActionRepository>(relaxed = true)
-    val service = PositionService(positions, trades, corporateActions)
+    val service = PositionService(positions, trades, corporateActions, mockk<IGapRepository>(relaxed = true))
 
     beforeTest { clearAllMocks() }
 

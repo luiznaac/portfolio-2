@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service
 class TradeService(
     private val repository: ITradeRepository,
     private val positionService: PositionService,
+    private val gaps: GapService,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -28,6 +29,7 @@ class TradeService(
             if (existing.any { it.source == TradeSource.B3_IMPORT }) throw DuplicateTradeException(key)
             val trade = repository.save(normalized, TradeSource.MANUAL, existing.size + 1)
             positionService.reproject(trade.ticker)
+            gaps.reconcile(trade.ticker)
             trade
         }
     }
@@ -50,7 +52,10 @@ class TradeService(
         for ((index, creation) in newOccurrences.withIndex()) {
             repository.save(normalized(creation), TradeSource.B3_IMPORT, existing.size + index + 1)
         }
-        if (newOccurrences.isNotEmpty()) positionService.reproject(key.ticker)
+        if (newOccurrences.isNotEmpty()) {
+            positionService.reproject(key.ticker)
+            gaps.reconcile(key.ticker)
+        }
     }
 
     suspend fun fetchAll() = repository.fetchAll()
