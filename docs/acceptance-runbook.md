@@ -173,6 +173,8 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
     ('PETR4', '2026-03-01', 'VISTA', 100, 10, @inst, NULL, 'OPENING', FALSE, 1, NOW()),
     ('PETR4', '2026-01-10', 'VISTA', 60, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
     ('PETR4', '2026-02-10', 'VISTA', 40, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());
+  INSERT INTO gap (id, ticker, `date`, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES
+    (9003, 'PETR4', '2026-02-20', 'SELL', 40, NULL, 'OPEN', 0, 0, NOW());
   INSERT INTO month (id, period, capital, `floor`, aportes, status, created_at) VALUES
     (9001, '2026-01', 100000, 0, 0, 'CLOSED', NOW()),
     (9002, '2026-02', 103500, 0, 2000, 'CLOSED', NOW());
@@ -199,6 +201,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
   curl -s http://localhost:8080/months/9002/performance   # decomposition 1.5%, xirr, benchmark
   curl -s http://localhost:8080/performance/series        # the two monthly points
-  curl -s http://localhost:8080/gaps                      # [] until the backfill records a delta
+  curl -s http://localhost:8080/gaps                      # the seeded missing sale, realized_pending true
+  curl -s -X POST http://localhost:8080/gaps/9003/price -H 'Content-Type: application/json' -d '{"unit_price":18}'
   curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```

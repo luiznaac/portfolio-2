@@ -854,7 +854,6 @@ export interface PendingTransfersError {
   pending_transfers: PendingTransfer[];
 }
 
-
 // Performance (GET /months/{id}/performance, GET /performance/series). The decomposition is the
 // month's return after net aportes and net income; the benchmark is the target-weighted blend of the
 // policy's class benchmarks (IBOV for Ações/FIIs, CDI for RF Pós/Pré, IPCA for RF Inflação). Null
