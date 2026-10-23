@@ -120,6 +120,49 @@ class IncomeServiceTest : StringSpec({
 
         coVerify(exactly = 0) { repository.saveAll(any()) }
     }
+
+    "reconcile marks a same-month payment of the same type as reconciled" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.ANNOUNCED),
+        )
+        val marked = slot<List<Int>>()
+        coEvery { repository.markReconciled(capture(marked)) } returns Unit
+        coEvery { repository.saveAll(any()) } returns emptyList()
+
+        val result = service.reconcile(listOf(creation(date = "2026-11-25")))
+
+        marked.captured shouldBe listOf(1)
+        result.single().status shouldBe IncomeStatus.RECONCILED
+        coVerify(exactly = 0) { repository.saveAll(any()) }
+    }
+
+    "reconcile imports a movement no announced payment matches" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.ANNOUNCED),
+        )
+        coEvery { repository.markReconciled(any()) } returns Unit
+        val saved = slot<List<IncomeCreation>>()
+        coEvery { repository.saveAll(capture(saved)) } returns emptyList()
+
+        service.reconcile(listOf(creation(date = "2026-12-05", type = IncomeType.JCP)))
+
+        saved.captured.single().type shouldBe IncomeType.JCP
+        coVerify(exactly = 0) { repository.markReconciled(any()) }
+    }
+
+    "reconcile skips a movement already reconciled from another file" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.RECONCILED),
+        )
+        coEvery { repository.markReconciled(any()) } returns Unit
+        coEvery { repository.saveAll(any()) } returns emptyList()
+
+        val result = service.reconcile(listOf(creation(date = "2026-11-25")))
+
+        result shouldBe emptyList()
+        coVerify(exactly = 0) { repository.markReconciled(any()) }
+        coVerify(exactly = 0) { repository.saveAll(any()) }
+    }
 })
 
 private fun income(

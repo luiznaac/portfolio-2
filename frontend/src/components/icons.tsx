@@ -125,6 +125,20 @@ export function IconLayers(props: IconProps) {
   );
 }
 
+export function IconEvent(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M8 2v2M8 12v2M2 8h2M12 8h2M3.8 3.8l1.4 1.4M10.8 10.8l1.4 1.4M12.2 3.8l-1.4 1.4M5.2 10.8l-1.4 1.4"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+      <circle cx={8} cy={8} r={2.2} stroke="currentColor" strokeWidth={1.3} />
+    </svg>
+  );
+}
+
 export function IconCoins(props: IconProps) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>

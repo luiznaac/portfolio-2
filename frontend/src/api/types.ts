@@ -529,6 +529,50 @@ export interface Income {
   status: IncomeStatus;
 }
 
+// Eventos corporativos: a holder-neutral event template plus the engine's decision. `ratio` keeps
+// the event's own direction — DESDOBRAMENTO multiplies the quantity by it, GRUPAMENTO divides — and
+// the amounts stay null on kinds that do not carry them. NEEDS_REVIEW is the review queue.
+export type CorporateActionKind =
+  | "SPLIT"
+  | "REVERSE_SPLIT"
+  | "BONUS_SHARES"
+  | "TICKER_CHANGE"
+  | "RIGHTS_ISSUE"
+  | "RIGHTS_ASSIGNMENT"
+  | "INCORPORATION"
+  | "MERGER"
+  | "SPIN_OFF"
+  | "CAPITAL_RETURN"
+  | "AMORTIZATION"
+  | "CASH_BONUS"
+  | "OTHER";
+export type CorporateActionStatus = "APPLIED" | "NEEDS_REVIEW";
+export type CorporateActionSource = "B3_MOVEMENTS";
+
+export interface CorporateAction {
+  id: number;
+  ticker: string;
+  kind: CorporateActionKind;
+  ex_date: string;
+  approval_date?: string;
+  ratio?: number;
+  declared_value_per_share?: number;
+  target_ticker?: string;
+  source: CorporateActionSource;
+  process_number?: string;
+  raw_type?: string;
+  ordinal: number;
+  status: CorporateActionStatus;
+}
+
+// The POST /corporate-actions/import response: how many rows each destination absorbed and the
+// corporate-action rows the log now holds.
+export interface MovementsImportResult {
+  trades: number;
+  incomes: number;
+  corporate_actions: CorporateAction[];
+}
+
 // Ordens: the persisted month plan. A suggested order's lifecycle is the server's match against the
 // month's trade ledger (suggested → executed → imported); the frontend only renders the state.
 export type SuggestedOrderStatus = "SUGGESTED" | "EXECUTED" | "IMPORTED";

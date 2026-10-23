@@ -322,3 +322,26 @@ export function useImportIncome() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["income"] }),
   });
 }
+
+export function useCorporateActions() {
+  return useQuery({
+    queryKey: ["corporate-actions"],
+    queryFn: api.getCorporateActions,
+  });
+}
+
+// One Movimentação upload touches four destinations: trades, income, the corporate-action log and
+// the positions their replay feeds.
+export function useImportMovements() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.importMovements(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["corporate-actions"] });
+      queryClient.invalidateQueries({ queryKey: ["income"] });
+      queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["imports"] });
+    },
+  });
+}

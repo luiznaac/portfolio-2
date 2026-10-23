@@ -8,6 +8,7 @@ import {
   IconBank,
   IconCalendar,
   IconCoins,
+  IconEvent,
   IconLayers,
   IconList,
   IconTarget,
@@ -23,6 +24,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   target: IconTarget,
   layers: IconLayers,
   coins: IconCoins,
+  event: IconEvent,
   list: IconList,
 };
 

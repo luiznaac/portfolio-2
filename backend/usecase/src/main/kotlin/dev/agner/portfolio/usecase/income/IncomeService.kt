@@ -46,7 +46,37 @@ class IncomeService(
         val today = LocalDate.today(clock)
         return incomes.map { it.copy(status = IncomeLifecycle.statusAt(it.status, it.date, today)) }
     }
+
+    // Reconciles a Movimentações cash row against the announced ledger. A row matches an announced,
+    // payable or already-reconciled movement of the same ticker and type in the same month — the
+    // export's payment date can differ from the forecast. An unconcluded match is marked RECONCILED;
+    // a row that matches a settled movement is a re-import and is skipped (never saved again, which
+    // would duplicate the natural key). A row no forecast matches is a payment announced elsewhere,
+    // so it is imported as usual.
+    suspend fun reconcile(creations: List<IncomeCreation>): List<Income> {
+        if (creations.isEmpty()) return emptyList()
+        val ledger = repository.fetchAll()
+        val fresh = creations.map { it.normalized() }
+            .distinctBy { IncomeNaturalKey(it.ticker, it.date, it.type) }
+        val pairs = fresh.mapNotNull { creation ->
+            ledger.firstOrNull { it.matches(creation) }?.let { creation to it }
+        }
+        val newlyReconciled = pairs.filter { (_, income) -> income.status != IncomeStatus.RECONCILED }
+        if (newlyReconciled.isNotEmpty()) {
+            repository.markReconciled(newlyReconciled.map { (_, income) -> income.id }.distinct())
+        }
+        val matched = pairs.map { (creation, _) -> creation }.toSet()
+        val unmatched = fresh - matched
+        val saved = if (unmatched.isEmpty()) emptyList() else repository.saveAll(unmatched)
+        return derive(newlyReconciled.map { (_, income) -> income.copy(status = IncomeStatus.RECONCILED) } + saved)
+    }
 }
+
+private fun Income.matches(creation: IncomeCreation): Boolean =
+    ticker == creation.ticker &&
+        type == creation.type &&
+        date.year == creation.date.year &&
+        date.month == creation.date.month
 
 private fun IncomeCreation.normalized() = copy(ticker = ticker.normalizedTicker())
 

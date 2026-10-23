@@ -10,6 +10,7 @@ export type NavIcon =
   | "target"
   | "layers"
   | "coins"
+  | "event"
   | "list";
 
 export interface NavItem {
@@ -40,6 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/allocation", label: "Alocação", icon: "target" },
       { to: "/strategies", label: "Estratégias", icon: "layers" },
       { to: "/trades", label: "Ativos", icon: "assets" },
+      { to: "/corporate-actions", label: "Eventos corporativos", icon: "event" },
       { to: "/fixed-income", label: "Renda fixa", icon: "bank" },
     ],
   },
