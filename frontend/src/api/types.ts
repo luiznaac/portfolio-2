@@ -312,10 +312,45 @@ export interface TickerAveragePrice {
   average_price: number;
 }
 
+// The three tax species a listed-asset sale realizes into. A STOCK sale is SWING unless a
+// same-day same-institution buy offsets it (DAY_TRADE); an FII sale is always FII.
+export type RealizedKind = "SWING" | "DAY_TRADE" | "FII";
+
+// One kind's realized month result: gains and losses are positive magnitudes, `result` is
+// gains − losses.
+export interface RealizedResult {
+  kind: RealizedKind;
+  gross_sales: number;
+  gains: number;
+  losses: number;
+  result: number;
+}
+
+// One carry bucket's movement in the month: opening balance, loss banked this month, carry consumed
+// by this month's taxable gains, and the balance carried into the next month.
+export interface CarryBucket {
+  kind: RealizedKind;
+  opening_balance: number;
+  loss_banked: number;
+  loss_applied: number;
+  closing_balance: number;
+}
+
+// The same-day both-sides guard: a warning only, never a day-trade tax computation.
+export interface DayTradeWarning {
+  ticker: string;
+  institution_id: number;
+  date: string;
+  quantity: number;
+}
+
 export interface StockTaxReport {
   period: string;
   meter: ExemptionMeter;
   average_prices: TickerAveragePrice[];
+  realized: RealizedResult[];
+  carry: CarryBucket[];
+  day_trades: DayTradeWarning[];
 }
 
 // The order engine's read (GET /month/current/orders?phase=ideals|candidates|funding|full). Ideal/amount

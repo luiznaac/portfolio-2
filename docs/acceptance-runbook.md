@@ -76,34 +76,43 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('B3SA3','2027-04-06','B3',-60, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());"
   ```
 
-- **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5:
+- **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
+
+  The carry state seeds the three bucket openings (SWING 500, DAY_TRADE 300, FII 250) at the 2027-02 close, so the roll starts at March. Two prior-month losses bank before April: a CSNA3 swing loss of R$100 in the exempt March month (gross R$900, so it stays under the meter) and a KNRI11 FII loss of R$1,000. April therefore opens with SWING 600 and FII 1,250; the SWING carry offsets R$600 of the month's R$4,600 gain (taxable R$4,000, tax R$600), the FII carry offsets the whole R$1,000 gain (closing R$250), and the day-trade bucket stays at R$300 because April's CSNA3 round trip is flat. That round trip is imported so the day-trade warning guard sees it:
 
   ```
   docker compose exec -T mysql mysql -uroot portfolio \
-    -e "DELETE FROM corporate_action; DELETE FROM ticker_catalog; \
+    -e "DELETE FROM tax_carry_bucket; DELETE FROM corporate_action; DELETE FROM ticker_catalog; \
         REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
           ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
           ('B3SA3','B3','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
           ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
           ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
           ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS','2027-01-01','2027-04-01',NOW()), \
+          ('KNRI11','KINEA RENDA','12',NULL,'FII','FIIS','2027-01-01','2027-04-01',NOW()), \
           ('SANB11','SANTANDER BR','02',NULL,'UNIT','ACOES','2027-01-01','2027-04-01',NOW()), \
           ('BOVA11','ISHARES BOVA','14',NULL,'ETF','ACOES','2027-01-01','2027-04-01',NOW()), \
           ('AAPL34','APPLE','34',NULL,'BDR','ACOES','2027-01-01','2027-04-01',NOW()); \
+        INSERT INTO tax_carry_bucket (kind, opening_balance, as_of_period, created_at) VALUES \
+          ('SWING', 500, '2027-02', NOW()), ('DAY_TRADE', 300, '2027-02', NOW()), ('FII', 250, '2027-02', NOW()); \
         SET @inst := (SELECT id FROM institution WHERE name='XP' LIMIT 1); \
         INSERT INTO corporate_action (ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES \
           ('ITUB4','SPLIT','2027-04-15',NULL,2,NULL,NULL,'B3_MOVEMENTS',NULL,NULL,1,NULL,'APPLIED',NOW()); \
         INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
           ('VALE3','2027-03-20','B3', 2000, 8, @inst, 1.25, 'MANUAL', FALSE, 1, NOW()), \
           ('VALE3','2027-04-07','B3',-2000, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('CSNA3','2027-03-01','B3', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('CSNA3','2027-03-15','B3',-100, 9, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('HGLG11','2027-03-01','B3', 100, 150, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('HGLG11','2027-04-08','B3',-100, 160, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('KNRI11','2027-03-01','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('KNRI11','2027-03-15','B3',-100, 90, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('SANB11','2027-03-01','B3', 100, 25, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('SANB11','2027-04-08','B3',-100, 26, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('BOVA11','2027-03-01','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('BOVA11','2027-04-08','B3',-100, 110, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('AAPL34','2027-03-01','B3', 100, 40, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('AAPL34','2027-04-08','B3',-100, 45, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
-          ('CSNA3','2027-04-09','B3', 1000, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
-          ('CSNA3','2027-04-09','B3',-1000, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW());"
+          ('CSNA3','2027-04-09','B3', 1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()), \
+          ('CSNA3','2027-04-09','B3',-1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());"
   ```
