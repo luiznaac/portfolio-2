@@ -20,6 +20,7 @@ import dev.agner.portfolio.persistence.listedasset.TradeTable
 import dev.agner.portfolio.persistence.order.SuggestedOrderTable
 import dev.agner.portfolio.persistence.order.TransferProposalTable
 import dev.agner.portfolio.persistence.portfolio.MonthTable
+import dev.agner.portfolio.persistence.portfolio.SnapshotTable
 import dev.agner.portfolio.persistence.portfolio.TargetTable
 import dev.agner.portfolio.persistence.quotes.QuoteTable
 import dev.agner.portfolio.persistence.strategy.EditionEntryTable
@@ -58,6 +59,7 @@ val allTables: Array<Table> = arrayOf(
     CashMovementTable,
     CorporateActionTable,
     MonthTable,
+    SnapshotTable,
     TargetTable,
     StrategyTable,
     EditionTable,
