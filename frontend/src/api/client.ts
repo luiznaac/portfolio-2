@@ -12,6 +12,9 @@ import type {
   EditionImport,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  HarvestOptOutUpdate,
+  HarvestPairCreation,
+  HarvestReport,
   HealthCheckResult,
   Import,
   ImportRow,
@@ -24,6 +27,7 @@ import type {
   OrderMatchUpdate,
   PositionDetail,
   Quote,
+  StockTaxReport,
   Strategy,
   StrategyCreation,
   SuggestedOrder,
@@ -173,6 +177,26 @@ export const api = {
 
   getCurrentAllocation(): Promise<Allocation> {
     return request("/month/current/allocation");
+  },
+
+  getStockTax(): Promise<StockTaxReport> {
+    return request("/month/current/tax");
+  },
+
+  getHarvest(): Promise<HarvestReport> {
+    return request("/tax/harvest");
+  },
+
+  acceptHarvestPair(creation: HarvestPairCreation): Promise<HarvestReport> {
+    return request("/tax/harvest", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  setHarvestOptOut(ticker: string, optedOut: boolean): Promise<HarvestReport> {
+    const update: HarvestOptOutUpdate = { opted_out: optedOut };
+    return request(`/tax/harvest/${encodeURIComponent(ticker)}/opt-out`, {
+      method: "PUT",
+      body: JSON.stringify(update),
+    });
   },
 
   getOrders(): Promise<OrderList> {

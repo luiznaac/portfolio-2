@@ -8,6 +8,8 @@ import type {
   EditionActivation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  HarvestPairCreation,
+  HarvestReport,
   ImportSource,
   MonthCreation,
   MonthUpdate,
@@ -25,6 +27,19 @@ export type FixedIncomeProductInput =
   | { kind: "FIXED_BOND"; creation: FixedRateBondCreation }
   | { kind: "FLOATING_BOND"; creation: FloatingRateBondCreation }
   | { kind: "ACCOUNT"; creation: CheckingAccountCreation };
+
+// No open month is a normal state, not an error — every month-scoped read resolves to null so the
+// page points at the month opener instead of rendering a failure.
+function nullOn404<T>(query: () => Promise<T>): () => Promise<T | null> {
+  return async () => {
+    try {
+      return await query();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  };
+}
 
 export function useHealth() {
   return useQuery({
@@ -129,15 +144,7 @@ export function useCreateFixedIncomeProduct() {
 export function useCurrentMonth() {
   return useQuery({
     queryKey: ["month", "current"],
-    queryFn: async () => {
-      try {
-        return await api.getCurrentMonth();
-      } catch (error) {
-        // No open month is a normal state, not an error — the page offers the opener instead.
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
+    queryFn: nullOn404(api.getCurrentMonth),
   });
 }
 
@@ -168,30 +175,46 @@ export function useReplaceTargets() {
 export function useCurrentAllocation() {
   return useQuery({
     queryKey: ["month", "current", "allocation"],
-    queryFn: async () => {
-      try {
-        return await api.getCurrentAllocation();
-      } catch (error) {
-        // No open month is a normal state, not an error — the page points at the opener instead.
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
+    queryFn: nullOn404(api.getCurrentAllocation),
+  });
+}
+
+export function useStockTax() {
+  return useQuery({
+    queryKey: ["tax", "current"],
+    queryFn: nullOn404(api.getStockTax),
+  });
+}
+
+export function useHarvest() {
+  return useQuery({
+    queryKey: ["tax", "harvest"],
+    queryFn: nullOn404(api.getHarvest),
+  });
+}
+
+// Both harvest writes return the fresh report, so the page updates in one round trip and the tax
+// read (whose headroom the pass depends on) is refreshed beside it.
+export function useAcceptHarvestPair() {
+  const queryClient = useQueryClient();
+  return useMutation<HarvestReport, Error, HarvestPairCreation>({
+    mutationFn: (creation) => api.acceptHarvestPair(creation),
+    onSuccess: (report) => queryClient.setQueryData(["tax", "harvest"], report),
+  });
+}
+
+export function useSetHarvestOptOut() {
+  const queryClient = useQueryClient();
+  return useMutation<HarvestReport, Error, { ticker: string; optedOut: boolean }>({
+    mutationFn: ({ ticker, optedOut }) => api.setHarvestOptOut(ticker, optedOut),
+    onSuccess: (report) => queryClient.setQueryData(["tax", "harvest"], report),
   });
 }
 
 export function useOrders() {
   return useQuery({
     queryKey: ["orders"],
-    queryFn: async () => {
-      try {
-        return await api.getOrders();
-      } catch (error) {
-        // No open month is a normal state, not an error — the page points at the month opener.
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
+    queryFn: nullOn404(api.getOrders),
   });
 }
 

@@ -116,3 +116,46 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('CSNA3','2027-04-09','B3', 1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()), \
           ('CSNA3','2027-04-09','B3',-1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());"
   ```
+
+- **Harvest seed**: the harvest pass reads the ledger, not the stored `position` table, so its scenario adds losing buys and their latest closes on top of the Order-plan seed (do **not** apply the Tax seed first — its VALE3 sale consumes the whole R$20k headroom). Catalog: ITUB4/B3SA3/CSNA3/PETR4/VALE3/ITSA4 as STOCK, HGLG11 as FII. The month's metered sales stay at the order seed's B3SA3 R$600, leaving R$19.4k of headroom. ITSA4 holds 100 units bought at R$22 with a R$10 close (a R$1,200 loss, unattributed); PETR4 holds 500 units bought at R$12 with a R$10 close (a R$1,000 loss, attributed to Dividendos, whose active edition flags it NEUTRO); VALE3 holds 300 at R$15 with a R$12 close (a R$900 loss) and is opted out, so it reports as ignored; HGLG11 holds 100 at R$100 with a R$110 close, so the FII report shows a R$1,000 gain and a R$200 estimate. The carry bucket rows seed the three openings so the Baldes panel has data:
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio \
+    -e "DELETE FROM harvest_opt_out; DELETE FROM harvest_pair; DELETE FROM tax_carry_bucket; DELETE FROM ticker_catalog; \
+        DELETE FROM trade WHERE ticker IN ('PETR4','VALE3','HGLG11','ITSA4'); \
+        DELETE FROM attribution WHERE ticker IN ('PETR4','ITSA4'); \
+        SET @div := (SELECT id FROM strategy WHERE name='Dividendos' LIMIT 1); \
+        DELETE FROM edition_entry WHERE edition_id IN (SELECT id FROM edition WHERE strategy_id=@div); \
+        DELETE FROM edition WHERE strategy_id=@div; \
+        INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('B3SA3','B3','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('ITSA4','ITAUSA','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS','2027-01-01','2027-04-01',NOW()); \
+        INSERT INTO tax_carry_bucket (kind, opening_balance, as_of_period, created_at) VALUES \
+          ('SWING', 500, '2027-02', NOW()), ('DAY_TRADE', 300, '2027-02', NOW()), ('FII', 250, '2027-02', NOW()); \
+        INSERT INTO edition (strategy_id, reference_month, status, created_at) VALUES (@div, '2027-04', 'ACTIVE', NOW()); \
+        SET @ed := LAST_INSERT_ID(); \
+        INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES \
+          (@ed, 'PETR4', 100, 'NEUTRAL', NULL, TRUE), (@ed, 'ITSA4', 100, NULL, NULL, FALSE); \
+        SET @inst := (SELECT id FROM institution WHERE name='XP' LIMIT 1); \
+        INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+          ('PETR4','2027-04-02','B3', 500, 12, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('VALE3','2027-04-02','B3', 300, 15, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('HGLG11','2027-04-02','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+          ('ITSA4','2027-04-02','B3', 100, 22, @inst, NULL, 'MANUAL', FALSE, 1, NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES \
+          ('PETR4', 500, 12), ('VALE3', 300, 15), ('HGLG11', 100, 100), ('ITSA4', 100, 22); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('PETR4','2027-04-30',10,'COTAHIST',NOW()), \
+          ('VALE3','2027-04-30',12,'COTAHIST',NOW()), \
+          ('ITSA4','2027-04-30',10,'COTAHIST',NOW()), \
+          ('HGLG11','2027-04-30',110,'COTAHIST',NOW()); \
+        INSERT INTO harvest_opt_out (ticker, created_at) VALUES ('VALE3', NOW()); \
+        REPLACE INTO attribution (ticker, strategy_id, quantity) VALUES ('PETR4', @div, 500);"
+  ```
+
+  The expected read is two active suggestions in loss-descending order — ITSA4 first (100 units, R$1,200 loss, no slice) and PETR4 second (500 units, R$1,000 loss, NEUTRO, slice Dividendos) — VALE3 in the ignored list, and the HGLG11 FII row at 20%.

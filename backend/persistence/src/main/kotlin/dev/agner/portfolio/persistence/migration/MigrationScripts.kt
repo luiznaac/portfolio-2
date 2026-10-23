@@ -26,6 +26,8 @@ import dev.agner.portfolio.persistence.quotes.QuoteTable
 import dev.agner.portfolio.persistence.strategy.EditionEntryTable
 import dev.agner.portfolio.persistence.strategy.EditionTable
 import dev.agner.portfolio.persistence.strategy.StrategyTable
+import dev.agner.portfolio.persistence.tax.HarvestOptOutTable
+import dev.agner.portfolio.persistence.tax.HarvestPairTable
 import dev.agner.portfolio.persistence.tax.TaxCarryBucketTable
 import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
 import org.jetbrains.exposed.v1.core.Table
@@ -65,6 +67,8 @@ val allTables: Array<Table> = arrayOf(
     SuggestedOrderTable,
     TransferProposalTable,
     TaxCarryBucketTable,
+    HarvestOptOutTable,
+    HarvestPairTable,
 )
 
 // Authoring half of the migration workflow (backend/AGENTS.md). Diffs `allTables` against a

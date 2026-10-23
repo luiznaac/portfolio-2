@@ -180,6 +180,11 @@ The offsetting of the same ticker at the same institution on the same date, dete
 _UI:_ "Day trade"
 _Avoid_: Same-day sale (a sale is not necessarily a day trade)
 
+**Harvest**:
+The tax-loss pass after rebalancing: sell a losing STOCK position on day D and rebuy it on the next business day — never the same day — sized to the remaining Exemption Meter headroom, so the loss is realized into its Carry Bucket while the position is kept. A ticker can be opted out; FIIs are report-only because their gains are always taxed and their losses are species-bound.
+_UI:_ "Harvest" / "Step-up D+1"
+_Avoid_: Day trade (the pair is deliberately D+1), swing trade
+
 **Attribution**:
 The ledger mapping parts of a listed asset's Position quantity to Strategies; the sum of attributions never exceeds the Position's quantity.
 _UI:_ "Atribuição"
