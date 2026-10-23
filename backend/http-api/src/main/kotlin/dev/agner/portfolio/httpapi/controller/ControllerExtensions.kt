@@ -1,10 +1,12 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.commons.DomainException
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveMultipart
+import io.ktor.server.response.respond
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
 
@@ -24,6 +26,11 @@ internal fun ApplicationCall.requiredInt(name: String): Int =
 
 internal fun ApplicationCall.requiredString(name: String): String =
     parameters[name] ?: throw InvalidParameterException(name, null)
+
+// The current-month reads all share one "absent is a 404" contract; the generic keeps a controller
+// from hand-rolling the same branch per shape.
+internal suspend inline fun <reified T : Any> ApplicationCall.respondOr404(value: T?) =
+    if (value == null) respond(HttpStatusCode.NotFound) else respond(HttpStatusCode.OK, value)
 
 // One uploaded part: the file the browser sent plus every form field beside it (the import
 // pipeline reads `source`, the position cross-check reads no field). Reading it is the one place

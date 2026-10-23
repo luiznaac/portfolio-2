@@ -351,6 +351,87 @@ export interface StockTaxReport {
   realized: RealizedResult[];
   carry: CarryBucket[];
   day_trades: DayTradeWarning[];
+  /** The DARF 6015 deadline: the last business day of the following month. */
+  darf_due_date: string;
+}
+
+// The harvest pass (GET /tax/harvest). A pair sells a losing STOCK position on `sell.date` and
+// rebuys it on the next business day, sized to the remaining R$20k headroom. `headroom` is what the
+// month's meter still allows; `minimum_loss` is the gate a pair must clear.
+export interface HarvestLeg {
+  date: string;
+  quantity: number;
+  price: number;
+  amount: number;
+}
+
+export interface HarvestProposal {
+  ticker: string;
+  strategy_id?: number;
+  strategy?: string;
+  quantity: number;
+  average_price: number;
+  price: number;
+  loss: number;
+  neutro: boolean;
+  sell: HarvestLeg;
+  rebuy: HarvestLeg;
+}
+
+/** A loss-making position the owner opted out of harvesting — reported so the choice is reversible. */
+export interface HarvestIgnored {
+  ticker: string;
+  strategy_id?: number;
+  strategy?: string;
+  quantity: number;
+  loss: number;
+  neutro: boolean;
+}
+
+/** FIIs are report-only: 20% of an unrealized gain, zero on a loss, never a proposed pair. */
+export interface FiiHarvestReport {
+  ticker: string;
+  quantity: number;
+  price: number;
+  average_price: number;
+  unrealized_result: number;
+  estimated_tax: number;
+}
+
+export interface HarvestPair {
+  id: number;
+  ticker: string;
+  strategy_id?: number;
+  strategy?: string;
+  loss: number;
+  sell: HarvestLeg;
+  rebuy: HarvestLeg;
+}
+
+/** The acceptance payload — both legs are editable before the pair is stored. */
+export interface HarvestPairCreation {
+  ticker: string;
+  strategy_id?: number;
+  sell_date: string;
+  sell_quantity: number;
+  sell_price: number;
+  rebuy_date: string;
+  rebuy_quantity: number;
+  rebuy_price: number;
+}
+
+export interface HarvestOptOutUpdate {
+  opted_out: boolean;
+}
+
+export interface HarvestReport {
+  period: string;
+  headroom: number;
+  minimum_loss: number;
+  suggestions: HarvestProposal[];
+  ignored: HarvestIgnored[];
+  fii_report: FiiHarvestReport[];
+  pairs: HarvestPair[];
 }
 
 // The order engine's read (GET /month/current/orders?phase=ideals|candidates|funding|full). Ideal/amount

@@ -2,10 +2,17 @@ package dev.agner.portfolio.httpapi.controller
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import dev.agner.portfolio.usecase.harvestLeg
+import dev.agner.portfolio.usecase.tax.HarvestService
 import dev.agner.portfolio.usecase.tax.StockTaxService
 import dev.agner.portfolio.usecase.tax.model.CarryBucket
 import dev.agner.portfolio.usecase.tax.model.DayTradeWarning
 import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
+import dev.agner.portfolio.usecase.tax.model.FiiHarvestReport
+import dev.agner.portfolio.usecase.tax.model.HarvestIgnored
+import dev.agner.portfolio.usecase.tax.model.HarvestPair
+import dev.agner.portfolio.usecase.tax.model.HarvestProposal
+import dev.agner.portfolio.usecase.tax.model.HarvestReport
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
 import dev.agner.portfolio.usecase.tax.model.RealizedResult
 import dev.agner.portfolio.usecase.tax.model.StockTaxReport
@@ -13,10 +20,16 @@ import dev.agner.portfolio.usecase.tax.model.TickerAveragePrice
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -26,18 +39,19 @@ class TaxControllerTest : DescribeSpec({
 
     describe("reading the current month's tax") {
 
-        it("serves the meter, average prices, realized result and carry state with snake_case keys") {
+        it("serves the meter, average prices, realized result, carry state and DARF deadline") {
             val service = mockk<StockTaxService>()
-            coEvery { service.fetchCurrent() } returns report
+            coEvery { service.fetchCurrent() } returns taxReport
 
             testApplication {
-                application { installRoutes(TaxController(service)) }
+                application { installRoutes(TaxController(service, mockk())) }
 
                 val response = client.get("/month/current/tax")
 
                 response.status shouldBe HttpStatusCode.OK
                 val body = ObjectMapper().readTree(response.bodyAsText())
                 body.get("period").asText() shouldBe "2026-10"
+                body.get("darf_due_date").asText() shouldBe "2026-11-30"
                 body.get("meter").get("gross_sales").decimal() shouldBe "20010"
                 body.get("meter").get("exemption_limit").decimal() shouldBe "20000"
                 body.get("meter").get("exceeded").asBoolean() shouldBe true
@@ -65,9 +79,146 @@ class TaxControllerTest : DescribeSpec({
             coEvery { service.fetchCurrent() } returns null
 
             testApplication {
-                application { installRoutes(TaxController(service)) }
+                application { installRoutes(TaxController(service, mockk())) }
 
                 client.get("/month/current/tax").status shouldBe HttpStatusCode.NotFound
+            }
+        }
+    }
+
+    describe("reading the harvest pass") {
+
+        it("serves the suggestions, ignored tickers, FII report and accepted pairs") {
+            val harvest = mockk<HarvestService>()
+            coEvery { harvest.fetch() } returns harvestReport
+
+            testApplication {
+                application { installRoutes(TaxController(mockk(), harvest)) }
+
+                val response = client.get("/tax/harvest")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("period").asText() shouldBe "2026-10"
+                body.get("headroom").decimal() shouldBe "13900"
+                body.get("minimum_loss").decimal() shouldBe "500"
+                body.get("suggestions").get(0).get("ticker").asText() shouldBe "PETR4"
+                body.get("suggestions").get(0).get("strategy").asText() shouldBe "Dividendos"
+                body.get("suggestions").get(0).get("loss").decimal() shouldBe "600"
+                body.get("suggestions").get(0).get("neutro").asBoolean() shouldBe true
+                body.get("suggestions").get(0).get("sell").get("date").asText() shouldBe "2026-10-22"
+                body.get("suggestions").get(0).get("sell").get("amount").decimal() shouldBe "3000"
+                body.get("suggestions").get(0).get("rebuy").get("date").asText() shouldBe "2026-10-23"
+                body.get("ignored").get(0).get("ticker").asText() shouldBe "VALE3"
+                body.get("fii_report").get(0).get("ticker").asText() shouldBe "HGLG11"
+                body.get("fii_report").get(0).get("estimated_tax").decimal() shouldBe "200"
+                body.get("pairs").get(0).get("ticker").asText() shouldBe "PETR4"
+                body.get("pairs").get(0).get("strategy").asText() shouldBe "Dividendos"
+            }
+        }
+
+        it("404s when no month is open") {
+            val harvest = mockk<HarvestService>()
+            coEvery { harvest.fetch() } returns null
+
+            testApplication {
+                application { installRoutes(TaxController(mockk(), harvest)) }
+
+                client.get("/tax/harvest").status shouldBe HttpStatusCode.NotFound
+            }
+        }
+    }
+
+    describe("accepting a harvest pair") {
+
+        it("passes both editable legs through and returns 201") {
+            val harvest = mockk<HarvestService>()
+            coEvery { harvest.accept(any()) } returns harvestReport
+
+            testApplication {
+                application { installRoutes(TaxController(mockk(), harvest)) }
+
+                val response = client.post("/tax/harvest") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {"ticker":"petr4","strategy_id":7,
+                         "sell_date":"2026-10-22","sell_quantity":300,"sell_price":10,
+                         "rebuy_date":"2026-10-23","rebuy_quantity":300,"rebuy_price":10}
+                        """.trimIndent(),
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.Created
+                coVerify(exactly = 1) {
+                    harvest.accept(
+                        match {
+                            it.ticker == "petr4" &&
+                                it.strategyId == 7 &&
+                                it.sellDate == LocalDate.parse("2026-10-22") &&
+                                it.rebuyDate == LocalDate.parse("2026-10-23") &&
+                                it.sellQuantity.compareTo(BigDecimal("300")) == 0 &&
+                                it.rebuyPrice.compareTo(BigDecimal("10")) == 0
+                        },
+                    )
+                }
+            }
+        }
+
+        it("404s when no month is open") {
+            val harvest = mockk<HarvestService>()
+            coEvery { harvest.accept(any()) } returns null
+
+            testApplication {
+                application { installRoutes(TaxController(mockk(), harvest)) }
+
+                val response = client.post("/tax/harvest") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {"ticker":"PETR4","sell_date":"2026-10-22","sell_quantity":300,"sell_price":10,
+                         "rebuy_date":"2026-10-23","rebuy_quantity":300,"rebuy_price":10}
+                        """.trimIndent(),
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.NotFound
+            }
+        }
+    }
+
+    describe("toggling a ticker's harvest opt-out") {
+
+        it("writes the refusal and returns the fresh report") {
+            val harvest = mockk<HarvestService>()
+            coEvery { harvest.setOptOut("PETR4", true) } returns harvestReport
+
+            testApplication {
+                application { installRoutes(TaxController(mockk(), harvest)) }
+
+                val response = client.put("/tax/harvest/PETR4/opt-out") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"opted_out":true}""")
+                }
+
+                response.status shouldBe HttpStatusCode.OK
+                coVerify(exactly = 1) { harvest.setOptOut("PETR4", true) }
+            }
+        }
+
+        it("404s when no month is open") {
+            val harvest = mockk<HarvestService>()
+            coEvery { harvest.setOptOut(any(), any()) } returns null
+
+            testApplication {
+                application { installRoutes(TaxController(mockk(), harvest)) }
+
+                val response = client.put("/tax/harvest/PETR4/opt-out") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"opted_out":true}""")
+                }
+
+                response.status shouldBe HttpStatusCode.NotFound
             }
         }
     }
@@ -75,7 +226,7 @@ class TaxControllerTest : DescribeSpec({
 
 private fun JsonNode.decimal(): String = decimalValue().stripTrailingZeros().toPlainString()
 
-private val report = StockTaxReport(
+private val taxReport = StockTaxReport(
     period = YearMonth.parse("2026-10"),
     meter = ExemptionMeter(
         grossSales = BigDecimal("20010"),
@@ -117,6 +268,60 @@ private val report = StockTaxReport(
             institutionId = 3,
             date = LocalDate.parse("2026-10-05"),
             quantity = BigDecimal("100"),
+        ),
+    ),
+)
+
+private val sellLeg = harvestLeg("2026-10-22")
+private val rebuyLeg = harvestLeg("2026-10-23")
+
+private val harvestReport = HarvestReport(
+    period = YearMonth.parse("2026-10"),
+    headroom = BigDecimal("13900"),
+    minimumLoss = BigDecimal("500"),
+    suggestions = listOf(
+        HarvestProposal(
+            ticker = "PETR4",
+            strategyId = 7,
+            strategy = "Dividendos",
+            quantity = BigDecimal("300"),
+            averagePrice = BigDecimal("12"),
+            price = BigDecimal("10"),
+            loss = BigDecimal("600"),
+            neutro = true,
+            sell = sellLeg,
+            rebuy = rebuyLeg,
+        ),
+    ),
+    ignored = listOf(
+        HarvestIgnored(
+            ticker = "VALE3",
+            strategyId = null,
+            strategy = null,
+            quantity = BigDecimal("100"),
+            loss = BigDecimal("600"),
+            neutro = false,
+        ),
+    ),
+    fiiReport = listOf(
+        FiiHarvestReport(
+            ticker = "HGLG11",
+            quantity = BigDecimal("100"),
+            price = BigDecimal("110"),
+            averagePrice = BigDecimal("100"),
+            unrealizedResult = BigDecimal("1000"),
+            estimatedTax = BigDecimal("200"),
+        ),
+    ),
+    pairs = listOf(
+        HarvestPair(
+            id = 1,
+            ticker = "PETR4",
+            strategyId = 7,
+            strategy = "Dividendos",
+            loss = BigDecimal("600"),
+            sell = sellLeg,
+            rebuy = rebuyLeg,
         ),
     ),
 )

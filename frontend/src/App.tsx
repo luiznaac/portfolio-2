@@ -10,6 +10,7 @@ import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
+import { Taxes } from "./pages/Taxes.tsx";
 import { Trades } from "./pages/Trades.tsx";
 
 export const routes: RouteObject[] = [
@@ -31,6 +32,7 @@ export const routes: RouteObject[] = [
       { path: "fixed-income", element: <FixedIncome /> },
       { path: "corporate-actions", element: <CorporateActions /> },
       { path: "income", element: <Income /> },
+      { path: "taxes", element: <Taxes /> },
     ],
   },
 ];

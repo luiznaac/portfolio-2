@@ -24,3 +24,23 @@ export function formatCurrency(value: number): string {
 export function formatTradeSide(side: TradeSide): string {
   return side === "BUY" ? "Compra" : "Venda";
 }
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// Split the ISO date ourselves: `new Date("2026-11-30")` parses as UTC midnight and renders the
+// previous day in a negative-offset browser.
+export function formatIsoDate(iso: string): string {
+  const match = ISO_DATE.exec(iso);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : iso;
+}
+
+// A business day is a weekday here: the app has no exchange-holiday calendar, so callers state the
+// holiday caveat where the date surfaces.
+export function isWeekend(iso: string): boolean {
+  const match = ISO_DATE.exec(iso);
+  if (!match) return false;
+  const day = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  ).getUTCDay();
+  return day === 0 || day === 6;
+}

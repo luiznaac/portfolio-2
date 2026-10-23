@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.tax
 
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.commons.defaultScale
+import dev.agner.portfolio.usecase.commons.percentOf
 import dev.agner.portfolio.usecase.listedasset.PositionCalculator
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
@@ -33,8 +34,6 @@ object StockTaxCalculator {
     // Lei 11.033/2004 art. 59: a month whose gross stock sales cross the limit loses the exemption
     // for the whole month — the 15% applies to the month's net gain, not to the excess only.
     val STOCK_GAIN_RATE: BigDecimal = BigDecimal("15.00")
-
-    private val HUNDRED = BigDecimal("100")
 
     fun compute(period: YearMonth, ledgers: List<TickerLedger>, carrySeed: CarrySeed): StockTaxReport {
         val replays = ledgers.map { replay(it) }
@@ -82,7 +81,7 @@ object StockTaxCalculator {
             realizedGain = swing.result,
             taxableGain = taxableGain,
             rate = STOCK_GAIN_RATE,
-            tax = taxableGain.multiply(STOCK_GAIN_RATE).divide(HUNDRED).defaultScale(),
+            tax = taxableGain.percentOf(STOCK_GAIN_RATE),
         )
     }
 
