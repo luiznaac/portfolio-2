@@ -165,6 +165,21 @@ The month-to-date total of gross STOCK sales measured against the R$20k monthly 
 _UI:_ "Isenção"
 _Avoid_: Limit (the value), exemption (the state)
 
+**Realized Result**:
+A month's net capital-gain result, per tax kind — swing STOCK, day trade and FII — as the sum of that kind's gains minus its losses, measured against Average Price at each sale.
+_UI:_ "Ganho realizado"
+_Avoid_: Profit/loss (that is the market view), income
+
+**Carry Bucket**:
+A per-kind stock of banked losses that only offsets future gains of the same kind: swing STOCK (unbounded in time), day trade, and FII (same species only); its opening balance is seeded once at adoption.
+_UI:_ "Prejuízo a compensar"
+_Avoid_: Loss balance, credit
+
+**Day Trade**:
+The offsetting of the same ticker at the same institution on the same date, detected as a warning guard and outside the Exemption Meter; the app does not compute day-trade tax.
+_UI:_ "Day trade"
+_Avoid_: Same-day sale (a sale is not necessarily a day trade)
+
 **Attribution**:
 The ledger mapping parts of a listed asset's Position quantity to Strategies; the sum of attributions never exceeds the Position's quantity.
 _UI:_ "Atribuição"

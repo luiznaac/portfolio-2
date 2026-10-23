@@ -5,17 +5,20 @@ import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.listedasset.PositionCalculator
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
+import dev.agner.portfolio.usecase.tax.model.CarrySeed
 import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
+import dev.agner.portfolio.usecase.tax.model.RealizedKind
+import dev.agner.portfolio.usecase.tax.model.RealizedResult
 import dev.agner.portfolio.usecase.tax.model.StockTaxReport
 import dev.agner.portfolio.usecase.tax.model.TickerAveragePrice
 import dev.agner.portfolio.usecase.tax.model.TickerLedger
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
+import kotlinx.datetime.yearMonth
 import java.math.BigDecimal
 
-// The stock-sale tax arithmetic: the monthly R$20k exemption meter and the fiscal average price.
-// Pure and side-effect free — the service only gathers each ticker's ledger, so the rules are
-// unit-tested with fixtures instead of a database.
+// The stock-sale tax arithmetic: the monthly R$20k exemption meter, the fiscal average price and the
+// realized result per tax kind. Pure and side-effect free — the service only gathers each ticker's
+// ledger and the adoption seed, so the rules are unit-tested with fixtures instead of a database.
 //
 // The meter counts gross proceeds of STOCK sales only. Units, FIIs, BDRs, ETFs and day trades are
 // outside it (SC Cosit 145/2021), and so are an unclassified ticker's sales: the catalog has not
@@ -33,26 +36,20 @@ object StockTaxCalculator {
 
     private val HUNDRED = BigDecimal("100")
 
-    fun compute(period: YearMonth, ledgers: List<TickerLedger>): StockTaxReport {
-        val replays = ledgers.map { replay(it, period) }
-        val sales = replays.flatMap { it.sales }
-
-        val grossSales = sales.sumOf { it.gross }.defaultScale()
-        val realizedGain = sales.sumOf { it.gain }.defaultScale()
-        val exceeded = grossSales > EXEMPTION_LIMIT
-        val taxableGain = if (exceeded && realizedGain.signum() > 0) realizedGain else BigDecimal.ZERO.defaultScale()
+    fun compute(period: YearMonth, ledgers: List<TickerLedger>, carrySeed: CarrySeed): StockTaxReport {
+        val replays = ledgers.map { replay(it) }
+        val months = replays
+            .flatMap { it.sales }
+            .groupBy { it.month }
+            .mapValues { (month, sales) -> monthOf(month, sales) }
+        val current = months[period] ?: monthOf(period, emptyList())
+        val prior = months.filterKeys { it < period }.toSortedMap().values.toList()
+        val carry = CarryRoller.roll(carrySeed, prior, current)
+        val swingCarry = carry.first { it.kind == RealizedKind.SWING }
 
         return StockTaxReport(
             period = period,
-            meter = ExemptionMeter(
-                grossSales = grossSales,
-                exemptionLimit = EXEMPTION_LIMIT,
-                exceeded = exceeded,
-                realizedGain = realizedGain,
-                taxableGain = taxableGain,
-                rate = STOCK_GAIN_RATE,
-                tax = taxableGain.multiply(STOCK_GAIN_RATE).divide(HUNDRED).defaultScale(),
-            ),
+            meter = meterOf(current.swing, current.swingExceeded, swingCarry.lossApplied),
             averagePrices = replays
                 .filter { it.position.quantity.signum() > 0 }
                 .map {
@@ -63,28 +60,96 @@ object StockTaxCalculator {
                     )
                 }
                 .sortedBy { it.ticker },
+            realized = current.results,
+            carry = carry,
+            dayTrades = ledgers
+                .flatMap { DayTradeCalculator.warnings(it.ticker, it.trades, period) }
+                .sortedWith(compareBy({ it.date }, { it.ticker }, { it.institutionId })),
         )
     }
 
-    private fun replay(ledger: TickerLedger, period: YearMonth) = LedgerReplay(
+    private fun meterOf(swing: RealizedResult, exceeded: Boolean, carryApplied: BigDecimal): ExemptionMeter {
+        val taxableGain = if (exceeded && swing.result.signum() > 0) {
+            swing.result.subtract(carryApplied).defaultScale()
+        } else {
+            BigDecimal.ZERO.defaultScale()
+        }
+
+        return ExemptionMeter(
+            grossSales = swing.grossSales,
+            exemptionLimit = EXEMPTION_LIMIT,
+            exceeded = exceeded,
+            realizedGain = swing.result,
+            taxableGain = taxableGain,
+            rate = STOCK_GAIN_RATE,
+            tax = taxableGain.multiply(STOCK_GAIN_RATE).divide(HUNDRED).defaultScale(),
+        )
+    }
+
+    private fun monthOf(period: YearMonth, sales: List<Sale>): MonthRealized {
+        val results = realizedOf(sales)
+        val swing = results.first { it.kind == RealizedKind.SWING }
+        return MonthRealized(
+            period = period,
+            results = results,
+            swing = swing,
+            swingExceeded = swing.grossSales > EXEMPTION_LIMIT,
+        )
+    }
+
+    // Three rows always, in the enum's order, so a kind with no sale still reports a zero result
+    // instead of vanishing from the ledger the UI renders.
+    private fun realizedOf(sales: List<Sale>): List<RealizedResult> =
+        RealizedKind.entries.map { kind ->
+            val ofKind = sales.filter { it.kind == kind }
+            val gains = ofKind.map { it.gain }.filter { it.signum() > 0 }.sumOf { it }.defaultScale()
+            val losses = ofKind.map { it.gain }.filter { it.signum() < 0 }.sumOf { it.negate() }.defaultScale()
+
+            RealizedResult(
+                kind = kind,
+                grossSales = ofKind.sumOf { it.gross }.defaultScale(),
+                gains = gains,
+                losses = losses,
+                result = gains.subtract(losses).defaultScale(),
+            )
+        }
+
+    private fun replay(ledger: TickerLedger) = LedgerReplay(
         ticker = ledger.ticker,
         position = PositionCalculator.replay(ledger.ticker, ledger.trades, ledger.corporateActions),
-        sales = if (ledger.assetKind == AssetKind.STOCK) {
-            val swing = swingQuantities(ledger.trades)
-            ledger.trades
-                .filterIsInstance<Trade.Sell>()
-                .filter { it.date.year == period.year && it.date.month == period.month }
-                .mapNotNull { sale ->
-                    swing[sale.id]
-                        ?.takeIf { it.signum() > 0 }
-                        ?.let { quantity -> saleOf(ledger, sale, quantity) }
-                }
-        } else {
-            emptyList()
-        },
+        sales = salesOf(ledger),
     )
 
-    private fun saleOf(ledger: TickerLedger, sale: Trade.Sell, quantity: BigDecimal): Sale {
+    private fun salesOf(ledger: TickerLedger): List<Sale> = when (ledger.assetKind) {
+        AssetKind.STOCK -> stockSales(ledger)
+        AssetKind.FII -> fiiSales(ledger)
+        else -> emptyList()
+    }
+
+    // A STOCK sale splits at the matched day-trade quantity: the part a same-day same-institution buy
+    // covers is a day trade, the remainder is swing. Both legs keep the sale's own moving-average
+    // basis, which is the formula the tax rules use for either species.
+    private fun stockSales(ledger: TickerLedger): List<Sale> {
+        val dayTraded = DayTradeCalculator.quantitiesBySale(ledger.trades)
+        return ledger.trades
+            .filterIsInstance<Trade.Sell>()
+            .flatMap { sale ->
+                val dayTradeQuantity = dayTraded[sale.id] ?: BigDecimal.ZERO
+                val swingQuantity = sale.quantity.subtract(dayTradeQuantity)
+                listOfNotNull(
+                    saleOf(ledger, sale, swingQuantity, RealizedKind.SWING),
+                    saleOf(ledger, sale, dayTradeQuantity, RealizedKind.DAY_TRADE),
+                )
+            }
+    }
+
+    private fun fiiSales(ledger: TickerLedger): List<Sale> =
+        ledger.trades
+            .filterIsInstance<Trade.Sell>()
+            .mapNotNull { sale -> saleOf(ledger, sale, sale.quantity, RealizedKind.FII) }
+
+    private fun saleOf(ledger: TickerLedger, sale: Trade.Sell, quantity: BigDecimal, kind: RealizedKind): Sale? {
+        if (quantity.signum() <= 0) return null
         val basis = PositionCalculator.positionBefore(
             ledger.ticker,
             ledger.trades,
@@ -94,37 +159,13 @@ object StockTaxCalculator {
         // Gross prices on both legs: a B3 import carries no fees, and the trade's stored fee stays
         // for later exactness rather than shifting the basis now.
         val gross = quantity.multiply(sale.unitPrice)
-        return Sale(gross = gross, gain = gross.subtract(quantity.multiply(basis.averagePrice)))
+        return Sale(
+            month = sale.date.yearMonth,
+            kind = kind,
+            gross = gross,
+            gain = gross.subtract(quantity.multiply(basis.averagePrice)),
+        )
     }
-
-    // A day trade is the offsetting of the same asset at the same institution on the same day, so
-    // the swing quantity of a sale is what a same-day buy at that institution does not cover. The
-    // matched part is taxed under the day-trade rule (20%) and stays out of this swing meter; the
-    // unmatched part keeps the normal moving-average basis. Quoting sells in ledger order keeps the
-    // allocation deterministic.
-    private fun swingQuantities(trades: List<Trade>): Map<Int, BigDecimal> {
-        val openQuantity = trades
-            .filterIsInstance<Trade.Buy>()
-            .groupBy { DayTradeKey(it.date, it.institutionId) }
-            .mapValues { (_, buys) -> buys.sumOf { it.quantity } }
-            .toMutableMap()
-
-        return trades
-            .filterIsInstance<Trade.Sell>()
-            .sortedWith(compareBy({ it.date }, { it.ordinal }, { it.id }))
-            .associate { sale ->
-                val key = DayTradeKey(sale.date, sale.institutionId)
-                val open = openQuantity[key] ?: BigDecimal.ZERO
-                val dayTraded = minOf(open, sale.quantity)
-                openQuantity[key] = open.subtract(dayTraded)
-                sale.id to sale.quantity.subtract(dayTraded)
-            }
-    }
-
-    private data class DayTradeKey(
-        val date: LocalDate,
-        val institutionId: Int,
-    )
 
     private data class LedgerReplay(
         val ticker: String,
@@ -133,6 +174,8 @@ object StockTaxCalculator {
     )
 
     private data class Sale(
+        val month: YearMonth,
+        val kind: RealizedKind,
         val gross: BigDecimal,
         val gain: BigDecimal,
     )

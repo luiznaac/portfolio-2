@@ -18,6 +18,9 @@ import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.sell
+import dev.agner.portfolio.usecase.tax.model.CarryBucketOpening
+import dev.agner.portfolio.usecase.tax.model.RealizedKind
+import dev.agner.portfolio.usecase.tax.repository.ICarryBucketRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -35,6 +38,7 @@ class StockTaxServiceTest : StringSpec({
             trades = mockk(),
             corporateActions = mockk(),
             catalog = catalog(),
+            carryBuckets = carryBuckets(),
         )
 
         service.fetchCurrent().shouldBeNull()
@@ -49,6 +53,7 @@ class StockTaxServiceTest : StringSpec({
             ),
             corporateActions = actions(),
             catalog = catalog("PETR4" to AssetKind.STOCK),
+            carryBuckets = carryBuckets(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -71,6 +76,7 @@ class StockTaxServiceTest : StringSpec({
             ),
             corporateActions = actions(),
             catalog = catalog("HGLG11" to AssetKind.FII),
+            carryBuckets = carryBuckets(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -90,12 +96,35 @@ class StockTaxServiceTest : StringSpec({
                 corporateAction(CorporateActionKind.SPLIT, exDate = "2026-10-10", ratio = "2"),
             ),
             catalog = catalog("PETR4" to AssetKind.STOCK),
+            carryBuckets = carryBuckets(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
 
         report.meter.realizedGain.plain() shouldBe "100"
         report.averagePrices.single().averagePrice.plain() shouldBe "5"
+    }
+
+    "applies the stored carry opening balances to the open month" {
+        val service = StockTaxService(
+            months = months(),
+            trades = trades(
+                buy(ticker = "PETR4", quantity = "2000", unitPrice = "10"),
+                sell(id = 2, ticker = "PETR4", quantity = "2000", unitPrice = "10.5"),
+            ),
+            corporateActions = actions(),
+            catalog = catalog("PETR4" to AssetKind.STOCK),
+            carryBuckets = carryBuckets(RealizedKind.SWING to "500"),
+        )
+
+        val report = requireNotNull(service.fetchCurrent())
+        val swing = report.carry.first { it.kind == RealizedKind.SWING }
+
+        swing.openingBalance.plain() shouldBe "500"
+        swing.lossApplied.plain() shouldBe "500"
+        swing.closingBalance.plain() shouldBe "0"
+        report.meter.taxableGain.plain() shouldBe "500"
+        report.meter.tax.plain() shouldBe "75"
     }
 })
 
@@ -111,6 +140,16 @@ private fun actions(vararg actions: dev.agner.portfolio.usecase.corporateaction.
     mockk<ICorporateActionRepository> {
         coEvery { fetchApplied() } returns actions.toList()
     }
+
+private fun carryBuckets(vararg openings: Pair<RealizedKind, String>): ICarryBucketRepository = mockk {
+    coEvery { fetchAll() } returns openings.map { (kind, balance) ->
+        CarryBucketOpening(
+            kind = kind,
+            openingBalance = java.math.BigDecimal(balance),
+            asOfPeriod = YearMonth.parse("2026-09"),
+        )
+    }
+}
 
 private fun catalog(vararg kinds: Pair<String, AssetKind>): CatalogService = mockk {
     coEvery { fetchAll() } returns kinds.map { (ticker, kind) ->
