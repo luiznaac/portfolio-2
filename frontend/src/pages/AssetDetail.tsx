@@ -11,12 +11,12 @@ import {
 import type { Trade } from "../api/types.ts";
 import { AttributionPanel } from "../components/AttributionPanel.tsx";
 import { Badge } from "../components/Badge.tsx";
+import { Kpi } from "../components/Kpi.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { formatCurrency, formatNumber, formatTradeSide } from "../lib/format.ts";
 import { latestQuote, positionValue } from "../lib/position.ts";
 
-const KPI_LABEL = "font-mono text-[10px] tracking-[.09em] text-ink-faint uppercase";
 const BACK_LINK =
   "inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[12.5px] text-ink hover:border-surface-3 hover:bg-surface-3";
 
@@ -48,16 +48,6 @@ const COLUMNS: Column<Trade>[] = [
     render: (trade) => formatCurrency(trade.quantity * trade.unit_price),
   },
 ];
-
-function Kpi({ label, value, hint }: { label: string; value?: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-surface px-4 py-3.5">
-      <div className={KPI_LABEL}>{label}</div>
-      <div className="mt-1 font-cond text-[22px] font-bold">{value ?? "—"}</div>
-      {hint !== undefined && <div className="mt-0.5 text-[11.5px] text-ink-faint">{hint}</div>}
-    </div>
-  );
-}
 
 // The Ativos detail: the stored position (quantity + fiscal average + market value), the
 // attribution ledger, and the trade history.
@@ -110,9 +100,10 @@ export function AssetDetail() {
       </div>
 
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <Kpi label="Custódia" value={formatNumber(current.quantity)} />
-        <Kpi label="Preço médio (fiscal)" value={formatCurrency(current.average_price)} />
+        <Kpi size="lg" label="Custódia" value={formatNumber(current.quantity)} />
+        <Kpi size="lg" label="Preço médio (fiscal)" value={formatCurrency(current.average_price)} />
         <Kpi
+          size="lg"
           label="Valor de mercado"
           value={value === undefined ? undefined : formatCurrency(value)}
           hint={close === undefined ? "sem cotação" : `cotação ${formatCurrency(close)}`}

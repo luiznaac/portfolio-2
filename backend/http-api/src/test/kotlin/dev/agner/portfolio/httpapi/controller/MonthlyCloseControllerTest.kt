@@ -74,6 +74,37 @@ class MonthlyCloseControllerTest : DescribeSpec({
         }
     }
 
+    describe("reading a closed month") {
+
+        it("serves the closed month's snapshot") {
+            val service = mockk<MonthlyCloseService>()
+            coEvery { service.fetchSnapshot(7) } returns snapshot
+
+            testApplication {
+                application { installRoutes(MonthlyCloseController(service)) }
+
+                val response = client.get("/months/7")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("month_id").asInt() shouldBe 7
+                body.get("state").get("period").asText() shouldBe "2026-10"
+                body.get("state").get("caixa").decimalValue().compareTo(BigDecimal("45000.00")) shouldBe 0
+            }
+        }
+
+        it("404s for a month that was never closed") {
+            val service = mockk<MonthlyCloseService>()
+            coEvery { service.fetchSnapshot(99) } returns null
+
+            testApplication {
+                application { installRoutes(MonthlyCloseController(service)) }
+
+                client.get("/months/99").status shouldBe HttpStatusCode.NotFound
+            }
+        }
+    }
+
     describe("listing closed months") {
 
         it("serves the closed months") {

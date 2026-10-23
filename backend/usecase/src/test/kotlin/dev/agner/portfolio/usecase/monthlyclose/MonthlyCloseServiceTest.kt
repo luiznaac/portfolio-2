@@ -176,6 +176,18 @@ class MonthlyCloseServiceTest : StringSpec({
 
         service.fetchClosedMonths() shouldBe closed
     }
+
+    "fetchSnapshot reads the closed month's frozen state from the snapshot ledger" {
+        coEvery { snapshots.fetchByMonth(7) } returns persistedSnapshot
+
+        service.fetchSnapshot(7) shouldBe persistedSnapshot
+    }
+
+    "fetchSnapshot returns null for a month that was never closed" {
+        coEvery { snapshots.fetchByMonth(99) } returns null
+
+        service.fetchSnapshot(99) shouldBe null
+    }
 })
 
 private val immediateTransactions = object : ITransactionTemplate {

@@ -14,6 +14,7 @@ import type {
   MonthCreation,
   MonthUpdate,
   OrderList,
+  Snapshot,
   StrategyCreation,
   SuggestedOrder,
   Targets,
@@ -176,6 +177,58 @@ export function useCurrentAllocation() {
   return useQuery({
     queryKey: ["month", "current", "allocation"],
     queryFn: nullOn404(api.getCurrentAllocation),
+  });
+}
+
+export function useClosedMonths() {
+  return useQuery({
+    queryKey: ["months"],
+    queryFn: api.getClosedMonths,
+  });
+}
+
+export function useMonthSnapshot(monthId: number | null) {
+  return useQuery({
+    queryKey: ["months", monthId],
+    queryFn: () => {
+      if (monthId === null) throw new Error("monthId is required to fetch a snapshot");
+      return api.getMonthSnapshot(monthId);
+    },
+    enabled: monthId !== null,
+  });
+}
+
+// Closing a month locks it and rewrites the order plan on the way in; the current month, the closed
+// list, the order inbox and every performance read are stale in one step.
+export function useCloseMonth() {
+  const queryClient = useQueryClient();
+  return useMutation<Snapshot, Error, void>({
+    mutationFn: () => api.closeCurrentMonth(),
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(["months", snapshot.month_id], snapshot);
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      queryClient.invalidateQueries({ queryKey: ["months"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["performance"] });
+    },
+  });
+}
+
+export function useMonthPerformance(monthId: number | null) {
+  return useQuery({
+    queryKey: ["months", monthId, "performance"],
+    queryFn: () => {
+      if (monthId === null) throw new Error("monthId is required to fetch performance");
+      return api.getMonthPerformance(monthId);
+    },
+    enabled: monthId !== null,
+  });
+}
+
+export function usePerformanceSeries() {
+  return useQuery({
+    queryKey: ["performance", "series"],
+    queryFn: api.getPerformanceSeries,
   });
 }
 

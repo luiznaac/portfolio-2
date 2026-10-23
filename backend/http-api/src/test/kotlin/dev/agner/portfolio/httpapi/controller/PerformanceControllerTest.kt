@@ -10,6 +10,8 @@ import dev.agner.portfolio.usecase.performance.model.ClassPerformance
 import dev.agner.portfolio.usecase.performance.model.MonthPerformance
 import dev.agner.portfolio.usecase.performance.model.PerformanceDecomposition
 import dev.agner.portfolio.usecase.performance.model.PerformanceSeries
+import dev.agner.portfolio.usecase.performance.model.PeriodBenchmark
+import dev.agner.portfolio.usecase.performance.model.PeriodClass
 import dev.agner.portfolio.usecase.performance.model.PeriodPerformance
 import dev.agner.portfolio.usecase.performance.model.TickerPerformance
 import io.kotest.core.spec.style.DescribeSpec
@@ -76,6 +78,12 @@ class PerformanceControllerTest : DescribeSpec({
                 val body = ObjectMapper().readTree(response.bodyAsText())
                 body.get("months").size() shouldBe 1
                 body.get("months").get(0).get("period").asText() shouldBe "2026-10"
+                body.get("months").get(0).get("benchmarks").get(0).get("index").asText() shouldBe "CDI"
+                body.get("months").get(0).get("benchmarks").get(0).get("return_percentage")
+                    .decimalValue().compareTo(BigDecimal("0.9000")) shouldBe 0
+                body.get("months").get(0).get("classes").get(0).get("asset_class").asText() shouldBe "ACOES"
+                body.get("months").get(0).get("classes").get(0).get("value_end")
+                    .decimalValue().compareTo(BigDecimal("101000")) shouldBe 0
                 body.get("xirr").decimalValue().compareTo(BigDecimal("12.0000")) shouldBe 0
             }
         }
@@ -140,6 +148,8 @@ private fun series() = PerformanceSeries(
             ),
             xirr = BigDecimal("12.0000"),
             benchmarkReturn = BigDecimal("2.0000"),
+            benchmarks = listOf(PeriodBenchmark(BenchmarkIndex.CDI, BigDecimal("0.9000"))),
+            classes = listOf(PeriodClass(AssetClass.ACOES, BigDecimal("101000"))),
         ),
     ),
     xirr = BigDecimal("12.0000"),

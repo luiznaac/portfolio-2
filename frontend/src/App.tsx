@@ -4,11 +4,13 @@ import { Allocation } from "./pages/Allocation.tsx";
 import { AssetDetail } from "./pages/AssetDetail.tsx";
 import { CorporateActions } from "./pages/CorporateActions.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
+import { Fechamento } from "./pages/Fechamento.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
+import { Performance } from "./pages/Performance.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { Taxes } from "./pages/Taxes.tsx";
 import { Trades } from "./pages/Trades.tsx";
@@ -33,6 +35,8 @@ export const routes: RouteObject[] = [
       { path: "corporate-actions", element: <CorporateActions /> },
       { path: "income", element: <Income /> },
       { path: "taxes", element: <Taxes /> },
+      { path: "fechamento", element: <Fechamento /> },
+      { path: "performance", element: <Performance /> },
     ],
   },
 ];

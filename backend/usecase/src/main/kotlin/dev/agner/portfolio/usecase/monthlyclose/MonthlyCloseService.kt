@@ -84,6 +84,10 @@ class MonthlyCloseService(
     // The closed months, newest period first — the read historical navigation is built on.
     suspend fun fetchClosedMonths(): List<Month> = months.fetchClosed()
 
+    // One closed month's frozen state — the history screen's summary read. Null for a month that was
+    // never closed; the edge maps that to the same 404 the month-scoped performance read uses.
+    suspend fun fetchSnapshot(monthId: Int): Snapshot? = snapshots.fetchByMonth(monthId)
+
     // The allocation values the book at the latest stored close — the same valuation the order plan
     // uses — and the snapshot freezes that state at close time. Income is the month's movements by
     // payable date, whatever their lifecycle stage: the close records what the month earned, not only

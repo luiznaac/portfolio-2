@@ -53,9 +53,14 @@ describe("theme tokens", () => {
 
   const FONTS = ["--font-sans", "--font-cond", "--font-mono"];
 
-  it.each([...CHROME, ...SIGN, ...RADII, ...FONTS])("declares %s in @theme", (token) => {
-    expect(indexCss).toContain(`${token}:`);
-  });
+  const BENCHMARKS = ["--color-blend", "--color-cdi", "--color-ipca", "--color-ibov"];
+
+  it.each([...CHROME, ...SIGN, ...RADII, ...FONTS, ...BENCHMARKS])(
+    "declares %s in @theme",
+    (token) => {
+      expect(indexCss).toContain(`${token}:`);
+    },
+  );
 });
 
 describe("fonts", () => {

@@ -175,3 +175,32 @@ export function IconCoins(props: IconProps) {
     </svg>
   );
 }
+
+export function IconLock(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <rect x={3} y={7} width={10} height={7} rx={1.5} stroke="currentColor" strokeWidth={1.3} />
+      <path
+        d="M5.2 7V5.2a2.8 2.8 0 0 1 5.6 0V7"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function IconChart(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path d="M2.5 13V3M2.5 13h11" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+      <path
+        d="m4.5 10 3-3.2 2.4 2.2 3.6-4"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

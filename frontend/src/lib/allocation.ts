@@ -11,6 +11,7 @@ import type {
   TickerAllocation,
 } from "../api/types.ts";
 import { subClassLabel } from "./fixedIncome.ts";
+import { formatPercent } from "./format.ts";
 import { assetClassLabel } from "./month.ts";
 
 export type AllocationRowKind = "capital" | "class" | "strategy" | "sub_class" | "ticker";
@@ -182,7 +183,7 @@ const ONE_DECIMAL = new Intl.NumberFormat("pt-BR", {
 
 // A target is the percentage number itself (50 = half); drift is already in percentage points.
 export function formatTarget(percentage: number | undefined): string {
-  return percentage === undefined ? "—" : `${ONE_DECIMAL.format(percentage)}%`;
+  return formatPercent(percentage, 1);
 }
 
 export function formatPoints(drift: number): string {

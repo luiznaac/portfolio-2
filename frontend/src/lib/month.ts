@@ -98,6 +98,11 @@ export function monthStatusLabel(status: MonthStatus): string {
   return status === "OPEN" ? "Aberto" : "Fechado";
 }
 
+// The backend lists closed months newest first; the newest one is what the history screens open on.
+export function defaultClosedMonthId(months: Month[]): number | null {
+  return months.length > 0 ? months[0].id : null;
+}
+
 const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
   ACOES: "Ações",
   FIIS: "Fundos imob.",

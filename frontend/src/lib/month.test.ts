@@ -4,6 +4,7 @@ import {
   addStrategyRow,
   addTickerRow,
   assetClassLabel,
+  defaultClosedMonthId,
   emptyMonthForm,
   emptyTargetsForm,
   monthFormFrom,
@@ -79,6 +80,35 @@ describe("month form", () => {
 
   it("rejects an invalid update", () => {
     expect(toMonthUpdate({ period: "2026-09", capital: "abc", floor: "25000" })).toBeNull();
+  });
+});
+
+describe("defaultClosedMonthId", () => {
+  it("selects the newest closed month the backend lists first", () => {
+    const months: Month[] = [
+      {
+        id: 9,
+        period: "2026-09",
+        capital: 240_000,
+        floor: 20_000,
+        status: "CLOSED",
+        aportes: 2_000,
+      },
+      {
+        id: 8,
+        period: "2026-08",
+        capital: 236_000,
+        floor: 18_000,
+        status: "CLOSED",
+        aportes: -1_000,
+      },
+    ];
+
+    expect(defaultClosedMonthId(months)).toBe(9);
+  });
+
+  it("returns null when no month has been closed", () => {
+    expect(defaultClosedMonthId([])).toBeNull();
   });
 });
 

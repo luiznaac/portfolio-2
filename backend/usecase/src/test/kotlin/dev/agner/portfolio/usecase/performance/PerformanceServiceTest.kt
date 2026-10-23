@@ -83,6 +83,16 @@ class PerformanceServiceTest : StringSpec({
         series.months.first().decomposition.returnPercentage shouldBe null
         series.months.last().decomposition.returnPercentage?.compareTo(BigDecimal("1.0000")) shouldBe 0
         series.months.last().xirr shouldNotBe null
+        series.months.last().benchmarks.map { it.index } shouldBe
+            listOf(BenchmarkIndex.CDI, BenchmarkIndex.IPCA, BenchmarkIndex.IBOV)
+        series.months.last().benchmarks
+            .first { it.index == BenchmarkIndex.IBOV }
+            .returnPercentage?.compareTo(BigDecimal("2.0000")) shouldBe 0
+        series.months.last().benchmarks
+            .first { it.index == BenchmarkIndex.CDI }
+            .returnPercentage shouldBe null
+        series.months.last().classes.single().assetClass shouldBe AssetClass.ACOES
+        series.months.last().classes.single().valueEnd.compareTo(BigDecimal("103500.00")) shouldBe 0
         series.xirr shouldNotBe null
     }
 })
