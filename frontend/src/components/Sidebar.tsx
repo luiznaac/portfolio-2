@@ -11,6 +11,7 @@ import {
   IconEvent,
   IconLayers,
   IconList,
+  IconReceipt,
   IconTarget,
   IconUpload,
 } from "./icons.tsx";
@@ -25,6 +26,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   layers: IconLayers,
   coins: IconCoins,
   event: IconEvent,
+  receipt: IconReceipt,
   list: IconList,
 };
 

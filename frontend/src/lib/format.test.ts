@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatCurrency, formatHealthStatus, formatNumber, formatTradeSide } from "./format.ts";
+import {
+  formatCurrency,
+  formatHealthStatus,
+  formatIsoDate,
+  formatNumber,
+  formatTradeSide,
+  isWeekend,
+} from "./format.ts";
 
 describe("formatHealthStatus", () => {
   it("formats a healthy result", () => {
@@ -38,5 +45,22 @@ describe("formatCurrency", () => {
 
   it("renders zero", () => {
     expect(formatCurrency(0)).toBe("R$ 0,00");
+  });
+});
+
+describe("formatIsoDate", () => {
+  it("renders the ISO date without shifting it through UTC", () => {
+    expect(formatIsoDate("2026-11-30")).toBe("30/11/2026");
+    expect(formatIsoDate("2026-01-05")).toBe("05/01/2026");
+    expect(formatIsoDate("not-a-date")).toBe("not-a-date");
+  });
+});
+
+describe("isWeekend", () => {
+  it("knows a weekend without a timezone shift", () => {
+    expect(isWeekend("2026-10-24")).toBe(true);
+    expect(isWeekend("2026-10-25")).toBe(true);
+    expect(isWeekend("2026-10-23")).toBe(false);
+    expect(isWeekend("not-a-date")).toBe(false);
   });
 });

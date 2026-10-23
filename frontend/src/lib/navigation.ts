@@ -11,6 +11,7 @@ export type NavIcon =
   | "layers"
   | "coins"
   | "event"
+  | "receipt"
   | "list";
 
 export interface NavItem {
@@ -45,7 +46,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/fixed-income", label: "Renda fixa", icon: "bank" },
     ],
   },
-  { label: "Resultados", items: [{ to: "/income", label: "Proventos", icon: "coins" }] },
+  {
+    label: "Resultados",
+    items: [
+      { to: "/income", label: "Proventos", icon: "coins" },
+      { to: "/taxes", label: "Impostos", icon: "receipt" },
+    ],
+  },
 ];
 
 export interface NavCrumb {

@@ -26,16 +26,28 @@ class AttributionService(
     private val transaction: ITransactionTemplate,
 ) {
 
-    // The whole ledger keyed by (strategy name, ticker), the way the order engine's funding pass
-    // consumes it — the id-to-name projection belongs here, beside the other reads that join it.
-    suspend fun fetchLedger(): Map<StrategyTicker, BigDecimal> {
+    // The ledger keyed by ticker, each slice carrying its strategy's name — the read the order
+    // engine and the harvest pass both need. The id-to-name projection belongs here, beside the
+    // other reads that join it.
+    suspend fun fetchSlicesByTicker(): Map<String, List<AttributionSlice>> {
         val names = strategies.fetchAll().associate { it.id to it.name }
         return attributions.fetchAll()
             .mapNotNull { row ->
-                names[row.strategyId]?.let { name -> StrategyTicker(name, row.ticker) to row.quantity }
+                names[row.strategyId]?.let { name ->
+                    row.ticker to AttributionSlice(row.strategyId, name, row.quantity)
+                }
+            }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+    }
+
+    // The whole ledger keyed by (strategy name, ticker), the way the order engine's funding pass
+    // consumes it. It is the same slice read flattened, so the two can never disagree.
+    suspend fun fetchLedger(): Map<StrategyTicker, BigDecimal> =
+        fetchSlicesByTicker()
+            .flatMap { (ticker, slices) ->
+                slices.map { StrategyTicker(it.strategyName, ticker) to it.quantity }
             }
             .toMap()
-    }
 
     suspend fun fetchSummary(ticker: String): AttributionSummary? {
         val normalized = ticker.normalizedTicker()

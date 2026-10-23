@@ -2,10 +2,7 @@ package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.order.OrderLifecycleService
 import dev.agner.portfolio.usecase.order.model.OrderMatchUpdate
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
-import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
@@ -45,8 +42,3 @@ class OrdersController(
         }
     }
 }
-
-// The three reads share one "absent is a 404" contract; the generic keeps the response types from
-// leaking a hand-rolled helper per shape.
-private suspend inline fun <reified T : Any> ApplicationCall.respondOr404(value: T?) =
-    if (value == null) respond(HttpStatusCode.NotFound) else respond(HttpStatusCode.OK, value)

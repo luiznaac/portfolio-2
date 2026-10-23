@@ -139,6 +139,25 @@ export function IconEvent(props: IconProps) {
   );
 }
 
+export function IconReceipt(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M4 2.5h8v11l-1.4-.9-1.3.9-1.3-.9-1.3.9-1.3-.9L4 13.5v-11Z"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 6h4M6 8.5h4M6 11h2.5"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function IconCoins(props: IconProps) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>

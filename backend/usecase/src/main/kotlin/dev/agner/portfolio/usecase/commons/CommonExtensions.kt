@@ -82,9 +82,28 @@ fun LocalDate.toMondayIfWeekend() = when (dayOfWeek) {
     else -> this
 }
 
+// The nearest weekday on either side. The app has no exchange-holiday calendar, so "business day"
+// means "weekday"; the caller states the holiday caveat where the date surfaces.
+fun LocalDate.nextWeekday(): LocalDate {
+    var day = nextDay()
+    while (day.isWeekend()) day = day.nextDay()
+    return day
+}
+
+fun LocalDate.weekdayOnOrBefore(): LocalDate {
+    var day = this
+    while (day.isWeekend()) day = day.dayBefore()
+    return day
+}
+
 fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() } }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
+
+private val HUNDRED = BigDecimal("100")
+
+// A percentage rate (15 for 15%) applied to an amount, at the repo's money scale.
+fun BigDecimal.percentOf(rate: BigDecimal) = multiply(rate).divide(HUNDRED).defaultScale()
 
 // A level's Deficit — its Ideal minus its Actual (CONTEXT.md); the negative side is the Surplus.
 fun BigDecimal.deficitAgainst(actual: BigDecimal) = (this - actual).defaultScale()
