@@ -8,6 +8,7 @@ import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
 import org.jetbrains.exposed.v1.dao.IntEntityClass
 import org.jetbrains.exposed.v1.datetime.datetime
+import java.math.BigDecimal
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
@@ -17,6 +18,10 @@ object MonthTable : IntIdTable("month") {
     val period = varchar("period", 7)
     val capital = decimal("capital", 18, 6)
     val floor = decimal("floor", 18, 6)
+
+    // Net external contribution for the month (negative on a redemption). The default keeps the
+    // column safe for rows and seeds written before the performance slice.
+    val aportes = decimal("aportes", 18, 6).default(BigDecimal.ZERO)
     val status = enumerationByName<MonthStatus>("status", 20)
     val createdAt = datetime("created_at")
 
@@ -30,6 +35,7 @@ class MonthEntity(id: EntityID<Int>) : IntEntity(id) {
     var period by MonthTable.period
     var capital by MonthTable.capital
     var floor by MonthTable.floor
+    var aportes by MonthTable.aportes
     var status by MonthTable.status
     var createdAt by MonthTable.createdAt
 
@@ -39,5 +45,6 @@ class MonthEntity(id: EntityID<Int>) : IntEntity(id) {
         capital = capital,
         floor = floor,
         status = status,
+        aportes = aportes,
     )
 }

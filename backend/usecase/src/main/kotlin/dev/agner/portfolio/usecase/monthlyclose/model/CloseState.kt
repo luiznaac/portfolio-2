@@ -16,12 +16,18 @@ data class CloseState(
     val period: YearMonth,
     val capital: BigDecimal,
     val floor: BigDecimal,
+    // The month's net external contribution, recorded at the Fechamento and dated month-end. The
+    // performance decomposition nets it out; a default keeps older snapshots readable.
+    val aportes: BigDecimal = BigDecimal.ZERO,
     // The Uninvested Balance: Capital minus the value of every position (CONTEXT.md -> Caixa).
     val caixa: BigDecimal,
     val holdings: List<HoldingSnapshot>,
     val attributions: List<AttributionSnapshot>,
     val classes: List<ClassTotalSnapshot>,
     val income: IncomeTotals,
+    // The month's income per ticker, frozen with the close. The performance reads the same rows at
+    // the class and ticker rungs, so a later edit to the live ledger cannot rewrite a closed month.
+    val incomeByTicker: List<TickerIncomeSnapshot> = emptyList(),
     val orders: OrdersSnapshot,
     val tax: TaxCloseSnapshot,
 )
@@ -52,6 +58,9 @@ data class ClassTotalSnapshot(
     val drift: BigDecimal,
     val unattributed: BigDecimal,
 )
+
+// One ticker's net income inside the closed month.
+data class TickerIncomeSnapshot(val ticker: String, val net: BigDecimal)
 
 // The month's income totals, summed across the income movements dated inside it regardless of
 // lifecycle stage: a payment due in the month counts as that month's income even if it has not been

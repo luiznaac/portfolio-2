@@ -9,7 +9,7 @@ import { Month } from "./Month.tsx";
 // edited value remounts the input on the first keystroke and the browser drops focus.
 vi.mock("../api/queries.ts", () => {
   const current = {
-    month: { id: 1, period: "2026-10", capital: 100_000, floor: 0, status: "OPEN" },
+    month: { id: 1, period: "2026-10", capital: 100_000, floor: 0, status: "OPEN", aportes: 0 },
     targets: {
       classes: [],
       strategies: [{ asset_class: "ACOES", strategy: "Top Dividendos", percentage: 34 }],

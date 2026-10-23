@@ -28,6 +28,9 @@ sealed class Trade(
     open val source: TradeSource,
     open val confirmedByB3: Boolean,
     open val ordinal: Int,
+    // How much of an OPENING seed the backfill has already absorbed. Only seeds use it; a regular
+    // trade stays at zero. Keeping it lets absorb rerun without subtracting the same history twice.
+    open val absorbedQuantity: BigDecimal,
 ) {
     // The direction as an explicit property, so it survives serialization (the API's GET /trades
     // would otherwise return a trade with no way to tell a buy from a sell).
@@ -45,6 +48,7 @@ sealed class Trade(
         override val source: TradeSource,
         override val confirmedByB3: Boolean,
         override val ordinal: Int,
+        override val absorbedQuantity: BigDecimal = BigDecimal.ZERO,
     ) : Trade(
         id,
         ticker,
@@ -57,6 +61,7 @@ sealed class Trade(
         source,
         confirmedByB3,
         ordinal,
+        absorbedQuantity,
     ) {
         override val side: TradeSide = TradeSide.BUY
 
@@ -77,6 +82,7 @@ sealed class Trade(
         override val source: TradeSource,
         override val confirmedByB3: Boolean,
         override val ordinal: Int,
+        override val absorbedQuantity: BigDecimal = BigDecimal.ZERO,
     ) : Trade(
         id,
         ticker,
@@ -89,6 +95,7 @@ sealed class Trade(
         source,
         confirmedByB3,
         ordinal,
+        absorbedQuantity,
     ) {
         override val side: TradeSide = TradeSide.SELL
         init { requirePositiveQuantity(quantity) }

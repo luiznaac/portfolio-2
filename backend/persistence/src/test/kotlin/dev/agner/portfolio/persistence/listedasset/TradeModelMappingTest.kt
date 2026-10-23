@@ -61,4 +61,5 @@ private fun tradeModel(quantity: BigDecimal) = tradeModel(
     source = TradeSource.MANUAL,
     confirmedByB3 = false,
     ordinal = 1,
+    absorbedQuantity = BigDecimal.ZERO,
 )

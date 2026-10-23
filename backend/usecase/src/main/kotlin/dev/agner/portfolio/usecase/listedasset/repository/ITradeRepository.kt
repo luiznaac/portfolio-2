@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import java.math.BigDecimal
 
 interface ITradeRepository {
 
@@ -23,4 +24,16 @@ interface ITradeRepository {
 
     // Marks a manual trade as confirmed by an import. Null when no trade has that id.
     suspend fun confirmByB3(id: Int): Trade?
+
+    // Every trade of one provenance — the backfill reads the OPENING seeds through this.
+    suspend fun fetchAllBySource(source: TradeSource): List<Trade>
+
+    // Retires a trade the history has fully replaced (an absorbed OPENING seed). False when no
+    // trade has that id.
+    suspend fun delete(id: Int): Boolean
+
+    // Rewrites an OPENING seed to the portion the imported history does not cover and records how
+    // much has been absorbed, so a rerun does not subtract the same history twice. Null when no
+    // trade has that id.
+    suspend fun absorb(id: Int, remainingQuantity: BigDecimal, absorbedQuantity: BigDecimal): Trade?
 }

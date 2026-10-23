@@ -30,7 +30,7 @@ _UI:_ "Mês"
 _Avoid_: Period, cycle
 
 **Aporte**:
-New money added to the Portfolio from outside during a month; part of Capital.
+New money added to the Portfolio from outside during a month, recorded as a net figure at each Fechamento and frozen into the Snapshot; part of Capital. The performance decomposition nets it out, and XIRR dates it at month-end.
 _UI:_ "Aporte"
 _Avoid_: Deposit (that is an RF movement), contribution
 
@@ -113,6 +113,43 @@ _Avoid_: Backup, export
 A broker/custodian named in imported records, normalized into a first-class entity; used for provenance and dedup of imported movements.
 _UI:_ "Instituição"
 _Avoid_: Broker, corretora, bank
+
+### History & performance
+
+**Backfill**:
+Replaying the exported trade history over the whole window it covers, then retiring the adoption seeds it explains, so the ledger reconstructs the Portfolio before adoption. Any quantity the replay still cannot explain becomes a GAP.
+_UI:_ "Histórico"
+_Avoid_: Import (that stages a file), sync
+
+**Absorb**:
+The backfill step that retires an OPENING seed a ticker's imported history now covers — fully (the seed is deleted) or partially (it keeps only the uncovered quantity). Coverage is per ticker.
+_UI:_ —
+_Avoid_: Merge, reconcile (that is custody vs ledger)
+
+**Opening Trade**:
+An adoption seed: one marked Trade built from the B3 Posição snapshot at the start of the tracked window, retired by the backfill once the exported history covers it.
+_UI:_ —
+_Avoid_: Seed position, initial trade
+
+**GAP**:
+A marked reconciliation record for a custody quantity delta the ledger cannot explain: an upward one is a missing buy priced at the market close (so its average price is approximate), a downward one a missing sale whose proceeds are unknown (so its realized result stays `pending`). A GAP is not a Trade — it never feeds the tax ledger; a new trade of the same ticker, side and quantity, or a new quantity Corporate Action, retires it, and either variant's placeholder price can be corrected directly (a missing sale's proceeds make its realized result stop being pending).
+_UI:_ "Lacuna"
+_Avoid_: Adjustment (that is an RF movement), opening trade
+
+**Performance Decomposition**:
+A month's return after the money that is not performance is netted out: `(value_end − value_start − net aportes − net income) ÷ value_start`. The same formula runs for the total, each class and each ticker; `value_start` is the prior Snapshot's value.
+_UI:_ "Rentabilidade"
+_Avoid_: Yield (that is RF accrual), profit
+
+**XIRR**:
+The annualized money-weighted return since inception, solved over the date-month-end snapshot values and the dated net Aportes. It answers what rate makes the contribution and value flows balance.
+_UI:_ "Retorno anualizado"
+_Avoid_: CAGR (that is time-weighted), monthly return
+
+**Benchmark Blend**:
+The comparison line the Portfolio is measured against: each class's benchmark weighted by the month's Target chain — Ações and FIIs against IBOV, RF Pós/Pré against CDI, RF Inflação against IPCA, from the BCB SGS series — never the actual allocation.
+_UI:_ "Benchmark"
+_Avoid_: Index (the series itself), target
 
 ### Listed assets
 

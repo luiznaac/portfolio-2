@@ -22,6 +22,7 @@ const month: Month = {
   period: "2026-09",
   capital: 245000,
   floor: 20000,
+  aportes: 0,
   status: "OPEN",
 };
 

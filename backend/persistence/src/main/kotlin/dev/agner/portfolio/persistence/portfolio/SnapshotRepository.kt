@@ -35,4 +35,10 @@ class SnapshotRepository(
     override suspend fun fetchByMonth(monthId: Int): Snapshot? = transaction {
         SnapshotEntity.find { SnapshotTable.monthId eq monthId }.firstOrNull()?.toModel()
     }
+
+    override suspend fun fetchAll(): List<Snapshot> = transaction {
+        SnapshotEntity.all()
+            .sortedBy { it.month.period }
+            .map { it.toModel() }
+    }
 }

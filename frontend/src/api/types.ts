@@ -190,6 +190,8 @@ export interface Month {
   capital: number;
   floor: number;
   status: MonthStatus;
+  // Net external contribution recorded with the month and frozen at the close (negative = resgate).
+  aportes: number;
 }
 
 // Target percentages are the percentage number — 50.00 is half (see the backend's Targets).
@@ -231,11 +233,13 @@ export interface MonthCreation {
   period: string;
   capital: number;
   floor: number;
+  aportes?: number;
 }
 
 export interface MonthUpdate {
   capital: number;
   floor: number;
+  aportes?: number;
 }
 
 // The computed allocation tree (GET /month/current/allocation). Ideal/Actual/Deficit are R$; Drift
@@ -794,6 +798,11 @@ export interface IncomeTotals {
   net: number;
 }
 
+export interface TickerIncomeSnapshot {
+  ticker: string;
+  net: number;
+}
+
 export interface OrdersSnapshot {
   orders: SuggestedOrder[];
   transfers: TransferProposal[];
@@ -809,11 +818,13 @@ export interface CloseState {
   period: string;
   capital: number;
   floor: number;
+  aportes: number;
   caixa: number;
   holdings: HoldingSnapshot[];
   attributions: AttributionSnapshot[];
   classes: ClassTotalSnapshot[];
   income: IncomeTotals;
+  income_by_ticker?: TickerIncomeSnapshot[];
   orders: OrdersSnapshot;
   tax: TaxCloseSnapshot;
 }
@@ -841,4 +852,102 @@ export interface PendingTransfersError {
   message: string;
   detail: string;
   pending_transfers: PendingTransfer[];
+}
+
+
+// Performance (GET /months/{id}/performance, GET /performance/series). The decomposition is the
+// month's return after net aportes and net income; the benchmark is the target-weighted blend of the
+// policy's class benchmarks (IBOV for Ações/FIIs, CDI for RF Pós/Pré, IPCA for RF Inflação). Null
+// fields are omitted by the backend.
+export type BenchmarkIndex = "CDI" | "IPCA" | "IBOV";
+
+export interface PerformanceDecomposition {
+  value_start?: number;
+  value_end: number;
+  net_aportes: number;
+  net_income: number;
+  return_percentage?: number;
+}
+
+export interface BenchmarkContribution {
+  label: string;
+  target: number;
+  benchmark?: BenchmarkIndex;
+  return_percentage?: number;
+}
+
+export interface BenchmarkBlend {
+  return_percentage?: number;
+  contributions: BenchmarkContribution[];
+}
+
+export interface ClassPerformance {
+  asset_class: AssetClass;
+  decomposition: PerformanceDecomposition;
+  benchmark_return?: number;
+}
+
+export interface TickerPerformance {
+  ticker: string;
+  asset_class?: AssetClass;
+  decomposition: PerformanceDecomposition;
+  benchmark_return?: number;
+}
+
+export interface MonthPerformance {
+  month_id: number;
+  period: string;
+  decomposition: PerformanceDecomposition;
+  xirr?: number;
+  benchmark: BenchmarkBlend;
+  classes: ClassPerformance[];
+  tickers: TickerPerformance[];
+}
+
+export interface PeriodPerformance {
+  period: string;
+  decomposition: PerformanceDecomposition;
+  xirr?: number;
+  benchmark_return?: number;
+}
+
+export interface PerformanceSeries {
+  months: PeriodPerformance[];
+  xirr?: number;
+}
+
+// History backfill (POST /history/backfill) and its GAP records (GET /gaps). A GAP is an unexplained
+// custody delta: an upward one is a missing buy priced at the market close, a downward one a missing
+// sale whose proceeds (and therefore realized result) stay pending until replaced.
+export type GapStatus = "OPEN" | "REPLACED";
+
+export interface Gap {
+  id: number;
+  ticker: string;
+  date: string;
+  quantity: number;
+  unit_price?: number;
+  status: GapStatus;
+  // A missing sale with no price yet; the backend serializes it only on that variant.
+  realized_pending?: boolean;
+}
+
+export interface GapPriceUpdate {
+  unit_price: number;
+}
+
+export interface OpeningSeedCreation {
+  ticker: string;
+  quantity: number;
+  unit_price: number;
+  date: string;
+  venue?: string;
+}
+
+export interface BackfillReport {
+  absorbed_seeds: number;
+  adjusted_seeds: number;
+  gaps_created: number;
+  gaps_replaced: number;
+  positions_reprojected: number;
 }

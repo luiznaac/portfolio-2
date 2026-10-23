@@ -3,8 +3,10 @@ package dev.agner.portfolio.usecase.listedasset
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
+import dev.agner.portfolio.usecase.listedasset.model.GapStatus
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.PositionDetail
+import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import org.springframework.stereotype.Service
@@ -14,6 +16,7 @@ class PositionService(
     private val positions: IPositionRepository,
     private val trades: ITradeRepository,
     private val corporateActions: ICorporateActionRepository,
+    private val gaps: IGapRepository,
 ) {
 
     suspend fun fetchAll() = positions.fetchAll()
@@ -30,6 +33,7 @@ class PositionService(
             normalized,
             trades.fetchAllBy(normalized),
             corporateActions.fetchByTicker(normalized),
+            gaps.fetchOpenBy(normalized),
         )
         positions.save(position)
         return position
@@ -44,16 +48,18 @@ class PositionService(
             trades.fetchAllBy(normalized),
             corporateActions.fetchByTicker(normalized),
             action,
+            gaps.fetchOpenBy(normalized),
         )
     }
 
     // Replays every ticker's ledger and actions, repairing drift across the whole book.
     suspend fun reprojectAll(): List<Position> {
         val actions = corporateActions.fetchApplied().groupBy { it.ticker }
+        val openGaps = gaps.fetchAll().filter { it.status == GapStatus.OPEN }.groupBy { it.ticker }
         val reprojected = trades.fetchAll()
             .groupBy { it.ticker }
             .map { (ticker, ledger) ->
-                PositionCalculator.replay(ticker, ledger, actions[ticker].orEmpty())
+                PositionCalculator.replay(ticker, ledger, actions[ticker].orEmpty(), openGaps[ticker].orEmpty())
             }
         for (position in reprojected) positions.save(position)
         return reprojected

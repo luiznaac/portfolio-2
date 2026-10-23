@@ -159,3 +159,46 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   The expected read is two active suggestions in loss-descending order — ITSA4 first (100 units, R$1,200 loss, no slice) and PETR4 second (500 units, R$1,000 loss, NEUTRO, slice Dividendos) — VALE3 in the ignored list, and the HGLG11 FII row at 20%.
+
+- **Performance seed**: the performance reads replay the immutable snapshots, not the live ledger, so this scenario seeds two closed months (January and February 2026) with their snapshot JSON, the target chain and one listed holding. January opens at R$100k; February closes at R$103.5k after a R$2k aporte and no income, so the decomposition is `(103500 − 100000 − 2000) ÷ 100000 = 1.5%`. Ações is 0% and Renda Fixa 100% (Pós-fixado), so the blended benchmark is the live CDI return: IBOV series 7 is currently absent from SGS, and the blend keeps the policy denominator rather than silently renormalising around the missing leg (a targeted class with no benchmark would make the total unknown). Run it independently of the order/tax/harvest seeds.
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM target; DELETE FROM month;
+  DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+  DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('PETR4', '2026-03-01', 'VISTA', 100, 10, @inst, NULL, 'OPENING', FALSE, 1, NOW()),
+    ('PETR4', '2026-01-10', 'VISTA', 60, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('PETR4', '2026-02-10', 'VISTA', 40, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());
+  INSERT INTO month (id, period, capital, `floor`, aportes, status, created_at) VALUES
+    (9001, '2026-01', 100000, 0, 0, 'CLOSED', NOW()),
+    (9002, '2026-02', 103500, 0, 2000, 'CLOSED', NOW());
+  INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+    (9001, 'CLASS', 'ACOES', NULL, NULL, NULL, 0, NOW()),
+    (9001, 'CLASS', 'RENDA_FIXA', NULL, NULL, NULL, 100, NOW()),
+    (9001, 'SUB_CLASS', NULL, NULL, 'FLOATING_RATE', NULL, 100, NOW()),
+    (9002, 'CLASS', 'ACOES', NULL, NULL, NULL, 0, NOW()),
+    (9002, 'CLASS', 'RENDA_FIXA', NULL, NULL, NULL, 100, NOW()),
+    (9002, 'SUB_CLASS', NULL, NULL, 'FLOATING_RATE', NULL, 100, NOW());
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('PETR4', 'PETROBRAS', '02', NULL, 'STOCK', 'ACOES', '2026-01-01', '2026-02-27', NOW());
+  INSERT INTO quote (ticker, date, close, source, created_at) VALUES
+    ('PETR4', '2026-01-30', 10, 'COTAHIST', NOW()),
+    ('PETR4', '2026-02-27', 10, 'COTAHIST', NOW());
+  INSERT INTO snapshot (month_id, state, created_at) VALUES
+    (9001, '{"period":"2026-01","capital":100000,"floor":0,"aportes":0,"caixa":0,"holdings":[{"ticker":"PETR4","quantity":6000,"average_price":10}],"attributions":[],"classes":[{"asset_class":"ACOES","target":0,"ideal":0,"actual":60000,"deficit":0,"drift":0,"unattributed":0},{"asset_class":"RENDA_FIXA","target":100,"ideal":100000,"actual":40000,"deficit":0,"drift":0,"unattributed":0}],"income":{"gross":0,"retained":0,"net":0},"orders":{"orders":[],"transfers":[],"unplanned_trades":[]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":0}}}', NOW()),
+    (9002, '{"period":"2026-02","capital":103500,"floor":0,"aportes":2000,"caixa":0,"holdings":[{"ticker":"PETR4","quantity":6210,"average_price":10}],"attributions":[],"classes":[{"asset_class":"ACOES","target":0,"ideal":0,"actual":62100,"deficit":0,"drift":0,"unattributed":0},{"asset_class":"RENDA_FIXA","target":100,"ideal":103500,"actual":41400,"deficit":0,"drift":0,"unattributed":0}],"income":{"gross":0,"retained":0,"net":0},"orders":{"orders":[],"transfers":[],"unplanned_trades":[]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":0}}}', NOW());
+  SQL
+  ```
+
+  The curl reads are then deterministic at ids `9001`/`9002`:
+
+  ```
+  curl -s http://localhost:8080/months/9002/performance   # decomposition 1.5%, xirr, benchmark
+  curl -s http://localhost:8080/performance/series        # the two monthly points
+  curl -s http://localhost:8080/gaps                      # [] until the backfill records a delta
+  curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
+  ```
