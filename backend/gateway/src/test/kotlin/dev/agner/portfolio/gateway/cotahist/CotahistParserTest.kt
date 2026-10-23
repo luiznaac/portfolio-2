@@ -1,5 +1,6 @@
 package dev.agner.portfolio.gateway.cotahist
 
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CotahistRow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -8,7 +9,8 @@ import java.math.BigDecimal
 
 // The COTAHIST layout is a 245-char fixed-width record. Offsets below are 1-based, matching B3's
 // published layout (SeriesHistoricas_Layout.pdf): TIPREG 1-2, DATPRE 3-10, CODBDI 11-12,
-// CODNEG 13-24, TPMERC 25-27, NOMRES 28-39, PREULT 109-121 (2 implied decimals), CODISI 225-236.
+// CODNEG 13-24, TPMERC 25-27, NOMRES 28-39, ESPECI 40-49, PREULT 109-121 (2 implied decimals),
+// CODISI 225-236.
 class CotahistParserTest : StringSpec({
     val parser = CotahistParser()
 
@@ -21,6 +23,25 @@ class CotahistParserTest : StringSpec({
             date = LocalDate.parse("2026-10-14"),
             closePrice = BigDecimal("48.92"),
         )
+    }
+
+    "classifies a unit from its COTAHIST specification" {
+        val line = cotahistLine(
+            1 to "01",
+            3 to "20261014",
+            11 to "02",
+            13 to "SANB11",
+            25 to "010",
+            28 to "SANTANDER BR",
+            40 to "UNT N2",
+            109 to "0000000027300",
+        )
+
+        parser.parseLine(line)?.assetKind shouldBe AssetKind.UNIT
+    }
+
+    "keeps a stock a stock when the specification has no unit marker" {
+        parser.parseLine(petr4Record())?.assetKind shouldBe AssetKind.STOCK
     }
 
     "strips the fractional-market suffix from the ticker" {

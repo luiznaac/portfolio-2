@@ -40,13 +40,31 @@ object PositionCalculator {
         trades: List<Trade>,
         corporateActions: List<CorporateAction>,
         action: CorporateAction,
-    ): Position {
-        val boundary = TimelineKey(action.exDate, ACTION_PRIORITY, action.ordinal, action.id)
-        return entries(trades, corporateActions)
+    ): Position = replayBefore(
+        ticker,
+        entries(trades, corporateActions),
+        TimelineKey(action.exDate, ACTION_PRIORITY, action.ordinal, action.id),
+    )
+
+    // The position immediately before one trade — the fiscal basis a sale's gain is measured on.
+    // Later trades and actions are excluded, while a same-day corporate action still counts: an
+    // ex-date trade is already priced ex.
+    fun positionBefore(
+        ticker: String,
+        trades: List<Trade>,
+        corporateActions: List<CorporateAction>,
+        trade: Trade,
+    ): Position = replayBefore(
+        ticker,
+        entries(trades, corporateActions),
+        TimelineKey(trade.date, TRADE_PRIORITY, trade.ordinal, trade.id),
+    )
+
+    private fun replayBefore(ticker: String, entries: List<LedgerEntry>, boundary: TimelineKey): Position =
+        entries
             .filter { it.key < boundary }
             .sortedBy { it.key }
             .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
-    }
 
     private fun entries(trades: List<Trade>, corporateActions: List<CorporateAction>): List<LedgerEntry> =
         trades.map { LedgerEntry.of(it) } + corporateActions.map { LedgerEntry.of(it) }
