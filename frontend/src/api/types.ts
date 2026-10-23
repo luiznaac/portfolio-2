@@ -680,3 +680,84 @@ export interface OrderList {
 export interface OrderMatchUpdate {
   trade_id?: number | null;
 }
+
+// The monthly close (POST /month/current/close): the immutable snapshot of the month the ritual
+// locked. The holdings and attributions are frozen at close time, the class totals are the
+// allocation's class rungs, and the tax block is the carry roll plus the exemption meter's finals.
+export interface HoldingSnapshot {
+  ticker: string;
+  quantity: number;
+  average_price: number;
+}
+
+export interface AttributionSnapshot {
+  ticker: string;
+  strategy_id: number;
+  strategy: string;
+  quantity: number;
+}
+
+export interface ClassTotalSnapshot {
+  asset_class: AssetClass;
+  target?: number;
+  ideal: number;
+  actual: number;
+  deficit: number;
+  drift: number;
+  unattributed: number;
+}
+
+export interface IncomeTotals {
+  gross: number;
+  retained: number;
+  net: number;
+}
+
+export interface OrdersSnapshot {
+  orders: SuggestedOrder[];
+  transfers: TransferProposal[];
+  unplanned_trades: UnplannedTrade[];
+}
+
+export interface TaxCloseSnapshot {
+  carry: CarryBucket[];
+  meter: ExemptionMeter;
+}
+
+export interface CloseState {
+  period: string;
+  capital: number;
+  floor: number;
+  caixa: number;
+  holdings: HoldingSnapshot[];
+  attributions: AttributionSnapshot[];
+  classes: ClassTotalSnapshot[];
+  income: IncomeTotals;
+  orders: OrdersSnapshot;
+  tax: TaxCloseSnapshot;
+}
+
+export interface Snapshot {
+  id: number;
+  month_id: number;
+  state: CloseState;
+  created_at: string;
+}
+
+// The 409 body a blocked close returns: the canonical error fields plus the undecided proposals, so
+// the caller can approve or reject them by id before retrying the close.
+export interface PendingTransfer {
+  id: number;
+  ticker: string;
+  from_strategy: string;
+  to_strategy: string;
+  quantity: number;
+  amount?: number;
+}
+
+export interface PendingTransfersError {
+  error: string;
+  message: string;
+  detail: string;
+  pending_transfers: PendingTransfer[];
+}

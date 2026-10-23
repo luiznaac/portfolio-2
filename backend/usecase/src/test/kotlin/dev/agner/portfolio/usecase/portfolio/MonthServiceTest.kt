@@ -89,6 +89,27 @@ class MonthServiceTest : StringSpec({
         service.fetchCurrentTargets() shouldBe targets
     }
 
+    "close delegates the lock and returns the closed month" {
+        coEvery { monthRepository.close(7) } returns openMonth.copy(status = MonthStatus.CLOSED)
+
+        service.close(7)!!.status shouldBe MonthStatus.CLOSED
+
+        coVerify(exactly = 1) { monthRepository.close(7) }
+    }
+
+    "close returns null when the month is not open" {
+        coEvery { monthRepository.close(7) } returns null
+
+        service.close(7) shouldBe null
+    }
+
+    "fetchClosed reads the closed months from the repository" {
+        val closed = listOf(openMonth.copy(status = MonthStatus.CLOSED))
+        coEvery { monthRepository.fetchClosed() } returns closed
+
+        service.fetchClosed() shouldBe closed
+    }
+
     "replaceCurrentTargets returns null when no month is open" {
         coEvery { monthRepository.fetchOpen() } returns null
 

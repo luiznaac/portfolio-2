@@ -30,6 +30,11 @@ class MonthService(
     suspend fun updateCurrent(update: MonthUpdate): CurrentMonth? =
         monthRepository.updateCurrent(update)?.let { view(it) }
 
+    // Locks the open month and returns it; null when it is not open (or already closed).
+    suspend fun close(id: Int): Month? = monthRepository.close(id)
+
+    suspend fun fetchClosed(): List<Month> = monthRepository.fetchClosed()
+
     suspend fun fetchCurrentTargets(): Targets? =
         monthRepository.fetchOpen()?.let { targetRepository.fetchByMonth(it.id) }
 
