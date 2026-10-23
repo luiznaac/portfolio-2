@@ -13,8 +13,11 @@ data class CotahistRow(
     val isin: String?,
     val date: LocalDate,
     val closePrice: BigDecimal,
+    // B3's "Especificação do papel" — the only field that separates a unit (UNT) from a stock,
+    // since both share BDI 02. Kept raw so the classification stays in AssetKind.
+    val specification: String? = null,
 ) {
-    val assetKind: AssetKind get() = AssetKind.fromBdiType(bdiType)
+    val assetKind: AssetKind get() = AssetKind.fromBdiType(bdiType, specification)
 
     fun toCatalogEntry() = CatalogEntry(
         ticker = ticker,

@@ -293,6 +293,31 @@ export interface Allocation {
   classes: ClassAllocation[];
 }
 
+// The open month's stock-sale tax read (GET /month/current/tax). The meter tracks the month's gross
+// STOCK sales against the R$20k exemption; crossing it taxes the whole month's net gain at 15%.
+// Average prices are the fiscal mean unit cost of every held ticker.
+export interface ExemptionMeter {
+  gross_sales: number;
+  exemption_limit: number;
+  exceeded: boolean;
+  realized_gain: number;
+  taxable_gain: number;
+  rate: number;
+  tax: number;
+}
+
+export interface TickerAveragePrice {
+  ticker: string;
+  quantity: number;
+  average_price: number;
+}
+
+export interface StockTaxReport {
+  period: string;
+  meter: ExemptionMeter;
+  average_prices: TickerAveragePrice[];
+}
+
 // The order engine's read (GET /month/current/orders?phase=ideals|candidates|funding|full). Ideal/amount
 // are R$; `target_quantity` is the whole-unit floor of a ticker slice and is absent when no quote
 // prices it. Candidates aggregate a ticker's target across strategies; a targeted surplus stays a

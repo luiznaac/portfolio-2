@@ -160,6 +160,11 @@ The fiscal mean unit cost of a listed asset's Position, built from its trades an
 _UI:_ "Preço médio"
 _Avoid_: Cost basis, avg cost
 
+**Exemption Meter**:
+The month-to-date total of gross STOCK sales measured against the R$20k monthly exemption; crossing it taxes the whole month's stock gain (the cliff), while units, FIIs, BDRs, ETFs and day trades stay outside it.
+_UI:_ "Isenção"
+_Avoid_: Limit (the value), exemption (the state)
+
 **Attribution**:
 The ledger mapping parts of a listed asset's Position quantity to Strategies; the sum of attributions never exceeds the Position's quantity.
 _UI:_ "Atribuição"
