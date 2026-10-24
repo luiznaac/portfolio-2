@@ -27,7 +27,7 @@ jobs:
           key: ${{ runner.os }}-gradle-wrapper${{ hashFiles('backend/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-wrapper
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: 'adopt'
           java-version: '21'
