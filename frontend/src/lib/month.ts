@@ -18,8 +18,9 @@ export interface MonthFormState {
   floor: string;
 }
 
-export function emptyMonthForm(): MonthFormState {
-  return { period: "", capital: "", floor: "" };
+// The opener seeds the period with the given one (the current month) so both selects start set.
+export function emptyMonthForm(period = ""): MonthFormState {
+  return { period, capital: "", floor: "" };
 }
 
 // Seeds the edit form from the open month; the period is editable only at open time but kept so the
@@ -29,7 +30,7 @@ export function monthFormFrom(month: Month): MonthFormState {
 }
 
 // YYYY-MM with a real month — the ISO form the backend's YearMonth parses.
-const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
+const PERIOD = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 // An amount field is valid when blank-as-zero or a finite non-negative number.
 function parseAmount(value: string): number | null {
@@ -84,6 +85,32 @@ export const MONTHS = [
   "nov",
   "dez",
 ];
+
+// The opener's period is two pickable selects, never a native `<input type="month">` (Firefox and
+// Safari render that as a plain text box with no picker). A blank period has no parts.
+export const MONTH_OPTIONS = MONTHS.map((label, index) => ({
+  value: String(index + 1).padStart(2, "0"),
+  label,
+}));
+
+export function periodYear(period: string): string {
+  return PERIOD.exec(period)?.[1] ?? "";
+}
+
+export function periodMonth(period: string): string {
+  return PERIOD.exec(period)?.[2] ?? "";
+}
+
+// The years around today, so the default month is always pickable; a selected year outside that
+// window is kept rather than dropped from the select.
+export function periodYearOptions(period: string, today: string, span = 2): string[] {
+  const anchor = Number(today.slice(0, 4));
+  const selected = periodYear(period);
+  const years = new Set<string>();
+  for (let offset = -span; offset <= span; offset += 1) years.add(String(anchor + offset));
+  if (selected.length > 0) years.add(selected);
+  return [...years].sort();
+}
 
 export function monthPeriodLabel(period: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(period);

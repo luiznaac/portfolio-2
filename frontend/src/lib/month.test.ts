@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Month, Targets } from "../api/types.ts";
 import {
+  MONTH_OPTIONS,
   addStrategyRow,
   addTickerRow,
   assetClassLabel,
@@ -10,6 +11,9 @@ import {
   monthFormFrom,
   monthPeriodLabel,
   monthStatusLabel,
+  periodMonth,
+  periodYear,
+  periodYearOptions,
   removeStrategyRow,
   removeTickerRow,
   targetsFormFrom,
@@ -80,6 +84,44 @@ describe("month form", () => {
 
   it("rejects an invalid update", () => {
     expect(toMonthUpdate({ period: "2026-09", capital: "abc", floor: "25000" })).toBeNull();
+  });
+});
+
+// The opener's period is picked from concrete month/year options rather than a native
+// `<input type="month">`: Firefox (and Safari) render that as a plain text box with no picker.
+describe("month opener period", () => {
+  it("defaults a blank form to the given period", () => {
+    expect(emptyMonthForm("2026-10")).toEqual({ period: "2026-10", capital: "", floor: "" });
+  });
+
+  it("splits a period into its month and year parts", () => {
+    expect(periodYear("2026-10")).toBe("2026");
+    expect(periodMonth("2026-10")).toBe("10");
+  });
+
+  it("gives a blank part for a blank period", () => {
+    expect(periodYear("")).toBe("");
+    expect(periodMonth("")).toBe("");
+  });
+
+  it("lists the twelve months as two-digit option values", () => {
+    expect(MONTH_OPTIONS).toHaveLength(12);
+    expect(MONTH_OPTIONS[0]).toEqual({ value: "01", label: "jan" });
+    expect(MONTH_OPTIONS[11]).toEqual({ value: "12", label: "dez" });
+  });
+
+  it("offers the years around today", () => {
+    expect(periodYearOptions("2026-10", "2026-10-24")).toEqual([
+      "2024",
+      "2025",
+      "2026",
+      "2027",
+      "2028",
+    ]);
+  });
+
+  it("keeps a selected year outside today's window", () => {
+    expect(periodYearOptions("2032-01", "2026-10-24")).toContain("2032");
   });
 });
 
