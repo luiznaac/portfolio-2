@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
 import { Allocation } from "./pages/Allocation.tsx";
 import { AssetDetail } from "./pages/AssetDetail.tsx";
+import { Cockpit } from "./pages/Cockpit.tsx";
 import { CorporateActions } from "./pages/CorporateActions.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
@@ -20,7 +21,9 @@ export const routes: RouteObject[] = [
     path: "/",
     element: <Layout />,
     children: [
-      { index: true, element: <Dashboard /> },
+      { index: true, element: <Cockpit /> },
+      // The scaffold health-check slice stays reachable (and keeps its end-to-end example) off-nav.
+      { path: "health", element: <Dashboard /> },
       { path: "month", element: <Month /> },
       { path: "orders", element: <Orders /> },
       { path: "allocation", element: <Allocation /> },

@@ -2,19 +2,24 @@
 
 React 19 + Vite + TypeScript + Tailwind v4 + TanStack Query + React Router SPA for the investment portfolio tracker. The stack and conventions are shared across all of luiznaac's frontends (see salgadinhos' `react-spa-screen` skill for the shared parts); this file only covers what's specific to portfolio-2.
 
-The frontend is currently reset to the `environments/react` scaffold: the only vertical slice is the `GET /health` health-check dashboard. The product frontend is being rewritten from scratch in future plans, so don't treat the current pages as a base to extend — start from the scaffold layout below.
+The product frontend is built out: the Cockpit at `/` is the monthly ritual's home, and the other screens hang off it (month, orders, import, close; allocation, strategies, assets, fixed income, corporate actions; income, taxes, performance). The scaffold's `GET /health` health-check dashboard stays reachable at `/health` as the end-to-end read example.
 
 ## Layout
 
 ```
 src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
-  components/   Layout.tsx, Sidebar.tsx — shell; Panel/Chip/Badge/Button/Table/WizardStepper —
-                the token-based primitive layer; icons.tsx; *Chip.tsx wrappers
-  pages/        route-level components (Dashboard.tsx is the health-check example);
-                a page that needs a behaviour test gets a co-located *.test.tsx render test
+  components/   Layout.tsx, Sidebar.tsx, MonthPill.tsx, CommandPalette.tsx — shell;
+                RitualStepper/AllocationStrip/Agenda — Cockpit pieces; Panel/Chip/Badge/Button/
+                Table/WizardStepper/Kpi — the token-based primitive layer; icons.tsx; *Chip.tsx
+  hooks/        shared stateful UI logic (useClosedMonthSelection.ts)
+  pages/        route-level components (`/` is Cockpit.tsx; Dashboard.tsx is the health-check
+                example at /health); a page that needs a behaviour test gets a co-located
+                *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
-                (navigation.ts holds the sidebar groups + topbar breadcrumb table)
+                (navigation.ts holds the sidebar groups + breadcrumb table; palette.ts flattens it
+                for Ctrl/Cmd+K; cockpit.ts derives KPIs, ritual steps and attention cards; agenda.ts
+                derives the agenda and its read set; dates.ts is the shared calendar arithmetic)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
