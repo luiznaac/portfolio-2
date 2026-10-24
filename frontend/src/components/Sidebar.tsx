@@ -7,10 +7,12 @@ import {
   IconAssets,
   IconBank,
   IconCalendar,
+  IconChart,
   IconCoins,
   IconEvent,
   IconLayers,
   IconList,
+  IconLock,
   IconReceipt,
   IconTarget,
   IconUpload,
@@ -28,6 +30,8 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   event: IconEvent,
   receipt: IconReceipt,
   list: IconList,
+  lock: IconLock,
+  chart: IconChart,
 };
 
 // The shell's primary navigation: brand mark, grouped items, 236px wide collapsing to 60px. Groups

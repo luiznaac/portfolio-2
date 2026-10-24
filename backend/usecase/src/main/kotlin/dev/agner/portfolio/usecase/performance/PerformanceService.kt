@@ -18,6 +18,8 @@ import dev.agner.portfolio.usecase.performance.model.ClassPerformance
 import dev.agner.portfolio.usecase.performance.model.MonthPerformance
 import dev.agner.portfolio.usecase.performance.model.PerformanceDecomposition
 import dev.agner.portfolio.usecase.performance.model.PerformanceSeries
+import dev.agner.portfolio.usecase.performance.model.PeriodBenchmark
+import dev.agner.portfolio.usecase.performance.model.PeriodClass
 import dev.agner.portfolio.usecase.performance.model.PeriodPerformance
 import dev.agner.portfolio.usecase.performance.model.TickerPerformance
 import dev.agner.portfolio.usecase.portfolio.model.Targets
@@ -61,7 +63,8 @@ class PerformanceService(
         val incomeByTicker = current.state.incomeByTicker.associate { it.ticker to it.net }
         val chain = targets.fetchByMonth(monthId)
         val observations = benchmarkObservations(period, period)
-        val blend = blend(chain, observations, period)
+        val returns = returnsFor(observations, period)
+        val blend = BenchmarkBlendCalculator.compute(chain, returns)
 
         return MonthPerformance(
             monthId = monthId,
@@ -102,12 +105,23 @@ class PerformanceService(
 
         val months = all.mapIndexed { index, snapshot ->
             val period = snapshot.state.period
+            val previous = all.getOrNull(index - 1)
             val chain = targets.fetchByMonth(snapshot.monthId)
+            val returns = returnsFor(observations, period)
             PeriodPerformance(
                 period = period,
-                decomposition = decompose(all.getOrNull(index - 1)?.state, snapshot.state),
+                decomposition = decompose(previous?.state, snapshot.state),
                 xirr = xirr(all.take(index + 1)),
-                benchmarkReturn = blend(chain, observations, period).returnPercentage,
+                benchmarkReturn = BenchmarkBlendCalculator.compute(chain, returns).returnPercentage,
+                benchmarks = returns.map { (benchmark, returnPercentage) ->
+                    PeriodBenchmark(benchmark, returnPercentage)
+                },
+                classes = snapshot.state.classes.map { classTotal ->
+                    PeriodClass(
+                        assetClass = classTotal.assetClass,
+                        valueEnd = classTotal.actual,
+                    )
+                },
             )
         }
 
@@ -243,17 +257,16 @@ class PerformanceService(
         }
     }
 
-    private fun blend(
-        chain: Targets,
+    // Each policy index's own return for the period, sliced out of the one span-wide SGS fetch.
+    private fun returnsFor(
         observations: Map<BenchmarkIndex, List<BenchmarkObservation>>,
         period: YearMonth,
-    ): BenchmarkBlend {
+    ): Map<BenchmarkIndex, BigDecimal?> {
         val from = period.firstDay()
         val to = period.endDate()
-        val returns = BenchmarkIndex.entries.associateWith { index ->
+        return BenchmarkIndex.entries.associateWith { index ->
             BenchmarkCalculator.returnFor(index, observations[index].orEmpty(), from, to)
         }
-        return BenchmarkBlendCalculator.compute(chain, returns)
     }
 
     private fun YearMonth.firstDay(): LocalDate = LocalDate(year, month, 1)

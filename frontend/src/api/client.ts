@@ -20,13 +20,17 @@ import type {
   ImportRow,
   ImportSource,
   Income,
+  Month,
   MonthCreation,
+  MonthPerformance,
   MonthUpdate,
   MovementsImportResult,
   OrderList,
   OrderMatchUpdate,
+  PerformanceSeries,
   PositionDetail,
   Quote,
+  Snapshot,
   StockTaxReport,
   Strategy,
   StrategyCreation,
@@ -177,6 +181,26 @@ export const api = {
 
   getCurrentAllocation(): Promise<Allocation> {
     return request("/month/current/allocation");
+  },
+
+  closeCurrentMonth(): Promise<Snapshot> {
+    return request("/month/current/close", { method: "POST" });
+  },
+
+  getClosedMonths(): Promise<Month[]> {
+    return request("/months");
+  },
+
+  getMonthSnapshot(monthId: number): Promise<Snapshot> {
+    return request(`/months/${monthId}`);
+  },
+
+  getMonthPerformance(monthId: number): Promise<MonthPerformance> {
+    return request(`/months/${monthId}/performance`);
+  },
+
+  getPerformanceSeries(): Promise<PerformanceSeries> {
+    return request("/performance/series");
   },
 
   getStockTax(): Promise<StockTaxReport> {

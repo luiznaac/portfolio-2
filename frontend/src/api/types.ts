@@ -908,6 +908,22 @@ export interface PeriodPerformance {
   decomposition: PerformanceDecomposition;
   xirr?: number;
   benchmark_return?: number;
+  // Each policy index's own return for the period, so the history can overlay CDI/IPCA/IBOV beside
+  // the blended benchmark. Null returns are omitted by the backend.
+  benchmarks?: PeriodBenchmark[];
+  // Each class's frozen value at the close, plus the previous close when the series has one.
+  classes?: PeriodClass[];
+}
+
+// One policy index's return in a period; absent when the SGS series could not price it.
+export interface PeriodBenchmark {
+  index: BenchmarkIndex;
+  return_percentage?: number;
+}
+
+export interface PeriodClass {
+  asset_class: AssetClass;
+  value_end: number;
 }
 
 export interface PerformanceSeries {

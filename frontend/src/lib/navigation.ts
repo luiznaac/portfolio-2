@@ -12,7 +12,9 @@ export type NavIcon =
   | "coins"
   | "event"
   | "receipt"
-  | "list";
+  | "list"
+  | "lock"
+  | "chart";
 
 export interface NavItem {
   to: string;
@@ -34,6 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/month", label: "Capital e alvos", icon: "calendar" },
       { to: "/orders", label: "Ordens", icon: "list" },
       { to: "/imports", label: "Importar extrato", icon: "upload" },
+      { to: "/fechamento", label: "Fechamento", icon: "lock" },
     ],
   },
   {
@@ -51,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/income", label: "Proventos", icon: "coins" },
       { to: "/taxes", label: "Impostos", icon: "receipt" },
+      { to: "/performance", label: "Performance", icon: "chart" },
     ],
   },
 ];

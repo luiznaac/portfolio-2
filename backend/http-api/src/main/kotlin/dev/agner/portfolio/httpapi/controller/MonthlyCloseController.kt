@@ -31,5 +31,9 @@ class MonthlyCloseController(
         get("/months") {
             call.respond(HttpStatusCode.OK, service.fetchClosedMonths())
         }
+
+        get("/months/{month_id}") {
+            call.respondOr404(service.fetchSnapshot(call.requiredInt("month_id")))
+        }
     }
 }

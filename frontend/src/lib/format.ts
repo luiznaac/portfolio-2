@@ -25,6 +25,36 @@ export function formatTradeSide(side: TradeSide): string {
   return side === "BUY" ? "Compra" : "Venda";
 }
 
+function percentFormatter(digits: number): Intl.NumberFormat {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+// A percentage value is already the number itself (1.5 = 1,50%), as the backend serialises it.
+export function formatPercent(value: number | undefined, digits = 2): string {
+  if (value === undefined) return "—";
+  return `${percentFormatter(digits).format(value)}%`;
+}
+
+export function formatSignedPercent(value: number | undefined, digits = 2): string {
+  if (value === undefined) return "—";
+  const formatted = formatPercent(value, digits);
+  return value > 0 ? `+${formatted}` : formatted;
+}
+
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
+
+// A local date-time with no zone (the backend's snapshot `created_at`); parse the fields ourselves so
+// the browser's timezone cannot shift the stamp.
+export function formatLocalDateTime(value: string): string {
+  const match = LOCAL_DATE_TIME.exec(value);
+  if (!match) return value;
+  const [, year, month, day, hour, minute] = match;
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 // Split the ISO date ourselves: `new Date("2026-11-30")` parses as UTC midnight and renders the

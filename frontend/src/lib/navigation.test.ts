@@ -14,6 +14,14 @@ describe("navCrumb", () => {
     expect(navCrumb("/orders")).toEqual({ group: "Mês", title: "Ordens" });
   });
 
+  it("resolves the Fechamento route under Mês", () => {
+    expect(navCrumb("/fechamento")).toEqual({ group: "Mês", title: "Fechamento" });
+  });
+
+  it("resolves the Performance route under Resultados", () => {
+    expect(navCrumb("/performance")).toEqual({ group: "Resultados", title: "Performance" });
+  });
+
   it("matches a nested path under an item's route", () => {
     expect(navCrumb("/imports/42")).toEqual({ group: "Mês", title: "Importar extrato" });
   });
