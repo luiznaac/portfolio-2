@@ -30,8 +30,12 @@ describe("navCrumb", () => {
     expect(navCrumb("/tradesx")).toBeNull();
   });
 
+  it("resolves the Cockpit route at the root", () => {
+    expect(navCrumb("/")).toEqual({ group: "Mês", title: "Cockpit" });
+  });
+
   it("returns null for a route outside the nav", () => {
-    expect(navCrumb("/")).toBeNull();
+    expect(navCrumb("/health")).toBeNull();
   });
 
   it("every nav item carries a non-empty label and an absolute route", () => {

@@ -27,6 +27,8 @@ import type {
   MovementsImportResult,
   OrderList,
   OrderMatchUpdate,
+  OrderPlan,
+  OrderPlanPhase,
   PerformanceSeries,
   PositionDetail,
   Quote,
@@ -225,6 +227,12 @@ export const api = {
 
   getOrders(): Promise<OrderList> {
     return request("/orders");
+  },
+
+  // The computed plan at the requested depth; the funding phase carries the unfunded/NEUTRO
+  // arithmetic and the outside-strategy holdings (present from the candidates phase on).
+  getOrderPlan(phase: OrderPlanPhase = "FULL"): Promise<OrderPlan> {
+    return request(`/month/current/orders?phase=${phase.toLowerCase()}`);
   },
 
   refreshOrders(): Promise<OrderList> {

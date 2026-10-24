@@ -1,10 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "./client.ts";
 import type {
   AttributionSliceCreation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
+  Edition,
   EditionActivation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
@@ -15,6 +16,7 @@ import type {
   MonthUpdate,
   OrderList,
   Snapshot,
+  Strategy,
   StrategyCreation,
   SuggestedOrder,
   Targets,
@@ -268,6 +270,28 @@ export function useOrders() {
   return useQuery({
     queryKey: ["orders"],
     queryFn: nullOn404(api.getOrders),
+  });
+}
+
+// The computed plan read (never the persisted lifecycle): the Cockpit reads the funding arithmetic
+// and the outside-strategy holdings the persisted list does not carry. The funding phase is the
+// shallowest depth that carries both, so the Cockpit does not pay for the pro-rata/attribution pass.
+export function useOrderPlan() {
+  return useQuery({
+    queryKey: ["month", "current", "orders", "funding"],
+    queryFn: nullOn404(() => api.getOrderPlan("FUNDING")),
+  });
+}
+
+// One editions read per strategy, sharing the `useEditions` cache key. The Cockpit only needs the
+// coverage count, so it asks in parallel rather than opening each strategy's detail.
+export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
+  return useQueries({
+    queries: strategies.map((strategy) => ({
+      queryKey: ["strategies", strategy.id, "editions"],
+      queryFn: (): Promise<Edition[]> => api.getEditions(strategy.id),
+      enabled: period !== undefined,
+    })),
   });
 }
 

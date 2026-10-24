@@ -214,3 +214,27 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   curl -s -X POST http://localhost:8080/gaps/9003/price -H 'Content-Type: application/json' -d '{"unit_price":18}'
   curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
+
+- **Cockpit seed**: run the Performance + Fechamento seed first — its open month (9003) and pending transfer are the Cockpit's close reminder, blocked close and transfer attention. This seed moves 9003's period to the previous calendar month (so the close reminder is due), then adds the agenda/proventos/edition rows its panels read. Dates are relative to `CURDATE()` so the maturity stays inside the seven-day lead and the payment inside the thirty-day window whenever acceptance runs:
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  UPDATE `month` SET period = DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m') WHERE id = 9003;
+  INSERT INTO bond (name, rate_type, rate, index_id, maturity_date, checking_account_id, created_at) VALUES
+    ('CDB Aceite', 'FIXED', 12, NULL, DATE_ADD(CURDATE(), INTERVAL 3 DAY), NULL, NOW());
+  INSERT INTO cash_movement (ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES
+    ('PETR4', DATE_ADD(CURDATE(), INTERVAL 5 DAY), 120, 0, 120, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW());
+  INSERT INTO edition (strategy_id, reference_month, status, created_at) VALUES
+    ((SELECT id FROM strategy WHERE name='Dividendos'), (SELECT period FROM `month` WHERE id=9003), 'ACTIVE', NOW()),
+    ((SELECT id FROM strategy WHERE name='Small Caps'), (SELECT period FROM `month` WHERE id=9003), 'ACTIVE', NOW());
+  INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+    (9003, 'CLASS', 'ACOES', NULL, NULL, NULL, 60, NOW()),
+    (9003, 'CLASS', 'FIIS', NULL, NULL, NULL, 20, NOW()),
+    (9003, 'CLASS', 'RENDA_FIXA', NULL, NULL, NULL, 20, NOW());
+  REPLACE INTO position (ticker, quantity, average_price) VALUES ('PETR4', 2000, 10);
+  REPLACE INTO attribution (ticker, strategy_id, quantity) VALUES
+    ('PETR4', (SELECT id FROM strategy WHERE name='Dividendos'), 500);
+  SQL
+  ```
+
+  Browser intents then read the shell against real data: `/` shows the four KPIs, the seven-step stepper (step 3 pending transfers, step 7 blocked), the unattributed-cotas attention card (2.000 cotas held, 500 attributed), the class strip with a 19,3% Ações bar and the 60/80/100 target markers, `Vencimento de CDB Aceite` and a `Fechamento de … pendente` agenda item, and `PETR4` among the próximos proventos; Ctrl+K opens the command palette; the agenda's `Marcar como lida` removes the item, and after a close the same item turns into a `concluído` notice that also waits for the mark-as-read before it leaves the list.
