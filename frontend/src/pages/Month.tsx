@@ -9,10 +9,12 @@ import type { AssetClass, CurrentMonth, Month as MonthModel, Targets } from "../
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { monthKey, todayIso } from "../lib/dates.ts";
 import { subClassLabel } from "../lib/fixedIncome.ts";
 import { formatCurrency } from "../lib/format.ts";
 import {
   ASSET_CLASSES,
+  MONTH_OPTIONS,
   type MonthFormState,
   type TargetsFormState,
   addStrategyRow,
@@ -22,6 +24,9 @@ import {
   monthFormFrom,
   monthPeriodLabel,
   monthStatusLabel,
+  periodMonth,
+  periodYear,
+  periodYearOptions,
   removeStrategyRow,
   removeTickerRow,
   targetsFormFrom,
@@ -58,7 +63,8 @@ export function Month() {
 // Opening a month closes any month still open (the backend owns that invariant), so the copy warns
 // before the button.
 function MonthOpener() {
-  const [form, setForm] = useState<MonthFormState>(emptyMonthForm());
+  const today = monthKey(todayIso());
+  const [form, setForm] = useState<MonthFormState>(() => emptyMonthForm(today));
   const open = useOpenMonth();
   const creation = toMonthCreation(form);
 
@@ -72,17 +78,46 @@ function MonthOpener() {
     <Panel title="Abrir mês">
       <form onSubmit={handleSubmit} data-testid="month-opener" className="space-y-4">
         <div className="flex flex-wrap gap-3">
-          <label className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
-            Período
-            <input
-              type="month"
-              value={form.period}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, period: event.target.value }))
-              }
-              className={FIELD}
-            />
-          </label>
+          {/* Two selects rather than a native month input: Firefox/Safari have no month picker. */}
+          <div className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
+            <span>Período</span>
+            <div className="flex gap-2">
+              <select
+                aria-label="Mês"
+                value={periodMonth(form.period)}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    period: `${periodYear(current.period)}-${event.target.value}`,
+                  }))
+                }
+                className={FIELD}
+              >
+                {MONTH_OPTIONS.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Ano"
+                value={periodYear(form.period)}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    period: `${event.target.value}-${periodMonth(current.period)}`,
+                  }))
+                }
+                className={FIELD}
+              >
+                {periodYearOptions(form.period, today).map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <NumberField
             label="Capital (R$)"
             value={form.capital}
