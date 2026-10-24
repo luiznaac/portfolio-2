@@ -4,6 +4,10 @@ React 19 + Vite + TypeScript + Tailwind v4 + TanStack Query + React Router SPA f
 
 The product frontend is built out: the Cockpit at `/` is the monthly ritual's home, and the other screens hang off it (month, orders, import, close; allocation, strategies, assets, fixed income, corporate actions; income, taxes, performance). The scaffold's `GET /health` health-check dashboard stays reachable at `/health` as the end-to-end read example.
 
+## Code map
+
+- [`docs/code-map.md`](../docs/code-map.md)
+
 ## Layout
 
 ```
