@@ -4,6 +4,10 @@ Development guidelines for anyone (human, agent, or tool) working in `backend/`.
 
 > This repo is a monorepo: `backend/` (this Gradle project) + `frontend/` (a React SPA that consumes the HTTP API — see [../frontend/README.md](../frontend/README.md)). The repo root holds the combined `Dockerfile`/`docker-compose.yml`, the `deploy/` templates and a script-only `package.json` task runner. **Cross-cutting rule:** `frontend/src/api/types.ts` is a hand-maintained mirror of the DTOs the controllers in `http-api/.../controller/` serialize (Jackson `SNAKE_CASE`, see `usecase/.../configuration/JsonMapper.kt`). Change a request/response shape on one side and update the other in the same commit. The domain-exception error body is pinned by the shared fixture `contracts/error-response.json` instead, asserted by `DomainExceptionContractTest`.
 
+## Code map
+
+- [`docs/code-map.md`](../docs/code-map.md)
+
 ## What this service does
 
 portfolio-2 tracks and consolidates a personal investment portfolio, focused on the Brazilian fixed-income market:
