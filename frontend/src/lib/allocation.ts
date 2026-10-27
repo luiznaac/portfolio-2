@@ -44,6 +44,15 @@ export interface AllocationRow {
 
 export const UNCLASSIFIED_ROW_KEY = "unclassified";
 
+// The planning cells a row shows while the month has a chain to scale. A month-free read leaves them
+// absent, so the page renders "—" instead of zeroes for a plan that does not exist.
+function planning(
+  planned: boolean,
+  cells: { target?: number; ideal: number; deficit: number; drift: number },
+): Pick<AllocationRow, "target" | "ideal" | "deficit" | "drift"> {
+  return planned ? cells : {};
+}
+
 // A row's stable identity — the tree's expand/collapse toggle keys on it. Strategies and tickers are
 // namespaced by their class so two strategies that share a name never collide.
 export function classRowKey(assetClass: AssetClass): string {
@@ -85,35 +94,40 @@ export function allocationRows(
   allocation: Allocation,
   expanded: ReadonlySet<string>,
 ): AllocationRow[] {
+  // A month-free read has no chain to scale, so Alvo, Ideal, Δ R$ and Δ p.p. are absent rather than
+  // zero — a zero would read as an excess for custody that simply has no plan yet.
+  const planned = allocation.period !== undefined;
   const rows: AllocationRow[] = [
     {
       key: "capital",
       kind: "capital",
       depth: 0,
       label: "Capital",
-      ideal: allocation.ideal,
+      ...planning(planned, {
+        ideal: allocation.ideal,
+        deficit: allocation.deficit,
+        drift: allocation.drift,
+      }),
       actual: allocation.actual,
-      deficit: allocation.deficit,
-      drift: allocation.drift,
       expandable: false,
     },
   ];
 
   for (const cls of allocation.classes) {
     const key = classRowKey(cls.asset_class);
-    rows.push(classRow(cls, key));
+    rows.push(classRow(cls, key, planned));
     if (!expanded.has(key)) continue;
 
     if (cls.sub_classes.length > 0) {
-      for (const subClass of cls.sub_classes) rows.push(subClassRow(subClass));
+      for (const subClass of cls.sub_classes) rows.push(subClassRow(subClass, planned));
       continue;
     }
 
     for (const strategy of cls.strategies) {
       const strategyKey = strategyRowKey(cls.asset_class, strategy.strategy);
-      rows.push(strategyRow(strategy, strategyKey));
+      rows.push(strategyRow(strategy, strategyKey, planned));
       if (!expanded.has(strategyKey)) continue;
-      for (const ticker of strategy.tickers) rows.push(tickerRow(cls, strategy, ticker));
+      for (const ticker of strategy.tickers) rows.push(tickerRow(cls, strategy, ticker, planned));
     }
 
     if (cls.manual) {
@@ -158,17 +172,19 @@ export function allocationRows(
   return rows;
 }
 
-function classRow(cls: ClassAllocation, key: string): AllocationRow {
+function classRow(cls: ClassAllocation, key: string, planned: boolean): AllocationRow {
   return {
     key,
     kind: "class",
     depth: 1,
     label: assetClassLabel(cls.asset_class),
-    target: cls.target,
-    ideal: cls.ideal,
+    ...planning(planned, {
+      target: cls.target,
+      ideal: cls.ideal,
+      deficit: cls.deficit,
+      drift: cls.drift,
+    }),
     actual: cls.actual,
-    deficit: cls.deficit,
-    drift: cls.drift,
     expandable:
       cls.strategies.length > 0 ||
       cls.sub_classes.length > 0 ||
@@ -177,32 +193,36 @@ function classRow(cls: ClassAllocation, key: string): AllocationRow {
   };
 }
 
-function strategyRow(strategy: StrategyAllocation, key: string): AllocationRow {
+function strategyRow(strategy: StrategyAllocation, key: string, planned: boolean): AllocationRow {
   return {
     key,
     kind: "strategy",
     depth: 2,
     label: strategy.strategy,
-    target: strategy.target,
-    ideal: strategy.ideal,
+    ...planning(planned, {
+      target: strategy.target,
+      ideal: strategy.ideal,
+      deficit: strategy.deficit,
+      drift: strategy.drift,
+    }),
     actual: strategy.actual,
-    deficit: strategy.deficit,
-    drift: strategy.drift,
     expandable: strategy.tickers.length > 0,
   };
 }
 
-function subClassRow(subClass: SubClassAllocation): AllocationRow {
+function subClassRow(subClass: SubClassAllocation, planned: boolean): AllocationRow {
   return {
     key: `subclass:${subClass.sub_class}`,
     kind: "sub_class",
     depth: 2,
     label: subClassLabel(subClass.sub_class),
-    target: subClass.target,
-    ideal: subClass.ideal,
+    ...planning(planned, {
+      target: subClass.target,
+      ideal: subClass.ideal,
+      deficit: subClass.deficit,
+      drift: subClass.drift,
+    }),
     actual: subClass.actual,
-    deficit: subClass.deficit,
-    drift: subClass.drift,
     expandable: false,
   };
 }
@@ -211,17 +231,20 @@ function tickerRow(
   cls: ClassAllocation,
   strategy: StrategyAllocation,
   ticker: TickerAllocation,
+  planned: boolean,
 ): AllocationRow {
   return {
     key: tickerRowKey(cls.asset_class, strategy.strategy, ticker.ticker),
     kind: "ticker",
     depth: 3,
     label: ticker.ticker,
-    target: ticker.target,
-    ideal: ticker.ideal,
+    ...planning(planned, {
+      target: ticker.target,
+      ideal: ticker.ideal,
+      deficit: ticker.deficit,
+      drift: ticker.drift,
+    }),
     actual: ticker.actual,
-    deficit: ticker.deficit,
-    drift: ticker.drift,
     expandable: false,
   };
 }

@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
+import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
@@ -33,9 +34,10 @@ class AllocationService(
     private val attributions: IAttributionRepository,
 ) {
 
-    // Null when no month is open — the edge maps that to the 404 the current-month reads promise.
-    suspend fun fetchCurrent(): Allocation? {
-        val current = months.fetchCurrent() ?: return null
+    // The read is month-free: without an open month it still returns the tree, with `period` absent
+    // and Actual only, so the bucket and outside rows stay visible before the ritual starts.
+    suspend fun fetchCurrent(): Allocation {
+        val current = months.fetchCurrent()
 
         val listed = positions.fetchAll().mapAsync { toListedHolding(it) }.awaitAll()
         // Every RF product is a bond, including the ones a checking account creates on each deposit
@@ -59,10 +61,10 @@ class AllocationService(
             .map { ManualStrategyHolding(it.name, it.assetClass) }
 
         return AllocationCalculator.compute(
-            period = current.month.period,
-            capital = current.month.capital,
-            floor = current.month.floor,
-            targets = current.targets,
+            period = current?.month?.period,
+            capital = current?.month?.capital ?: BigDecimal.ZERO,
+            floor = current?.month?.floor ?: BigDecimal.ZERO,
+            targets = current?.targets ?: EMPTY_TARGETS,
             listed = listed,
             fixedIncome = fixedIncome,
             attributions = ledger,
@@ -85,3 +87,12 @@ class AllocationService(
             FixedIncomeHolding(bond.subClass, position.principal + position.yield)
         }
 }
+
+// The chain a month-free read scales: nothing. The calculator still lays out every class and RF
+// sub-class so their Actuals show, with no target rung above them.
+private val EMPTY_TARGETS = Targets(
+    classes = emptyList(),
+    strategies = emptyList(),
+    subClasses = emptyList(),
+    tickers = emptyList(),
+)

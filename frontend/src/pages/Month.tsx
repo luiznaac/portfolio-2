@@ -3,6 +3,7 @@ import {
   useCurrentMonth,
   useOpenMonth,
   useReplaceTargets,
+  useStrategies,
   useUpdateCurrentMonth,
 } from "../api/queries.ts";
 import type { AssetClass, CurrentMonth, Month as MonthModel, Targets } from "../api/types.ts";
@@ -11,7 +12,7 @@ import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { monthKey, todayIso } from "../lib/dates.ts";
 import { subClassLabel } from "../lib/fixedIncome.ts";
-import { formatCurrency } from "../lib/format.ts";
+import { formatCurrency, formatNumber } from "../lib/format.ts";
 import {
   ASSET_CLASSES,
   MONTH_OPTIONS,
@@ -24,9 +25,11 @@ import {
   monthFormFrom,
   monthPeriodLabel,
   monthStatusLabel,
+  overplannedStrategyClasses,
   periodMonth,
   periodYear,
   periodYearOptions,
+  remainingLegacyShares,
   removeStrategyRow,
   removeTickerRow,
   targetsFormFrom,
@@ -209,6 +212,15 @@ function CapitalForm({ month }: { month: MonthModel }) {
 function TargetsForm({ targets }: { targets: Targets }) {
   const [form, setForm] = useState<TargetsFormState>(() => targetsFormFrom(targets));
   const replace = useReplaceTargets();
+  const strategies = useStrategies();
+  // The bucket carries no Target row, so its share is derived from the classes that have one.
+  const manualClasses = new Set(
+    (strategies.data ?? [])
+      .filter((strategy) => strategy.kind === "MANUAL")
+      .map((strategy) => strategy.asset_class),
+  );
+  const remainders = remainingLegacyShares(form, manualClasses);
+  const overplanned = overplannedStrategyClasses(form);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -314,6 +326,17 @@ function TargetsForm({ targets }: { targets: Targets }) {
           <Button variant="default" onClick={() => setForm((current) => addStrategyRow(current))}>
             Adicionar estratégia
           </Button>
+          {remainders.map(({ assetClass, percentage }) => (
+            <p key={assetClass} className="w-full text-[12.5px] text-ink-dim">
+              {assetClassLabel(assetClass)} · restante: {formatNumber(percentage)}% — posições
+              legadas, sem alvo
+            </p>
+          ))}
+          {overplanned.map((assetClass) => (
+            <p key={assetClass} className="w-full text-[12.5px] text-tax">
+              A soma dos alvos das estratégias de {assetClassLabel(assetClass)} passa de 100%.
+            </p>
+          ))}
         </Rung>
 
         <Rung title="Tickers por estratégia">
@@ -380,7 +403,11 @@ function TargetsForm({ targets }: { targets: Targets }) {
         {replace.error && <p className="text-[12.5px] text-tax">{replace.error.message}</p>}
         {replace.isSuccess && <p className="text-[12.5px] text-yield">Alvos salvos.</p>}
 
-        <Button type="submit" variant="primary" disabled={replace.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={replace.isPending || overplanned.length > 0}
+        >
           {replace.isPending ? "Salvando…" : "Salvar alvos"}
         </Button>
       </form>

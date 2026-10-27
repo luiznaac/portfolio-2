@@ -178,7 +178,8 @@ export function useReplaceTargets() {
 export function useCurrentAllocation() {
   return useQuery({
     queryKey: ["month", "current", "allocation"],
-    queryFn: nullOn404(api.getCurrentAllocation),
+    // The read is month-free: it answers even without an open month, with Actual only.
+    queryFn: api.getCurrentAllocation,
   });
 }
 

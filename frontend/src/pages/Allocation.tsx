@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useCurrentAllocation } from "../api/queries.ts";
 import type { Allocation as AllocationModel } from "../api/types.ts";
 import { Panel } from "../components/Panel.tsx";
@@ -37,18 +36,8 @@ export function Allocation() {
       ) : allocation.isError ? (
         <p className="text-[13.5px] text-tax">{allocation.error.message}</p>
       ) : allocation.data ? (
-        <AllocationTree key={allocation.data.period} allocation={allocation.data} />
-      ) : (
-        <Panel>
-          <p className="text-[13.5px] text-ink-dim">
-            Nenhum mês aberto.{" "}
-            <Link to="/month" className="text-principal hover:underline">
-              Abra um mês
-            </Link>{" "}
-            para ver a alocação.
-          </p>
-        </Panel>
-      )}
+        <AllocationTree key={allocation.data.period ?? "month-free"} allocation={allocation.data} />
+      ) : null}
     </section>
   );
 }
@@ -257,6 +246,12 @@ function Reconciliation({ allocation }: { allocation: AllocationModel }) {
 }
 
 function CapitalPanel({ allocation }: { allocation: AllocationModel }) {
+  // No month means no Capital, Floor or drift to show: the panel stays empty rather than reporting
+  // zeroes for a plan that does not exist.
+  if (allocation.period === undefined) {
+    return <Panel title="Capital do mês" />;
+  }
+
   return (
     <Panel title="Capital do mês">
       <dl className="space-y-2 text-[13px]">

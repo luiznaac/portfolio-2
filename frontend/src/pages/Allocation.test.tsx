@@ -87,6 +87,21 @@ describe("the Alocação tree", () => {
     expect(screen.getByText("ZZZZ9")).toBeDefined();
   });
 
+  it("renders an Actual-only tree and an empty Capital panel without an open month", async () => {
+    mock.allocation = monthFreeAllocation;
+    renderAllocation();
+
+    await screen.findByText("Ações");
+    expect(screen.queryByText(/Nenhum mês aberto/)).toBeNull();
+
+    const capitalRow = rowFor("Capital");
+    expect(within(capitalRow).getAllByText("—")).toHaveLength(4);
+    expect(within(capitalRow).getByText("R$ 3.600,00")).toBeDefined();
+
+    expect(screen.getByText("Capital do mês")).toBeDefined();
+    expect(screen.queryByText("Reserva (piso)")).toBeNull();
+  });
+
   it("drops the stale strategy-distribution copy from the reconciliation bar", async () => {
     mock.allocation = allocation;
     renderAllocation();
@@ -181,4 +196,17 @@ const allocation: AllocationModel = {
       ],
     },
   ],
+};
+
+// The month-free read: no period and no chain, so the Capital root and every class blank their
+// planning columns while the custody-driven Actuals and the bucket/outside rows stay live.
+const monthFreeAllocation: AllocationModel = {
+  ...allocation,
+  period: undefined,
+  capital: 0,
+  floor: 0,
+  ideal: 0,
+  deficit: -3600,
+  drift: 0,
+  classes: allocation.classes.map((cls) => ({ ...cls, target: undefined })),
 };

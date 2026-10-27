@@ -141,6 +141,45 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
   ```
 
+- **Month-free allocation seed**: the Alocação read no longer needs an open month. This seed clears the month and target tables but keeps the Allocation seed's custody: one report Strategy (Top Dividendos, id 9001), two manual buckets (Legado Ações id 9002, Legado FIIs id 9003), three positions and quotes at R$10 (VALE3 100, ITUB4 50, ZZZZ9 10), the ledger split (VALE3: 60 to Top Dividendos + 20 to Legado Ações; ITUB4: 30 to Legado Ações) and a catalog row for ZZZZ9 with no class. With no month the chain is empty, so the report attribution is inert: class Ações Actual 1.500,00 = Legado Ações 500,00 + outside 1.000,00 (VALE3's 60 report units and the 40 unstored remainder sit outside), while the root adds the unclassified 100,00 for Actual 1.600,00 and unattributed 1.100,00. `GET /month/current/allocation` answers 200 with no `period`; the Alocação page blanks Alvo/Ideal/Δ and the Capital panel stays empty. Run it independently of the other seeds.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()), \
+          (9003,'Legado FIIs','FIIS','MANUAL',NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('VALE3',100,8), ('ITUB4',50,8), ('ZZZZ9',10,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('VALE3',9001,60), ('VALE3',9002,20), ('ITUB4',9002,30); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('VALE3','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ZZZZ9','2027-04-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
+  ```
+
+- **Strategy target ceiling seed**: run the Month-free allocation seed first, then add an open month whose report shares exercise the ceiling. Ações targets 80 (so the Legado Ações bucket's restante reads 20%), while Fundos imob. targets 60 + 50 = 110 — a state the write path now refuses, seeded directly so the form's inline mirror can be read. The Alvos Estratégias rung shows `Ações · restante: 20% — posições legadas, sem alvo` and `Fundos imob. · restante: 0% — posições legadas, sem alvo` (the Legado FIIs bucket has no target left), beside the Fundos imob. over-allocation error and a disabled Salvar alvos. `PUT /month/current/targets` with the seeded 110 answers 400 (`strategy-targets-exceed-class`); a replacement chain with Ações 100 and no FIIS strategy rows answers 200.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; DELETE FROM target; DELETE FROM month; \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9100, '2027-07', 100000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9100,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9100,'CLASS','FIIS',NULL,NULL,NULL,0,NOW()), \
+          (9100,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,80,NOW()), \
+          (9100,'STRATEGY','FIIS','Fundo A',NULL,NULL,60,NOW()), \
+          (9100,'STRATEGY','FIIS','Fundo B',NULL,NULL,50,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',100,NOW());"
+  ```
+
 - **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
 
   The carry state seeds the three bucket openings (SWING 500, DAY_TRADE 300, FII 250) at the 2027-02 close, so the roll starts at March. Two prior-month losses bank before April: a CSNA3 swing loss of R$100 in the exempt March month (gross R$900, so it stays under the meter) and a KNRI11 FII loss of R$1,000. April therefore opens with SWING 600 and FII 1,250; the SWING carry offsets R$600 of the month's R$4,600 gain (taxable R$4,000, tax R$600), the FII carry offsets the whole R$1,000 gain (closing R$250), and the day-trade bucket stays at R$300 because April's CSNA3 round trip is flat. That round trip is imported so the day-trade warning guard sees it:

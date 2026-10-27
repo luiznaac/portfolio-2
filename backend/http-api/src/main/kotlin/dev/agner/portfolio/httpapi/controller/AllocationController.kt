@@ -7,8 +7,9 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import org.springframework.stereotype.Component
 
-// The month-scoped allocation read: the whole Capital → class → strategy/sub-class → ticker tree,
-// computed on read from the open month's targets, positions, quotes and RF consolidations.
+// The allocation read: the whole Capital → class → strategy/sub-class → ticker tree, computed on
+// read from the open month's targets, positions, quotes and RF consolidations. It is month-free —
+// without an open month it still serves the Actual-only tree, with no `period`.
 @Component
 class AllocationController(
     private val service: AllocationService,
@@ -17,12 +18,7 @@ class AllocationController(
     override fun routes(): RouteDefinition = {
         route("/month") {
             get("/current/allocation") {
-                val allocation = service.fetchCurrent()
-                if (allocation == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                } else {
-                    call.respond(HttpStatusCode.OK, allocation)
-                }
+                call.respond(HttpStatusCode.OK, service.fetchCurrent())
             }
         }
     }
