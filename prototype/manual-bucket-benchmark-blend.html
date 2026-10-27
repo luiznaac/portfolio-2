@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Legado no Benchmark Blend</title>
+<style>
+  :root {
+    --ink: #1b1d21;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --bg: #fbfbfa;
+    --panel: #ffffff;
+    --accent: #0f766e;
+    --accent-soft: #ecfdf5;
+    --warn: #b45309;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 24px 96px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 40px 0 12px; }
+  p { margin: 0 0 12px; }
+  .lede { color: var(--muted); max-width: 78ch; }
+  .proto {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    color: var(--warn); border: 1px solid #fcd34d; background: #fffbeb;
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .grid { display: grid; gap: 20px; }
+  .two { grid-template-columns: 1.15fr 0.85fr; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom: none; }
+  .field { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .field:last-child { border-bottom: none; }
+  .field label { color: var(--ink); }
+  .field .hint { display: block; color: var(--muted); font-size: 12px; }
+  input[type="number"], select {
+    width: 132px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; font-variant-numeric: tabular-nums; background: #fff; text-align: right;
+  }
+  select { text-align: left; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    font: inherit; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink); cursor: pointer;
+  }
+  button:hover { border-color: #9ca3af; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.ghost { background: transparent; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.a { background: var(--accent-soft); color: var(--accent); }
+  .badge.b { background: #fef2f2; color: #b91c1c; }
+  .note { font-size: 13px; color: var(--muted); }
+  .big { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .compare { grid-template-columns: 1fr; } }
+  .compare > div { border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .changed { background: #fffbeb; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs button { border-radius: 999px; font-size: 13px; padding: 6px 12px; }
+  .tabs button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  ol.steps { margin: 0; padding-left: 20px; }
+  ol.steps li { margin: 0 0 10px; }
+  ol.steps li button { font-size: 13px; }
+  .done { color: var(--muted); text-decoration: line-through; }
+  code { font-size: 12.5px; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <span class="proto">PROTOTYPE — throwaway</span>
+  <h1>Does the Legado bucket move the Benchmark Blend?</h1>
+  <p class="lede">
+    The map says a Manual Strategy (<em>Legado</em>) has no Target and no Edition. This demo asks one
+    question: when Legado money sits inside an Asset Class, does the class's benchmark weight change?
+    Model <strong>A</strong> is today's code: weights come only from the month's Target chain.
+    Model <strong>B</strong> is the alternative: weights come from the actual allocation, Legado included.
+    Change the numbers and watch the two weights.
+  </p>
+
+  <h2>State</h2>
+  <div class="grid two">
+    <div class="card">
+      <table id="classTable">
+        <thead>
+          <tr>
+            <th>Classe</th>
+            <th>Alvo %</th>
+            <th>Ideal R$</th>
+            <th>Com relatório R$</th>
+            <th>Legado R$</th>
+            <th>Atual R$</th>
+            <th>Peso A %</th>
+            <th>Peso B %</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p class="note" style="margin-top:14px">
+        <strong>Ideal</strong> = Capital × Alvo. <strong>Atual</strong> = Com relatório + Legado.
+        Peso A = Alvo ÷ soma dos Alvos. Peso B = Atual ÷ soma dos Atuais.
+        Renda Fixa splits by sub-class Alvo (Pós 50 / Pré 20 / Inflação 30) in both models.
+      </p>
+    </div>
+
+    <div class="card" id="controls">
+      <div class="field">
+        <label>Capital <span class="hint">Total da Carteira</span></label>
+        <input type="number" id="capital" step="50000">
+      </div>
+      <div class="field">
+        <label>Legado: classe</label>
+        <select id="bucketClass">
+          <option value="ACOES">Ações</option>
+          <option value="FIIS">FIIs</option>
+          <option value="RENDA_FIXA">Renda Fixa</option>
+          <option value="NONE">Fora de toda Estratégia</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Legado: valor R$ <span class="hint">Positions do bucket</span></label>
+        <input type="number" id="bucketValue" step="10000">
+      </div>
+      <div class="field">
+        <label>Com relatório: Ações R$</label>
+        <input type="number" id="reportAcoes" step="10000">
+      </div>
+      <div class="field">
+        <label>Com relatório: FIIs R$</label>
+        <input type="number" id="reportFiis" step="10000">
+      </div>
+      <div class="field">
+        <label>Com relatório: Renda Fixa R$</label>
+        <input type="number" id="reportRf" step="10000">
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="ghost" id="reset">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Blend result</h2>
+  <div class="compare">
+    <div>
+      <span class="badge a">MODEL A — today</span>
+      <p class="note" style="margin:8px 0 4px">Weights from the Target chain only.</p>
+      <div class="big" id="blendA">—</div>
+      <p class="note" id="blendANote"></p>
+    </div>
+    <div>
+      <span class="badge b">MODEL B — alternative</span>
+      <p class="note" style="margin:8px 0 4px">Weights from the actual allocation, Legado included.</p>
+      <div class="big" id="blendB">—</div>
+      <p class="note" id="blendBNote"></p>
+    </div>
+  </div>
+
+  <h2>Free play</h2>
+  <div class="card">
+    <div class="row">
+      <button data-act="bucket+">Legado +50k</button>
+      <button data-act="bucket-">Legado −50k</button>
+      <button data-act="bucket0">Legado = 0</button>
+      <button data-act="bucketAcoes">Legado → Ações</button>
+      <button data-act="bucketRf">Legado → Renda Fixa</button>
+      <button data-act="rf0">Alvo RF = 0%</button>
+      <button data-act="rf40">Alvo RF = 40%</button>
+      <button class="ghost" data-act="reset">Reset</button>
+    </div>
+  </div>
+
+  <h2>Guided walkthroughs</h2>
+  <div class="card">
+    <div class="tabs" id="tabs"></div>
+    <div id="scenario"></div>
+  </div>
+
+  <h2>What to look at</h2>
+  <div class="card">
+    <p>
+      <strong>Model A never moves.</strong> The bucket has no Target, so it adds no weight. The
+      denominator is the policy's own Alvo sum. This is the line the glossary draws:
+      “never the actual allocation”.
+    </p>
+    <p>
+      <strong>Model B moves.</strong> The bucket's value joins the class's actual value, so the class
+      weight drifts with legacy money. A class with Alvo 0% and only Legado money gets a real weight
+      under B and none under A.
+    </p>
+    <p class="note">
+      The RF split by sub-class is an approximation in this demo. The real code multiplies the class
+      Alvo by each sub-class Alvo and divides by 100.
+    </p>
+  </div>
+</main>
+
+<script>
+// ─── Pure module: the logic this prototype is testing. No DOM in here. ───────────────
+const HUNDRED = 100;
+
+const CLASSES = [
+  { id: "ACOES", label: "Ações", benchmark: "IBOV" },
+  { id: "FIIS", label: "FIIs", benchmark: "IBOV" },
+  { id: "RENDA_FIXA", label: "Renda Fixa", benchmark: null },
+];
+
+const RF_SUB_CLASSES = [
+  { label: "RF Pós", weight: 50, benchmark: "CDI" },
+  { label: "RF Pré", weight: 20, benchmark: "CDI" },
+  { label: "RF Inflação", weight: 30, benchmark: "IPCA" },
+];
+
+const RETURNS = { IBOV: 1.2, CDI: 0.9, IPCA: 0.4 };
+
+const INITIAL = {
+  capital: 1000000,
+  targets: { ACOES: 40, FIIS: 20, RENDA_FIXA: 40 },
+  report: { ACOES: 340000, FIIS: 200000, RENDA_FIXA: 340000 },
+  bucketClass: "ACOES",
+  bucketValue: 120000,
+};
+
+function classActuals(state) {
+  return Object.fromEntries(
+    CLASSES.map((c) => [
+      c.id,
+      state.report[c.id] + (state.bucketClass === c.id ? state.bucketValue : 0),
+    ]),
+  );
+}
+
+// Model A: the Target chain, exactly like BenchmarkBlendCalculator.compute.
+function contributionsA(state) {
+  const out = [];
+  for (const c of CLASSES) {
+    const target = state.targets[c.id];
+    if (c.id === "RENDA_FIXA") {
+      for (const sub of RF_SUB_CLASSES) {
+        out.push({
+          label: sub.label,
+          target: (target * sub.weight) / HUNDRED,
+          benchmark: sub.benchmark,
+          ret: RETURNS[sub.benchmark],
+        });
+      }
+    } else {
+      out.push({ label: c.label, target, benchmark: c.benchmark, ret: RETURNS[c.benchmark] });
+    }
+  }
+  return out;
+}
+
+function blendA(state) {
+  const contributions = contributionsA(state).filter((c) => c.target > 0);
+  const totalTarget = contributions.reduce((a, c) => a + c.target, 0);
+  const complete = contributions.every((c) => c.ret != null);
+  const value =
+    totalTarget === 0 || !complete
+      ? null
+      : contributions.reduce((a, c) => a + c.target * c.ret, 0) / totalTarget;
+  return { value, contributions, totalTarget };
+}
+
+// Model B: the actual allocation, bucket included.
+function contributionsB(state) {
+  const actual = classActuals(state);
+  const totalActual = Object.values(actual).reduce((a, v) => a + v, 0);
+  const out = [];
+  for (const c of CLASSES) {
+    const classWeight = totalActual === 0 ? 0 : (actual[c.id] / totalActual) * HUNDRED;
+    if (c.id === "RENDA_FIXA") {
+      for (const sub of RF_SUB_CLASSES) {
+        out.push({
+          label: sub.label,
+          target: (classWeight * sub.weight) / HUNDRED,
+          benchmark: sub.benchmark,
+          ret: RETURNS[sub.benchmark],
+        });
+      }
+    } else {
+      out.push({ label: c.label, target: classWeight, benchmark: c.benchmark, ret: RETURNS[c.benchmark] });
+    }
+  }
+  return { out, totalActual };
+}
+
+function blendB(state) {
+  const { out, totalActual } = contributionsB(state);
+  const contributions = out.filter((c) => c.target > 0);
+  const totalWeight = contributions.reduce((a, c) => a + c.target, 0);
+  const value =
+    totalWeight === 0
+      ? null
+      : contributions.reduce((a, c) => a + c.target * c.ret, 0) / totalWeight;
+  return { value, contributions, totalActual };
+}
+
+function classWeightsA(state) {
+  const contributions = contributionsA(state);
+  const total = contributions.reduce((a, c) => a + c.target, 0);
+  const byClass = { ACOES: 0, FIIS: 0, RENDA_FIXA: 0 };
+  for (const c of contributions) {
+    if (c.label.startsWith("RF")) byClass.RENDA_FIXA += c.target;
+    else if (c.label === "Ações") byClass.ACOES += c.target;
+    else if (c.label === "FIIs") byClass.FIIS += c.target;
+  }
+  return total === 0 ? byClass : Object.fromEntries(Object.entries(byClass).map(([k, v]) => [k, (v / total) * HUNDRED]));
+}
+
+function classWeightsB(state) {
+  const actual = classActuals(state);
+  const total = Object.values(actual).reduce((a, v) => a + v, 0);
+  return total === 0
+    ? { ACOES: 0, FIIS: 0, RENDA_FIXA: 0 }
+    : Object.fromEntries(CLASSES.map((c) => [c.id, (actual[c.id] / total) * HUNDRED]));
+}
+// ─── End pure module ─────────────────────────────────────────────────────────────────
+
+let state = structuredClone(INITIAL);
+let previous = null;
+
+const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const pct = (v) => (v == null ? "—" : v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%");
+
+function render() {
+  const actual = classActuals(state);
+  const wA = classWeightsA(state);
+  const wB = classWeightsB(state);
+  const tbody = document.querySelector("#classTable tbody");
+  tbody.innerHTML = "";
+  for (const c of CLASSES) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${c.label}</td>
+      <td>${state.targets[c.id]}%</td>
+      <td>${brl((state.capital * state.targets[c.id]) / 100)}</td>
+      <td>${brl(state.report[c.id])}</td>
+      <td>${state.bucketClass === c.id ? brl(state.bucketValue) : "—"}</td>
+      <td>${brl(actual[c.id])}</td>
+      <td class="${previous && previous.wA[c.id] !== wA[c.id] ? "changed" : ""}">${pct(wA[c.id])}</td>
+      <td class="${previous && previous.wB[c.id] !== wB[c.id] ? "changed" : ""}">${pct(wB[c.id])}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  const trTotal = document.createElement("tr");
+  trTotal.className = "total";
+  trTotal.innerHTML = `
+    <td>Total</td>
+    <td>${Object.values(state.targets).reduce((a, v) => a + v, 0)}%</td>
+    <td>${brl(state.capital)}</td>
+    <td>${brl(Object.values(state.report).reduce((a, v) => a + v, 0))}</td>
+    <td>${state.bucketClass === "NONE" ? "fora" : brl(state.bucketValue)}</td>
+    <td>${brl(Object.values(actual).reduce((a, v) => a + v, 0))}</td>
+    <td>100%</td>
+    <td>100%</td>
+  `;
+  tbody.appendChild(trTotal);
+
+  const a = blendA(state);
+  const b = blendB(state);
+  document.getElementById("blendA").textContent = pct(a.value);
+  document.getElementById("blendB").textContent = pct(b.value);
+  document.getElementById("blendANote").textContent =
+    a.value == null ? "unknown: no targeted leg with a benchmark" : `weights: ${a.contributions.map((c) => c.label + " " + pct(c.target)).join(" · ")}`;
+  document.getElementById("blendBNote").textContent =
+    b.value == null ? "unknown: no weighted leg" : `weights: ${b.contributions.map((c) => c.label + " " + pct(c.target)).join(" · ")}`;
+
+  previous = { wA, wB };
+}
+
+function syncInputs() {
+  document.getElementById("capital").value = state.capital;
+  document.getElementById("bucketClass").value = state.bucketClass;
+  document.getElementById("bucketValue").value = state.bucketValue;
+  document.getElementById("reportAcoes").value = state.report.ACOES;
+  document.getElementById("reportFiis").value = state.report.FIIS;
+  document.getElementById("reportRf").value = state.report.RENDA_FIXA;
+}
+
+const ACTIONS = {
+  "bucket+": () => { state.bucketValue += 50000; },
+  "bucket-": () => { state.bucketValue = Math.max(0, state.bucketValue - 50000); },
+  "bucket0": () => { state.bucketValue = 0; },
+  "bucketAcoes": () => { state.bucketClass = "ACOES"; },
+  "bucketRf": () => { state.bucketClass = "RENDA_FIXA"; },
+  "rf0": () => { state.targets.RENDA_FIXA = 0; },
+  "rf40": () => { state.targets.RENDA_FIXA = 40; },
+  "reset": () => { state = structuredClone(INITIAL); },
+};
+
+function act(name) {
+  const fn = ACTIONS[name];
+  if (!fn) return;
+  fn();
+  syncInputs();
+  render();
+  advanceScenario(name);
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (btn) act(btn.dataset.act);
+});
+
+document.getElementById("capital").addEventListener("input", (e) => { state.capital = Number(e.target.value) || 0; render(); });
+document.getElementById("bucketValue").addEventListener("input", (e) => { state.bucketValue = Number(e.target.value) || 0; render(); });
+document.getElementById("reportAcoes").addEventListener("input", (e) => { state.report.ACOES = Number(e.target.value) || 0; render(); });
+document.getElementById("reportFiis").addEventListener("input", (e) => { state.report.FIIS = Number(e.target.value) || 0; render(); });
+document.getElementById("reportRf").addEventListener("input", (e) => { state.report.RENDA_FIXA = Number(e.target.value) || 0; render(); });
+document.getElementById("bucketClass").addEventListener("change", (e) => { state.bucketClass = e.target.value; render(); });
+document.getElementById("reset").addEventListener("click", () => act("reset"));
+
+// ─── Guided walkthroughs ────────────────────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    title: "1 · Legado inside a targeted class",
+    intro: "Ações has Alvo 40%. The bucket holds R$120k of that class. Press the step and watch: Model A's Ações weight stays 40,00%; Model B's Ações weight rises above 40,00%.",
+    setup: { ...structuredClone(INITIAL), bucketClass: "ACOES", bucketValue: 120000 },
+    steps: [
+      { label: "Grow the bucket by R$50k", act: "bucket+" },
+      { label: "Grow it again by R$50k", act: "bucket+" },
+      { label: "Sell the bucket down to R$0", act: "bucket0" },
+    ],
+    watch: "A stays flat through every step. B moves with the bucket.",
+  },
+  {
+    title: "2 · Legado in a class with Alvo 0%",
+    intro: "Renda Fixa has Alvo 0%, but the bucket holds R$200k of RF money. Under Model A the class contributes no weight at all. Under Model B it takes a real share of the blend.",
+    setup: { ...structuredClone(INITIAL), targets: { ACOES: 50, FIIS: 50, RENDA_FIXA: 0 }, bucketClass: "RENDA_FIXA", bucketValue: 200000, report: { ACOES: 400000, FIIS: 400000, RENDA_FIXA: 0 } },
+    steps: [
+      { label: "Grow the bucket to R$250k", act: "bucket+" },
+      { label: "Grow it to R$300k", act: "bucket+" },
+    ],
+    watch: "A never gives RF a weight. B gives RF a weight that grows with the bucket.",
+  },
+  {
+    title: "3 · Restore the Alvo",
+    intro: "Same RF bucket, but Renda Fixa gets its Alvo back to 40%. Now both models see the class — but their weights still differ, because B weighs the actual allocation and A weighs the policy.",
+    setup: { ...structuredClone(INITIAL), targets: { ACOES: 50, FIIS: 50, RENDA_FIXA: 0 }, bucketClass: "RENDA_FIXA", bucketValue: 200000, report: { ACOES: 400000, FIIS: 400000, RENDA_FIXA: 0 } },
+    steps: [
+      { label: "Set RF Alvo back to 40%", act: "rf40" },
+    ],
+    watch: "A jumps to the policy weight. B barely moves: the actual money was already there.",
+  },
+];
+
+let activeScenario = 0;
+let stepIndex = 0;
+
+function renderScenario() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = "";
+  SCENARIOS.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.textContent = s.title;
+    b.setAttribute("aria-selected", String(i === activeScenario));
+    b.addEventListener("click", () => { activeScenario = i; startScenario(); });
+    tabs.appendChild(b);
+  });
+  const s = SCENARIOS[activeScenario];
+  const el = document.getElementById("scenario");
+  el.innerHTML = `<p>${s.intro}</p><ol class="steps"></ol><p class="note">${s.watch}</p>`;
+  const ol = el.querySelector("ol");
+  s.steps.forEach((step, i) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.textContent = step.label;
+    b.dataset.act = step.act;
+    if (i < stepIndex) { b.disabled = true; b.classList.add("done"); }
+    li.appendChild(b);
+    ol.appendChild(li);
+  });
+}
+
+function startScenario() {
+  state = structuredClone(SCENARIOS[activeScenario].setup);
+  stepIndex = 0;
+  syncInputs();
+  previous = null;
+  render();
+  renderScenario();
+}
+
+function advanceScenario(actName) {
+  const s = SCENARIOS[activeScenario];
+  if (stepIndex < s.steps.length && s.steps[stepIndex].act === actName) {
+    stepIndex++;
+    renderScenario();
+  }
+}
+
+startScenario();
+</script>
+</body>
+</html>
