@@ -75,6 +75,15 @@ class CatalogServiceTest : StringSpec({
         captured.captured.single().assetClass shouldBe null
     }
 
+    "fetchUnclassified reports the tickers with no class, including a missing row" {
+        coEvery { repository.fetchAll() } returns listOf(
+            entry(ticker = "PETR4", isin = null, kind = AssetKind.STOCK, assetClass = AssetClass.ACOES),
+            entry(ticker = "XPTO3", isin = null, kind = AssetKind.UNKNOWN, assetClass = null),
+        )
+
+        service.fetchUnclassified(setOf("PETR4", "XPTO3", "MISS3")) shouldBe setOf("XPTO3", "MISS3")
+    }
+
     "remapTicker copies the ISIN and descriptive fields into the new ticker's entry" {
         coEvery { repository.fetchBy("PETR4") } returns entry(
             ticker = "PETR4",

@@ -297,27 +297,42 @@ private fun plan(
     position: String,
     attributions: Map<String, String> = emptyMap(),
     transfers: List<AttributionTransfer> = emptyList(),
-): OrderPlan = OrderPlanCalculator.compute(
-    OrderPlanContext(
-        period = YearMonth.parse("2026-10"),
-        phase = OrderPlanPhase.FUNDING,
-        capital = BigDecimal(capital),
-        floor = BigDecimal.ZERO,
-        targets = Targets(
-            classes = listOf(classTarget(AssetClass.ACOES, "100")),
-            strategies = strategies.map { (strategy, percentage) ->
-                strategyTarget(AssetClass.ACOES, strategy, percentage)
-            },
-            subClasses = emptyList(),
-            tickers = tickers.map { (strategy, percentage) -> tickerTarget(strategy, "ITUB4", percentage) },
+): OrderPlan {
+    val targets = Targets(
+        classes = listOf(classTarget(AssetClass.ACOES, "100")),
+        strategies = strategies.map { (strategy, percentage) ->
+            strategyTarget(AssetClass.ACOES, strategy, percentage)
+        },
+        subClasses = emptyList(),
+        tickers = tickers.map { (strategy, percentage) -> tickerTarget(strategy, "ITUB4", percentage) },
+    )
+    val positionByTicker = mapOf("ITUB4" to BigDecimal(position))
+    val ledger = attributions.map { (strategy, quantity) ->
+        StrategyTicker(strategy, "ITUB4") to BigDecimal(quantity)
+    }.toMap()
+    return OrderPlanCalculator.compute(
+        OrderPlanContext(
+            period = YearMonth.parse("2026-10"),
+            phase = OrderPlanPhase.FUNDING,
+            capital = BigDecimal(capital),
+            floor = BigDecimal.ZERO,
+            targets = targets,
+            positions = positionByTicker,
+            prices = mapOf("ITUB4" to BigDecimal(price)),
+            placement = PlacementCalculator.compute(
+                positions = positionByTicker,
+                targetedTickers = targets.tickers
+                    .filter { it.percentage.signum() > 0 }
+                    .map { it.ticker }
+                    .toSet(),
+                ledger = ledger,
+                manualStrategies = emptySet(),
+                unclassifiedTickers = emptySet(),
+            ),
+            attributionBySlice = ledger,
         ),
-        positions = mapOf("ITUB4" to BigDecimal(position)),
-        prices = mapOf("ITUB4" to BigDecimal(price)),
-        attributionBySlice = attributions.map { (strategy, quantity) ->
-            StrategyTicker(strategy, "ITUB4") to BigDecimal(quantity)
-        }.toMap(),
-    ),
-).copy(transfers = transfers)
+    ).copy(transfers = transfers)
+}
 
 // The full plan's attribution transfer, as the planner emits it (both slices priced).
 private fun transfer(amount: String) = AttributionTransfer(

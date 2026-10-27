@@ -1,6 +1,8 @@
 package dev.agner.portfolio.usecase.order
 
+import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.listedasset.AttributionService
 import dev.agner.portfolio.usecase.listedasset.PositionService
@@ -9,7 +11,9 @@ import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
 import dev.agner.portfolio.usecase.order.model.tickerSlices
 import dev.agner.portfolio.usecase.portfolio.AllocationService
 import dev.agner.portfolio.usecase.portfolio.MonthService
+import dev.agner.portfolio.usecase.portfolio.TargetChainCalculator
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
+import dev.agner.portfolio.usecase.portfolio.targetedTickers
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import kotlinx.coroutines.awaitAll
@@ -31,6 +35,7 @@ class OrderPlanService(
     private val allocations: AllocationService,
     private val strategies: StrategyService,
     private val attributions: AttributionService,
+    private val catalog: CatalogService,
 ) {
 
     // Null when no month is open — the edge maps that to the 404 the current-month reads promise.
@@ -38,6 +43,17 @@ class OrderPlanService(
         val current = months.fetchCurrent() ?: return null
         val targets = current.targets.normalized()
         val positionByTicker = positions.fetchAll().associate { it.ticker to it.quantity }
+        val ledger = attributions.fetchLedger()
+        // The report-membership half comes from the chain leaves, exactly as the order calculator
+        // reads it, so a Target the chain does not carry cannot make a ticker inside.
+        val investableCapital = (current.month.capital - current.month.floor).defaultScale()
+        val placement = PlacementCalculator.compute(
+            positions = positionByTicker,
+            targetedTickers = TargetChainCalculator.compute(investableCapital, targets).targetedTickers(),
+            ledger = ledger,
+            manualStrategies = strategies.fetchManualNames(),
+            unclassifiedTickers = catalog.fetchUnclassified(positionByTicker.keys),
+        )
 
         // A targeted ticker with no position still needs a price: it is exactly where a NEW_ENTRY
         // candidate comes from. A ticker with neither a target nor a position never reaches the plan.
@@ -61,8 +77,9 @@ class OrderPlanService(
                 targets = targets,
                 positions = positionByTicker,
                 prices = prices,
+                placement = placement,
                 neutroSlices = strategies.fetchNeutroSlices(),
-                attributionBySlice = attributions.fetchLedger(),
+                attributionBySlice = ledger,
                 fixedIncomeActualBySubClass = allocation?.fixedIncomeActual.orEmpty(),
             ),
         )
@@ -72,6 +89,7 @@ class OrderPlanService(
             holdingsValue = allocation.actual,
             positions = positionByTicker,
             prices = prices,
+            placement = placement,
         )
         return if (phase.isFull) funded.withFullPlan() else funded
     }
@@ -83,6 +101,7 @@ class OrderPlanService(
         holdingsValue: BigDecimal,
         positions: TickerPositions,
         prices: TickerPrices,
+        placement: TickerPlacements,
     ): OrderPlan {
         val funding = FundingCalculator.compute(
             FundingContext(
@@ -90,6 +109,7 @@ class OrderPlanService(
                 slices = tickerSlices,
                 positions = positions,
                 prices = prices,
+                placement = placement,
                 floor = floor,
                 uninvestedBalance = capital.subtract(holdingsValue),
             ),

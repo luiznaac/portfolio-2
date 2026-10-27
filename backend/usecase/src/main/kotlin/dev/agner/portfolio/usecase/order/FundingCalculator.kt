@@ -21,11 +21,12 @@ data class FundingOutcome(
 //
 // 1. NEUTRO slices — the (strategy, ticker) pairs flagged "não operar", whose attributed units are
 //    the least wanted money in the book;
-// 2. positions outside every strategy — a held ticker no Target names, the "outside strategy"
-//    holdings the spec's FII worked example describes (weight 0 everywhere). A ticker a Target names
-//    is inside a strategy even when its Attribution ledger is empty; the ledger says which strategy
-//    holds the units, not whether the ticker belongs to one;
-// 3. the largest Surpluses by R$ — held units above the ticker's whole-unit Target.
+// 2. positions outside every strategy — the shared placement's OUTSIDE verdict (a held ticker no
+//    Target names and no Manual Strategy holds). A ticker a Target names or a Manual Strategy holds
+//    is inside, so it never becomes an outside source;
+// 3. the largest Surpluses by R$ — held units above the ticker's whole-unit Target, minus the units
+//    a Manual Strategy holds (the bucket is ring-fenced: those units leave only through an
+//    Attribution Transfer or a manual sell).
 //
 // Only enough is sold to cover the shortfall, and sells floor to whole units, so a remainder stays
 // unfunded rather than being bought with money the plan does not raise. The EXIT candidates already
@@ -65,7 +66,7 @@ object FundingCalculator {
     private fun sources(context: FundingContext): List<SellablePool> {
         val slicesByTicker: TickerSlices = context.slices.groupBy { it.ticker }
         return neutroSources(slicesByTicker, context) +
-            outsideSources(slicesByTicker, context) +
+            outsideSources(context) +
             surplusSources(slicesByTicker, context)
     }
 
@@ -83,13 +84,8 @@ object FundingCalculator {
         )
     }.sortedBy { it.ticker }
 
-    private fun outsideSources(
-        slicesByTicker: TickerSlices,
-        context: FundingContext,
-    ): List<SellablePool> = context.positions.entries
-        .filter { (ticker, position) ->
-            position.signum() > 0 && slicesByTicker[ticker].orEmpty().none { it.target.signum() > 0 }
-        }
+    private fun outsideSources(context: FundingContext): List<SellablePool> = context.positions.entries
+        .filter { (ticker, position) -> position.signum() > 0 && context.placement.isOutside(ticker) }
         .mapNotNull { (ticker, position) ->
             poolOrNull(
                 ticker = ticker,
@@ -109,9 +105,10 @@ object FundingCalculator {
         .filter { (ticker, _) -> slicesByTicker[ticker].orEmpty().isNotEmpty() }
         .mapNotNull { (ticker, position) ->
             val tickerSlices = slicesByTicker[ticker].orEmpty()
+            val manualHeld = context.placement[ticker]?.manualQuantity ?: BigDecimal.ZERO
             poolOrNull(
                 ticker = ticker,
-                quantity = position - tickerSlices.targetUnits,
+                quantity = position - tickerSlices.targetUnits - manualHeld,
                 context = context,
                 reason = FundingSource.SURPLUS,
                 tickerSlices = tickerSlices,
@@ -130,8 +127,10 @@ object FundingCalculator {
         tickerSlices: List<TickerOrderPlan>,
         position: BigDecimal,
     ): SellablePool? {
+        // An unclassified ticker is a data-quality state, never funding: it waits for classification.
+        if (context.placement.isUnclassified(ticker)) return null
         if (quantity.signum() <= 0) return null
-        val price = priceOf(ticker, context.prices) ?: return null
+        val price = context.prices.priceOf(ticker) ?: return null
         return SellablePool(
             ticker = ticker,
             quantity = quantity,
@@ -158,9 +157,6 @@ object FundingCalculator {
             (ideal - held.multiply(price)).coerceAtLeast(BigDecimal.ZERO)
         }
         .defaultScale()
-
-    private fun priceOf(ticker: String, prices: TickerPrices): BigDecimal? =
-        prices[ticker]?.takeIf { it.signum() > 0 }
 }
 
 // One sellable pool, before any of it is spent. `position` and the slice sums are the candidate's

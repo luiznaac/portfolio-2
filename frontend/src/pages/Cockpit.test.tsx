@@ -106,6 +106,7 @@ vi.mock("../api/queries.ts", () => {
           neutro_deficit: 0,
         },
         outside_strategy: [],
+        unclassified: [],
         attribution: [],
         transfers: [],
       }),

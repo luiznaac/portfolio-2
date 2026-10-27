@@ -6,6 +6,9 @@ import dev.agner.portfolio.integrationTest.config.getRequest
 import dev.agner.portfolio.integrationTest.config.postRequest
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
+import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
 import dev.agner.portfolio.usecase.strategy.StrategyService
@@ -18,6 +21,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.delete
 import io.ktor.http.HttpStatusCode
 import io.mockk.every
+import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -40,6 +44,21 @@ class AttributionTest : StringSpec({
             .create(StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN))
         val acoes = getBean<StrategyService>()
             .create(StrategyCreation("Top Ações", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN))
+        // Classification is a precondition for attribution: the catalog must give the ticker a class.
+        getBean<ICatalogRepository>().upsertAll(
+            listOf(
+                CatalogEntry(
+                    ticker = "PETR4",
+                    shortName = "PETR4",
+                    bdiType = "02",
+                    isin = null,
+                    assetKind = AssetKind.STOCK,
+                    assetClass = AssetClass.ACOES,
+                    firstSeen = LocalDate.parse("2026-10-14"),
+                    lastSeen = LocalDate.parse("2026-10-14"),
+                ),
+            ),
+        )
 
         val first = attribute(dividends.id, "60")
         (first["attributed_quantity"] as Number).toInt() shouldBe 60

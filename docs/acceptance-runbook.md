@@ -50,8 +50,12 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   docker compose exec -T mysql mysql -uroot portfolio \
     -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
         DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
-        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; DELETE FROM strategy; DELETE FROM institution; \
-        INSERT INTO strategy (name, asset_class, weight, created_at) VALUES ('Dividendos','ACOES',50,NOW()), ('Small Caps','ACOES',50,NOW()); \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('B3SA3','B3','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()), \
+          ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-01',NOW()); \
+        INSERT INTO strategy (name, asset_class, kind, created_at) VALUES ('Dividendos','ACOES','REPORT_DRIVEN',NOW()), ('Small Caps','ACOES','REPORT_DRIVEN',NOW()); \
         SET @div := (SELECT id FROM strategy WHERE name='Dividendos'); \
         INSERT INTO \`month\` (period, capital, \`floor\`, status, created_at) VALUES ('2027-04', 4000, 0, 'OPEN', NOW()); \
         SET @month := LAST_INSERT_ID(); \
@@ -75,6 +79,38 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('ITUB4','2027-04-05','B3', 60, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
           ('B3SA3','2027-04-06','B3',-60, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());"
   ```
+
+- **Placement seed**: the inside/outside/unclassified rule and the Funding ring-fence read positions, attributions, quotes and the catalog. This seed runs independently of the Order-plan seed: ACOES is 100% of Capital, Dividendos (report-driven) targets ITUB4 and B3SA3 at 50% each, B3SA3 holds 260 units against a 200-unit Target with 60 units attributed to the Legado Manual Strategy, ITUB4 holds 100 units with a stale 40-unit report attribution, and ZZZZ3 has a position and a quote but no catalog row. The plan therefore buys ITUB4's shortfall, sells no B3SA3 (its 60 surplus units are ring-fenced to Legado), leaves ZZZZ3 out of every Strategy, and reports it in `unclassified`. The catalog is seeded because classification is a precondition for attribution.
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-01',NOW()), \
+          ('B3SA3','B3','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-01',NOW()); \
+        INSERT INTO strategy (name, asset_class, kind, created_at) VALUES \
+          ('Dividendos','ACOES','REPORT_DRIVEN',NOW()), ('Legado','ACOES','MANUAL',NOW()); \
+        SET @div := (SELECT id FROM strategy WHERE name='Dividendos'); \
+        SET @legacy := (SELECT id FROM strategy WHERE name='Legado'); \
+        INSERT INTO \`month\` (period, capital, \`floor\`, status, created_at) VALUES ('2027-05', 4000, 0, 'OPEN', NOW()); \
+        SET @month := LAST_INSERT_ID(); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (@month,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (@month,'STRATEGY','ACOES','Dividendos',NULL,NULL,100,NOW()), \
+          (@month,'TICKER','ACOES','Dividendos',NULL,'ITUB4',50,NOW()), \
+          (@month,'TICKER','ACOES','Dividendos',NULL,'B3SA3',50,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES \
+          ('ITUB4',100,8), ('B3SA3',260,8), ('ZZZZ3',10,5); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4',@div,40), ('B3SA3',@legacy,60); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('ITUB4','2027-05-30',10,'COTAHIST',NOW()), \
+          ('B3SA3','2027-05-30',10,'COTAHIST',NOW()), \
+          ('ZZZZ3','2027-05-30',5,'COTAHIST',NOW());"
+  ```
+
+  The reads are then deterministic: `GET /month/current/orders?phase=funding` returns an ITUB4 BUY, no SELL, `outside_strategy: []`, and one `unclassified` entry for ZZZZ3; `POST /positions/ZZZZ3/attribution` and a cross-class attribution both answer 400.
 
 - **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
 

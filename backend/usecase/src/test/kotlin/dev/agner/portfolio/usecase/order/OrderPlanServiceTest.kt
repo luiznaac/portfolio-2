@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.order
 
+import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.listedasset.AttributionService
@@ -43,9 +44,13 @@ class OrderPlanServiceTest : StringSpec({
     val allocations = mockk<AllocationService>(relaxed = true)
     val strategies = mockk<StrategyService>(relaxed = true)
     val attributions = mockk<AttributionService>(relaxed = true)
-    val service = OrderPlanService(months, positions, quotes, allocations, strategies, attributions)
+    val catalog = mockk<CatalogService>(relaxed = true)
+    val service = OrderPlanService(months, positions, quotes, allocations, strategies, attributions, catalog)
 
-    beforeTest { clearAllMocks() }
+    beforeTest {
+        clearAllMocks()
+        coEvery { catalog.fetchUnclassified(any()) } returns emptySet()
+    }
 
     "returns null when no month is open and reads no book" {
         coEvery { months.fetchCurrent() } returns null
@@ -151,6 +156,56 @@ class OrderPlanServiceTest : StringSpec({
             Triple("ITUB4", "Top", AttributionSide.ALLOCATE),
         )
         plan.attribution.single().quantity.plain() shouldBe "249"
+    }
+
+    "reads the manual ledger into the placement instead of calling the bucket outside" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(
+            Position("VALE3", BigDecimal("10"), BigDecimal("8")),
+            Position("MXRF11", BigDecimal("40"), BigDecimal("9")),
+        )
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { quotes.latestClose("MXRF11") } returns BigDecimal("10")
+        coEvery { strategies.fetchManualNames() } returns setOf("Legado")
+        coEvery { attributions.fetchLedger() } returns mapOf(
+            StrategyTicker("Legado", "MXRF11") to BigDecimal("40"),
+        )
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.outsideStrategy shouldBe emptyList()
+        plan.unclassified shouldBe emptyList()
+    }
+
+    "reports a ticker the catalog has not classified separately from the outside holdings" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("ZZZZ3", BigDecimal("10"), BigDecimal("9")))
+        coEvery { quotes.latestClose("ZZZZ3") } returns BigDecimal("10")
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { catalog.fetchUnclassified(any()) } returns setOf("ZZZZ3")
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.outsideStrategy shouldBe emptyList()
+        plan.unclassified.single().ticker shouldBe "ZZZZ3"
+    }
+
+    "keeps a ticker named only by a Strategy the chain does not carry outside" {
+        coEvery { months.fetchCurrent() } returns currentMonth.copy(
+            targets = currentMonth.targets.copy(
+                tickers = currentMonth.targets.tickers + tickerTarget("Ghost", "MXRF11", "100"),
+            ),
+        )
+        coEvery { positions.fetchAll() } returns listOf(Position("MXRF11", BigDecimal("40"), BigDecimal("9")))
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { quotes.latestClose("MXRF11") } returns BigDecimal("10")
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.outsideStrategy.single().ticker shouldBe "MXRF11"
     }
 })
 
