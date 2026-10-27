@@ -4,12 +4,13 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Edition, Strategy } from "../api/types.ts";
+import type { Edition, Strategy, StrategyHoldings } from "../api/types.ts";
 import { Strategies } from "./Strategies.tsx";
 
 const mock = vi.hoisted(() => ({
   strategies: [] as Strategy[],
   editions: {} as Record<number, Edition[]>,
+  holdings: {} as Record<number, StrategyHoldings>,
   createError: null as Error | null,
 }));
 
@@ -17,6 +18,15 @@ vi.mock("../api/client.ts", () => ({
   api: {
     getStrategies: () => Promise.resolve(mock.strategies),
     getEditions: (strategyId: number) => Promise.resolve(mock.editions[strategyId] ?? []),
+    getStrategyHoldings: (strategyId: number) =>
+      Promise.resolve(
+        mock.holdings[strategyId] ?? {
+          strategy_id: strategyId,
+          strategy_name: "",
+          total_value: 0,
+          holdings: [],
+        },
+      ),
     getCurrentMonth: () => Promise.resolve({ month: { period: "2026-09" } }),
     createStrategy: (creation: Omit<Strategy, "id">) => {
       if (mock.createError) return Promise.reject(mock.createError);
@@ -58,6 +68,7 @@ afterEach(() => {
   cleanup();
   mock.strategies = [];
   mock.editions = {};
+  mock.holdings = {};
   mock.createError = null;
 });
 
@@ -109,6 +120,47 @@ describe("the report import", () => {
     expect(
       (screen.getByRole("button", { name: "Importar pendentes" }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+});
+
+describe("the manual Strategy detail", () => {
+  it("shows the bucket's read-only holdings, total and a link to Alocação", async () => {
+    mock.strategies = [{ id: 9, name: "Legado Ações", asset_class: "ACOES", kind: "MANUAL" }];
+    mock.holdings = {
+      9: {
+        strategy_id: 9,
+        strategy_name: "Legado Ações",
+        total_value: 200,
+        holdings: [
+          { ticker: "ITUB4", quantity: 20, value: 100, share: 50 },
+          { ticker: "VALE3", quantity: 10, value: 100, share: 50 },
+        ],
+      },
+    };
+
+    renderStrategies();
+
+    expect(await screen.findByRole("heading", { name: "Legado Ações" })).toBeDefined();
+    expect(screen.getByText("ITUB4")).toBeDefined();
+    expect(screen.getByText("VALE3")).toBeDefined();
+    expect(screen.getAllByText("50,00%")).toHaveLength(2);
+    expect(screen.getByText("Total do legado")).toBeDefined();
+    expect(screen.getByText("R$ 200,00")).toBeDefined();
+    expect(screen.getByRole("link", { name: /Alocação/ })).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Importar relatório" })).toBeNull();
+    expect(screen.queryByText("Mudanças vs. edição anterior")).toBeNull();
+  });
+
+  it("shows the empty state when no position is attributed", async () => {
+    mock.strategies = [{ id: 9, name: "Legado Ações", asset_class: "ACOES", kind: "MANUAL" }];
+
+    renderStrategies();
+
+    expect(
+      await screen.findByText(
+        "Nenhuma posição atribuída. Use Atribuir posições fora da estratégia na Alocação.",
+      ),
+    ).toBeDefined();
   });
 });
 

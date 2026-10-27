@@ -22,9 +22,9 @@ const HEADER =
 const CELL = "border-t border-line-soft px-3 py-2.5 align-middle";
 
 // The Alocação tree: the open month's Capital → class → strategy/sub-class → ticker chain, each rung
-// with its Ideal, Actual, Δ R$ (deficit) and Δ p.p. (drift) bar. A later slice adds the stored
-// Attribution ledger, so today the unattributed segment claims every held ticker the chain does not
-// name.
+// with its Ideal, Actual, Δ R$ (deficit) and Δ p.p. (drift) bar. A class is additive — its report
+// Strategies, its manual bucket and its outside row sum to the class Actual — and the unclassified
+// line sits at the root in no class rung.
 export function Allocation() {
   const allocation = useCurrentAllocation();
 
@@ -155,23 +155,33 @@ function AllocationTableRow({
         </span>
       </td>
       <td className={cn(CELL, "text-right text-ink-dim")}>{formatTarget(row.target)}</td>
-      <td className={cn(CELL, "text-right font-mono")}>{formatCurrency(row.ideal)}</td>
+      <td className={cn(CELL, "text-right font-mono")}>
+        {row.ideal === undefined ? "—" : formatCurrency(row.ideal)}
+      </td>
       <td className={cn(CELL, "text-right font-mono")}>{formatCurrency(row.actual)}</td>
       <td className={cn(CELL, "text-center")}>
-        <div className="flex items-center justify-center gap-2">
-          <DivergentBar value={-row.deficit} max={maxDeficit} />
-          <span className={cn("min-w-[84px] text-right font-mono", deviationTone(-row.deficit))}>
-            {formatDeviation(-row.deficit)}
-          </span>
-        </div>
+        {row.deficit === undefined ? (
+          <span className="font-mono text-ink-dim">—</span>
+        ) : (
+          <div className="flex items-center justify-center gap-2">
+            <DivergentBar value={-row.deficit} max={maxDeficit} />
+            <span className={cn("min-w-[84px] text-right font-mono", deviationTone(-row.deficit))}>
+              {formatDeviation(-row.deficit)}
+            </span>
+          </div>
+        )}
       </td>
       <td className={cn(CELL, "text-right")}>
-        <div className="flex items-center justify-end gap-2">
-          <DivergentBar value={row.drift} max={maxDrift} />
-          <span className={cn("min-w-[72px] text-right font-mono", deviationTone(row.drift))}>
-            {formatPoints(row.drift)}
-          </span>
-        </div>
+        {row.drift === undefined ? (
+          <span className="font-mono text-ink-dim">—</span>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <DivergentBar value={row.drift} max={maxDrift} />
+            <span className={cn("min-w-[72px] text-right font-mono", deviationTone(row.drift))}>
+              {formatPoints(row.drift)}
+            </span>
+          </div>
+        )}
       </td>
     </tr>
   );
@@ -240,8 +250,7 @@ function Reconciliation({ allocation }: { allocation: AllocationModel }) {
         )}
       </div>
       <p className="mt-2 text-[11.5px] text-ink-faint">
-        {formatCurrency(allocation.unattributed)} não atribuídos às estratégias. A distribuição por
-        estratégia chega com a fatia de Estratégias.
+        {formatCurrency(allocation.unattributed)} de custódia fora de qualquer estratégia.
       </p>
     </Panel>
   );

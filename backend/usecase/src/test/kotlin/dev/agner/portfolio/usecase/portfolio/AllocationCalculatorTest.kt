@@ -7,6 +7,8 @@ import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
+import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.subClassTarget
 import dev.agner.portfolio.usecase.tickerTarget
@@ -164,6 +166,118 @@ class AllocationCalculatorTest : StringSpec({
         allocation.classes.single { it.assetClass == AssetClass.ACOES }.actual.plain() shouldBe "1000"
         allocation.actual.plain() shouldBe "1100"
         allocation.unattributed.plain() shouldBe "1100"
+        allocation.unclassified.actual.plain() shouldBe "100"
+        allocation.unclassified.tickers.single().ticker shouldBe "ZZZZ9"
+    }
+
+    "every strategy row and ticker leaf shows only its attributed units × the current quote" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = listOf(listed("VALE3", AssetClass.ACOES, "100", "10")),
+            fixedIncome = emptyList(),
+            attributions = mapOf(attributed("Top Dividendos", "VALE3", "60")),
+        )
+
+        val strategy = allocation.classes.single { it.assetClass == AssetClass.ACOES }.strategies.single()
+
+        strategy.actual.plain() shouldBe "600"
+        strategy.deficit.plain() shouldBe "49400"
+        strategy.tickers.single().actual.plain() shouldBe "600"
+    }
+
+    "renders the bucket after the report strategies with no target, ideal, deficit or drift" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = listOf(
+                listed("VALE3", AssetClass.ACOES, "100", "10"),
+                listed("ITUB4", AssetClass.ACOES, "50", "10"),
+            ),
+            fixedIncome = emptyList(),
+            attributions = mapOf(
+                attributed("Top Dividendos", "VALE3", "60"),
+                attributed("Legado Ações", "VALE3", "20"),
+                attributed("Legado Ações", "ITUB4", "30"),
+            ),
+            manualStrategies = listOf(manualStrategy("Legado Ações", AssetClass.ACOES)),
+        )
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+        val manual = acoes.manual!!
+
+        manual.strategy shouldBe "Legado Ações"
+        manual.actual.plain() shouldBe "500"
+        manual.tickers.map { it.ticker } shouldBe listOf("ITUB4", "VALE3")
+        manual.tickers.associate { it.ticker to it.actual.plain() } shouldBe
+            mapOf("ITUB4" to "300", "VALE3" to "200")
+    }
+
+    "an outside row follows the bucket so the class rows sum to its full-custody Actual" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = listOf(
+                listed("VALE3", AssetClass.ACOES, "100", "10"),
+                listed("ITUB4", AssetClass.ACOES, "50", "10"),
+            ),
+            fixedIncome = emptyList(),
+            attributions = mapOf(
+                attributed("Top Dividendos", "VALE3", "60"),
+                attributed("Legado Ações", "VALE3", "20"),
+                attributed("Legado Ações", "ITUB4", "30"),
+            ),
+            manualStrategies = listOf(manualStrategy("Legado Ações", AssetClass.ACOES)),
+        )
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+        val outside = acoes.outside
+
+        acoes.actual.plain() shouldBe "1500"
+        outside.actual.plain() shouldBe "400"
+        outside.tickers.associate { it.ticker to it.actual.plain() } shouldBe
+            mapOf("ITUB4" to "200", "VALE3" to "200")
+        (acoes.strategies.sumOf { it.actual } + (acoes.manual?.actual ?: BigDecimal.ZERO) + outside.actual)
+            .plain() shouldBe "1500"
+    }
+
+    "unattributed excludes the bucket and carries only outside and unclassified custody" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = listOf(
+                listed("VALE3", AssetClass.ACOES, "100", "10"),
+                listed("ITUB4", AssetClass.ACOES, "50", "10"),
+                listed("ZZZZ9", null, "10", "10"),
+            ),
+            fixedIncome = emptyList(),
+            attributions = mapOf(
+                attributed("Top Dividendos", "VALE3", "60"),
+                attributed("Legado Ações", "VALE3", "20"),
+                attributed("Legado Ações", "ITUB4", "30"),
+            ),
+            manualStrategies = listOf(manualStrategy("Legado Ações", AssetClass.ACOES)),
+        )
+
+        allocation.classes.single { it.assetClass == AssetClass.ACOES }.unattributed.plain() shouldBe "400"
+        allocation.unattributed.plain() shouldBe "500"
+        allocation.actual.plain() shouldBe "1600"
+    }
+
+    "a report attribution to a ticker the chain does not name stays outside" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = listOf(listed("ITUB4", AssetClass.ACOES, "50", "10")),
+            fixedIncome = emptyList(),
+            attributions = mapOf(attributed("Top Dividendos", "ITUB4", "20")),
+        )
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+
+        acoes.strategies.single().actual.plain() shouldBe "0"
+        acoes.outside.actual.plain() shouldBe "500"
+        acoes.manual shouldBe null
     }
 
     "a zero capital never divides by zero" {
@@ -194,6 +308,8 @@ private fun compute(
     targets: Targets,
     listed: List<ListedHolding>,
     fixedIncome: List<FixedIncomeHolding>,
+    attributions: AttributionLedger = emptyMap(),
+    manualStrategies: List<ManualStrategyHolding> = emptyList(),
 ) = AllocationCalculator.compute(
     period = YearMonth.parse("2026-09"),
     capital = BigDecimal(capital),
@@ -201,7 +317,14 @@ private fun compute(
     targets = targets,
     listed = listed,
     fixedIncome = fixedIncome,
+    attributions = attributions,
+    manualStrategies = manualStrategies,
 )
+
+private fun attributed(strategy: String, ticker: String, quantity: String) =
+    StrategyTicker(strategy, ticker) to BigDecimal(quantity)
+
+private fun manualStrategy(name: String, assetClass: AssetClass) = ManualStrategyHolding(name, assetClass)
 
 private fun targets(vararg classes: ClassTarget) =
     Targets(classes.toList(), emptyList(), emptyList(), emptyList())
