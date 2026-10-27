@@ -44,6 +44,39 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 - **DB readiness**: the app section needs no runbook-level DB probe — the mysql section's ready probe plus compose `depends_on: mysql: condition: service_healthy` covers it; the app self-migrates an empty MySQL via Flyway (`bin/migrate` in `deploy/entrypoint.sh`) before serving.
 
 - **chameidor**: not booted; scheduling-side intents are unreachable and fine (job registration is lazy — `ScheduleService` is reached only through consolidation runs).
+- **Snapshot slice seed**: the monthly close freezes one slice per Strategy, the manual bucket included. This seed is self-contained: reset the close/plan tables, seed one report strategy that targets nothing and one manual bucket that owns the whole position, then the close's HTTP intents read the frozen slice. Run it alone — do **not** apply any other seed section.
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+  DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM trade; DELETE FROM position;
+  DELETE FROM institution; DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  INSERT INTO strategy (name, asset_class, kind, created_at) VALUES
+    ('Top Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW()),
+    ('Legado', 'ACOES', 'MANUAL', NOW());
+  SET @bucket := (SELECT id FROM strategy WHERE name = 'Legado');
+  INSERT INTO month (id, period, capital, `floor`, aportes, status, created_at) VALUES
+    (9001, '2026-10', 1000, 0, 0, 'OPEN', NOW());
+  INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+    (9001, 'CLASS', 'ACOES', NULL, NULL, NULL, 100, NOW()),
+    (9001, 'STRATEGY', 'ACOES', 'Top Dividendos', NULL, NULL, 0, NOW());
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('ITUB4', 'ITAUUNIBANCO', '02', NULL, 'STOCK', 'ACOES', '2026-10-01', '2026-10-31', NOW());
+  INSERT INTO quote (ticker, date, close, source, created_at) VALUES
+    ('ITUB4', '2026-10-30', 10, 'COTAHIST', NOW());
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('ITUB4', '2026-10-05', 'VISTA', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW());
+  REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 100, 10);
+  REPLACE INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4', @bucket, 100);
+  SQL
+  ```
+
+  The close is then `POST /month/current/close` (200) and the read is `GET /months/9001` (200). The
+  frozen state must carry two `strategies` slices: `Legado` (`kind: MANUAL`, `value_end: 1000`,
+  `flow: 0`) and `Top Dividendos` (`kind: REPORT_DRIVEN`, `value_end: 0`); the Ações class total is
+  `actual: 1000` with `unattributed: 0`.
 - **Order-plan seed**: the order plan prices positions from the latest stored close and reads the NEUTRO flag from a strategy's active Edition; the COTAHIST feed and a report import are not reachable in acceptance. After the app is healthy, reset the order tables and seed the scenario the plan, lifecycle and transfer intents read. The month and its chain are seeded here too (not posted over HTTP) so the run is deterministic. The scenario: two strategies (Dividendos / Small Caps) share ITUB4, B3SA3 and CSNA3 at a R$10 close; ITUB4 sits below its target (a BUY candidate the seeded manual trade executes), B3SA3 and CSNA3 sit above theirs (funding sells), and the Dividendos attribution is off-ideal against Small Caps so the refresh proposes one auto-approved transfer (ITUB4, R$200) and two pending ones (B3SA3 and CSNA3, R$600 each):
 
   ```

@@ -84,6 +84,28 @@ class MonthlyCloseTest : StringSpec({
         }
     }
 
+    "closing the month freezes a slice per strategy, the bucket included" {
+        val (monthId, bucketId) = openMonthWithAttributedHolding()
+
+        val response = getBean<HttpClient>().post("http://localhost:8080/month/current/close")
+
+        response.status shouldBe HttpStatusCode.OK
+        val persisted = getBean<ISnapshotRepository>().fetchByMonth(monthId)!!
+        val slices = persisted.state.strategies.associateBy { it.strategyId }
+        slices.size shouldBe 2
+        val bucket = slices.getValue(bucketId)
+        bucket.strategy shouldBe "Legado"
+        bucket.kind shouldBe StrategyKind.MANUAL
+        bucket.valueEnd.compareTo(BigDecimal("1000.00")) shouldBe 0
+        bucket.flow.compareTo(BigDecimal.ZERO) shouldBe 0
+        val report = slices.values.single { it.kind == StrategyKind.REPORT_DRIVEN }
+        report.strategy shouldBe "Top Dividendos"
+        report.valueEnd.compareTo(BigDecimal.ZERO) shouldBe 0
+        val acoes = persisted.state.classes.first { it.assetClass == AssetClass.ACOES }
+        acoes.actual.compareTo(BigDecimal("1000.00")) shouldBe 0
+        acoes.unattributed.compareTo(BigDecimal.ZERO) shouldBe 0
+    }
+
     "a pending transfer blocks the close and leaves the month open" {
         val monthId = openMonthWithPendingTransfer()
         val client = getBean<HttpClient>()
@@ -109,42 +131,7 @@ private val period = YearMonth.parse("2026-10")
 // Two slices of one ticker, 150 units apart, at R$10 — the donor's 50-unit transfer is worth exactly
 // R$500, so the threshold leaves it pending for a human.
 private suspend fun openMonthWithPendingTransfer(): Int {
-    val institution = getBean<InstitutionService>().create(InstitutionCreation("XP INVESTIMENTOS"))
-    getBean<TradeService>().createManual(
-        TradeCreation(
-            ticker = "ITUB4",
-            side = TradeSide.BUY,
-            date = LocalDate.parse("2026-10-05"),
-            venue = "VISTA",
-            quantity = BigDecimal("200"),
-            unitPrice = BigDecimal("10"),
-            institutionId = institution.id,
-        ),
-    )
-    getBean<ICatalogRepository>().upsertAll(
-        listOf(
-            CatalogEntry(
-                ticker = "ITUB4",
-                shortName = "ITUB4",
-                bdiType = "02",
-                isin = null,
-                assetKind = AssetKind.STOCK,
-                assetClass = AssetClass.ACOES,
-                firstSeen = LocalDate.parse("2026-10-05"),
-                lastSeen = LocalDate.parse("2026-10-05"),
-            ),
-        ),
-    )
-    getBean<IQuoteRepository>().upsertAll(
-        listOf(
-            Quote(
-                ticker = "ITUB4",
-                date = LocalDate.parse("2026-10-05"),
-                close = BigDecimal("10"),
-                source = QuoteSource.COTAHIST,
-            ),
-        ),
-    )
+    seedBoughtPosition(quantity = BigDecimal("200"))
     getBean<StrategyService>().create(
         StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN),
     )
@@ -159,6 +146,67 @@ private suspend fun openMonthWithPendingTransfer(): Int {
     getBean<AttributionService>().setSlice("ITUB4", AttributionSliceCreation(small.id, BigDecimal("200")))
     return month.month.id
 }
+
+// One report strategy that targets nothing and the manual bucket owning the whole position — the
+// close has no transfer to gate on, so the snapshot freezes both slices.
+private suspend fun openMonthWithAttributedHolding(): Pair<Int, Int> {
+    seedBoughtPosition(quantity = BigDecimal("100"))
+    getBean<StrategyService>().create(
+        StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN),
+    )
+    val bucket = getBean<StrategyService>().create(
+        StrategyCreation("Legado", AssetClass.ACOES, StrategyKind.MANUAL),
+    )
+
+    val month = getBean<MonthService>().open(
+        MonthCreation(period = period, capital = BigDecimal("1000"), floor = BigDecimal.ZERO),
+    )
+    getBean<MonthService>().replaceCurrentTargets(
+        Targets(
+            classes = listOf(ClassTarget(AssetClass.ACOES, BigDecimal("100"))),
+            strategies = listOf(StrategyTarget(AssetClass.ACOES, "Top Dividendos", BigDecimal("0"))),
+            subClasses = emptyList(),
+            tickers = emptyList(),
+        ),
+    )
+    getBean<AttributionService>().setSlice("ITUB4", AttributionSliceCreation(bucket.id, BigDecimal("100")))
+    return month.month.id to bucket.id
+}
+
+private suspend fun seedBoughtPosition(quantity: BigDecimal) {
+    val institution = getBean<InstitutionService>().create(InstitutionCreation("XP INVESTIMENTOS"))
+    getBean<TradeService>().createManual(
+        TradeCreation(
+            ticker = "ITUB4",
+            side = TradeSide.BUY,
+            date = LocalDate.parse("2026-10-05"),
+            venue = "VISTA",
+            quantity = quantity,
+            unitPrice = BigDecimal("10"),
+            institutionId = institution.id,
+        ),
+    )
+    getBean<ICatalogRepository>().upsertAll(listOf(catalogEntry("ITUB4")))
+    getBean<IQuoteRepository>().upsertAll(listOf(quote("ITUB4")))
+}
+
+private fun catalogEntry(ticker: String) = CatalogEntry(
+    ticker = ticker,
+    shortName = ticker,
+    bdiType = "02",
+    isin = null,
+    assetKind = AssetKind.STOCK,
+    assetClass = AssetClass.ACOES,
+    firstSeen = LocalDate.parse("2026-10-05"),
+    lastSeen = LocalDate.parse("2026-10-05"),
+)
+
+private fun quote(ticker: String) = Quote(
+    ticker = ticker,
+    date = LocalDate.parse("2026-10-05"),
+    close = BigDecimal("10"),
+    source = QuoteSource.COTAHIST,
+)
 
 private fun targets() = Targets(
     classes = listOf(ClassTarget(AssetClass.ACOES, BigDecimal("100"))),
