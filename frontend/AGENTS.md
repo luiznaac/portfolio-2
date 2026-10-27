@@ -40,6 +40,10 @@ npm run check         # typecheck + lint + test — run before considering a cha
 npm run build         # tsc -b && vite build
 ```
 
+## Coding standards
+
+- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
+
 ## Portfolio-2-specific pieces
 
 - **Tailwind v4 config lives in CSS**: `src/index.css` has `@import "tailwindcss";` and an `@theme` block holding the reference palette, sign convention, radii scale and the three IBM Plex families (`src/fonts.css` bundles them via `@fontsource`); there is no `tailwind.config.js`.
@@ -47,9 +51,5 @@ npm run build         # tsc -b && vite build
 - **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; the dev server proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8080`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
 - **Testing scope**: `src/lib/**/*.test.ts` covers the pure helpers in a node environment; a page that needs a behaviour test adds a co-located `src/**/*.test.tsx` render test that opts into jsdom with a `// @vitest-environment jsdom` docblock (Testing Library + `user-event`, asserting user-observable results such as focus or the rendered DOM — not implementation details). `lib/theme.test.ts` additionally reads source files as a build-time guard (the `@theme` tokens exist; no shipped component carries a scaffold-palette shade). Don't claim UI coverage beyond what actually exists.
-
-## Coding standards
-
-- [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.
