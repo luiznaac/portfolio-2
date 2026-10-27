@@ -2,11 +2,13 @@ package dev.agner.portfolio.usecase.listedasset
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
+import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSlice
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
@@ -69,6 +71,20 @@ class AttributionService(
         return upsertSlice(normalized = ticker.normalizedTicker(), creation = creation)
     }
 
+    // The one Attribution Transfer operation: the source slice gives up units, the destination slice
+    // gains them, and a source that reaches zero is deleted. Custody never changes, and the checks
+    // (positive quantity, distinct strategies, class match, source holding enough) all live here so
+    // the manual endpoint and the order lifecycle cannot drift into two implementations.
+    suspend fun transfer(ticker: String, creation: AttributionTransferCreation): AttributionSummary? {
+        if (creation.quantity <= BigDecimal.ZERO) {
+            throw InvalidTransferException("quantity must be positive, received ${creation.quantity}")
+        }
+        if (creation.fromStrategyId == creation.toStrategyId) {
+            throw InvalidTransferException("source and destination must be different strategies")
+        }
+        return moveSlice(normalized = ticker.normalizedTicker(), creation = creation)
+    }
+
     suspend fun removeSlice(ticker: String, strategyId: Int): AttributionSummary? {
         val normalized = ticker.normalizedTicker()
         return transaction.execute {
@@ -114,16 +130,65 @@ class AttributionService(
         }
     }
 
-    // A ticker enters a Strategy only once the catalog gives it a class, and only the Strategy of
-    // that class may hold it. Classification is a precondition, not an inference.
-    private suspend fun requireClassMatch(ticker: String, strategy: Strategy) {
-        val assetClass = catalog.fetchBy(ticker)?.assetClass
-            ?: throw InvalidAttributionException("$ticker has no Asset Class; classify it before attributing")
-        if (assetClass != strategy.assetClass) {
-            throw InvalidAttributionException(
-                "cannot attribute $ticker ($assetClass) to ${strategy.name} (${strategy.assetClass})",
-            )
+    private suspend fun moveSlice(
+        normalized: String,
+        creation: AttributionTransferCreation,
+    ): AttributionSummary? = transaction.execute {
+        val position = positions.fetchBy(normalized)
+        val from = strategies.fetchById(creation.fromStrategyId)
+        val to = strategies.fetchById(creation.toStrategyId)
+        if (position == null || from == null || to == null) {
+            null
+        } else {
+            requireClassMatch(normalized, from) { InvalidTransferException(it) }
+            requireClassMatch(normalized, to) { InvalidTransferException(it) }
+
+            val rows = attributions.fetchBy(normalized)
+            val source = rows.firstOrNull { it.strategyId == from.id }
+                ?: throw InvalidTransferException("$normalized has no slice for strategy ${from.name}")
+            if (source.quantity < creation.quantity) {
+                throw InvalidTransferException(
+                    "$normalized strategy ${from.name} holds ${source.quantity}, but the transfer moves " +
+                        creation.quantity,
+                )
+            }
+
+            val remaining = source.quantity - creation.quantity
+            val sourceRow = remaining.takeIf { it.signum() > 0 }?.let { Attribution(normalized, from.id, it) }
+            val destinationQuantity = (rows.firstOrNull { it.strategyId == to.id }?.quantity ?: BigDecimal.ZERO) +
+                creation.quantity
+            val destinationRow = Attribution(normalized, to.id, destinationQuantity)
+
+            if (sourceRow == null) {
+                attributions.delete(normalized, from.id)
+            } else {
+                attributions.save(sourceRow)
+            }
+            attributions.save(destinationRow)
+
+            val moved = rows.filterNot { it.strategyId == from.id || it.strategyId == to.id } +
+                listOfNotNull(sourceRow, destinationRow)
+            summarize(normalized, position, moved)
         }
+    }
+
+    // A ticker enters a Strategy only once the catalog gives it a class, and only the Strategy of
+    // that class may hold it. Classification is a precondition, not an inference. The caller names
+    // the error because a slice write and a transfer are different caller errors.
+    private suspend fun requireClassMatch(
+        ticker: String,
+        strategy: Strategy,
+        onMismatch: (String) -> DomainException = { InvalidAttributionException(it) },
+    ) {
+        val assetClass = catalog.fetchBy(ticker)?.assetClass
+        val reason = if (assetClass == null) {
+            "$ticker has no Asset Class; classify it before attributing"
+        } else if (assetClass != strategy.assetClass) {
+            "cannot attribute $ticker ($assetClass) to ${strategy.name} (${strategy.assetClass})"
+        } else {
+            null
+        }
+        if (reason != null) throw onMismatch(reason)
     }
 
     private suspend fun summarize(

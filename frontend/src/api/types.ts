@@ -138,6 +138,14 @@ export interface AttributionSliceCreation {
   quantity: number;
 }
 
+// The manual Attribution Transfer: units move from the source slice to the destination slice and
+// custody never changes. The endpoint is month-free and writes no inbox row.
+export interface AttributionTransferCreation {
+  from_strategy_id: number;
+  to_strategy_id: number;
+  quantity: number;
+}
+
 export type IndexId = "IPCA" | "CDI" | "SELIC";
 
 // The target bucket a fixed-income product allocates to — derived by the backend from the rate kind

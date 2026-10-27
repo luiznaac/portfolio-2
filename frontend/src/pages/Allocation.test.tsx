@@ -4,16 +4,33 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Allocation as AllocationModel } from "../api/types.ts";
+import { api } from "../api/client.ts";
+import type {
+  Allocation as AllocationModel,
+  Attribution,
+  Edition,
+  OrderPlan,
+  Strategy,
+} from "../api/types.ts";
 import { Allocation } from "./Allocation.tsx";
 
 const mock = vi.hoisted(() => ({
   allocation: null as AllocationModel | null,
+  strategies: [] as Strategy[],
+  editions: {} as Record<number, Edition[]>,
+  attribution: null as Attribution | null,
+  plan: null as OrderPlan | null,
 }));
 
 vi.mock("../api/client.ts", () => ({
+  ApiError: class ApiError extends Error {},
   api: {
     getCurrentAllocation: () => Promise.resolve(mock.allocation),
+    getStrategies: () => Promise.resolve(mock.strategies),
+    getEditions: (strategyId: number) => Promise.resolve(mock.editions[strategyId] ?? []),
+    getAttribution: () => Promise.resolve(mock.attribution),
+    getOrderPlan: () => Promise.resolve(mock.plan),
+    transferAttribution: vi.fn(() => Promise.resolve(mock.attribution)),
   },
 }));
 
@@ -39,7 +56,12 @@ function rowFor(label: string): HTMLElement {
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   mock.allocation = null;
+  mock.strategies = [];
+  mock.editions = {};
+  mock.attribution = null;
+  mock.plan = null;
 });
 
 describe("the Alocação tree", () => {
@@ -95,6 +117,162 @@ describe("the Alocação tree", () => {
     expect(screen.queryByText(/distribuição por estratégia/)).toBeNull();
   });
 });
+
+describe("the manual transfer from the bucket", () => {
+  it("offers only report-driven Strategies whose active edition weighs the ticker, with the shortfall as default", async () => {
+    mock.allocation = allocation;
+    mock.strategies = transferStrategies;
+    mock.editions = transferEditions;
+    mock.attribution = transferAttribution;
+    mock.plan = orderPlan({ targetQuantity: 25, attributedQuantity: 10 });
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await openTransferModal(user);
+
+    const dialog = screen.getByRole("dialog", { name: "Transferir do legado" });
+    const destination = within(dialog).getByLabelText("Estratégia de destino");
+    const options = within(destination).getAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
+      "Top Dividendos · falta 15 cotas",
+    ]);
+    expect((within(dialog).getByLabelText("Quantidade") as HTMLInputElement).value).toBe("15");
+    expect(within(dialog).getByText(/40 cotas no legado/)).toBeDefined();
+  });
+
+  it("applies the transfer from the manual bucket to the chosen report Strategy", async () => {
+    mock.allocation = allocation;
+    mock.strategies = transferStrategies;
+    mock.editions = transferEditions;
+    mock.attribution = transferAttribution;
+    mock.plan = orderPlan({ targetQuantity: 25, attributedQuantity: 10 });
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await openTransferModal(user);
+    await user.click(screen.getByRole("button", { name: "Transferir 15 cotas" }));
+
+    expect(vi.mocked(api.transferAttribution)).toHaveBeenCalledWith("ITUB4", {
+      from_strategy_id: 9002,
+      to_strategy_id: 9001,
+      quantity: 15,
+    });
+  });
+
+  it("tells the user to import an edition when no report Strategy weighs the ticker", async () => {
+    mock.allocation = allocation;
+    mock.strategies = transferStrategies;
+    mock.editions = {};
+    mock.attribution = transferAttribution;
+    mock.plan = null;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await openTransferModal(user);
+
+    expect(screen.getByText(/Importe uma edição/)).toBeDefined();
+  });
+});
+
+async function openTransferModal(user: ReturnType<typeof userEvent.setup>) {
+  await screen.findByText("Ações");
+  await user.click(within(rowFor("Ações")).getByRole("button"));
+  await user.click(within(rowFor("Legado Ações")).getByRole("button"));
+  await user.click(screen.getByRole("button", { name: "Transferir ITUB4" }));
+  await screen.findByRole("dialog", { name: "Transferir do legado" });
+}
+
+function strategy(
+  id: number,
+  name: string,
+  assetClass: Strategy["asset_class"],
+  kind: Strategy["kind"],
+): Strategy {
+  return { id, name, asset_class: assetClass, kind };
+}
+
+function edition(
+  strategyId: number,
+  status: Edition["status"],
+  entries: Edition["entries"],
+): Edition {
+  return {
+    id: strategyId,
+    strategy_id: strategyId,
+    reference_month: "2026-09",
+    status,
+    entries,
+  };
+}
+
+function orderPlan({
+  targetQuantity,
+  attributedQuantity,
+}: {
+  targetQuantity: number;
+  attributedQuantity: number;
+}): OrderPlan {
+  return {
+    period: "2026-09",
+    phase: "FUNDING",
+    capital: 100000,
+    floor: 20000,
+    investable_capital: 80000,
+    classes: [
+      {
+        asset_class: "ACOES",
+        target: 50,
+        ideal: 50000,
+        strategies: [
+          {
+            strategy: "Top Dividendos",
+            target: 100,
+            ideal: 50000,
+            tickers: [
+              {
+                ticker: "ITUB4",
+                strategy: "Top Dividendos",
+                target: 100,
+                ideal: 50000,
+                target_quantity: targetQuantity,
+                neutro: false,
+                attributed_quantity: attributedQuantity,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    candidates: [],
+    outside_strategy: [],
+    unclassified: [],
+    attribution: [],
+    transfers: [],
+  };
+}
+
+const transferStrategies: Strategy[] = [
+  strategy(9001, "Top Dividendos", "ACOES", "REPORT_DRIVEN"),
+  strategy(9002, "Legado Ações", "ACOES", "MANUAL"),
+  strategy(9003, "Sem edição", "ACOES", "REPORT_DRIVEN"),
+  strategy(9004, "Top FIIs", "FIIS", "REPORT_DRIVEN"),
+];
+
+const transferEditions: Record<number, Edition[]> = {
+  9001: [edition(9001, "ACTIVE", [{ ticker: "ITUB4", weight: 20, do_not_trade: false }])],
+  9004: [edition(9004, "ACTIVE", [{ ticker: "ITUB4", weight: 20, do_not_trade: false }])],
+};
+
+const transferAttribution: Attribution = {
+  ticker: "ITUB4",
+  custody_quantity: 100,
+  attributed_quantity: 100,
+  unattributed_quantity: 0,
+  slices: [
+    { strategy_id: 9001, strategy_name: "Top Dividendos", quantity: 60 },
+    { strategy_id: 9002, strategy_name: "Legado Ações", quantity: 40 },
+  ],
+};
 
 const allocation: AllocationModel = {
   period: "2026-09",

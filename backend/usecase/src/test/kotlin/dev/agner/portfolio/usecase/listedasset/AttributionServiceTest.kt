@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
@@ -228,11 +229,158 @@ class AttributionServiceTest : StringSpec({
 
         coVerify(exactly = 0) { attributions.delete(any(), any()) }
     }
+
+    "transfer moves the units from the source slice to the destination in one transaction" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+        coEvery { attributions.fetchBy("PETR4") } returns listOf(
+            attribution(strategyId = 1, quantity = "60"),
+            attribution(strategyId = 2, quantity = "10"),
+        )
+
+        val summary = service.transfer(
+            "petr4",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("20")),
+        )!!
+
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 1, BigDecimal("40"))) }
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 2, BigDecimal("30"))) }
+        coVerify(exactly = 0) { attributions.delete(any(), any()) }
+        summary.strategyQuantity("Top Dividendos").compareTo(BigDecimal("40")) shouldBe 0
+        summary.strategyQuantity("Top Ações").compareTo(BigDecimal("30")) shouldBe 0
+        summary.attributedQuantity.compareTo(BigDecimal("70")) shouldBe 0
+        transaction.count shouldBe 1
+    }
+
+    "transfer deletes the source row when it reaches zero" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { attributions.fetchBy("PETR4") } returns listOf(
+            attribution(strategyId = 1, quantity = "60"),
+            attribution(strategyId = 2, quantity = "10"),
+        )
+
+        service.transfer(
+            "PETR4",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("60")),
+        )
+
+        coVerify(exactly = 1) { attributions.delete("PETR4", 1) }
+        coVerify(exactly = 0) { attributions.save(match { it.strategyId == 1 }) }
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 2, BigDecimal("70"))) }
+    }
+
+    "transfer refuses to move more than the source slice holds and writes nothing" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { attributions.fetchBy("PETR4") } returns listOf(
+            attribution(strategyId = 1, quantity = "10"),
+            attribution(strategyId = 2, quantity = "60"),
+        )
+
+        val error = runCatching {
+            service.transfer(
+                "PETR4",
+                AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("20")),
+            )
+        }.exceptionOrNull()
+
+        (error is InvalidTransferException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+        coVerify(exactly = 0) { attributions.delete(any(), any()) }
+        transaction.count shouldBe 1
+    }
+
+    "transfer refuses a non-positive quantity before opening a transaction" {
+        val error = runCatching {
+            service.transfer(
+                "PETR4",
+                AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal.ZERO),
+            )
+        }.exceptionOrNull()
+
+        (error is InvalidTransferException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+        transaction.count shouldBe 0
+    }
+
+    "transfer rejects a class mismatch on either side of the move" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { catalog.fetchBy("PETR4") } returns catalogEntry(AssetClass.FIIS)
+
+        val error = runCatching {
+            service.transfer(
+                "PETR4",
+                AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("10")),
+            )
+        }.exceptionOrNull()
+
+        (error is InvalidTransferException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+        transaction.count shouldBe 1
+    }
+
+    "transfer refuses the same strategy as source and destination" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+
+        val error = runCatching {
+            service.transfer(
+                "PETR4",
+                AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 1, quantity = BigDecimal("10")),
+            )
+        }.exceptionOrNull()
+
+        (error is InvalidTransferException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
+
+    "transfer allows the manual bucket as the destination" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(3) } returns strategyCatalog.single { it.id == 3 }
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+        coEvery { attributions.fetchBy("PETR4") } returns listOf(attribution(strategyId = 1, quantity = "60"))
+
+        val summary = service.transfer(
+            "PETR4",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 3, quantity = BigDecimal("15")),
+        )!!
+
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 1, BigDecimal("45"))) }
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 3, BigDecimal("15"))) }
+        summary.strategyQuantity("Legado").compareTo(BigDecimal("15")) shouldBe 0
+    }
+
+    "transfer is null when the position or a strategy does not exist" {
+        coEvery { positions.fetchBy("PETR4") } returns null
+        service.transfer(
+            "PETR4",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("10")),
+        ) shouldBe null
+
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns null
+        service.transfer(
+            "PETR4",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("10")),
+        ) shouldBe null
+
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
 })
 
 private val strategyCatalog = listOf(
     Strategy(id = 1, name = "Top Dividendos", assetClass = AssetClass.ACOES, kind = StrategyKind.REPORT_DRIVEN),
     Strategy(id = 2, name = "Top Ações", assetClass = AssetClass.ACOES, kind = StrategyKind.REPORT_DRIVEN),
+    Strategy(id = 3, name = "Legado", assetClass = AssetClass.ACOES, kind = StrategyKind.MANUAL),
 )
 
 private fun position(quantity: String) =

@@ -34,6 +34,9 @@ export interface AllocationRow {
   kind: AllocationRowKind;
   depth: number;
   label: string;
+  // The ticker leaf's class, so the bucket's transfer action can filter its destinations without
+  // parsing the row key.
+  assetClass?: AssetClass;
   target?: number;
   ideal?: number;
   actual: number;
@@ -272,6 +275,7 @@ function actualTickerRow(
     kind,
     depth: 3,
     label: ticker.ticker,
+    assetClass,
     actual: ticker.actual,
     expandable: false,
   };

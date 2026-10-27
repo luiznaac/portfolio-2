@@ -1,10 +1,11 @@
 package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
-import dev.agner.portfolio.usecase.listedasset.model.Attribution
+import dev.agner.portfolio.usecase.listedasset.AttributionService
+import dev.agner.portfolio.usecase.listedasset.InvalidTransferException
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.isImported
-import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.order.model.InvalidOrderMatchException
 import dev.agner.portfolio.usecase.order.model.OrderList
@@ -40,7 +41,7 @@ class OrderLifecycleService(
     private val trades: ITradeRepository,
     private val suggestions: ISuggestedOrderRepository,
     private val transfers: ITransferProposalRepository,
-    private val attributions: IAttributionRepository,
+    private val attributionService: AttributionService,
     private val strategies: IStrategyRepository,
     private val transaction: ITransactionTemplate,
 ) {
@@ -192,22 +193,16 @@ class OrderLifecycleService(
         toStrategyId: Int,
         quantity: BigDecimal,
     ) {
-        val rows = attributions.fetchBy(ticker)
-        val from = rows.firstOrNull { it.strategyId == fromStrategyId }
-            ?: throw InvalidTransferException("$ticker has no slice for strategy $fromStrategyId")
-        if (from.quantity < quantity) {
-            throw InvalidTransferException(
-                "$ticker strategy $fromStrategyId holds ${from.quantity}, but the transfer moves $quantity",
-            )
-        }
-        val toQuantity = rows.firstOrNull { it.strategyId == toStrategyId }?.quantity ?: BigDecimal.ZERO
-
-        if (from.quantity == quantity) {
-            attributions.delete(ticker, fromStrategyId)
-        } else {
-            attributions.save(Attribution(ticker, fromStrategyId, from.quantity - quantity))
-        }
-        attributions.save(Attribution(ticker, toStrategyId, toQuantity + quantity))
+        attributionService.transfer(
+            ticker,
+            AttributionTransferCreation(
+                fromStrategyId = fromStrategyId,
+                toStrategyId = toStrategyId,
+                quantity = quantity,
+            ),
+        ) ?: throw InvalidTransferException(
+            "$ticker can no longer move $quantity from strategy $fromStrategyId to strategy $toStrategyId",
+        )
     }
 
     private suspend fun monthTrades(period: YearMonth): List<Trade> =

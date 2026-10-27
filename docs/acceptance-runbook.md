@@ -141,6 +141,39 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
   ```
 
+- **Manual-transfer seed**: the bucket's ticker leaf and its transfer modal read the attribution ledger, the strategies catalog and the order plan. This scenario seeds one report Strategy (Top Dividendos, id 9001) with an active 2027-04 Edition weighing ITUB4, VALE3 and PETR4, the Legado Ações bucket (id 9002), an open 2027-04 month whose class/strategy/ticker chain gives ITUB4 an 80-unit Target, four positions and quotes at R$10, and the ledger split (ITUB4: 40 and PETR4: 20 and CSNA3: 10 to Legado Ações; VALE3: 60 to Top Dividendos). On Alocação, expanding Ações and Legado Ações shows ITUB4 with a *Transferir* action; the modal offers Top Dividendos with "falta 80 cotas" and defaults the quantity to the 40-unit bucket slice. Applying it moves the attribution to Top Dividendos (ITUB4: 0 no legado, 40 na estratégia) with no inbox row and no month change. The CSNA3 bucket leaf has no destination (the Edition does not weigh it), so its modal tells the user to import an edition. The HTTP intent transfers PETR4's 20 bucket units to Top Dividendos first, leaving the Browser flow its own slice.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+        INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES (9200, 9001, '2027-04', 'ACTIVE', NOW()); \
+        INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES \
+          (9200,'ITUB4',40,NULL,NULL,FALSE), (9200,'VALE3',40,NULL,NULL,FALSE), (9200,'PETR4',20,NULL,NULL,FALSE); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9100, '2027-04', 2000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9100,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9100,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',40,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',40,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'PETR4',20,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8), ('VALE3',100,8), ('PETR4',20,8), ('CSNA3',10,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4',9002,40), ('VALE3',9001,60), ('PETR4',9002,20), ('CSNA3',9002,10); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), ('VALE3','2027-04-30',10,'COTAHIST',NOW()), \
+          ('PETR4','2027-04-30',10,'COTAHIST',NOW()), ('CSNA3','2027-04-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW());"
+  ```
+
 - **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
 
   The carry state seeds the three bucket openings (SWING 500, DAY_TRADE 300, FII 250) at the 2027-02 close, so the roll starts at March. Two prior-month losses bank before April: a CSNA3 swing loss of R$100 in the exempt March month (gross R$900, so it stays under the meter) and a KNRI11 FII loss of R$1,000. April therefore opens with SWING 600 and FII 1,250; the SWING carry offsets R$600 of the month's R$4,600 gain (taxable R$4,000, tax R$600), the FII carry offsets the whole R$1,000 gain (closing R$250), and the day-trade bucket stays at R$300 because April's CSNA3 round trip is flat. That round trip is imported so the day-trade warning guard sees it:
