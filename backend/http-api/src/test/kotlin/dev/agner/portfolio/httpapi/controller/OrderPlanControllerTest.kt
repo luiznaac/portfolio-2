@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.order.FundingContext
 import dev.agner.portfolio.usecase.order.OrderPlanCalculator
 import dev.agner.portfolio.usecase.order.OrderPlanContext
 import dev.agner.portfolio.usecase.order.OrderPlanService
+import dev.agner.portfolio.usecase.order.PlacementCalculator
 import dev.agner.portfolio.usecase.order.model.AttributionMove
 import dev.agner.portfolio.usecase.order.model.AttributionSide
 import dev.agner.portfolio.usecase.order.model.AttributionTransfer
@@ -20,6 +21,7 @@ import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
 import dev.agner.portfolio.usecase.order.model.OutsideStrategyHolding
 import dev.agner.portfolio.usecase.order.model.ProRataSummary
 import dev.agner.portfolio.usecase.order.model.SubClassOrderPlan
+import dev.agner.portfolio.usecase.order.model.UnclassifiedHolding
 import dev.agner.portfolio.usecase.order.model.tickerSlices
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.strategyTarget
@@ -124,6 +126,9 @@ class OrderPlanControllerTest : DescribeSpec({
                 body.get("pro_rata").get("factor").decimalValue().compareTo(BigDecimal("0.9")) shouldBe 0
                 body.get("outside_strategy").get(0).get("ticker").asText() shouldBe "MXRF11"
                 body.get("outside_strategy").get(0).get("suggested_exit_quantity").asInt() shouldBe 25
+                body.get("unclassified").get(0).get("ticker").asText() shouldBe "ZZZZ3"
+                body.get("unclassified").get(0).get("amount").decimalValue()
+                    .compareTo(BigDecimal("100")) shouldBe 0
                 body.get("attribution").get(0).get("side").asText() shouldBe "ALLOCATE"
                 body.get("transfers").get(0).get("from_strategy").asText() shouldBe "Dividendos Plus"
 
@@ -161,53 +166,61 @@ class OrderPlanControllerTest : DescribeSpec({
     }
 })
 
-private fun plan(phase: OrderPlanPhase) = OrderPlanCalculator.compute(
-    OrderPlanContext(
-        period = YearMonth.parse("2026-10"),
-        phase = phase,
-        capital = BigDecimal("49075"),
-        floor = BigDecimal("16000"),
-        targets = Targets(
-            classes = listOf(classTarget(AssetClass.ACOES, "100")),
-            strategies = listOf(
-                strategyTarget(AssetClass.ACOES, "Top", "50"),
-                strategyTarget(AssetClass.ACOES, "Dividendos", "25"),
-                strategyTarget(AssetClass.ACOES, "Dividendos Plus", "25"),
-            ),
-            subClasses = emptyList(),
-            tickers = listOf(
-                tickerTarget("Top", "ITUB4", "10"),
-                tickerTarget("Dividendos", "ITUB4", "15"),
-                tickerTarget("Dividendos Plus", "ITUB4", "10"),
-            ),
+private fun plan(phase: OrderPlanPhase): OrderPlan {
+    val targets = Targets(
+        classes = listOf(classTarget(AssetClass.ACOES, "100")),
+        strategies = listOf(
+            strategyTarget(AssetClass.ACOES, "Top", "50"),
+            strategyTarget(AssetClass.ACOES, "Dividendos", "25"),
+            strategyTarget(AssetClass.ACOES, "Dividendos Plus", "25"),
         ),
-        positions = mapOf("ITUB4" to BigDecimal("76")),
-        prices = mapOf("ITUB4" to BigDecimal("42.62")),
-    ),
-)
+        subClasses = emptyList(),
+        tickers = listOf(
+            tickerTarget("Top", "ITUB4", "10"),
+            tickerTarget("Dividendos", "ITUB4", "15"),
+            tickerTarget("Dividendos Plus", "ITUB4", "10"),
+        ),
+    )
+    val positions = mapOf("ITUB4" to BigDecimal("76"))
+    return OrderPlanCalculator.compute(
+        OrderPlanContext(
+            period = YearMonth.parse("2026-10"),
+            phase = phase,
+            capital = BigDecimal("49075"),
+            floor = BigDecimal("16000"),
+            targets = targets,
+            positions = positions,
+            prices = mapOf("ITUB4" to BigDecimal("42.62")),
+            placement = placement(positions, targets),
+        ),
+    )
+}
 
 // The funding phase's plan, composed the way OrderPlanService composes it: the chain and candidates
 // from the calculator, then the funding pass with the whole-book cash.
 private fun fundingPlan(): OrderPlan {
     val positions = mapOf("ITUB4" to BigDecimal("120"))
     val prices = mapOf("VALE3" to BigDecimal("100"), "ITUB4" to BigDecimal("50"))
+    val targets = Targets(
+        classes = listOf(classTarget(AssetClass.ACOES, "100")),
+        strategies = listOf(strategyTarget(AssetClass.ACOES, "Top", "100")),
+        subClasses = emptyList(),
+        tickers = listOf(
+            tickerTarget("Top", "VALE3", "50"),
+            tickerTarget("Top", "ITUB4", "50"),
+        ),
+    )
+    val placement = placement(positions, targets)
     val plan = OrderPlanCalculator.compute(
         OrderPlanContext(
             period = YearMonth.parse("2026-10"),
             phase = OrderPlanPhase.FUNDING,
             capital = BigDecimal("10000"),
             floor = BigDecimal("0"),
-            targets = Targets(
-                classes = listOf(classTarget(AssetClass.ACOES, "100")),
-                strategies = listOf(strategyTarget(AssetClass.ACOES, "Top", "100")),
-                subClasses = emptyList(),
-                tickers = listOf(
-                    tickerTarget("Top", "VALE3", "50"),
-                    tickerTarget("Top", "ITUB4", "50"),
-                ),
-            ),
+            targets = targets,
             positions = positions,
             prices = prices,
+            placement = placement,
         ),
     )
     val funding = FundingCalculator.compute(
@@ -216,6 +229,7 @@ private fun fundingPlan(): OrderPlan {
             slices = plan.tickerSlices,
             positions = positions,
             prices = prices,
+            placement = placement,
             floor = BigDecimal.ZERO,
             uninvestedBalance = BigDecimal("4000"),
         ),
@@ -243,6 +257,14 @@ private fun fullPlan(): OrderPlan {
                 price = BigDecimal("10"),
                 amount = BigDecimal("250"),
                 suggestedExitQuantity = BigDecimal("25"),
+            ),
+        ),
+        unclassified = listOf(
+            UnclassifiedHolding(
+                ticker = "ZZZZ3",
+                quantity = BigDecimal("10"),
+                price = BigDecimal("10"),
+                amount = BigDecimal("100"),
             ),
         ),
         attribution = listOf(
@@ -285,4 +307,12 @@ private fun fixedIncomePlan(): FixedIncomeOrderPlan = FixedIncomeOrderPlan(
             ),
         ),
     ),
+)
+
+private fun placement(positions: Map<String, BigDecimal>, targets: Targets) = PlacementCalculator.compute(
+    positions = positions,
+    targetedTickers = targets.tickers.filter { it.percentage.signum() > 0 }.map { it.ticker }.toSet(),
+    ledger = emptyMap(),
+    manualStrategies = emptySet(),
+    unclassifiedTickers = emptySet(),
 )

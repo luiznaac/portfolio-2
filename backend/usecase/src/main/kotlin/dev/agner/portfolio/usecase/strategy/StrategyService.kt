@@ -48,6 +48,13 @@ class StrategyService(
     suspend fun fetchEditions(strategyId: Int): List<EditionDetail>? =
         strategies.fetchById(strategyId)?.let { editions.fetchByStrategy(strategyId) }
 
+    // The names of the Manual Strategies — the only Attribution slices that make a ticker inside a
+    // Strategy. The placement rule filters the ledger with this set; a report-driven slice is inert.
+    suspend fun fetchManualNames(): Set<String> = strategies.fetchAll()
+        .filter { it.kind == StrategyKind.MANUAL }
+        .map { it.name }
+        .toSet()
+
     // The "não operar" slices of every strategy's current (latest active) edition. A strategy with
     // no active edition contributes none — an absent report never blocks trading.
     suspend fun fetchNeutroSlices(): Set<StrategyTicker> = strategies.fetchAll()

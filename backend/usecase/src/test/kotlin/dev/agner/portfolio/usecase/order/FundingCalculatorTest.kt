@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.order.model.OrderCandidate
 import dev.agner.portfolio.usecase.order.model.OrderSide
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
 import dev.agner.portfolio.usecase.plain
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -125,6 +126,51 @@ class FundingCalculatorTest : StringSpec({
         outcome.summary.unfundedAmount.plain() shouldBe "8500"
     }
 
+    "never sells a manually attributed position as an outside source" {
+        val outcome = compute(
+            candidates = listOf(buy("VALE3", quantity = "10", price = "100")),
+            slices = listOf(slice("VALE3", targetQuantity = "10")),
+            positions = mapOf("MXRF11" to "40"),
+            prices = mapOf("VALE3" to "100", "MXRF11" to "10"),
+            manualAttribution = mapOf("MXRF11" to "40"),
+            uninvestedBalance = "0",
+        )
+
+        outcome.sells.shouldBeEmpty()
+        outcome.summary.unfundedAmount.plain() shouldBe "1000"
+    }
+
+    "subtracts the manual units from a targeted surplus" {
+        val outcome = compute(
+            candidates = listOf(buy("VALE3", quantity = "55", price = "100")),
+            slices = listOf(
+                slice("VALE3", targetQuantity = "55"),
+                slice("ITUB4", targetQuantity = "100"),
+            ),
+            positions = mapOf("ITUB4" to "120"),
+            prices = mapOf("VALE3" to "100", "ITUB4" to "50"),
+            manualAttribution = mapOf("ITUB4" to "10"),
+            uninvestedBalance = "4500",
+        )
+
+        outcome.sells.map { it.ticker to it.quantity.plain() } shouldBe listOf("ITUB4" to "10")
+        outcome.summary.unfundedAmount.plain() shouldBe "500"
+    }
+
+    "never sells an unclassified ticker" {
+        val outcome = compute(
+            candidates = listOf(buy("VALE3", quantity = "10", price = "100")),
+            slices = listOf(slice("VALE3", targetQuantity = "10")),
+            positions = mapOf("PETR4" to "40"),
+            prices = mapOf("VALE3" to "100", "PETR4" to "10"),
+            unclassifiedTickers = setOf("PETR4"),
+            uninvestedBalance = "0",
+        )
+
+        outcome.sells.shouldBeEmpty()
+        outcome.summary.unfundedAmount.plain() shouldBe "1000"
+    }
+
     "leaves the remainder unfunded when every source is exhausted" {
         val outcome = compute(
             candidates = listOf(buy("VALE3", quantity = "50", price = "100")),
@@ -149,16 +195,30 @@ private fun compute(
     prices: Map<String, String> = emptyMap(),
     floor: String = "0",
     uninvestedBalance: String,
-) = FundingCalculator.compute(
-    FundingContext(
-        candidates = candidates,
-        slices = slices,
-        positions = positions.mapValues { BigDecimal(it.value) },
-        prices = prices.mapValues { BigDecimal(it.value) },
-        floor = BigDecimal(floor),
-        uninvestedBalance = BigDecimal(uninvestedBalance),
-    ),
-)
+    manualAttribution: Map<String, String> = emptyMap(),
+    unclassifiedTickers: Set<String> = emptySet(),
+): FundingOutcome {
+    val positionByTicker = positions.mapValues { BigDecimal(it.value) }
+    return FundingCalculator.compute(
+        FundingContext(
+            candidates = candidates,
+            slices = slices,
+            positions = positionByTicker,
+            prices = prices.mapValues { BigDecimal(it.value) },
+            placement = PlacementCalculator.compute(
+                positions = positionByTicker,
+                targetedTickers = slices.filter { it.target.signum() > 0 }.map { it.ticker }.toSet(),
+                ledger = manualAttribution.map { (ticker, quantity) ->
+                    StrategyTicker("Legado", ticker) to BigDecimal(quantity)
+                }.toMap(),
+                manualStrategies = setOf("Legado"),
+                unclassifiedTickers = unclassifiedTickers,
+            ),
+            floor = BigDecimal(floor),
+            uninvestedBalance = BigDecimal(uninvestedBalance),
+        ),
+    )
+}
 
 private fun OrderCandidate.source(): FundingSource = (this as OrderCandidate.FundingSell).fundingSource
 

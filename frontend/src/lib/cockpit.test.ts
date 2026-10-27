@@ -91,6 +91,7 @@ function orderPlan(overrides: Partial<OrderPlan> = {}): OrderPlan {
       neutro_deficit: 0,
     },
     outside_strategy: [],
+    unclassified: [],
     attribution: [],
     transfers: [],
     ...overrides,

@@ -582,6 +582,14 @@ export interface OutsideStrategyHolding {
   suggested_exit_quantity: number;
 }
 
+/** A held ticker the catalog has not classified — a data-quality state, never an outside holding. */
+export interface UnclassifiedHolding {
+  ticker: string;
+  quantity: number;
+  price?: number;
+  amount?: number;
+}
+
 export type AttributionSide = "ALLOCATE" | "DEALLOCATE";
 
 /** A suggested change to the Attribution ledger caused by a buy or a sell. */
@@ -612,6 +620,7 @@ export interface OrderPlan {
   candidates: OrderCandidate[];
   funding?: FundingSummary;
   outside_strategy: OutsideStrategyHolding[];
+  unclassified: UnclassifiedHolding[];
   /** Present from the full phase on. */
   pro_rata?: ProRataSummary;
   attribution: AttributionMove[];

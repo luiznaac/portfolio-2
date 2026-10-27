@@ -100,3 +100,14 @@ object TargetChainCalculator {
     private fun proportion(amount: BigDecimal, percentage: BigDecimal?): BigDecimal =
         if (percentage == null) BigDecimal.ZERO else amount.multiply(percentage).divide(HUNDRED)
 }
+
+// The tickers a Target names with weight > 0, read from the chain leaves — the report-membership half
+// of the placement rule. A ticker target under a Strategy the chain does not carry is not a leaf, so
+// it is not targeted: the order plan and the placement read the same set.
+fun TargetChain.targetedTickers(): Set<String> = classes
+    .filterIsInstance<EquitiesChain>()
+    .flatMap { it.strategies }
+    .flatMap { it.tickers }
+    .filter { it.target.signum() > 0 }
+    .map { it.ticker }
+    .toSet()

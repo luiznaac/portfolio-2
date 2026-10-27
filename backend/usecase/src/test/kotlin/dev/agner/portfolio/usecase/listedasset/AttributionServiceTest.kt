@@ -1,6 +1,9 @@
 package dev.agner.portfolio.usecase.listedasset
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
+import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
@@ -19,17 +22,20 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 class AttributionServiceTest : StringSpec({
     val attributions = mockk<IAttributionRepository>(relaxed = true)
     val positions = mockk<IPositionRepository>(relaxed = true)
     val strategies = mockk<IStrategyRepository>(relaxed = true)
+    val catalog = mockk<ICatalogRepository>(relaxed = true)
     val transaction = AttributionTransaction()
-    val service = AttributionService(attributions, positions, strategies, transaction)
+    val service = AttributionService(attributions, positions, strategies, catalog, transaction)
 
     beforeTest {
         clearAllMocks()
+        coEvery { catalog.fetchBy(any()) } returns catalogEntry(AssetClass.ACOES)
         transaction.count = 0
     }
 
@@ -143,6 +149,48 @@ class AttributionServiceTest : StringSpec({
         coVerify(exactly = 0) { attributions.save(any()) }
     }
 
+    "setSlice rejects a ticker whose catalog class differs from the strategy's" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { catalog.fetchBy("PETR4") } returns catalogEntry(AssetClass.FIIS)
+
+        val error = runCatching {
+            service.setSlice("PETR4", AttributionSliceCreation(strategyId = 2, quantity = BigDecimal("10")))
+        }.exceptionOrNull()
+
+        (error is InvalidAttributionException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
+
+    "setSlice rejects a ticker whose effective catalog class is null" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { catalog.fetchBy("PETR4") } returns catalogEntry(assetClass = null)
+
+        val error = runCatching {
+            service.setSlice("PETR4", AttributionSliceCreation(strategyId = 2, quantity = BigDecimal("10")))
+        }.exceptionOrNull()
+
+        (error is InvalidAttributionException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
+
+    "setSlice accepts a Manual Strategy of the ticker's class" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(3) } returns Strategy(
+            id = 3,
+            name = "Legado",
+            assetClass = AssetClass.ACOES,
+            kind = StrategyKind.MANUAL,
+        )
+        coEvery { attributions.fetchBy("PETR4") } returns emptyList()
+
+        val summary = service.setSlice("PETR4", AttributionSliceCreation(strategyId = 3, quantity = BigDecimal("40")))!!
+
+        summary.attributedQuantity.compareTo(BigDecimal("40")) shouldBe 0
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 3, BigDecimal("40"))) }
+    }
+
     "setSlice is null when the position does not exist" {
         coEvery { positions.fetchBy("PETR4") } returns null
 
@@ -204,3 +252,14 @@ private class AttributionTransaction : ITransactionTemplate {
 
 private fun AttributionSummary.strategyQuantity(strategyName: String): BigDecimal =
     slices.single { it.strategyName == strategyName }.quantity
+
+private fun catalogEntry(assetClass: AssetClass?) = CatalogEntry(
+    ticker = "PETR4",
+    shortName = "PETR4",
+    bdiType = "02",
+    isin = null,
+    assetKind = AssetKind.STOCK,
+    assetClass = assetClass,
+    firstSeen = LocalDate.parse("2026-10-01"),
+    lastSeen = LocalDate.parse("2026-10-01"),
+)
