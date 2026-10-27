@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.listedasset
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
+import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSlice
@@ -9,6 +10,7 @@ import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
+import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import org.springframework.stereotype.Service
@@ -16,13 +18,16 @@ import java.math.BigDecimal
 
 // The attribution ledger: parts of a position's custody mapped to strategies, with the remainder
 // left explicitly unattributed. The position is the ceiling, so a write is rejected when the slices
-// would sum above it (Σ attributions ≤ Position.quantity). Reads never write; the two mutations run
-// inside a transaction so the ceiling check and the write see the same ledger.
+// would sum above it (Σ attributions ≤ Position.quantity). A slice also has to match its Strategy's
+// Asset Class — the class-match rule that keeps the per-class sums and the shared-ticker split safe
+// — and an unclassified ticker cannot be attributed at all. Reads never write; the two mutations run
+// inside a transaction so the checks and the write see the same ledger.
 @Service
 class AttributionService(
     private val attributions: IAttributionRepository,
     private val positions: IPositionRepository,
     private val strategies: IStrategyRepository,
+    private val catalog: ICatalogRepository,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -86,6 +91,7 @@ class AttributionService(
         if (position == null || strategy == null) {
             null
         } else {
+            requireClassMatch(normalized, strategy)
             val existing = attributions.fetchBy(normalized)
 
             // Replacing a strategy's slice counts only the other strategies against the ceiling;
@@ -104,6 +110,18 @@ class AttributionService(
                 normalized,
                 position,
                 retainedRows + Attribution(normalized, strategy.id, creation.quantity),
+            )
+        }
+    }
+
+    // A ticker enters a Strategy only once the catalog gives it a class, and only the Strategy of
+    // that class may hold it. Classification is a precondition, not an inference.
+    private suspend fun requireClassMatch(ticker: String, strategy: Strategy) {
+        val assetClass = catalog.fetchBy(ticker)?.assetClass
+            ?: throw InvalidAttributionException("$ticker has no Asset Class; classify it before attributing")
+        if (assetClass != strategy.assetClass) {
+            throw InvalidAttributionException(
+                "cannot attribute $ticker ($assetClass) to ${strategy.name} (${strategy.assetClass})",
             )
         }
     }
