@@ -20,6 +20,8 @@ import type {
   ImportRow,
   ImportSource,
   Income,
+  LegacyAttributionPreview,
+  LegacyAttributionResult,
   Month,
   MonthCreation,
   MonthPerformance,
@@ -131,6 +133,14 @@ export const api = {
     return request(`/positions/${encodeURIComponent(ticker)}/attribution/${strategyId}`, {
       method: "DELETE",
     });
+  },
+
+  getLegacyAttributionPreview(): Promise<LegacyAttributionPreview> {
+    return request("/positions/legacy-attribution/preview");
+  },
+
+  applyLegacyAttribution(): Promise<LegacyAttributionResult> {
+    return request("/positions/legacy-attribution", { method: "POST" });
   },
 
   getTickerQuotes(ticker: string): Promise<Quote[]> {

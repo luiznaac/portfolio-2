@@ -12,6 +12,7 @@ import type {
   HarvestPairCreation,
   HarvestReport,
   ImportSource,
+  LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
   OrderList,
@@ -100,6 +101,30 @@ export function useRemoveAttribution(ticker: string) {
   return useMutation({
     mutationFn: (strategyId: number) => api.removeAttribution(ticker, strategyId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["positions", ticker] }),
+  });
+}
+
+// The bulk legacy action's dry-run. It is enabled only while the Alocação banner has outside
+// custody to offer, so the page does not pay for the read when there is nothing to attribute.
+export function useLegacyAttributionPreview(enabled: boolean) {
+  return useQuery({
+    queryKey: ["positions", "legacy-attribution", "preview"],
+    queryFn: api.getLegacyAttributionPreview,
+    enabled,
+  });
+}
+
+// The apply writes slices through the attribution path, so the position, allocation, strategy and
+// order reads are all stale in one step.
+export function useApplyLegacyAttribution() {
+  const queryClient = useQueryClient();
+  return useMutation<LegacyAttributionResult, Error, void>({
+    mutationFn: () => api.applyLegacyAttribution(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
   });
 }
 
