@@ -1,0 +1,558 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Ticket: Manual transfers (#247).
+  Question: where does the manual Attribution Transfer out of the manual Strategy live?
+  Three variants of the Alocação screen, switchable with ?variant=A|B|C (or ← / →):
+    A — row action on the bucket's ticker leaf, form in a modal
+    B — a dedicated "Transferir do legado" panel in the right column
+    C — inline split editor: expand the bucket ticker and type the units into each Strategy
+  Read-only: nothing persists, Apply only rewrites the numbers on screen.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo · Transferência manual · Alocação</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ground: #0b0f14;
+        --surface: #121a21;
+        --surface-2: #19232c;
+        --surface-3: #212f3a;
+        --line: #263440;
+        --line-soft: #1c2833;
+        --ink: #e5ebf1;
+        --ink-dim: #9ba8b4;
+        --ink-faint: #667581;
+        --principal: #38bdf8;
+        --principal-bg: #38bdf81f;
+        --yield: #34d399;
+        --yield-bg: #34d3991f;
+        --tax: #fb7185;
+        --tax-bg: #fb71851f;
+        --accent: #f59e0b;
+        --accent-bg: #f59e0b1f;
+        --violet: #a78bfa;
+        --violet-bg: #a78bfa1f;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", monospace; }
+      .cond { font-family: "IBM Plex Sans Condensed", sans-serif; }
+      .shell { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh; }
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background: var(--surface);
+        padding: 18px 12px;
+      }
+      .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 18px; }
+      .brand .dot { width: 18px; height: 18px; border-radius: 6px; background: var(--principal); }
+      .brand b { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 15px; letter-spacing: .02em; }
+      .nav-group { margin-bottom: 16px; }
+      .nav-title {
+        font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .09em;
+        text-transform: uppercase; color: var(--ink-faint); padding: 0 8px 6px;
+      }
+      .nav-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 6px 8px; border-radius: 6px; color: var(--ink-dim); font-size: 13px;
+      }
+      .nav-item.active { background: var(--surface-2); color: var(--ink); }
+      .nav-item .badge {
+        font-family: "IBM Plex Mono", monospace; font-size: 10px; color: var(--accent);
+        background: var(--accent-bg); border-radius: 4px; padding: 1px 5px;
+      }
+      .topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 1px solid var(--line); padding: 12px 24px; background: var(--surface);
+      }
+      .crumb { color: var(--ink-faint); font-size: 12.5px; }
+      .crumb b { color: var(--ink-dim); font-weight: 500; }
+      .pill {
+        border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+        font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-dim);
+      }
+      main { padding: 20px 24px 96px; }
+      h1 { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 24px; font-weight: 700; margin: 0 0 16px; }
+      .layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+      .card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+      .card-title {
+        padding: 10px 12px; border-bottom: 1px solid var(--line-soft);
+        font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 600; font-size: 13.5px;
+      }
+      .card-body { padding: 12px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th {
+        text-align: left; padding: 8px 12px; background: var(--surface-2);
+        font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .09em;
+        text-transform: uppercase; color: var(--ink-faint); font-weight: 500; white-space: nowrap;
+      }
+      th.r, td.r { text-align: right; }
+      td { border-top: 1px solid var(--line-soft); padding: 8px 12px; vertical-align: middle; }
+      tr.row-capital td { background: var(--surface-2); }
+      tr.row-class td { background: var(--surface-2); }
+      .indent-1 { padding-left: 22px; }
+      .indent-2 { padding-left: 44px; }
+      .indent-3 { padding-left: 66px; }
+      .level { display: inline-flex; align-items: center; gap: 6px; }
+      .caret { color: var(--ink-faint); font-size: 10px; width: 9px; display: inline-block; }
+      .bucket-name { color: var(--violet); }
+      .muted { color: var(--ink-dim); }
+      .faint { color: var(--ink-faint); }
+      .tag {
+        font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: .06em;
+        text-transform: uppercase; border-radius: 4px; padding: 1px 5px;
+        background: var(--surface-3); color: var(--ink-dim);
+      }
+      .tag.manual { background: var(--violet-bg); color: var(--violet); }
+      .tag.outside { background: var(--tax-bg); color: var(--tax); }
+      .btn {
+        font: inherit; font-size: 12.5px; border-radius: 5px; padding: 5px 10px; cursor: pointer;
+        border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+      }
+      .btn:hover { border-color: var(--ink-faint); }
+      .btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1205; font-weight: 600; }
+      .btn.ghost { background: transparent; }
+      .btn.small { font-size: 11.5px; padding: 3px 8px; }
+      .link { color: var(--principal); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+      .bar { position: relative; height: 12px; width: 110px; display: inline-block; vertical-align: middle; }
+      .bar .axis { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--line); }
+      .bar .fill { position: absolute; top: 0; bottom: 0; }
+      .bar .fill.pos { left: 50%; background: var(--accent); }
+      .bar .fill.neg { right: 50%; background: var(--principal); }
+      .dev { display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+      .dev span { min-width: 82px; text-align: right; }
+      .pos { color: var(--accent); }
+      .neg { color: var(--principal); }
+      .kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+      .kv:last-child { border-bottom: 0; }
+      .kv dt { color: var(--ink-faint); }
+      .kv dd { margin: 0; font-family: "IBM Plex Mono", monospace; }
+      .recon { display: flex; height: 26px; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+      .recon div { display: flex; align-items: center; justify-content: center; font-family: "IBM Plex Mono", monospace; font-size: 10px; font-weight: 600; }
+      .recon .attr { background: var(--surface-3); color: var(--ink-dim); }
+      .recon .unattr { color: var(--tax); background: var(--tax-bg); background-image: repeating-linear-gradient(45deg, var(--tax) 0 6px, transparent 6px 12px); }
+      .note { font-size: 11.5px; color: var(--ink-faint); margin: 8px 0 0; }
+
+      /* shared modal for A */
+      .overlay { position: fixed; inset: 0; background: #05080bcc; display: none; align-items: center; justify-content: center; z-index: 40; }
+      .overlay.open { display: flex; }
+      .modal { width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px #000a; }
+      .modal-head { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); display: flex; justify-content: space-between; align-items: center; }
+      .modal-head b { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 15px; }
+      .modal-body { padding: 16px; display: grid; gap: 12px; }
+      .modal-foot { padding: 12px 16px; border-top: 1px solid var(--line-soft); display: flex; justify-content: flex-end; gap: 8px; }
+      label.field { display: grid; gap: 5px; font-size: 12px; color: var(--ink-dim); }
+      input, select {
+        font: inherit; font-family: "IBM Plex Mono", monospace; font-size: 13px;
+        background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px;
+        color: var(--ink); padding: 7px 9px; width: 100%;
+      }
+      .hint { font-size: 11.5px; color: var(--ink-faint); }
+      .toast {
+        position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+        background: var(--surface-3); border: 1px solid var(--line); border-radius: 7px;
+        padding: 8px 14px; font-size: 12.5px; color: var(--ink); opacity: 0; transition: opacity .2s;
+        pointer-events: none; z-index: 60;
+      }
+      .toast.show { opacity: 1; }
+
+      /* variant B: right-column transfer panel */
+      .transfer-panel .card-body { display: grid; gap: 10px; }
+      .t-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+      .t-ticker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+      .t-meta { font-size: 11px; color: var(--ink-faint); }
+      .mini-field { display: grid; grid-template-columns: 1fr 84px; gap: 6px; margin-top: 4px; }
+      .mini-field select, .mini-field input { padding: 5px 7px; font-size: 12px; }
+
+      /* variant C: inline split editor */
+      .split { background: var(--surface-2); }
+      .split td { border-top: 1px solid var(--line-soft); padding: 10px 12px 12px 66px; }
+      .split-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+      .split-col { border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; background: var(--surface); }
+      .split-col .h { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-dim); margin-bottom: 6px; }
+      .split-col .h b { color: var(--ink); font-weight: 500; }
+      .split-col input { width: 100%; }
+      .split-col.bucket { border-color: var(--violet); }
+      .split-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+
+      /* floating switcher */
+      .switcher {
+        position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px; z-index: 80;
+        background: #f2f6fa; color: #10161d; border-radius: 999px; padding: 6px 8px;
+        box-shadow: 0 10px 30px #000c; font-family: "IBM Plex Mono", monospace; font-size: 12px;
+      }
+      .switcher button {
+        font: inherit; border: 0; background: #dbe4ec; color: #10161d; border-radius: 999px;
+        width: 26px; height: 26px; cursor: pointer; font-size: 14px; line-height: 1;
+      }
+      .switcher .label { min-width: 210px; text-align: center; font-weight: 600; }
+      .switcher .hint { font-weight: 400; opacity: .55; font-size: 10.5px; }
+      .variant-note {
+        margin: 0 0 14px; border: 1px dashed var(--line); border-radius: 8px;
+        padding: 8px 12px; font-size: 12px; color: var(--ink-dim); background: var(--surface);
+      }
+      .variant-note b { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="dot"></span><b>Carteira Ideal</b></div>
+        <div class="nav-group">
+          <div class="nav-title">Ritual</div>
+          <div class="nav-item">Cockpit</div>
+          <div class="nav-item">Capital e alvos</div>
+          <div class="nav-item">Ordens <span class="badge">2</span></div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-title">Carteira</div>
+          <div class="nav-item active">Alocação</div>
+          <div class="nav-item">Estratégias</div>
+          <div class="nav-item">Ativos</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-title">Resultados</div>
+          <div class="nav-item">Proventos</div>
+          <div class="nav-item">Impostos</div>
+        </div>
+      </aside>
+
+      <div>
+        <header class="topbar">
+          <div class="crumb">Carteira <span class="faint">/</span> <b>Alocação</b></div>
+          <div class="pill">Outubro 2026 · aberto</div>
+        </header>
+
+        <main>
+          <h1>Alocação</h1>
+          <p class="variant-note" id="variant-note"></p>
+
+          <div class="layout">
+            <div>
+              <div class="card">
+                <table id="tree">
+                  <thead>
+                    <tr>
+                      <th>Nível</th>
+                      <th class="r">Alvo</th>
+                      <th class="r">Ideal</th>
+                      <th class="r">Atual</th>
+                      <th style="text-align:center">Δ R$</th>
+                      <th class="r">Δ p.p.</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tree-body"></tbody>
+                </table>
+              </div>
+
+              <div class="card" style="margin-top:16px">
+                <div class="card-title">Conciliação</div>
+                <div class="card-body">
+                  <div class="recon">
+                    <div class="attr" style="width:88%">88% atribuído</div>
+                    <div class="unattr" style="width:12%">12%</div>
+                  </div>
+                  <p class="note">R$ 24.000 fora da estratégia. As cotas do legado contam como atribuídas.</p>
+                </div>
+              </div>
+            </div>
+
+            <div id="right-column">
+              <div class="card">
+                <div class="card-title">Capital do mês</div>
+                <div class="card-body">
+                  <dl style="margin:0">
+                    <div class="kv"><dt>Capital</dt><dd>R$ 420.000</dd></div>
+                    <div class="kv"><dt>Reserva (piso)</dt><dd>R$ 20.000</dd></div>
+                    <div class="kv"><dt>Atual</dt><dd>R$ 396.500</dd></div>
+                    <div class="kv"><dt>Drift total</dt><dd class="pos">+1,4 p.p.</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div id="extra-panel"></div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-head">
+          <b id="modal-title">Transferir do legado</b>
+          <button class="btn ghost small" id="modal-close">Fechar</button>
+        </div>
+        <div class="modal-body">
+          <label class="field">Ativo
+            <input id="modal-ticker" value="PETR4" readonly />
+          </label>
+          <label class="field">Estratégia de destino
+            <select id="modal-target">
+              <option>Carteira XP · falta 250 cotas</option>
+              <option>Dividendos · falta 120 cotas</option>
+            </select>
+          </label>
+          <label class="field">Quantidade
+            <input id="modal-qty" type="number" value="250" min="1" max="400" />
+          </label>
+          <p class="hint">400 cotas no legado. A custódia não muda: só a atribuição.</p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn ghost" id="modal-cancel">Cancelar</button>
+          <button class="btn primary" id="modal-apply">Transferir 250 cotas</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="switcher">
+      <button id="prev" aria-label="Variante anterior">←</button>
+      <div class="label"><span id="switcher-label">A — ação na linha</span> <span class="hint">?variant=A</span></div>
+      <button id="next" aria-label="Próxima variante">→</button>
+    </div>
+
+    <script>
+      // ---- fake data: one class, its report strategies, the manual bucket and the outside row ----
+      const state = {
+        petr4: { bucket: 400, xp: 250, dividendos: 80 },
+      };
+
+      const money = (n) =>
+        "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      function bar(value, max) {
+        const pct = Math.min(100, Math.abs(value / max) * 50);
+        const cls = value >= 0 ? "pos" : "neg";
+        const side = value >= 0 ? "left:50%" : "right:50%";
+        return `<span class="bar"><span class="axis"></span><span class="fill ${cls}" style="${side};width:${pct}%"></span></span>`;
+      }
+
+      function deviation(value) {
+        if (Math.abs(value) < 0.5) return '<span class="muted">—</span>';
+        const tone = value > 0 ? "pos" : "neg";
+        const sign = value > 0 ? "+" : "−";
+        return `<span class="dev"><span class="${tone}">${sign}${money(Math.abs(value))}</span></span>`;
+      }
+
+      const ROWS = [
+        { kind: "capital", depth: 0, label: "Carteira", target: "", ideal: "R$ 400.000", actual: "R$ 396.500", dev: -3500, drift: "+0,2 p.p." },
+        { kind: "class", depth: 0, label: "Ações", target: "45%", ideal: "R$ 180.000", actual: "R$ 210.000", dev: 30000, drift: "+7,5 p.p." },
+        { kind: "strategy", depth: 1, label: "Carteira XP", target: "40%", ideal: "R$ 72.000", actual: "R$ 60.000", dev: -12000, drift: "-3,0 p.p." },
+        { kind: "ticker", depth: 2, label: "PETR4", target: "8%", ideal: "R$ 14.400", actual: "R$ 9.500", dev: -4900, drift: "-2,4 p.p.", ticker: "PETR4", strategy: "Carteira XP" },
+        { kind: "strategy", depth: 1, label: "Dividendos", target: "20%", ideal: "R$ 36.000", actual: "R$ 30.000", dev: -6000, drift: "-1,5 p.p." },
+        { kind: "bucket", depth: 1, label: "Legado Ações", target: "—", ideal: "—", actual: "R$ 96.000", dev: null, drift: "—" },
+        { kind: "bucket-ticker", depth: 2, label: "PETR4", target: "—", ideal: "—", actual: "R$ 38.000", dev: null, drift: "—", ticker: "PETR4" },
+        { kind: "bucket-ticker", depth: 2, label: "VALE3", target: "—", ideal: "—", actual: "R$ 34.000", dev: null, drift: "—", ticker: "VALE3" },
+        { kind: "bucket-ticker", depth: 2, label: "ITUB4", target: "—", ideal: "—", actual: "R$ 24.000", dev: null, drift: "—", ticker: "ITUB4" },
+        { kind: "outside", depth: 1, label: "Fora da estratégia", target: "—", ideal: "—", actual: "R$ 24.000", dev: null, drift: "—" },
+        { kind: "outside-ticker", depth: 2, label: "BBAS3", target: "—", ideal: "—", actual: "R$ 24.000", dev: null, drift: "—" },
+      ];
+
+      function levelCell(row, variant) {
+        const indent = ["", "indent-1", "indent-2", "indent-3"][row.depth];
+        const caret = row.kind === "bucket" || row.kind === "outside" ? '<span class="caret">▾</span>' : '<span class="caret"></span>';
+        const labelClass =
+          row.kind === "capital" ? "cond" : row.kind === "class" || row.kind === "bucket" || row.kind === "outside" ? "cond bucket-name" : "mono";
+        const tag =
+          row.kind === "bucket"
+            ? ' <span class="tag manual">manual</span>'
+            : row.kind === "outside"
+              ? ' <span class="tag outside">fora</span>'
+              : "";
+        const action =
+          variant === "A" && row.kind === "bucket-ticker"
+            ? ` <button class="btn small" data-open-transfer="${row.ticker}">Transferir</button>`
+            : "";
+        const split = variant === "C" && row.kind === "bucket-ticker" && row.ticker === "PETR4" ? "▾" : caret;
+        return `<td class="${indent}"><span class="level">${split}<span class="${labelClass}">${row.label}</span>${tag}${action}</span></td>`;
+      }
+
+      function renderTree() {
+        const variant = current();
+        const body = document.getElementById("tree-body");
+        body.innerHTML = ROWS.map((row) => {
+          const rowClass =
+            row.kind === "capital" ? "row-capital" : row.kind === "class" ? "row-class" : "";
+          const cells = `
+            <td class="r muted">${row.target || "—"}</td>
+            <td class="r mono">${row.ideal || "—"}</td>
+            <td class="r mono">${row.actual}</td>
+            <td style="text-align:center">${row.dev === null ? '<span class="muted">—</span>' : deviation(row.dev)}</td>
+            <td class="r mono ${row.dev === null ? "muted" : ""}">${row.drift}</td>
+            <td></td>`;
+          const html = `<tr class="${rowClass}">${levelCell(row, variant)}${cells}</tr>`;
+          if (variant === "C" && row.kind === "bucket-ticker" && row.ticker === "PETR4") {
+            return html + splitRow();
+          }
+          return html;
+        }).join("");
+        wireTree();
+      }
+
+      function splitRow() {
+        const s = state.petr4;
+        const remaining = s.bucket - 250 - 0;
+        return `<tr class="split"><td colspan="7">
+          <div class="split-grid">
+            <div class="split-col bucket">
+              <div class="h"><b>Legado Ações</b><span>${s.bucket} cotas</span></div>
+              <input value="Legado Ações" readonly />
+              <div class="hint" style="margin-top:6px">${s.bucket} cotas no legado · sem alvo</div>
+            </div>
+            <div class="split-col">
+              <div class="h"><b>Carteira XP</b><span>falta 250</span></div>
+              <input type="number" value="250" max="400" />
+              <div class="hint" style="margin-top:6px">alvo 500 · atribuídas ${s.xp}</div>
+            </div>
+            <div class="split-col">
+              <div class="h"><b>Dividendos</b><span>falta 120</span></div>
+              <input type="number" value="0" max="400" />
+              <div class="hint" style="margin-top:6px">alvo 200 · atribuídas ${s.dividendos}</div>
+            </div>
+          </div>
+          <div class="split-foot">
+            <span class="hint">A custódia não muda. Sobram ${remaining} cotas no legado.</span>
+            <button class="btn primary" data-apply-split="1">Aplicar transferência</button>
+          </div>
+        </td></tr>`;
+      }
+
+      function wireTree() {
+        document.querySelectorAll("[data-open-transfer]").forEach((b) =>
+          b.addEventListener("click", () => openModal(b.dataset.openTransfer)),
+        );
+        document.querySelectorAll("[data-apply-split]").forEach((b) =>
+          b.addEventListener("click", () => {
+            state.petr4.bucket = 150;
+            state.petr4.xp = 500;
+            toast("250 cotas transferidas de Legado Ações para Carteira XP");
+          }),
+        );
+      }
+
+      // ---- variant B: the right-column transfer panel ----
+      function renderExtraPanel() {
+        const host = document.getElementById("extra-panel");
+        if (current() !== "B") {
+          host.innerHTML = "";
+          return;
+        }
+        host.innerHTML = `
+          <div class="card transfer-panel" style="margin-top:16px">
+            <div class="card-title">Transferir do legado</div>
+            <div class="card-body">
+              <p class="hint" style="margin:0">Move cotas já atribuídas ao legado para uma estratégia. A custódia não muda.</p>
+              <div>
+                <div class="t-row"><span class="t-ticker">PETR4</span><span class="t-meta">400 no legado</span></div>
+                <div class="mini-field">
+                  <select><option>Carteira XP · falta 250</option><option>Dividendos · falta 120</option></select>
+                  <input type="number" value="250" />
+                </div>
+              </div>
+              <div>
+                <div class="t-row"><span class="t-ticker">VALE3</span><span class="t-meta">500 no legado</span></div>
+                <div class="mini-field">
+                  <select><option>Carteira XP · falta 180</option><option>Dividendos · falta 90</option></select>
+                  <input type="number" value="180" />
+                </div>
+              </div>
+              <div>
+                <div class="t-row"><span class="t-ticker">ITUB4</span><span class="t-meta">300 no legado</span></div>
+                <div class="mini-field">
+                  <select><option>Dividendos · falta 60</option></select>
+                  <input type="number" value="60" />
+                </div>
+              </div>
+              <button class="btn primary" style="margin-top:4px" onclick="toast('2 transferências aplicadas')">Aplicar transferências</button>
+            </div>
+          </div>`;
+      }
+
+      // ---- shared modal (variant A) ----
+      const overlay = document.getElementById("overlay");
+      function openModal(ticker) {
+        document.getElementById("modal-ticker").value = ticker;
+        overlay.classList.add("open");
+      }
+      document.getElementById("modal-close").addEventListener("click", () => overlay.classList.remove("open"));
+      document.getElementById("modal-cancel").addEventListener("click", () => overlay.classList.remove("open"));
+      document.getElementById("modal-apply").addEventListener("click", () => {
+        overlay.classList.remove("open");
+        toast("250 cotas transferidas para Carteira XP");
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") overlay.classList.remove("open");
+      });
+
+      let toastTimer;
+      function toast(message) {
+        const el = document.getElementById("toast");
+        el.textContent = message;
+        el.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+      }
+
+      // ---- variants ----
+      const VARIANTS = [
+        { key: "A", name: "A — ação na linha", note: "<b>A — ação na linha.</b> O botão <i>Transferir</i> mora na cota do legado; o formulário abre num modal com estratégia de destino e quantidade." },
+        { key: "B", name: "B — painel na coluna", note: "<b>B — painel na coluna.</b> Um cartão <i>Transferir do legado</i> na coluna da direita lista todas as cotas do legado com destino e quantidade, aplicando em lote." },
+        { key: "C", name: "C — editor na linha", note: "<b>C — editor na linha.</b> Expandir a cota do legado abre um editor lado a lado: o legado e cada estratégia da classe, com a quantidade digitada em cada destino." },
+      ];
+
+      function current() {
+        const value = new URLSearchParams(location.search).get("variant") || "A";
+        return VARIANTS.some((v) => v.key === value) ? value : "A";
+      }
+
+      function go(delta) {
+        const index = VARIANTS.findIndex((v) => v.key === current());
+        const next = VARIANTS[(index + delta + VARIANTS.length) % VARIANTS.length];
+        const url = new URL(location.href);
+        url.searchParams.set("variant", next.key);
+        history.replaceState(null, "", url);
+        render();
+      }
+
+      function render() {
+        const variant = current();
+        const meta = VARIANTS.find((v) => v.key === variant);
+        document.getElementById("switcher-label").textContent = meta.name;
+        document.querySelector(".switcher .hint").textContent = "?variant=" + variant;
+        document.getElementById("variant-note").innerHTML = meta.note;
+        renderTree();
+        renderExtraPanel();
+      }
+
+      document.getElementById("prev").addEventListener("click", () => go(-1));
+      document.getElementById("next").addEventListener("click", () => go(1));
+      document.addEventListener("keydown", (e) => {
+        const tag = document.activeElement && document.activeElement.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (e.key === "ArrowLeft") go(-1);
+        if (e.key === "ArrowRight") go(1);
+      });
+      window.addEventListener("popstate", render);
+
+      render();
+    </script>
+  </body>
+</html>
