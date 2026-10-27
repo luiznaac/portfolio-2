@@ -1,6 +1,13 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api } from "./client.ts";
 import type {
+  AssetClass,
   AttributionSliceCreation,
   Bond,
   CheckingAccount,
@@ -133,6 +140,52 @@ export function useTickerQuotes(ticker: string) {
     queryKey: ["tickers", ticker, "quotes"],
     queryFn: () => api.getTickerQuotes(ticker),
     enabled: ticker.length > 0,
+  });
+}
+
+// The ticker's catalog row — its BDI-derived class and any manual override. A 404 (a ticker the
+// catalog has never seen) is a normal state for the classification action, not an error.
+export function useTicker(ticker: string) {
+  return useQuery({
+    queryKey: ["tickers", ticker],
+    queryFn: () => api.getTicker(ticker),
+    enabled: ticker.length > 0,
+    retry: false,
+  });
+}
+
+// A classification changes the allocation tree, the funding pass and the asset detail at once, so
+// every read that groups by class is invalidated.
+function invalidateClassReads(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["tickers"] });
+  queryClient.invalidateQueries({ queryKey: ["month"] });
+  queryClient.invalidateQueries({ queryKey: ["months"] });
+  queryClient.invalidateQueries({ queryKey: ["orders"] });
+  queryClient.invalidateQueries({ queryKey: ["positions"] });
+  queryClient.invalidateQueries({ queryKey: ["performance"] });
+}
+
+export function useClassifyTicker(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assetClass: AssetClass) => api.classifyTicker(ticker, assetClass),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRevertTickerClassification(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.revertTickerClassification(ticker),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.refreshCatalog,
+    onSuccess: () => invalidateClassReads(queryClient),
   });
 }
 

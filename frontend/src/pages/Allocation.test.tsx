@@ -17,6 +17,8 @@ const mock = vi.hoisted(() => ({
   preview: null as LegacyAttributionPreview | null,
   result: null as LegacyAttributionResult | null,
   applied: 0,
+  classified: [] as Array<[string, string]>,
+  refreshed: 0,
 }));
 
 vi.mock("../api/client.ts", () => ({
@@ -27,6 +29,14 @@ vi.mock("../api/client.ts", () => ({
       mock.applied += 1;
       if (mock.settled) mock.allocation = mock.settled;
       return Promise.resolve(mock.result);
+    },
+    classifyTicker: (ticker: string, assetClass: string) => {
+      mock.classified.push([ticker, assetClass]);
+      return Promise.resolve({ ticker });
+    },
+    refreshCatalog: () => {
+      mock.refreshed += 1;
+      return Promise.resolve({ catalog: 1, quotes: 1 });
     },
   },
 }));
@@ -58,6 +68,8 @@ afterEach(() => {
   mock.preview = null;
   mock.result = null;
   mock.applied = 0;
+  mock.classified = [];
+  mock.refreshed = 0;
 });
 
 describe("the Alocação tree", () => {
@@ -189,6 +201,33 @@ describe("the Alocação tree", () => {
     );
     expect(screen.getByRole("dialog", { name: /Atribuir ao legado/ })).toBeDefined();
     expect(screen.getByText(/1 posição atribuída ao legado/)).toBeDefined();
+  });
+
+  it("classifies an unclassified ticker from its leaf", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Sem classe");
+    await user.click(within(rowFor("Sem classe")).getByRole("button"));
+    await user.click(screen.getByRole("button", { name: "Classificar" }));
+    await user.click(screen.getByRole("button", { name: "FIIs" }));
+
+    expect(mock.classified).toEqual([["ZZZZ9", "FIIS"]]);
+  });
+
+  it("offers the catalog refresh as the bulk alternative in the classify dialog", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Sem classe");
+    await user.click(within(rowFor("Sem classe")).getByRole("button"));
+    await user.click(screen.getByRole("button", { name: "Classificar" }));
+    await user.click(screen.getByRole("button", { name: "Atualizar catálogo" }));
+
+    expect(mock.refreshed).toBe(1);
+    expect(mock.classified).toEqual([]);
   });
 });
 

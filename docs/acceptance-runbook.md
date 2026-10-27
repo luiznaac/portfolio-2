@@ -368,3 +368,23 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   Browser intents then read the shell against real data: `/` shows the four KPIs, the seven-step stepper (step 3 pending transfers, step 7 blocked), the unattributed-cotas attention card (2.000 cotas held, 500 attributed), the class strip with a 19,3% Ações bar and the 60/80/100 target markers, `Vencimento de CDB Aceite` and a `Fechamento de … pendente` agenda item, and `PETR4` among the próximos proventos; Ctrl+K opens the command palette; the agenda's `Marcar como lida` removes the item, and after a close the same item turns into a `concluído` notice that also waits for the mark-as-read before it leaves the list.
+
+- **Catalog classification seed**: the Alocação "Sem classe" line and the asset detail's classify/revert action read this scenario. It resets the allocation tables and seeds an open 2027-05 month with a 100% Ações class target, two positions and quotes at R$10, a catalog row for ZZZZ9 with no class at all (the unclassified state), and a catalog row for YYYY9 whose BDI class is FII but whose manual override is Ações (the disagreement the detail's revert action reads). The tree then reads class Ações Actual 100,00 plus the unclassified 100,00; classifying ZZZZ9 as Ações moves it into the class and removes the "Sem classe" line. Run it independently of the other seeds.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9200, '2027-05', 1000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9200,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ZZZZ9',10,8), ('YYYY9',10,8); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('ZZZZ9','2027-05-31',10,'COTAHIST',NOW()), \
+          ('YYYY9','2027-05-31',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, asset_class_override, first_seen, last_seen, created_at) VALUES \
+          ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,NULL,'2027-01-01','2027-05-31',NOW()), \
+          ('YYYY9','YYYY','12',NULL,'FII','FIIS','ACOES','2027-01-01','2027-05-31',NOW());"
+  ```

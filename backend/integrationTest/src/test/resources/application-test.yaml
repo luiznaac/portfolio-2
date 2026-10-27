@@ -14,3 +14,5 @@ gateways:
   chameidor:
     host: 'http://localhost:${wiremock.port}'
     token: 'dev-portfolio-fixture-token'
+  cotahist:
+    host: 'http://localhost:${wiremock.port}'

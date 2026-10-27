@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.performance
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.logger
@@ -178,7 +179,7 @@ class PerformanceService(
         val previousByClass = context.previous?.classes?.associateBy { it.assetClass }.orEmpty()
         val targetByClass = context.chain.classes.associate { it.assetClass to it.percentage }
         val totalTarget = targetByClass.values.fold(BigDecimal.ZERO, BigDecimal::add)
-        val assetClasses = catalog.fetchAll().associate { it.ticker to it.assetClass }
+        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
         val incomeByClass = context.incomeByTicker.entries
             .groupBy({ (ticker, _) -> assetClasses[ticker] }, { (_, net) -> net })
             .mapValues { (_, amounts) -> amounts.fold(BigDecimal.ZERO, BigDecimal::add).defaultScale() }
@@ -317,7 +318,7 @@ class PerformanceService(
     private suspend fun tickerPerformances(context: TickerPerformanceContext): List<TickerPerformance> {
         val previousByTicker = context.previous?.holdings?.associateBy { it.ticker }.orEmpty()
         val currentByTicker = context.current.holdings.associateBy { it.ticker }
-        val assetClasses = catalog.fetchAll().associate { it.ticker to it.assetClass }
+        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
 
         val endValues = currentByTicker.mapValues { (_, holding) -> valueAt(holding, context.currentEnd) }
         val endByClass = endValues.entries

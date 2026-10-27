@@ -12,6 +12,7 @@ import type {
   LegacyAttributionSkip,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
+import { ClassifyTickerModal } from "../components/ClassifyTickerModal.tsx";
 import { Panel } from "../components/Panel.tsx";
 import {
   type AllocationRow,
@@ -75,6 +76,7 @@ export function Allocation() {
 // The expansion keys are the row keys from lib/allocation, so the tree and its toggles agree.
 function AllocationTree({ allocation }: { allocation: AllocationModel }) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [classifying, setClassifying] = useState<string | null>(null);
   const rows = allocationRows(allocation, expanded);
   const maxDeficit = maxAbsDeficit(rows);
   const maxDrift = maxAbsDrift(rows);
@@ -92,45 +94,52 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
   }
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_300px]">
-      <div className="flex flex-col gap-4">
-        <LegacyAttributionBanner allocation={allocation} />
+    <>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_300px]">
+        <div className="flex flex-col gap-4">
+          <LegacyAttributionBanner allocation={allocation} />
 
-        <div
-          data-testid="allocation-tree"
-          className="overflow-x-auto rounded-lg border border-line"
-        >
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr>
-                <th className={cn(HEADER, "text-left")}>Nível</th>
-                <th className={cn(HEADER, "text-right")}>Alvo</th>
-                <th className={cn(HEADER, "text-right")}>Ideal</th>
-                <th className={cn(HEADER, "text-right")}>Atual</th>
-                <th className={cn(HEADER, "text-center")}>Δ R$</th>
-                <th className={cn(HEADER, "text-right")}>Δ p.p.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <AllocationTableRow
-                  key={row.key}
-                  row={row}
-                  expanded={expanded.has(row.key)}
-                  maxDeficit={maxDeficit}
-                  maxDrift={maxDrift}
-                  onToggle={toggle}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div
+            data-testid="allocation-tree"
+            className="overflow-x-auto rounded-lg border border-line"
+          >
+            <table className="w-full border-collapse text-[13px]">
+              <thead>
+                <tr>
+                  <th className={cn(HEADER, "text-left")}>Nível</th>
+                  <th className={cn(HEADER, "text-right")}>Alvo</th>
+                  <th className={cn(HEADER, "text-right")}>Ideal</th>
+                  <th className={cn(HEADER, "text-right")}>Atual</th>
+                  <th className={cn(HEADER, "text-center")}>Δ R$</th>
+                  <th className={cn(HEADER, "text-right")}>Δ p.p.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <AllocationTableRow
+                    key={row.key}
+                    row={row}
+                    expanded={expanded.has(row.key)}
+                    maxDeficit={maxDeficit}
+                    maxDrift={maxDrift}
+                    onToggle={toggle}
+                    onClassify={setClassifying}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Reconciliation allocation={allocation} />
         </div>
 
-        <Reconciliation allocation={allocation} />
+        <CapitalPanel allocation={allocation} />
       </div>
 
-      <CapitalPanel allocation={allocation} />
-    </div>
+      {classifying && (
+        <ClassifyTickerModal ticker={classifying} onClose={() => setClassifying(null)} />
+      )}
+    </>
   );
 }
 
@@ -142,13 +151,17 @@ function AllocationTableRow({
   maxDeficit,
   maxDrift,
   onToggle,
+  onClassify,
 }: {
   row: AllocationRow;
   expanded: boolean;
   maxDeficit: number;
   maxDrift: number;
   onToggle: (key: string) => void;
+  onClassify: (ticker: string) => void;
 }) {
+  const ticker = row.ticker;
+
   return (
     <tr className="bg-surface">
       <td className={cn(CELL, INDENT[row.depth])}>
@@ -173,6 +186,15 @@ function AllocationTableRow({
           >
             {row.label}
           </span>
+          {row.kind === "unclassified_ticker" && ticker !== undefined && (
+            <button
+              type="button"
+              onClick={() => onClassify(ticker)}
+              className="rounded-sm border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim hover:border-surface-3 hover:text-ink"
+            >
+              Classificar
+            </button>
+          )}
         </span>
       </td>
       <td className={cn(CELL, "text-right text-ink-dim")}>{formatTarget(row.target)}</td>
