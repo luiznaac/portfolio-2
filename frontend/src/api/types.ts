@@ -796,6 +796,17 @@ export interface ClassTotalSnapshot {
   unattributed: number;
 }
 
+// One Strategy's frozen slice at the close, the manual bucket included. The identity is frozen
+// beside the value so a later rename or kind change cannot rewrite a closed month; `flow` is the
+// month's netted bookkeeping flow, valued at the same close.
+export interface StrategySliceSnapshot {
+  strategy_id: number;
+  strategy: string;
+  kind: StrategyKind;
+  value_end: number;
+  flow: number;
+}
+
 export interface IncomeTotals {
   gross: number;
   retained: number;
@@ -827,6 +838,7 @@ export interface CloseState {
   holdings: HoldingSnapshot[];
   attributions: AttributionSnapshot[];
   classes: ClassTotalSnapshot[];
+  strategies?: StrategySliceSnapshot[];
   income: IncomeTotals;
   income_by_ticker?: TickerIncomeSnapshot[];
   orders: OrdersSnapshot;

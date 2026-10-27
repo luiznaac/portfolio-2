@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.order.model.SuggestedOrder
 import dev.agner.portfolio.usecase.order.model.TransferProposal
 import dev.agner.portfolio.usecase.order.model.UnplannedTrade
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.tax.model.CarryBucket
 import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
 import kotlinx.datetime.YearMonth
@@ -24,6 +25,10 @@ data class CloseState(
     val holdings: List<HoldingSnapshot>,
     val attributions: List<AttributionSnapshot>,
     val classes: List<ClassTotalSnapshot>,
+    // One frozen slice per Strategy, the Manual Strategy (the legacy bucket) included. The id, name
+    // and kind are frozen beside the value so a later rename or kind change cannot rewrite a closed
+    // month. Empty for snapshots written before the strategy rung landed.
+    val strategies: List<StrategySliceSnapshot> = emptyList(),
     val income: IncomeTotals,
     // The month's income per ticker, frozen with the close. The performance reads the same rows at
     // the class and ticker rungs, so a later edit to the live ledger cannot rewrite a closed month.
@@ -57,6 +62,18 @@ data class ClassTotalSnapshot(
     val deficit: BigDecimal,
     val drift: BigDecimal,
     val unattributed: BigDecimal,
+)
+
+// One Strategy's slice at the close: its frozen identity, the value its attributed units held at
+// the month's close and the month's netted bookkeeping flow (the attribution changes valued at that
+// close). The first close has no prior book, so its flow is zero; every later close diffs against
+// the previous snapshot's frozen attributions.
+data class StrategySliceSnapshot(
+    val strategyId: Int,
+    val strategy: String,
+    val kind: StrategyKind,
+    val valueEnd: BigDecimal,
+    val flow: BigDecimal,
 )
 
 // One ticker's net income inside the closed month.
