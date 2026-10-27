@@ -89,10 +89,20 @@ Moving part of a listed asset's Attribution from one Strategy to another without
 _UI:_ "Transferência"
 _Avoid_: Custody transfer (that is between institutions, ticketed separately), reallocation
 
-**Dropped Ticker (Outside Strategy)**:
-A ticker that reached weight 0 everywhere in the current Edition while still held: the engine holds it and surfaces it for attention, never auto-exits it, and a manual EXIT defaults to the full position.
+**Inside a Strategy**:
+A held Ticker is inside a Strategy when a Target names it with weight > 0, or when a Manual Strategy's Attribution holds at least one of its units. It is a property of the Ticker, not of a unit; an Attribution to a Report Strategy alone is inert.
+_UI:_ —
+_Avoid_: Attributed (that is the ledger row), targeted (that is only the Target half)
+
+**Outside Strategy**:
+A held, classified Ticker that no Target names and no Manual Strategy holds: the engine holds it and surfaces it for attention, never auto-exits it, and a manual EXIT defaults to the full position. It is a transient state, not a home for legacy money.
 _UI:_ "Fora da estratégia"
 _Avoid_: Exited (that is the manual act), untracked
+
+**Unclassified Ticker**:
+A held Ticker whose effective catalog class is null: it counts in the Portfolio total, belongs to no class or Strategy rung, is never sold by Funding and waits for classification. It is a data-quality state, never an Outside Strategy holding.
+_UI:_ "Sem classe"
+_Avoid_: Outside strategy (a planning state), unknown ticker
 
 **Pro-rata Scaling**:
 The full plan's last resort when funding still cannot cover the buys: every BUY is scaled by the same fraction of its demand, floored to whole units, leaving the remainder unfunded; NEUTRO never participates.

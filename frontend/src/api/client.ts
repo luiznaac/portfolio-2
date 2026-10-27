@@ -36,6 +36,7 @@ import type {
   StockTaxReport,
   Strategy,
   StrategyCreation,
+  StrategyHoldings,
   SuggestedOrder,
   Targets,
   Trade,
@@ -257,6 +258,10 @@ export const api = {
 
   createStrategy(creation: StrategyCreation): Promise<Strategy> {
     return request("/strategies", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  getStrategyHoldings(strategyId: number): Promise<StrategyHoldings> {
+    return request(`/strategies/${strategyId}/holdings`);
   },
 
   getEditions(strategyId: number): Promise<Edition[]> {

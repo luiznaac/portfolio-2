@@ -32,6 +32,7 @@ import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.tax.StockTaxService
 import dev.agner.portfolio.usecase.tax.model.StockTaxReport
@@ -116,7 +117,7 @@ class MonthlyCloseService(
         val strategyCatalog = strategies.fetchAll().associateBy { it.id }
         val attributionLedger = attributions.fetchAll()
         val previous = previousClose(month.period)
-        val slices = strategySlices(strategyCatalog, attributionLedger, previous, month.period)
+        val slices = strategySlices(strategyCatalog, allocation, attributionLedger, previous, month.period)
         val attributedByClass = slices
             .groupBy { strategyCatalog.assetClassOf(it.strategyId) }
             .mapValues { (_, classSlices) -> classSlices.sumOf { it.valueEnd } }
@@ -151,14 +152,17 @@ class MonthlyCloseService(
         .maxByOrNull { it.state.period }
         ?.state
 
-    // One slice per Strategy, the bucket included. `valueEnd` is the attributed units at the month's
-    // close; `flow` is the net bookkeeping change since the prior close (a manual or suggested
-    // transfer, the bulk legacy entry, a re-attribution), valued at the same close. A corporate
-    // action's quantity scaling is not a bookkeeping change: the prior quantities are scaled by the
-    // month's quantity events first, so a split does not read as money arriving. Trade-driven value
-    // changes flow through the slice the way they flow through a class.
+    // One slice per Strategy, the bucket included. `valueEnd` is the inside attributed units at the
+    // month's close; `flow` is the net bookkeeping change since the prior close (a manual or
+    // suggested transfer, the bulk legacy entry, a re-attribution), valued at the same close. A
+    // report Strategy owns only the tickers its Target chain names, so an inert report attribution
+    // stays in the class's outside remainder; the bucket owns every ticker it is attributed. A
+    // corporate action's quantity scaling is not a bookkeeping change: the prior quantities are
+    // scaled by the month's quantity events first, so a split does not read as money arriving.
+    // Trade-driven value changes flow through the slice the way they flow through a class.
     private suspend fun strategySlices(
         strategyCatalog: StrategyCatalog,
+        allocation: Allocation,
         attributionLedger: List<Attribution>,
         previous: CloseState?,
         period: YearMonth,
@@ -170,19 +174,31 @@ class MonthlyCloseService(
             .associateWith { quotes.latestClose(it) ?: BigDecimal.ZERO }
         val rowsByStrategy = attributionLedger.groupBy { it.strategyId }
         val priorByStrategy = priorRows.groupBy { it.strategyId }
+        val reportTickers = allocation.classes
+            .flatMap { it.strategies }
+            .associate { strategy -> strategy.strategy to strategy.tickers.map { it.ticker }.toSet() }
 
         return strategyCatalog.values
             .sortedBy { it.name }
             .map { strategy ->
                 val rows = rowsByStrategy[strategy.id].orEmpty()
+                val prior = priorByStrategy[strategy.id].orEmpty()
+                val insideTickers = when (strategy.kind) {
+                    // The bucket has no Target chain entry: every unit attributed to it is inside.
+                    StrategyKind.MANUAL -> (rows.map { it.ticker } + prior.map { it.ticker }).toSet()
+                    StrategyKind.REPORT_DRIVEN -> reportTickers[strategy.name].orEmpty()
+                }
                 StrategySliceSnapshot(
                     strategyId = strategy.id,
                     strategy = strategy.name,
                     kind = strategy.kind,
-                    valueEnd = rows.sumOf { it.quantity * closeByTicker.getValue(it.ticker) }.defaultScale(),
+                    valueEnd = rows
+                        .filter { it.ticker in insideTickers }
+                        .sumOf { it.quantity * closeByTicker.getValue(it.ticker) }
+                        .defaultScale(),
                     flow = flowOf(
-                        rows = rows,
-                        prior = priorByStrategy[strategy.id].orEmpty(),
+                        rows = rows.filter { it.ticker in insideTickers },
+                        prior = prior.filter { it.ticker in insideTickers },
                         closeByTicker = closeByTicker,
                         quantityEvents = quantityEvents,
                         hasPrevious = previous != null,

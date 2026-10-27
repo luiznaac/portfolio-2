@@ -8,6 +8,7 @@ import {
   useImportEdition,
   useStrategies,
   useStrategyEditions,
+  useStrategyHoldings,
 } from "../api/queries.ts";
 import type {
   AssetClass,
@@ -16,6 +17,7 @@ import type {
   EditionEntry,
   Rating,
   Strategy,
+  StrategyHolding,
   StrategyKind,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
@@ -24,7 +26,7 @@ import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { cn } from "../lib/cn.ts";
-import { formatCurrency } from "../lib/format.ts";
+import { formatCurrency, formatNumber, formatPercent } from "../lib/format.ts";
 import { ASSET_CLASSES, assetClassLabel } from "../lib/month.ts";
 import {
   editionDiffSummary,
@@ -254,14 +256,7 @@ function StrategyDetail({
         )}
       </div>
 
-      {!isReportDriven(strategy) && (
-        <Panel>
-          <p className="text-[13px] text-ink-dim">
-            Estratégia manual (legado): guarda as posições desta classe sem edição e sem alvos.
-            Atribua ou transfira posições na Alocação.
-          </p>
-        </Panel>
-      )}
+      {!isReportDriven(strategy) && <ManualHoldings strategyId={strategy.id} />}
 
       {isReportDriven(strategy) && (
         <>
@@ -294,6 +289,74 @@ function StrategyDetail({
           )}
         </>
       )}
+    </>
+  );
+}
+
+const MANUAL_HOLDING_COLUMNS: Column<StrategyHolding>[] = [
+  {
+    key: "ticker",
+    header: "Ticker",
+    render: (holding) => <span className="font-mono font-medium">{holding.ticker}</span>,
+  },
+  {
+    key: "quantity",
+    header: "Unidades atribuídas",
+    align: "right",
+    render: (holding) => formatNumber(holding.quantity),
+  },
+  {
+    key: "value",
+    header: "Valor atual",
+    align: "right",
+    render: (holding) => formatCurrency(holding.value),
+  },
+  {
+    key: "share",
+    header: "Fatia do legado",
+    align: "right",
+    render: (holding) => formatPercent(holding.share),
+  },
+];
+
+// The manual Strategy detail is a read-only holdings view: no edition chips, diff, import button,
+// transfer or classify action. Every write lives on Alocação, which the footer points at.
+function ManualHoldings({ strategyId }: { strategyId: number }) {
+  const holdings = useStrategyHoldings(strategyId);
+
+  if (holdings.isLoading) return <p className="text-[13.5px] text-ink-dim">Carregando posições…</p>;
+  if (holdings.error) return <p className="text-[13.5px] text-tax">{holdings.error.message}</p>;
+
+  return (
+    <>
+      {holdings.data && holdings.data.holdings.length > 0 ? (
+        <>
+          <Table
+            columns={MANUAL_HOLDING_COLUMNS}
+            rows={holdings.data.holdings}
+            rowKey={(holding) => holding.ticker}
+          />
+          <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-[13px]">
+            <span className="text-ink-dim">Total do legado</span>
+            <span className="font-mono font-semibold">
+              {formatCurrency(holdings.data.total_value)}
+            </span>
+          </div>
+        </>
+      ) : (
+        <Panel>
+          <p className="text-[13px] text-ink-dim">
+            Nenhuma posição atribuída. Use Atribuir posições fora da estratégia na Alocação.
+          </p>
+        </Panel>
+      )}
+      <p className="mt-3 text-[11.5px] text-ink-faint">
+        Transferências e classificação acontecem na{" "}
+        <Link to="/allocation" className="text-principal hover:underline">
+          Alocação
+        </Link>
+        .
+      </p>
     </>
   );
 }

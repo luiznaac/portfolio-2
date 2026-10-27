@@ -32,6 +32,7 @@ function allocation(overrides: Partial<Allocation> = {}): Allocation {
     deficit: 20_000,
     drift: 0,
     unattributed: 0,
+    unclassified: { actual: 0, tickers: [] },
     classes: [
       {
         asset_class: "ACOES",
@@ -42,6 +43,7 @@ function allocation(overrides: Partial<Allocation> = {}): Allocation {
         drift: 5,
         unattributed: 0,
         strategies: [],
+        outside: { actual: 0, tickers: [] },
         sub_classes: [],
       },
       {
@@ -53,6 +55,7 @@ function allocation(overrides: Partial<Allocation> = {}): Allocation {
         drift: -10,
         unattributed: 0,
         strategies: [],
+        outside: { actual: 0, tickers: [] },
         sub_classes: [],
       },
       {
@@ -64,6 +67,7 @@ function allocation(overrides: Partial<Allocation> = {}): Allocation {
         drift: -15,
         unattributed: 0,
         strategies: [],
+        outside: { actual: 0, tickers: [] },
         sub_classes: [],
       },
     ],
@@ -87,6 +91,7 @@ function orderPlan(overrides: Partial<OrderPlan> = {}): OrderPlan {
       neutro_deficit: 0,
     },
     outside_strategy: [],
+    unclassified: [],
     attribution: [],
     transfers: [],
     ...overrides,

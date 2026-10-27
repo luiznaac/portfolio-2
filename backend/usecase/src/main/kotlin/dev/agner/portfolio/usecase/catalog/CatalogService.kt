@@ -22,6 +22,13 @@ class CatalogService(
 
     suspend fun fetchBy(ticker: String) = repository.fetchBy(ticker.normalizedTicker())
 
+    // Which of the given tickers the catalog has not classified yet. A missing row counts as
+    // unclassified: without a class a ticker belongs to no class rung and waits for classification.
+    suspend fun fetchUnclassified(tickers: Set<String>): Set<String> {
+        val classByTicker = repository.fetchAll().associate { it.ticker to it.assetClass }
+        return tickers.filter { classByTicker[it] == null }.toSet()
+    }
+
     // Upsert the catalog from the latest published COTAHIST file. Unknown BDI codes still enter
     // (AssetKind.UNKNOWN) but are logged so the mapping can be extended instead of silently guessed.
     suspend fun refresh(): Int {

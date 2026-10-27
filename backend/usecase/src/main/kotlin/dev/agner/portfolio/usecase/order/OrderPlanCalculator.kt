@@ -11,9 +11,11 @@ import dev.agner.portfolio.usecase.order.model.OrderCandidate
 import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.OrderSide
 import dev.agner.portfolio.usecase.order.model.OutsideStrategyHolding
+import dev.agner.portfolio.usecase.order.model.Placement
 import dev.agner.portfolio.usecase.order.model.StrategyOrderPlan
 import dev.agner.portfolio.usecase.order.model.SubClassOrderPlan
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
+import dev.agner.portfolio.usecase.order.model.UnclassifiedHolding
 import dev.agner.portfolio.usecase.order.model.targetUnits
 import dev.agner.portfolio.usecase.portfolio.TargetChainCalculator
 import dev.agner.portfolio.usecase.portfolio.model.ClassChain
@@ -35,9 +37,10 @@ import java.math.RoundingMode
 // Uninvested Balance. A targeted surplus is held — SELLs arrive with funding, which the service
 // composes from FundingCalculator at the funding phase.
 //
-// A held ticker no Target names (a dropped ticker) is reported as an OutsideStrategyHolding with a
-// full-position manual EXIT default; it is never auto-exited. RF orders are sized per sub-class at
-// the full phase.
+// A held ticker the shared placement calls OUTSIDE is reported as an OutsideStrategyHolding with a
+// full-position manual EXIT default; it is never auto-exited. A ticker with no effective class is
+// reported in its own `unclassified` list instead. RF orders are sized per sub-class at the full
+// phase.
 object OrderPlanCalculator {
 
     fun compute(context: OrderPlanContext): OrderPlan {
@@ -49,12 +52,18 @@ object OrderPlanCalculator {
                 classes = classes,
                 positions = context.positions,
                 prices = context.prices,
+                placement = context.placement,
             )
         } else {
             emptyList()
         }
         val outsideStrategy = if (context.phase.includesCandidates) {
-            computeOutsideStrategy(classes = classes, positions = context.positions, prices = context.prices)
+            computeOutsideStrategy(context)
+        } else {
+            emptyList()
+        }
+        val unclassified = if (context.phase.includesCandidates) {
+            computeUnclassified(context)
         } else {
             emptyList()
         }
@@ -68,6 +77,7 @@ object OrderPlanCalculator {
             classes = classes,
             candidates = candidates,
             outsideStrategy = outsideStrategy,
+            unclassified = unclassified,
         )
     }
 
@@ -142,6 +152,7 @@ object OrderPlanCalculator {
         classes: List<ClassOrderPlan>,
         positions: TickerPositions,
         prices: TickerPrices,
+        placement: TickerPlacements,
     ): List<OrderCandidate> {
         val slices = tickerSlices(classes).groupBy { it.ticker }
         val targeted = targetedTickers(classes)
@@ -152,7 +163,9 @@ object OrderPlanCalculator {
         return tickers.mapNotNull { (ticker, tickerSlices) ->
             val position = positions[ticker] ?: BigDecimal.ZERO
             val price = prices[ticker]?.takeIf { it.signum() > 0 }
-            val hasWeight = ticker in targeted
+            // An unclassified ticker waits for classification before it can enter any Strategy, even
+            // when a Target names it; it is reported in its own list, never bought.
+            val hasWeight = ticker in targeted && !placement.isUnclassified(ticker)
 
             if (hasWeight && price != null) {
                 buyOrNewEntry(
@@ -168,30 +181,50 @@ object OrderPlanCalculator {
         }
     }
 
-    // Every held ticker the chain does not name: a dropped ticker (weight 0 everywhere) or a position
-    // from before the current Edition. Held for attention, with a manual EXIT defaulting to the full
-    // whole-unit position — the engine emits no order here.
-    private fun computeOutsideStrategy(
-        classes: List<ClassOrderPlan>,
-        positions: TickerPositions,
-        prices: TickerPrices,
-    ): List<OutsideStrategyHolding> {
-        val targeted = targetedTickers(classes)
+    // Every held ticker the shared placement calls OUTSIDE: a dropped ticker (weight 0 everywhere)
+    // or a position from before the current Edition, with no Manual Strategy holding it. Held for
+    // attention, with a manual EXIT defaulting to the full whole-unit position — the engine emits no
+    // order here. A manual attribution makes a ticker INSIDE, so it never reaches this list.
+    private fun computeOutsideStrategy(context: OrderPlanContext): List<OutsideStrategyHolding> =
+        pricedHoldings(context, Placement.OUTSIDE).map { holding ->
+            OutsideStrategyHolding(
+                ticker = holding.ticker,
+                quantity = holding.quantity,
+                price = holding.price,
+                amount = holding.amount,
+                suggestedExitQuantity = wholeUnits(holding.quantity),
+            )
+        }
 
-        return positions.entries
-            .filter { (ticker, position) -> position.signum() > 0 && ticker !in targeted }
+    // A held ticker the catalog has not classified. It is a data-quality state, not an outside
+    // holding: reported separately, never exited, never sold by Funding.
+    private fun computeUnclassified(context: OrderPlanContext): List<UnclassifiedHolding> =
+        pricedHoldings(context, Placement.UNCLASSIFIED).map { holding ->
+            UnclassifiedHolding(
+                ticker = holding.ticker,
+                quantity = holding.quantity,
+                price = holding.price,
+                amount = holding.amount,
+            )
+        }
+
+    // The two attention lists share the same valuation shape: held positions in one placement, priced
+    // at the latest close and sorted by ticker.
+    private fun pricedHoldings(context: OrderPlanContext, placement: Placement): List<PricedHolding> =
+        context.positions.entries
+            .filter { (ticker, position) ->
+                position.signum() > 0 && context.placement[ticker]?.placement == placement
+            }
             .map { (ticker, position) ->
-                val price = prices[ticker]?.takeIf { it.signum() > 0 }
-                OutsideStrategyHolding(
+                val price = context.prices.priceOf(ticker)
+                PricedHolding(
                     ticker = ticker,
                     quantity = position,
                     price = price,
                     amount = price?.let { position.multiply(it).defaultScale() },
-                    suggestedExitQuantity = wholeUnits(position),
                 )
             }
             .sortedBy { it.ticker }
-    }
 
     private fun buyOrNewEntry(
         ticker: String,
@@ -250,3 +283,11 @@ object OrderPlanCalculator {
     private fun targetedTickers(classes: List<ClassOrderPlan>): Set<String> =
         tickerSlices(classes).filter { it.target.signum() > 0 }.map { it.ticker }.toSet()
 }
+
+// A held position with its close-derived figures, before it becomes an attention row.
+private data class PricedHolding(
+    val ticker: String,
+    val quantity: BigDecimal,
+    val price: BigDecimal?,
+    val amount: BigDecimal?,
+)

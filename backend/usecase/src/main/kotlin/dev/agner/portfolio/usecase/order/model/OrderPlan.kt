@@ -14,9 +14,11 @@ import java.math.BigDecimal
 // for, because the phase is a query dimension rather than a variant of the plan's value (the same
 // shape `EditionDetail.diffFromPrevious` takes for a first edition).
 //
-// `outsideStrategy` lists the held tickers no Target names (dropped tickers), held for attention
-// rather than auto-exited. It is absent at the ideals phase, which carries the chain alone.
-// `proRata`, `attribution` and `transfers` arrive with the full phase.
+// `outsideStrategy` lists the held tickers no Target names (dropped tickers) and no Manual Strategy
+// holds, held for attention rather than auto-exited. `unclassified` is separate: a ticker the
+// catalog has not classified is a data-quality state, never an outside holding, and Funding never
+// sells it. Both are absent at the ideals phase, which carries the chain alone. `proRata`,
+// `attribution` and `transfers` arrive with the full phase.
 data class OrderPlan(
     val period: YearMonth,
     val phase: OrderPlanPhase,
@@ -27,6 +29,7 @@ data class OrderPlan(
     val candidates: List<OrderCandidate>,
     val funding: FundingSummary? = null,
     val outsideStrategy: List<OutsideStrategyHolding> = emptyList(),
+    val unclassified: List<UnclassifiedHolding> = emptyList(),
     val proRata: ProRataSummary? = null,
     val attribution: List<AttributionMove> = emptyList(),
     val transfers: List<AttributionTransfer> = emptyList(),

@@ -52,6 +52,24 @@ class TargetChainCalculatorTest : StringSpec({
         }
     }
 
+    "reads the targeted tickers from the chain leaves, dropping a ticker under an absent Strategy" {
+        val chain = TargetChainCalculator.compute(
+            capital = BigDecimal("100000"),
+            targets = Targets(
+                classes = listOf(classTarget(AssetClass.ACOES, "100")),
+                strategies = listOf(strategyTarget(AssetClass.ACOES, "Top", "100")),
+                subClasses = emptyList(),
+                tickers = listOf(
+                    tickerTarget("Top", "VALE3", "50"),
+                    tickerTarget("Top", "ITUB4", "0"),
+                    tickerTarget("Ghost", "MXRF11", "50"),
+                ),
+            ),
+        )
+
+        chain.targetedTickers() shouldBe setOf("VALE3")
+    }
+
     "always carries the three asset classes and the three RF sub-classes" {
         val chain = TargetChainCalculator.compute(
             capital = BigDecimal("100000"),

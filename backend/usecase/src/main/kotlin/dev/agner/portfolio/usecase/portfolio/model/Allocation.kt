@@ -12,6 +12,10 @@ import java.math.BigDecimal
 // Ideal is Capital × the chain (class % × strategy/sub-class share × ticker weight); Actual is the RF
 // consolidation engine's product values plus Position × current quote for the listed book. Deficit is
 // Ideal − Actual (positive = short); Drift is (Actual − Ideal) ÷ Capital, in percentage points.
+//
+// The listed tree is additive: a class's report Strategy slices, its Manual Strategy (bucket) and its
+// outside row sum to the class Actual, which stays full custody. `unattributed` is the custody inside
+// no Strategy — outside plus unclassified — so bucket units never count as unattributed.
 data class Allocation(
     val period: YearMonth,
     val capital: BigDecimal,
@@ -20,16 +24,15 @@ data class Allocation(
     val actual: BigDecimal,
     val deficit: BigDecimal,
     val drift: BigDecimal,
-    // The listed value no strategy targets — the reconciliation bar's hatched segment. Until the
-    // stored Attribution ledger lands, the tree derives strategy ownership from the target chain, so
-    // a held ticker the chain does not name is unattributed.
     val unattributed: BigDecimal,
+    val unclassified: UnclassifiedAllocation,
     val classes: List<ClassAllocation>,
 )
 
-// One class rung. ACOES/FIIS carry `strategies`, RENDA_FIXA carries `subClasses` (RF targets at
-// sub-class level only, so the RF branch has no ticker rung). `target` is null when the month's chain
-// carries no percentage for the class.
+// One class rung. ACOES/FIIS carry `strategies` (report-driven), an optional `manual` bucket and the
+// `outside` remainder; RENDA_FIXA carries `subClasses` (RF targets at sub-class level only, so the RF
+// branch has no ticker rung). `target` is null when the month's chain carries no percentage for the
+// class.
 data class ClassAllocation(
     val assetClass: AssetClass,
     val target: BigDecimal?,
@@ -37,14 +40,16 @@ data class ClassAllocation(
     val actual: BigDecimal,
     val deficit: BigDecimal,
     val drift: BigDecimal,
-    // The part of this class's Actual not attributed to any strategy (its listed holdings).
+    // The part of this class's Actual inside no Strategy (its outside custody).
     val unattributed: BigDecimal,
     val strategies: List<StrategyAllocation>,
+    val manual: ManualAllocation?,
+    val outside: OutsideAllocation,
     val subClasses: List<SubClassAllocation>,
 )
 
-// A strategy rung — the second rung of an ACOES/FIIS class. The strategy is a name until the Strategy
-// entity lands (CONTEXT.md → Strategy).
+// A report Strategy rung — the second rung of an ACOES/FIIS class. Its Actual is the attributed
+// units of its target tickers × the current quote.
 data class StrategyAllocation(
     val strategy: String,
     val target: BigDecimal,
@@ -53,6 +58,34 @@ data class StrategyAllocation(
     val deficit: BigDecimal,
     val drift: BigDecimal,
     val tickers: List<TickerAllocation>,
+)
+
+// The Manual Strategy (bucket) rung: Actual only, so Alvo, Ideal, Δ R$ and Δ p.p. are absent rather
+// than zero — a zero would draw an excess bar for money that has no target.
+data class ManualAllocation(
+    val strategy: String,
+    val actual: BigDecimal,
+    val tickers: List<ActualTickerAllocation>,
+)
+
+// The class's outside custody, after the bucket, so the class's rows sum to its Actual. Actual only,
+// for the same reason the bucket carries no target.
+data class OutsideAllocation(
+    val actual: BigDecimal,
+    val tickers: List<ActualTickerAllocation>,
+)
+
+// A held ticker whose catalog class is null: a data-quality state, not a planning one. It belongs to
+// no class or Strategy rung but still counts in the Portfolio total.
+data class UnclassifiedAllocation(
+    val actual: BigDecimal,
+    val tickers: List<ActualTickerAllocation>,
+)
+
+// A leaf with only an Actual — a bucket, outside or unclassified ticker.
+data class ActualTickerAllocation(
+    val ticker: String,
+    val actual: BigDecimal,
 )
 
 // The RF sub-class rung — the second and last rung of RENDA_FIXA. All three sub-classes are always
@@ -66,7 +99,7 @@ data class SubClassAllocation(
     val drift: BigDecimal,
 )
 
-// A ticker leaf — the chain's last rung, under a strategy.
+// A ticker leaf — the chain's last rung, under a report Strategy.
 data class TickerAllocation(
     val ticker: String,
     val target: BigDecimal,

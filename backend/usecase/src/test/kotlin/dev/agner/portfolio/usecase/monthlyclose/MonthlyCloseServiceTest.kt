@@ -39,7 +39,11 @@ import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
+import dev.agner.portfolio.usecase.portfolio.model.OutsideAllocation
+import dev.agner.portfolio.usecase.portfolio.model.StrategyAllocation
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.model.TickerAllocation
+import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
@@ -327,6 +331,7 @@ private val allocation = Allocation(
     deficit = BigDecimal("45000.00"),
     drift = BigDecimal("18.37"),
     unattributed = BigDecimal("50000.00"),
+    unclassified = UnclassifiedAllocation(actual = BigDecimal.ZERO, tickers = emptyList()),
     classes = listOf(
         ClassAllocation(
             assetClass = AssetClass.ACOES,
@@ -336,7 +341,28 @@ private val allocation = Allocation(
             deficit = BigDecimal("2500.00"),
             drift = BigDecimal("-1.02"),
             unattributed = BigDecimal("120000.00"),
-            strategies = emptyList(),
+            strategies = listOf(
+                StrategyAllocation(
+                    strategy = "Top Dividendos",
+                    target = BigDecimal.ZERO,
+                    ideal = BigDecimal.ZERO,
+                    actual = BigDecimal("400.00"),
+                    deficit = BigDecimal.ZERO,
+                    drift = BigDecimal.ZERO,
+                    tickers = listOf(
+                        TickerAllocation(
+                            ticker = "ITUB4",
+                            target = BigDecimal("100.00"),
+                            ideal = BigDecimal.ZERO,
+                            actual = BigDecimal("400.00"),
+                            deficit = BigDecimal.ZERO,
+                            drift = BigDecimal.ZERO,
+                        ),
+                    ),
+                ),
+            ),
+            manual = null,
+            outside = OutsideAllocation(actual = BigDecimal("120000.00"), tickers = emptyList()),
             subClasses = emptyList(),
         ),
     ),

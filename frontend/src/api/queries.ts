@@ -386,6 +386,17 @@ export function useCreateStrategy() {
   });
 }
 
+export function useStrategyHoldings(strategyId: number | null) {
+  return useQuery({
+    queryKey: ["strategies", strategyId, "holdings"],
+    queryFn: () => {
+      if (strategyId === null) throw new Error("strategyId is required to fetch holdings");
+      return api.getStrategyHoldings(strategyId);
+    },
+    enabled: strategyId !== null,
+  });
+}
+
 export function useEditions(strategyId: number | null) {
   return useQuery({
     queryKey: ["strategies", strategyId, "editions"],
