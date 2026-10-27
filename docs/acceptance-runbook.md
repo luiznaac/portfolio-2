@@ -245,8 +245,8 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
     (9001, '2026-01', 100000, 0, 0, 'CLOSED', NOW()),
     (9002, '2026-02', 103500, 0, 2000, 'CLOSED', NOW()),
     (9003, '2026-03', 103500, 0, 0, 'OPEN', NOW());
-  INSERT INTO strategy (name, asset_class, weight, created_at) VALUES
-    ('Dividendos', 'ACOES', 50, NOW()), ('Small Caps', 'ACOES', 50, NOW());
+  INSERT INTO strategy (name, asset_class, kind, created_at) VALUES
+    ('Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW()), ('Small Caps', 'ACOES', 'REPORT_DRIVEN', NOW());
   SET @div := (SELECT id FROM strategy WHERE name='Dividendos');
   SET @small := (SELECT id FROM strategy WHERE name='Small Caps');
   INSERT INTO transfer_proposal (ticker, month_id, from_strategy_id, to_strategy_id, quantity, amount, auto_approved, status, created_at) VALUES
