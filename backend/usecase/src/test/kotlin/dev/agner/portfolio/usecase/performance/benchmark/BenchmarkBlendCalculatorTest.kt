@@ -3,6 +3,7 @@ package dev.agner.portfolio.usecase.performance.benchmark
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
+import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.SubClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import io.kotest.core.spec.style.StringSpec
@@ -84,6 +85,29 @@ class BenchmarkBlendCalculatorTest : StringSpec({
         )
 
         blend.returnPercentage?.compareTo(BigDecimal("1.0000")) shouldBe 0
+    }
+
+    "a manual Strategy adds no blend contribution or denominator weight" {
+        val targets = Targets(
+            classes = listOf(
+                ClassTarget(AssetClass.ACOES, BigDecimal("50")),
+                ClassTarget(AssetClass.RENDA_FIXA, BigDecimal("50")),
+            ),
+            strategies = listOf(StrategyTarget(AssetClass.ACOES, "Legado", BigDecimal("100"))),
+            subClasses = listOf(
+                SubClassTarget(FixedIncomeSubClass.FLOATING_RATE, BigDecimal("100")),
+            ),
+            tickers = emptyList(),
+        )
+
+        val blend = BenchmarkBlendCalculator.compute(
+            targets = targets,
+            returns = mapOf(BenchmarkIndex.IBOV to BigDecimal("2"), BenchmarkIndex.CDI to BigDecimal("1")),
+        )
+
+        // (50*2 + 50*1) / 100 = 1.5 — the bucket's 100% strategy share is not a blend weight.
+        blend.returnPercentage?.compareTo(BigDecimal("1.5000")) shouldBe 0
+        blend.contributions.map { it.label } shouldBe listOf("ACOES", "RENDA_FIXA.FLOATING_RATE")
     }
 
     "has no blended return without any priced benchmark" {

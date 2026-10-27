@@ -14,6 +14,7 @@ import {
   projectY,
   returnFillClass,
   returnTextClass,
+  strategyValueSeries,
   valueExtent,
 } from "../lib/performance.ts";
 
@@ -245,19 +246,37 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
   );
 }
 
-// Each class's value at every close, one line per class — the per-class value series the snapshot
-// history can reconstruct without re-reading the live book.
-export function ClassChart({ months }: { months: PeriodPerformance[] }) {
-  const series = classValueSeries(months);
-  if (series.length === 0) {
-    return <p className="text-[13px] text-ink-dim">Sem valores por classe nos meses fechados.</p>;
+// The line-chart geometry the class and strategy series share: each line plots one rung's value at
+// every close, on one currency axis. Keeping it in one place means the two series cannot drift.
+interface ValueLine {
+  key: string;
+  label: string;
+  points: { period: string; value: number }[];
+  style: { stroke: string; fill: string };
+}
+
+function ValueLineChart({
+  testId,
+  ariaLabel,
+  emptyMessage,
+  months,
+  lines,
+}: {
+  testId: string;
+  ariaLabel: string;
+  emptyMessage: string;
+  months: PeriodPerformance[];
+  lines: ValueLine[];
+}) {
+  if (lines.length === 0) {
+    return <p className="text-[13px] text-ink-dim">{emptyMessage}</p>;
   }
 
   const width = 640;
   const height = 220;
   const pad = { top: 14, right: 14, bottom: 32, left: 56 };
   const area = plotArea(width, height, pad);
-  const values = series.flatMap((line) => line.points.map((point) => point.value));
+  const values = lines.flatMap((line) => line.points.map((point) => point.value));
   const min = Math.min(...values);
   const max = Math.max(...values);
   const padding = (max - min) * 0.12 || 1;
@@ -268,13 +287,13 @@ export function ClassChart({ months }: { months: PeriodPerformance[] }) {
   const y = (value: number) => projectY(value, low, high, area);
 
   return (
-    <div data-testid="class-chart">
+    <div data-testid={testId}>
       <svg
         width="100%"
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Valor por classe ao longo dos meses fechados"
+        aria-label={ariaLabel}
       >
         {[low, high].map((value) => (
           <g key={value}>
@@ -292,18 +311,15 @@ export function ClassChart({ months }: { months: PeriodPerformance[] }) {
           </g>
         ))}
 
-        {series.map((line) => {
-          const style = CLASS_LINES.find((entry) => entry.assetClass === line.assetClass);
-          return (
-            <polyline
-              key={line.assetClass}
-              points={line.points.map((point) => `${x(point.period)},${y(point.value)}`).join(" ")}
-              fill="none"
-              className={style?.stroke ?? "stroke-ink"}
-              strokeWidth={1.7}
-            />
-          );
-        })}
+        {lines.map((line) => (
+          <polyline
+            key={line.key}
+            points={line.points.map((point) => `${x(point.period)},${y(point.value)}`).join(" ")}
+            fill="none"
+            className={line.style.stroke}
+            strokeWidth={1.7}
+          />
+        ))}
 
         <text x={pad.left} y={height - 12} className="fill-ink-faint font-mono text-[9px]">
           {periods.length > 0 ? monthPeriodLabel(periods[0]) : ""}
@@ -317,14 +333,68 @@ export function ClassChart({ months }: { months: PeriodPerformance[] }) {
           {periods.length > 0 ? monthPeriodLabel(periods[periods.length - 1]) : ""}
         </text>
       </svg>
-      <Legend
-        items={series.map((line) => ({
-          label: assetClassLabel(line.assetClass),
-          className:
-            CLASS_LINES.find((entry) => entry.assetClass === line.assetClass)?.fill ?? "bg-ink",
-        }))}
-      />
+      <Legend items={lines.map((line) => ({ label: line.label, className: line.style.fill }))} />
     </div>
+  );
+}
+
+// Each class's value at every close, one line per class — the per-class value series the snapshot
+// history can reconstruct without re-reading the live book.
+export function ClassChart({ months }: { months: PeriodPerformance[] }) {
+  const lines = classValueSeries(months).map((line) => ({
+    key: line.assetClass,
+    label: assetClassLabel(line.assetClass),
+    points: line.points,
+    style: CLASS_LINES.find((entry) => entry.assetClass === line.assetClass) ?? {
+      stroke: "stroke-ink",
+      fill: "bg-ink",
+    },
+  }));
+
+  return (
+    <ValueLineChart
+      testId="class-chart"
+      ariaLabel="Valor por classe ao longo dos meses fechados"
+      emptyMessage="Sem valores por classe nos meses fechados."
+      months={months}
+      lines={lines}
+    />
+  );
+}
+
+// The strategy colours: the bucket keeps the violet that marks "Legado" elsewhere, and the report
+// slices cycle through the data palette so each line stays distinguishable.
+const MANUAL_STRATEGY_STYLE = { stroke: "stroke-violet", fill: "bg-violet" };
+const REPORT_STRATEGY_STYLES: { stroke: string; fill: string }[] = [
+  { stroke: "stroke-principal", fill: "bg-principal" },
+  { stroke: "stroke-yield", fill: "bg-yield" },
+  { stroke: "stroke-accent", fill: "bg-accent" },
+  { stroke: "stroke-cdi", fill: "bg-cdi" },
+  { stroke: "stroke-ipca", fill: "bg-ipca" },
+];
+
+// Each Strategy's frozen value at every close, the bucket included — the legacy book's evolution
+// beside the report-driven slices, read from the snapshot slices so a rename cannot rewrite it.
+export function StrategyChart({ months }: { months: PeriodPerformance[] }) {
+  let reportIndex = 0;
+  const lines = strategyValueSeries(months).map((line) => ({
+    key: String(line.strategyId),
+    label: line.strategy,
+    points: line.points,
+    style:
+      line.kind === "MANUAL"
+        ? MANUAL_STRATEGY_STYLE
+        : REPORT_STRATEGY_STYLES[reportIndex++ % REPORT_STRATEGY_STYLES.length],
+  }));
+
+  return (
+    <ValueLineChart
+      testId="strategy-chart"
+      ariaLabel="Valor por estratégia ao longo dos meses fechados"
+      emptyMessage="Sem valores por estratégia nos meses fechados."
+      months={months}
+      lines={lines}
+    />
   );
 }
 
