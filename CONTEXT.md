@@ -35,7 +35,7 @@ _UI:_ "Aporte"
 _Avoid_: Deposit (that is an RF movement), contribution
 
 **Target**:
-A percentage a level of the chain is managed against: class, strategy or sub-class share, or ticker weight. Targets belong to a month, never standing config.
+A percentage a level of the chain is managed against: class, Report Strategy or sub-class share, or ticker weight. Targets belong to a month, never standing config.
 _UI:_ "Alvo"
 _Avoid_: Goal, weight (that is the edition's per-ticker number)
 
@@ -154,12 +154,22 @@ _Avoid_: Index (the series itself), target
 ### Listed assets
 
 **Strategy**:
-A named bucket of the user's Listed-Assets money driven by an external report (the five XP strategies); carries a Target share within its Asset Class.
+The umbrella for a named bucket of the user's Listed-Assets money; it is either a Report Strategy or a Manual Strategy, told apart by its stored kind.
 _UI:_ "Estratégia"
 _Avoid_: Report (that is the Edition's source), carteira
 
+**Report Strategy**:
+A Strategy fed by an Edition and planned through Targets; its share within its Asset Class lives in the month's Targets, never on the Strategy.
+_UI:_ "Com relatório"
+_Avoid_: XP strategy, report (that is the Edition's source)
+
+**Manual Strategy**:
+The legacy bucket: a Strategy with no Edition and no Targets, at most one per Asset Class. It counts in its class Actual through Attribution, generates no plan orders, is ring-fenced from Funding, and its units leave only through an Attribution Transfer or a manual sell.
+_UI:_ "Manual (legado)" / "Legado"
+_Avoid_: Legacy Holding (there is no separate entity), synthetic strategy
+
 **Edition**:
-One monthly instance of a Strategy: the parsed report for a month, holding per-ticker weights; staged as a diff against the previous Edition before it goes active. One active Edition per Strategy; history kept; a ticker leaving a report means weight 0, not deletion.
+One monthly instance of a Report Strategy: the parsed report for a month, holding per-ticker weights; staged as a diff against the previous Edition before it goes active. One active Edition per Report Strategy; history kept; a ticker leaving a report means weight 0, not deletion.
 _UI:_ "Edição"
 _Avoid_: Report (the PDF artifact), import (the act)
 

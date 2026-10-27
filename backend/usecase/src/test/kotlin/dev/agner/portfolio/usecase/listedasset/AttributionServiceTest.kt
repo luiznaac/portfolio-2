@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import io.kotest.core.spec.style.StringSpec
@@ -182,8 +183,8 @@ class AttributionServiceTest : StringSpec({
 })
 
 private val strategyCatalog = listOf(
-    Strategy(id = 1, name = "Top Dividendos", assetClass = AssetClass.ACOES, weight = BigDecimal("50")),
-    Strategy(id = 2, name = "Top Ações", assetClass = AssetClass.ACOES, weight = BigDecimal("50")),
+    Strategy(id = 1, name = "Top Dividendos", assetClass = AssetClass.ACOES, kind = StrategyKind.REPORT_DRIVEN),
+    Strategy(id = 2, name = "Top Ações", assetClass = AssetClass.ACOES, kind = StrategyKind.REPORT_DRIVEN),
 )
 
 private fun position(quantity: String) =

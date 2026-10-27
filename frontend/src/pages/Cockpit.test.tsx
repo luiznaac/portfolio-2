@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Cockpit } from "./Cockpit.tsx";
 
-const mock = vi.hoisted(() => ({ openMonth: true }));
+const mock = vi.hoisted(() => ({ openMonth: true, manualBucket: false }));
 
 vi.mock("../api/queries.ts", () => {
   const month = {
@@ -35,7 +35,15 @@ vi.mock("../api/queries.ts", () => {
     useCurrentMonth: () =>
       query(
         mock.openMonth
-          ? { month, targets: { classes: [], strategies: [], sub_classes: [], tickers: [] } }
+          ? {
+              month,
+              targets: {
+                classes: [],
+                strategies: [],
+                sub_classes: [],
+                tickers: [],
+              },
+            }
           : null,
       ),
     useCurrentAllocation: () =>
@@ -118,7 +126,17 @@ vi.mock("../api/queries.ts", () => {
         },
       ]),
     useStrategies: () =>
-      query([{ id: 1, name: "Top Dividendos", asset_class: "ACOES", weight: 1 }]),
+      query([
+        {
+          id: 1,
+          name: "Top Dividendos",
+          asset_class: "ACOES",
+          kind: "REPORT_DRIVEN",
+        },
+        ...(mock.manualBucket
+          ? [{ id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" }]
+          : []),
+      ]),
     useEditionCoverage: () => [{ data: [{ reference_month: "2026-10", status: "ACTIVE" }] }],
     useIncome: () => query([]),
     useUpcomingIncome: () => query([]),
@@ -139,6 +157,7 @@ vi.mock("../api/queries.ts", () => {
 beforeEach(() => {
   localStorage.clear();
   mock.openMonth = true;
+  mock.manualBucket = false;
 });
 
 afterEach(cleanup);
@@ -178,6 +197,17 @@ describe("Cockpit", () => {
     }
     expect(screen.getByTestId("ritual-step-close").textContent).toContain("Bloqueado");
     expect(screen.getByTestId("ritual-step-transfers").textContent).toContain("1 transferências");
+  });
+
+  it("keeps the editions step counting report-driven strategies only", () => {
+    mock.manualBucket = true;
+    render(
+      <MemoryRouter>
+        <Cockpit />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("ritual-step-editions").textContent).toContain("1 de 1");
   });
 
   it("lists the attention cards and the allocation strip", () => {

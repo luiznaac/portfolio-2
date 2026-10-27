@@ -2,6 +2,7 @@ package dev.agner.portfolio.persistence.strategy
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
@@ -15,7 +16,7 @@ object StrategyTable : IntIdTable("strategy") {
     // twice is a mistake, not a second bucket.
     val name = varchar("name", 100)
     val assetClass = enumerationByName<AssetClass>("asset_class", 20)
-    val weight = decimal("weight", 18, 6)
+    val kind = enumerationByName<StrategyKind>("kind", 20)
     val createdAt = datetime("created_at")
 
     init { uniqueIndex(name) }
@@ -27,13 +28,13 @@ class StrategyEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var name by StrategyTable.name
     var assetClass by StrategyTable.assetClass
-    var weight by StrategyTable.weight
+    var kind by StrategyTable.kind
     var createdAt by StrategyTable.createdAt
 
     fun toModel() = Strategy(
         id = id.value,
         name = name,
         assetClass = assetClass,
-        weight = weight,
+        kind = kind,
     )
 }

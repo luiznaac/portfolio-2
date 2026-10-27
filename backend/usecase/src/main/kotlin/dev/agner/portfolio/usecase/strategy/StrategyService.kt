@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.strategy
 
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.strategy.model.EditionDetail
@@ -9,6 +10,7 @@ import dev.agner.portfolio.usecase.strategy.model.EditionStatus
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.model.editionWeightProblem
 import dev.agner.portfolio.usecase.strategy.model.normalizedEntries
@@ -29,10 +31,18 @@ class StrategyService(
     suspend fun fetchAll(): List<Strategy> = strategies.fetchAll()
 
     // The name is the strategy's natural key, so a second strategy under it is rejected here with a
-    // domain error rather than surfacing the unique-index violation as a 500.
+    // domain error rather than surfacing the unique-index violation as a 500. The kind has no
+    // default, Renda Fixa never holds a Strategy, and a class has at most one manual bucket.
     suspend fun create(creation: StrategyCreation): Strategy {
+        val kind = creation.kind ?: throw MissingStrategyKindException()
+        if (creation.assetClass == AssetClass.RENDA_FIXA) throw InvalidStrategyClassException(creation.assetClass)
         strategies.fetchByName(creation.name)?.let { throw DuplicateStrategyNameException(creation.name) }
-        return strategies.save(creation)
+        if (kind == StrategyKind.MANUAL) {
+            strategies.fetchManualByClass(creation.assetClass)?.let {
+                throw DuplicateManualStrategyException(creation.assetClass, it.name)
+            }
+        }
+        return strategies.save(creation.copy(kind = kind))
     }
 
     suspend fun fetchEditions(strategyId: Int): List<EditionDetail>? =

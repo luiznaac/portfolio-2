@@ -592,17 +592,21 @@ export type Rating = "BUY" | "NEUTRAL" | "SELL";
 
 export type EditionStatus = "STAGED" | "ACTIVE";
 
+// A Strategy is either report-driven (fed by an Edition, planned through Targets) or manual — the
+// legacy bucket, one per Asset Class, with no Edition and no Targets.
+export type StrategyKind = "REPORT_DRIVEN" | "MANUAL";
+
 export interface Strategy {
   id: number;
   name: string;
   asset_class: AssetClass;
-  weight: number;
+  kind: StrategyKind;
 }
 
 export interface StrategyCreation {
   name: string;
   asset_class: AssetClass;
-  weight: number;
+  kind: StrategyKind;
 }
 
 export interface EditionEntry {

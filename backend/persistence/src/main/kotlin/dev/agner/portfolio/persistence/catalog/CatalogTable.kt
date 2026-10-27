@@ -19,6 +19,10 @@ object CatalogTable : IdTable<String>("ticker_catalog") {
     val isin = varchar("isin", 12).nullable()
     val assetKind = enumerationByName<AssetKind>("asset_kind", 20)
     val assetClass = enumerationByName<AssetClass>("asset_class", 20).nullable()
+
+    // A manual classification that wins over the BDI-derived class; a COTAHIST refresh never
+    // clears it. The classification write surface lands with its own ticket.
+    val assetClassOverride = enumerationByName<AssetClass>("asset_class_override", 20).nullable()
     val firstSeen = date("first_seen")
     val lastSeen = date("last_seen")
     val createdAt = datetime("created_at")
