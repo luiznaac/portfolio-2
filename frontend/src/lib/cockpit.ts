@@ -105,9 +105,11 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
     title: "Registrar edições da XP",
     detail:
       coverage.length === 0
-        ? "Nenhuma estratégia cadastrada"
+        ? "Nenhuma estratégia com relatório"
         : `${editions} de ${coverage.length} estratégias com edição de ${monthPeriodLabel(month.period)}`,
-    status: coverage.length > 0 && editions === coverage.length ? "complete" : "pending",
+    // A legacy-only book has nothing to import, so the step is complete rather than waiting on a
+    // report that will never exist.
+    status: editions === coverage.length ? "complete" : "pending",
     to: "/strategies",
     actionLabel: "Importar relatórios",
   };

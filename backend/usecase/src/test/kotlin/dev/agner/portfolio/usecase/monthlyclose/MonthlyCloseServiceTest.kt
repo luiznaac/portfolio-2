@@ -35,6 +35,7 @@ import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.tax.StockTaxService
 import dev.agner.portfolio.usecase.tax.model.CarryBucket
@@ -286,7 +287,7 @@ private fun strategy(id: Int, name: String) = Strategy(
     id = id,
     name = name,
     assetClass = AssetClass.ACOES,
-    weight = BigDecimal("50"),
+    kind = StrategyKind.REPORT_DRIVEN,
 )
 
 private val octoberIncome = Income(

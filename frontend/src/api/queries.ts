@@ -283,16 +283,26 @@ export function useOrderPlan() {
   });
 }
 
-// One editions read per strategy, sharing the `useEditions` cache key. The Cockpit only needs the
-// coverage count, so it asks in parallel rather than opening each strategy's detail.
-export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
+// One editions read per strategy, sharing the `useEditions` cache key, so both the catalog's status
+// chips and the Cockpit's coverage count ask in parallel rather than opening each detail.
+function useEditionsFor(strategies: Strategy[], enabled: boolean) {
   return useQueries({
     queries: strategies.map((strategy) => ({
       queryKey: ["strategies", strategy.id, "editions"],
       queryFn: (): Promise<Edition[]> => api.getEditions(strategy.id),
-      enabled: period !== undefined,
+      enabled,
     })),
   });
+}
+
+// The catalog's chips always fetch: a chip shows the latest edition even when no month is open.
+export function useStrategyEditions(strategies: Strategy[]) {
+  return useEditionsFor(strategies, true);
+}
+
+// The Cockpit's coverage count only matters for an open month, so it skips the reads otherwise.
+export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
+  return useEditionsFor(strategies, period !== undefined);
 }
 
 export function useRefreshOrders() {
@@ -361,9 +371,18 @@ export function useStrategies() {
 
 export function useCreateStrategy() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<Strategy, Error, StrategyCreation>({
     mutationFn: (creation: StrategyCreation) => api.createStrategy(creation),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+    // The created Strategy enters the cached catalog immediately, so the page can select it
+    // without waiting for the refetch; the invalidation still reconciles with the server's order.
+    onSuccess: (created) => {
+      queryClient.setQueryData<Strategy[]>(["strategies"], (current) =>
+        current === undefined
+          ? [created]
+          : [...current.filter((item) => item.id !== created.id), created],
+      );
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
   });
 }
 

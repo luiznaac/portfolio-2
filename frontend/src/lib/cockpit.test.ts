@@ -80,7 +80,12 @@ function orderPlan(overrides: Partial<OrderPlan> = {}): OrderPlan {
     investable_capital: 80_000,
     classes: [],
     candidates: [],
-    funding: { buy_amount: 10_000, sell_amount: 7_500, unfunded_amount: 0, neutro_deficit: 0 },
+    funding: {
+      buy_amount: 10_000,
+      sell_amount: 7_500,
+      unfunded_amount: 0,
+      neutro_deficit: 0,
+    },
     outside_strategy: [],
     attribution: [],
     transfers: [],
@@ -89,7 +94,13 @@ function orderPlan(overrides: Partial<OrderPlan> = {}): OrderPlan {
 }
 
 function orderList(overrides: Partial<OrderList> = {}): OrderList {
-  return { period: "2026-10", orders: [], transfers: [], unplanned_trades: [], ...overrides };
+  return {
+    period: "2026-10",
+    orders: [],
+    transfers: [],
+    unplanned_trades: [],
+    ...overrides,
+  };
 }
 
 function suggestedOrder(): OrderList["orders"][number] {
@@ -203,6 +214,13 @@ describe("ritualSteps", () => {
     expect(steps[0]?.detail).toContain("1 de 2");
   });
 
+  it("completes step 1 when there is no report-driven strategy", () => {
+    const steps = ritualSteps(ritualInput({ coverage: [] }));
+
+    expect(steps[0]?.status).toBe("complete");
+    expect(steps[0]?.detail).toBe("Nenhuma estratégia com relatório");
+  });
+
   it("keeps step 2 pending until a plan is persisted for the month", () => {
     const steps = ritualSteps(ritualInput({ orders: null }));
     expect(steps[1]?.status).toBe("pending");
@@ -277,7 +295,9 @@ describe("ritualSteps", () => {
 
   it("keeps step 6 pending while an income event is not reconciled", () => {
     const steps = ritualSteps(
-      ritualInput({ income: [income("2026-10-15", "RECEIVED"), income("2026-10-20")] }),
+      ritualInput({
+        income: [income("2026-10-15", "RECEIVED"), income("2026-10-20")],
+      }),
     );
     expect(steps[5]?.status).toBe("pending");
     expect(steps[5]?.detail).toContain("1 de 2");
@@ -292,7 +312,11 @@ describe("ritualSteps", () => {
 describe("attentionItems", () => {
   it("reports nothing when the book is clean", () => {
     const clean = allocation({
-      classes: allocation().classes.map((rung) => ({ ...rung, drift: 0, unattributed: 0 })),
+      classes: allocation().classes.map((rung) => ({
+        ...rung,
+        drift: 0,
+        unattributed: 0,
+      })),
     });
     expect(attentionItems({ allocation: clean, plan: orderPlan() })).toEqual([]);
   });
@@ -311,7 +335,10 @@ describe("attentionItems", () => {
   });
 
   it("flags a root-level unattributed holding with no class rung", () => {
-    const classes = allocation().classes.map((rung) => ({ ...rung, unattributed: 0 }));
+    const classes = allocation().classes.map((rung) => ({
+      ...rung,
+      unattributed: 0,
+    }));
     const items = attentionItems({
       allocation: allocation({ classes, unattributed: 500 }),
       plan: null,
@@ -389,7 +416,10 @@ describe("allocationStrip", () => {
     const strip = allocationStrip(
       allocation({
         actual: 120_000,
-        classes: allocation().classes.map((rung) => ({ ...rung, actual: 40_000 })),
+        classes: allocation().classes.map((rung) => ({
+          ...rung,
+          actual: 40_000,
+        })),
       }),
     );
     expect(strip.reduce((sum, segment) => sum + segment.actualPercent, 0)).toBe(100);

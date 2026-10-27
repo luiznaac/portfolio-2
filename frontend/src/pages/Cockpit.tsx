@@ -33,6 +33,7 @@ import { todayIso } from "../lib/dates.ts";
 import { formatCurrency, formatIsoDate } from "../lib/format.ts";
 import { incomeTypeLabel } from "../lib/income.ts";
 import { monthPeriodLabel, monthStatusLabel } from "../lib/month.ts";
+import { reportDrivenStrategies } from "../lib/strategy.ts";
 
 // The Cockpit (issue #26/#177): where the month is and what to do now. Every figure is derived on
 // read from the same month-scoped queries the other screens use — no cockpit-specific endpoint —
@@ -48,7 +49,10 @@ export function Cockpit() {
   const upcoming = useUpcomingIncome();
   const bonds = useBonds();
   const closed = useClosedMonths();
-  const editions = useEditionCoverage(strategies.data ?? [], current.data?.month.period);
+  // The bucket never has an edition, so the ritual's editions step counts report-driven Strategies
+  // only.
+  const reportStrategies = reportDrivenStrategies(strategies.data ?? []);
+  const editions = useEditionCoverage(reportStrategies, current.data?.month.period);
 
   const today = todayIso();
   const month = current.data?.month ?? null;
@@ -88,7 +92,7 @@ export function Cockpit() {
   }
 
   const coverage = editionCoverage(
-    strategies.data ?? [],
+    reportStrategies,
     editions.map((result) => result.data),
     month.period,
   );

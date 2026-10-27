@@ -28,6 +28,7 @@ import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -144,8 +145,12 @@ private suspend fun openMonthWithPendingTransfer(): Int {
             ),
         ),
     )
-    getBean<StrategyService>().create(StrategyCreation("Top Dividendos", AssetClass.ACOES, BigDecimal("50")))
-    val small = getBean<StrategyService>().create(StrategyCreation("Small Caps", AssetClass.ACOES, BigDecimal("50")))
+    getBean<StrategyService>().create(
+        StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN),
+    )
+    val small = getBean<StrategyService>().create(
+        StrategyCreation("Small Caps", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN),
+    )
 
     val month = getBean<MonthService>().open(
         MonthCreation(period = period, capital = BigDecimal("1000"), floor = BigDecimal.ZERO),

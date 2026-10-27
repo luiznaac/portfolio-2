@@ -2,34 +2,56 @@ import { type ChangeEvent, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   useActivateEdition,
+  useCreateStrategy,
   useCurrentMonth,
   useEditions,
   useImportEdition,
   useStrategies,
+  useStrategyEditions,
 } from "../api/queries.ts";
-import type { Edition, EditionDiff, EditionEntry, Rating, Strategy } from "../api/types.ts";
+import type {
+  AssetClass,
+  Edition,
+  EditionDiff,
+  EditionEntry,
+  Rating,
+  Strategy,
+  StrategyKind,
+} from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
+import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { cn } from "../lib/cn.ts";
 import { formatCurrency } from "../lib/format.ts";
-import { assetClassLabel } from "../lib/month.ts";
+import { ASSET_CLASSES, assetClassLabel } from "../lib/month.ts";
 import {
   editionDiffSummary,
+  editionStatusChip,
   editionWeightSum,
   groupStrategiesByClass,
   isEditionForMonth,
+  isReportDriven,
   isWeightSumValid,
   overrideEntry,
   ratingLabel,
   referenceMonthLabel,
+  reportDrivenStrategies,
+  strategyCoverage,
+  strategyCoverageLabel,
   suggestStrategy,
 } from "../lib/strategy.ts";
 
 const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px] text-ink";
 
 const RATINGS: Rating[] = ["BUY", "NEUTRAL", "SELL"];
+
+// A Strategy is created in one of the two listed-asset classes; Renda Fixa is the consolidation
+// engine's domain and never holds a Strategy.
+const STRATEGY_CLASSES: AssetClass[] = ASSET_CLASSES.filter(
+  (assetClass) => assetClass !== "RENDA_FIXA",
+);
 
 // The Estratégias screen (issue #162): the XP strategy catalog, each strategy's editions with the
 // month-to-month diff, and the batch report import with a per-edition preview drawer. The catalog
@@ -42,12 +64,22 @@ export function Strategies() {
 
 function StrategyCatalogView() {
   const strategies = useStrategies();
+  const currentMonth = useCurrentMonth().data?.month.period;
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const list = strategies.data ?? [];
-  const selected = list.find((strategy) => strategy.id === selectedId) ?? list[0] ?? null;
-  const editions = useEditions(selected?.id ?? null);
+  const reportStrategies = reportDrivenStrategies(list);
   const groups = groupStrategiesByClass(list);
+  // The default selection is the first row the nav renders, so the bucket never opens the detail
+  // pane just because its name sorts first in the server's list.
+  const selected =
+    list.find((strategy) => strategy.id === selectedId) ?? groups[0]?.strategies[0] ?? null;
+  const editions = useEditions(isReportDriven(selected) ? selected.id : null);
+  const catalogEditions = useStrategyEditions(reportStrategies);
+  const editionsById = new Map(
+    reportStrategies.map((strategy, index) => [strategy.id, catalogEditions[index]?.data ?? []]),
+  );
 
   return (
     <section>
@@ -58,9 +90,14 @@ function StrategyCatalogView() {
             As carteiras da XP, edição por edição. O diff mês a mês e os alvos por ticker.
           </p>
         </div>
-        <Link to="/strategies/import">
-          <Button variant="default">Importar relatórios</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Button variant="default" onClick={() => setCreating(true)}>
+            Nova estratégia
+          </Button>
+          <Link to="/strategies/import">
+            <Button variant="default">Importar relatórios</Button>
+          </Link>
+        </div>
       </div>
 
       {strategies.isLoading ? (
@@ -72,8 +109,13 @@ function StrategyCatalogView() {
           <nav className="w-[250px] shrink-0 space-y-4">
             {groups.map((group) => (
               <div key={group.assetClass}>
-                <h5 className="px-2 pb-1 font-mono text-[10px] font-medium tracking-[.12em] text-ink-faint uppercase">
-                  {assetClassLabel(group.assetClass)}
+                <h5 className="flex items-baseline justify-between gap-2 px-2 pb-1 font-mono text-[10px] font-medium tracking-[.12em] text-ink-faint uppercase">
+                  <span>{assetClassLabel(group.assetClass)}</span>
+                  <span className="tracking-[.02em] normal-case">
+                    {strategyCoverageLabel(
+                      strategyCoverage(group.strategies, editionsById, currentMonth),
+                    )}
+                  </span>
                 </h5>
                 <ul className="space-y-1">
                   {group.strategies.map((strategy) => (
@@ -82,16 +124,17 @@ function StrategyCatalogView() {
                         type="button"
                         onClick={() => setSelectedId(strategy.id)}
                         className={cn(
-                          "w-full rounded-md border px-3 py-2 text-left",
+                          "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left",
                           strategy.id === selected?.id
                             ? "border-accent bg-surface-2"
                             : "border-line bg-surface hover:bg-surface-2",
                         )}
                       >
-                        <span className="block text-[13.5px] text-ink">{strategy.name}</span>
-                        <span className="font-mono text-[11px] text-ink-faint">
-                          peso {strategy.weight}% do bloco
-                        </span>
+                        <span className="text-[13.5px] text-ink">{strategy.name}</span>
+                        <StrategyStatusChip
+                          strategy={strategy}
+                          editions={editionsById.get(strategy.id)}
+                        />
                       </button>
                     </li>
                   ))}
@@ -120,8 +163,31 @@ function StrategyCatalogView() {
           </div>
         </div>
       )}
+
+      {creating && (
+        <CreateStrategyModal
+          strategies={list}
+          onClose={() => setCreating(false)}
+          onCreated={(created) => {
+            setSelectedId(created.id);
+            setCreating(false);
+          }}
+        />
+      )}
     </section>
   );
+}
+
+function StrategyStatusChip({
+  strategy,
+  editions,
+}: {
+  strategy: Strategy;
+  editions?: Edition[];
+}) {
+  if (!isReportDriven(strategy)) return <Chip tone="violet">Legado</Chip>;
+  const status = editionStatusChip(editions);
+  return <Chip tone={status.tone}>{status.label}</Chip>;
 }
 
 function StrategyDetail({
@@ -142,8 +208,17 @@ function StrategyDetail({
       header: "Ticker",
       render: (entry) => <span className="font-mono font-medium">{entry.ticker}</span>,
     },
-    { key: "weight", header: "Peso", align: "right", render: (entry) => `${entry.weight}%` },
-    { key: "rating", header: "Rating", render: (entry) => ratingLabel(entry.rating) },
+    {
+      key: "weight",
+      header: "Peso",
+      align: "right",
+      render: (entry) => `${entry.weight}%`,
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      render: (entry) => ratingLabel(entry.rating),
+    },
     {
       key: "target",
       header: "Preço-alvo",
@@ -167,44 +242,196 @@ function StrategyDetail({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="font-cond text-[19px] font-bold">{strategy.name}</h2>
-          <p className="text-[12.5px] text-ink-dim">
-            {assetClassLabel(strategy.asset_class)} · peso{" "}
-            <b className="font-mono">{strategy.weight}%</b> do bloco
+          <p className="flex items-center gap-1.5 text-[12.5px] text-ink-dim">
+            <span>{assetClassLabel(strategy.asset_class)}</span>
+            <StrategyStatusChip strategy={strategy} editions={editions} />
           </p>
         </div>
-        <Link to={`/strategies/import?strategy=${strategy.id}`}>
-          <Button variant="default">Importar relatório</Button>
-        </Link>
+        {isReportDriven(strategy) && (
+          <Link to={`/strategies/import?strategy=${strategy.id}`}>
+            <Button variant="default">Importar relatório</Button>
+          </Link>
+        )}
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {editions.map((edition) => (
-          <Chip key={edition.id} tone={edition.status === "ACTIVE" ? "green" : "amber"}>
-            {referenceMonthLabel(edition.reference_month)}
-            {edition.status === "ACTIVE" ? " · ativa" : " · em revisão"}
-            {currentMonth && isEditionForMonth(edition, currentMonth) ? " · mês atual" : ""}
-          </Chip>
-        ))}
-      </div>
-
-      {latest?.diff_from_previous && (
-        <div className="mb-4">
-          <DiffPanel diff={latest.diff_from_previous} />
-        </div>
-      )}
-
-      {loading ? (
-        <p className="text-[13.5px] text-ink-dim">Carregando edições…</p>
-      ) : latest ? (
-        <Table columns={columns} rows={latest.entries} rowKey={(entry) => entry.ticker} />
-      ) : (
+      {!isReportDriven(strategy) && (
         <Panel>
           <p className="text-[13px] text-ink-dim">
-            Sem edição importada. Importe o relatório do mês para ver os alvos.
+            Estratégia manual (legado): guarda as posições desta classe sem edição e sem alvos.
+            Atribua ou transfira posições na Alocação.
           </p>
         </Panel>
       )}
+
+      {isReportDriven(strategy) && (
+        <>
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {editions.map((edition) => (
+              <Chip key={edition.id} tone={edition.status === "ACTIVE" ? "green" : "amber"}>
+                {referenceMonthLabel(edition.reference_month)}
+                {edition.status === "ACTIVE" ? " · ativa" : " · em revisão"}
+                {currentMonth && isEditionForMonth(edition, currentMonth) ? " · mês atual" : ""}
+              </Chip>
+            ))}
+          </div>
+
+          {latest?.diff_from_previous && (
+            <div className="mb-4">
+              <DiffPanel diff={latest.diff_from_previous} />
+            </div>
+          )}
+
+          {loading ? (
+            <p className="text-[13.5px] text-ink-dim">Carregando edições…</p>
+          ) : latest ? (
+            <Table columns={columns} rows={latest.entries} rowKey={(entry) => entry.ticker} />
+          ) : (
+            <Panel>
+              <p className="text-[13px] text-ink-dim">
+                Sem edição importada. Importe o relatório do mês para ver os alvos.
+              </p>
+            </Panel>
+          )}
+        </>
+      )}
     </>
+  );
+}
+
+function CreateStrategyModal({
+  strategies,
+  onClose,
+  onCreated,
+}: {
+  strategies: Strategy[];
+  onClose: () => void;
+  onCreated: (strategy: Strategy) => void;
+}) {
+  const createStrategy = useCreateStrategy();
+  const [name, setName] = useState("");
+  const [assetClass, setAssetClass] = useState<AssetClass>("ACOES");
+  const [kind, setKind] = useState<StrategyKind>("REPORT_DRIVEN");
+
+  const bucket = strategies.find(
+    (strategy) => !isReportDriven(strategy) && strategy.asset_class === assetClass,
+  );
+  // A class holds at most one bucket, so a class that already has one falls back to "Com relatório"
+  // during render instead of leaving a contradictory mode in state.
+  const effectiveKind = bucket !== undefined && kind === "MANUAL" ? "REPORT_DRIVEN" : kind;
+
+  async function submit() {
+    try {
+      const created = await createStrategy.mutateAsync({
+        name: name.trim(),
+        asset_class: assetClass,
+        kind: effectiveKind,
+      });
+      onCreated(created);
+    } catch {
+      // The mutation error is rendered inline; the modal stays open for a retry.
+    }
+  }
+
+  return (
+    <dialog
+      open
+      aria-modal="true"
+      aria-label="Nova estratégia"
+      className="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center border-0 bg-transparent p-0"
+    >
+      <button
+        type="button"
+        aria-label="Fechar"
+        onClick={onClose}
+        className="absolute inset-0 bg-ground/70"
+      />
+      <div className="relative w-[420px] max-w-full space-y-4 rounded-md border border-line bg-surface p-4">
+        <h3 className="font-cond text-[16px] font-bold">Nova estratégia</h3>
+
+        <Field label="Nome">
+          <Input value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+
+        <Field label="Classe">
+          <select
+            value={assetClass}
+            onChange={(event) => setAssetClass(event.target.value as AssetClass)}
+            className={FIELD}
+          >
+            {STRATEGY_CLASSES.map((option) => (
+              <option key={option} value={option}>
+                {assetClassLabel(option)}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="space-y-1">
+          <span className="text-[11.5px] text-ink-dim">Modo</span>
+          <fieldset className="grid grid-cols-2 gap-1 rounded-md border border-line bg-surface-2 p-1">
+            <legend className="sr-only">Modo</legend>
+            <label
+              className={cn(
+                "flex cursor-pointer items-center justify-center rounded-sm px-2 py-1.5 text-[12.5px]",
+                effectiveKind === "REPORT_DRIVEN"
+                  ? "bg-surface text-ink"
+                  : "text-ink-dim hover:text-ink",
+              )}
+            >
+              <input
+                type="radio"
+                name="strategy-kind"
+                value="REPORT_DRIVEN"
+                checked={effectiveKind === "REPORT_DRIVEN"}
+                onChange={() => setKind("REPORT_DRIVEN")}
+                className="sr-only"
+              />
+              Com relatório
+            </label>
+            <label
+              className={cn(
+                "flex items-center justify-center rounded-sm px-2 py-1.5 text-[12.5px]",
+                bucket === undefined ? "cursor-pointer" : "cursor-not-allowed opacity-45",
+                effectiveKind === "MANUAL" ? "bg-surface text-ink" : "text-ink-dim hover:text-ink",
+              )}
+            >
+              <input
+                type="radio"
+                name="strategy-kind"
+                value="MANUAL"
+                checked={effectiveKind === "MANUAL"}
+                disabled={bucket !== undefined}
+                onChange={() => setKind("MANUAL")}
+                className="sr-only"
+              />
+              Manual (legado)
+            </label>
+          </fieldset>
+          {bucket && (
+            <p className="text-[11.5px] text-ink-faint">
+              {assetClassLabel(assetClass)} já tem uma estratégia manual.
+            </p>
+          )}
+        </div>
+
+        {createStrategy.error && (
+          <p className="text-[12.5px] text-tax">{createStrategy.error.message}</p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            onClick={submit}
+            disabled={createStrategy.isPending || name.trim() === ""}
+          >
+            {createStrategy.isPending ? "Criando…" : "Criar estratégia"}
+          </Button>
+        </div>
+      </div>
+    </dialog>
   );
 }
 
@@ -257,8 +484,12 @@ function StrategyImportView() {
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
 
-  const list = strategies.data ?? [];
-  const preselected = Number(params.get("strategy")) || null;
+  // Only a report-driven Strategy can receive an edition, so the bucket is never offered here.
+  const reportStrategies = reportDrivenStrategies(strategies.data ?? []);
+  const preselectedParam = Number(params.get("strategy")) || null;
+  const preselected = reportStrategies.some((strategy) => strategy.id === preselectedParam)
+    ? preselectedParam
+    : null;
   const reviewingRow = rows.find((row) => row.id === reviewingId);
   const reviewing = reviewingRow?.edition ?? null;
 
@@ -273,7 +504,7 @@ function StrategyImportView() {
     const additions: ImportRow[] = files.map((file) => ({
       id: crypto.randomUUID(),
       file,
-      strategyId: preselected ?? suggestStrategy(list, file.name)?.id ?? 0,
+      strategyId: preselected ?? suggestStrategy(reportStrategies, file.name)?.id ?? 0,
       status: "pending",
     }));
     setRows((current) => [...current, ...additions]);
@@ -288,7 +519,11 @@ function StrategyImportView() {
         strategyId: row.strategyId,
         file: row.file,
       });
-      updateRow(row.id, { status: "staged", edition: imported.edition, parser: imported.parser });
+      updateRow(row.id, {
+        status: "staged",
+        edition: imported.edition,
+        parser: imported.parser,
+      });
     } catch (error) {
       updateRow(row.id, {
         status: "failed",
@@ -316,19 +551,22 @@ function StrategyImportView() {
     {
       key: "strategy",
       header: "Estratégia sugerida",
-      render: (row) => (
-        <select
-          value={row.strategyId}
-          onChange={(event) => updateRow(row.id, { strategyId: Number(event.target.value) })}
-          className={FIELD}
-        >
-          {list.map((strategy) => (
-            <option key={strategy.id} value={strategy.id}>
-              {strategy.name}
-            </option>
-          ))}
-        </select>
-      ),
+      render: (row) =>
+        reportStrategies.length === 0 ? (
+          <span className="text-[12.5px] text-ink-dim">Nenhuma estratégia com relatório</span>
+        ) : (
+          <select
+            value={row.strategyId}
+            onChange={(event) => updateRow(row.id, { strategyId: Number(event.target.value) })}
+            className={FIELD}
+          >
+            {reportStrategies.map((strategy) => (
+              <option key={strategy.id} value={strategy.id}>
+                {strategy.name}
+              </option>
+            ))}
+          </select>
+        ),
     },
     {
       key: "parser",
@@ -427,7 +665,11 @@ function StrategyImportView() {
       {rows.length > 0 && (
         <div className="mt-4 space-y-3">
           <Table columns={columns} rows={rows} rowKey={(row) => row.id} />
-          <Button variant="primary" onClick={importPending} disabled={importEdition.isPending}>
+          <Button
+            variant="primary"
+            onClick={importPending}
+            disabled={importEdition.isPending || reportStrategies.length === 0}
+          >
             {importEdition.isPending ? "Importando…" : "Importar pendentes"}
           </Button>
         </div>
@@ -535,7 +777,9 @@ function PreviewDrawer({
                   value={entry.weight}
                   onChange={(event) =>
                     setEntries((current) =>
-                      overrideEntry(current, index, { weight: Number(event.target.value) }),
+                      overrideEntry(current, index, {
+                        weight: Number(event.target.value),
+                      }),
                     )
                   }
                   className={FIELD}
@@ -580,7 +824,9 @@ function PreviewDrawer({
                     checked={entry.do_not_trade}
                     onChange={(event) =>
                       setEntries((current) =>
-                        overrideEntry(current, index, { do_not_trade: event.target.checked }),
+                        overrideEntry(current, index, {
+                          do_not_trade: event.target.checked,
+                        }),
                       )
                     }
                   />

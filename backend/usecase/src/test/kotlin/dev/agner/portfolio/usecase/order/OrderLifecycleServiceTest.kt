@@ -28,6 +28,7 @@ import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.strategyTarget
@@ -332,7 +333,7 @@ private fun strategy(id: Int, name: String) = Strategy(
     id = id,
     name = name,
     assetClass = AssetClass.ACOES,
-    weight = BigDecimal("50"),
+    kind = StrategyKind.REPORT_DRIVEN,
 )
 
 private fun trade(

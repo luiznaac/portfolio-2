@@ -3,6 +3,7 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.import.strategy.StrategyReportParserResolver
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.strategy.MissingStrategyKindException
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.DiffChange
 import dev.agner.portfolio.usecase.strategy.model.DiffWeight
@@ -15,6 +16,7 @@ import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.forms.MultiPartFormDataContent
@@ -53,14 +55,15 @@ class StrategyControllerTest : DescribeSpec({
                 val body = ObjectMapper().readTree(response.bodyAsText()).get(0)
                 body.get("name").asText() shouldBe "Top Dividendos"
                 body.get("asset_class").asText() shouldBe "ACOES"
-                body.get("weight").decimalValue().compareTo(BigDecimal("34.00")) shouldBe 0
+                body.get("kind").asText() shouldBe "REPORT_DRIVEN"
+                body.has("weight") shouldBe false
             }
         }
     }
 
     describe("creating a strategy") {
 
-        it("creates from the name, class and weight") {
+        it("creates from the name, class and kind, ignoring a stale weight") {
             val service = mockk<StrategyService>()
             coEvery { service.create(any()) } returns strategy
 
@@ -69,15 +72,37 @@ class StrategyControllerTest : DescribeSpec({
 
                 val response = client.post("/strategies") {
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":"Top Dividendos","asset_class":"ACOES","weight":34.00}""")
+                    setBody(
+                        """{"name":"Top Dividendos","asset_class":"ACOES","kind":"REPORT_DRIVEN","weight":34.00}""",
+                    )
                 }
 
                 response.status shouldBe HttpStatusCode.Created
                 coVerify(exactly = 1) {
                     service.create(
-                        match { it == StrategyCreation("Top Dividendos", AssetClass.ACOES, BigDecimal("34.00")) },
+                        match {
+                            it == StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN)
+                        },
                     )
                 }
+            }
+        }
+
+        it("rejects a creation without a kind through the canonical error body") {
+            val service = mockk<StrategyService>()
+            coEvery { service.create(any()) } throws MissingStrategyKindException()
+
+            testApplication {
+                application { installRoutes(StrategyController(service, resolver())) }
+
+                val response = client.post("/strategies") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"name":"Top Dividendos","asset_class":"ACOES"}""")
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "missing-strategy-kind"
             }
         }
     }
@@ -232,7 +257,7 @@ class StrategyControllerTest : DescribeSpec({
 
 private fun resolver() = StrategyReportParserResolver(emptyList())
 
-private val strategy = Strategy(1, "Top Dividendos", AssetClass.ACOES, BigDecimal("34.00"))
+private val strategy = Strategy(1, "Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN)
 
 private val entry = EditionEntry(
     ticker = "PETR4",
