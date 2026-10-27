@@ -1,0 +1,472 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Ticket: UI: Strategies screen and Cockpit coverage (#248).
+  Question: #243 drops `strategy.weight`, so what replaces the "peso X% do bloco" line in the
+  Estratégias catalog list and the detail header — for report-driven strategies and for the manual
+  bucket alike?
+  Three variants of the Estratégias screen, switchable with ?variant=A|B|C (or ← / →):
+    A — Contagem: the line becomes "12 ativos · set/26" (a factual second line)
+    B — Status: no count; a right-aligned edition-status chip, class header gains "2 de 3 com edição"
+    C — Cobertura: class groups become cards with a coverage meter; rows are a compact name|dot|ativos table
+  Read-only: nothing persists, clicking a row only changes the detail pane.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo · Linha da estratégia · Estratégias</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ground: #0b0f14;
+        --surface: #121a21;
+        --surface-2: #19232c;
+        --surface-3: #212f3a;
+        --line: #263440;
+        --line-soft: #1c2833;
+        --ink: #e5ebf1;
+        --ink-dim: #9ba8b4;
+        --ink-faint: #667581;
+        --principal: #38bdf8;
+        --principal-bg: #38bdf81f;
+        --yield: #34d399;
+        --yield-bg: #34d3991f;
+        --tax: #fb7185;
+        --tax-bg: #fb71851f;
+        --accent: #f59e0b;
+        --accent-bg: #f59e0b1f;
+        --violet: #a78bfa;
+        --violet-bg: #a78bfa1f;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", monospace; }
+      .cond { font-family: "IBM Plex Sans Condensed", sans-serif; }
+      .shell { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh; }
+      .sidebar { border-right: 1px solid var(--line); background: var(--surface); padding: 18px 12px; }
+      .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 18px; }
+      .brand .dot { width: 18px; height: 18px; border-radius: 6px; background: var(--principal); }
+      .brand b { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 15px; letter-spacing: .02em; }
+      .nav-group { margin-bottom: 16px; }
+      .nav-title {
+        font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .09em;
+        text-transform: uppercase; color: var(--ink-faint); padding: 0 8px 6px;
+      }
+      .nav-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 6px; color: var(--ink-dim); font-size: 13px; }
+      .nav-item.active { background: var(--surface-2); color: var(--ink); }
+      .topbar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 12px 24px; background: var(--surface); }
+      .crumb { color: var(--ink-faint); font-size: 12.5px; }
+      .crumb b { color: var(--ink-dim); font-weight: 500; }
+      .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-dim); }
+      main { padding: 20px 24px 96px; }
+      h1 { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 24px; font-weight: 700; margin: 0; }
+      .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+      .page-head p { margin: 2px 0 0; color: var(--ink-dim); font-size: 13px; }
+      .actions { display: flex; gap: 8px; }
+      .btn {
+        border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+        border-radius: 6px; padding: 6px 12px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+      }
+      .btn:hover { background: var(--surface-3); }
+      .btn.primary { background: var(--principal); border-color: var(--principal); color: #05121b; font-weight: 600; }
+      .md { display: flex; gap: 20px; align-items: flex-start; }
+      .md-list { width: 264px; flex: 0 0 auto; }
+      .md-detail { min-width: 0; flex: 1; }
+
+      /* shared: one strategy row, three arrangements */
+      .s-row { width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 8px 10px; color: var(--ink); font-family: inherit; cursor: pointer; }
+      .s-row + .s-row { margin-top: 4px; }
+      .s-row.on { border-color: var(--principal); background: var(--surface-2); }
+      .s-name { display: block; font-size: 13.5px; }
+      .s-sub { display: block; font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-faint); }
+      .group-title { padding: 0 8px 6px; font-family: "IBM Plex Mono", monospace; font-size: 10px; font-weight: 500; letter-spacing: .12em; color: var(--ink-faint); text-transform: uppercase; }
+      .tag { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; border-radius: 4px; padding: 1px 5px; background: var(--violet-bg); color: var(--violet); }
+      .chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; white-space: nowrap; }
+      .chip.green { background: var(--yield-bg); color: var(--yield); }
+      .chip.amber { background: var(--accent-bg); color: var(--accent); }
+      .chip.rose { background: var(--tax-bg); color: var(--tax); }
+      .chip.violet { background: var(--violet-bg); color: var(--violet); }
+      .chip.neutral { background: var(--surface-3); color: var(--ink-dim); }
+      .dot-status { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+
+      /* variant A: count line */
+      .A .s-row { padding: 8px 10px; }
+
+      /* variant B: status chip, right-aligned; no second metric line */
+      .B .group-title { display: flex; align-items: center; justify-content: space-between; }
+      .B .group-title .coverage { color: var(--ink-faint); letter-spacing: .04em; text-transform: none; font-size: 10px; }
+      .B .s-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; }
+      .B .s-name { font-size: 13px; }
+
+      /* variant C: class cards with a coverage meter; compact table rows */
+      .C .group-card { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; margin-bottom: 10px; }
+      .C .group-card .group-title { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); background: var(--surface-2); }
+      .C .meter { width: 54px; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; display: inline-block; vertical-align: middle; }
+      .C .meter i { display: block; height: 100%; background: var(--yield); }
+      .C .s-row { border: 0; border-radius: 0; border-top: 1px solid var(--line-soft); display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 7px 10px; }
+      .C .s-row:first-of-type { border-top: 0; }
+      .C .s-row.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--principal); }
+      .C .s-name { font-size: 13px; }
+      .C .count { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-dim); }
+
+      /* detail pane */
+      .detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .detail-head h2 { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 19px; font-weight: 700; margin: 0; }
+      .detail-head .meta { color: var(--ink-dim); font-size: 12.5px; margin-top: 2px; }
+      .detail-head .meta b { font-family: "IBM Plex Mono", monospace; font-weight: 500; }
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+      .panel { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+      .panel-title { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 600; font-size: 13.5px; }
+      .panel-body { padding: 12px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; padding: 8px 12px; background: var(--surface-2); font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; white-space: nowrap; }
+      th.r, td.r { text-align: right; }
+      td { border-top: 1px solid var(--line-soft); padding: 8px 12px; vertical-align: middle; }
+      .muted { color: var(--ink-dim); }
+      .faint { color: var(--ink-faint); }
+      .empty { padding: 18px 12px; color: var(--ink-dim); font-size: 13px; }
+      .empty a { color: var(--principal); }
+
+      .variant-note { color: var(--ink-faint); font-size: 12px; margin: 0 0 14px; }
+      .variant-note b { color: var(--ink-dim); }
+
+      /* floating switcher */
+      .switcher {
+        position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+        background: #0d141a; border: 1px solid var(--surface-3); border-radius: 999px;
+        box-shadow: 0 10px 30px #0009; z-index: 50;
+      }
+      .switcher button {
+        width: 28px; height: 28px; border-radius: 999px; border: 1px solid var(--surface-3);
+        background: var(--surface-2); color: var(--ink); cursor: pointer; font-size: 14px; line-height: 1;
+      }
+      .switcher button:hover { background: var(--surface-3); }
+      .switcher .label { min-width: 230px; text-align: center; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 600; }
+      .switcher .hint { font-weight: 400; opacity: .55; font-size: 10.5px; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="dot"></span><b>Portfólio</b></div>
+        <div class="nav-group">
+          <div class="nav-title">Ritual</div>
+          <div class="nav-item">Cockpit</div>
+          <div class="nav-item">Capital e alvos</div>
+          <div class="nav-item">Ordens</div>
+          <div class="nav-item">Fechamento</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-title">Carteira</div>
+          <div class="nav-item">Alocação</div>
+          <div class="nav-item active">Estratégias</div>
+          <div class="nav-item">Ativos</div>
+          <div class="nav-item">Renda fixa</div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-title">Resultados</div>
+          <div class="nav-item">Proventos</div>
+          <div class="nav-item">Impostos</div>
+          <div class="nav-item">Performance</div>
+        </div>
+      </aside>
+
+      <div>
+        <div class="topbar">
+          <span class="crumb">Carteira / <b>Estratégias</b></span>
+          <span class="pill">set/26 · aberto</span>
+        </div>
+
+        <main id="page">
+          <div class="page-head">
+            <div>
+              <h1>Estratégias</h1>
+              <p>As carteiras da XP, edição por edição. O diff mês a mês e os alvos por ticker.</p>
+            </div>
+            <div class="actions">
+              <button class="btn">Nova estratégia</button>
+              <button class="btn primary">Importar relatórios</button>
+            </div>
+          </div>
+
+          <p class="variant-note" id="variant-note"></p>
+
+          <div class="md">
+            <nav class="md-list" id="catalog"></nav>
+            <div class="md-detail" id="detail"></div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div class="switcher">
+      <button id="prev" aria-label="Variante anterior">←</button>
+      <div class="label"><span id="switcher-label">A — Contagem</span> <span class="hint">?variant=A</span></div>
+      <button id="next" aria-label="Próxima variante">→</button>
+    </div>
+
+    <script>
+      // ---- fake data ----
+      const STRATEGIES = [
+        {
+          id: 1, name: "Carteira XP", ac: "ACOES", kind: "REPORT",
+          edition: { month: "2026-09", status: "ACTIVE" },
+          tickers: ["PETR4", "VALE3", "ITUB4", "BBAS3", "BBDC4", "PRIO3"],
+        },
+        {
+          id: 2, name: "Dividendos Plus", ac: "ACOES", kind: "REPORT",
+          edition: { month: "2026-09", status: "STAGED" },
+          tickers: ["ITSA4", "TAEE11", "CPLE6", "EGIE3", "VIVT3"],
+        },
+        {
+          id: 3, name: "Small Caps", ac: "ACOES", kind: "REPORT",
+          edition: { month: "2026-08", status: "ACTIVE" },
+          tickers: ["ALPA4", "MOVI3", "CASH3", "POSI3"],
+        },
+        {
+          id: 4, name: "Legado Ações", ac: "ACOES", kind: "MANUAL",
+          bucket: [
+            { ticker: "PETR4", qty: 400, value: 38000 },
+            { ticker: "VALE3", qty: 300, value: 34000 },
+            { ticker: "ITUB4", qty: 600, value: 24000 },
+          ],
+        },
+        {
+          id: 5, name: "Fundamentalista", ac: "FIIS", kind: "REPORT",
+          edition: { month: "2026-09", status: "ACTIVE" },
+          tickers: ["HGLG11", "KNRI11", "XPLG11", "VISC11"],
+        },
+        {
+          id: 6, name: "Legado FIIs", ac: "FIIS", kind: "MANUAL",
+          bucket: [
+            { ticker: "MXRF11", qty: 900, value: 9600 },
+            { ticker: "HSML11", qty: 120, value: 10200 },
+          ],
+        },
+      ];
+
+      const CLASS_LABEL = { ACOES: "Ações", FIIS: "FIIs" };
+      const VARIANTS = [
+        { key: "A", name: "A — Contagem", note: "<b>A — Contagem:</b> a linha vira um fato do mês — <span class='mono'>12 ativos · set/26</span> (o legado conta as posições atribuídas). A estrutura da lista não muda." },
+        { key: "B", name: "B — Status", note: "<b>B — Status:</b> sem contagem; um chip de status alinhado à direita (set/26 ✓ / em revisão / sem edição / Legado) e a cobertura da classe no cabeçalho do grupo. As linhas ficam mais curtas." },
+        { key: "C", name: "C — Cobertura", note: "<b>C — Cobertura:</b> cada classe vira um cartão com medidor de cobertura; as linhas são uma tabela compacta nome · ponto · ativos. O status da edição vive no medidor, não na linha." },
+      ];
+
+      let selected = 1;
+      const money = (n) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const monthLabel = (m) => {
+        const [y, mm] = m.split("-");
+        return ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(mm) - 1] + "/" + y.slice(2);
+      };
+
+      function current() {
+        return (new URLSearchParams(location.search).get("variant") || "A").toUpperCase();
+      }
+
+      function editionChip(s) {
+        if (s.kind === "MANUAL") return '<span class="chip violet">Legado</span>';
+        if (!s.edition) return '<span class="chip rose">sem edição</span>';
+        return s.edition.status === "ACTIVE"
+          ? `<span class="chip green">${monthLabel(s.edition.month)} ✓</span>`
+          : `<span class="chip amber">${monthLabel(s.edition.month)} · revisão</span>`;
+      }
+
+      function factLine(s) {
+        if (s.kind === "MANUAL") return `Legado · ${s.bucket.length} ativos`;
+        if (!s.edition) return "sem edição";
+        return `${s.tickers.length} ativos · ${monthLabel(s.edition.month)}`;
+      }
+
+      function classGroups() {
+        const groups = {};
+        for (const s of STRATEGIES) (groups[s.ac] ??= []).push(s);
+        for (const ac of Object.keys(groups)) {
+          groups[ac].sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "MANUAL" ? 1 : -1));
+        }
+        return groups;
+      }
+
+      function coverage(ac, list) {
+        const reports = list.filter((s) => s.kind === "REPORT");
+        const withEdition = reports.filter((s) => s.edition).length;
+        return { withEdition, total: reports.length };
+      }
+
+      // ---- variant A: the count line ----
+      function renderA() {
+        return Object.entries(classGroups()).map(([ac, list]) => `
+          <div style="margin-bottom:14px">
+            <div class="group-title">${CLASS_LABEL[ac]}</div>
+            ${list.map((s) => `
+              <button class="s-row ${s.id === selected ? "on" : ""}" data-id="${s.id}">
+                <span class="s-name">${s.name}${s.kind === "MANUAL" ? ' <span class="tag">legado</span>' : ""}</span>
+                <span class="s-sub">${factLine(s)}</span>
+              </button>`).join("")}
+          </div>`).join("");
+      }
+
+      // ---- variant B: the status chip ----
+      function renderB() {
+        return Object.entries(classGroups()).map(([ac, list]) => {
+          const { withEdition, total } = coverage(ac, list);
+          return `
+          <div style="margin-bottom:14px">
+            <div class="group-title"><span>${CLASS_LABEL[ac]}</span><span class="coverage">${withEdition} de ${total} com edição</span></div>
+            ${list.map((s) => `
+              <button class="s-row ${s.id === selected ? "on" : ""}" data-id="${s.id}">
+                <span class="s-name">${s.name}</span>
+                ${editionChip(s)}
+              </button>`).join("")}
+          </div>`;
+        }).join("");
+      }
+
+      // ---- variant C: class cards + coverage meter ----
+      function renderC() {
+        return Object.entries(classGroups()).map(([ac, list]) => {
+          const { withEdition, total } = coverage(ac, list);
+          const pct = total === 0 ? 0 : Math.round((withEdition / total) * 100);
+          return `
+          <div class="group-card">
+            <div class="group-title">
+              <span>${CLASS_LABEL[ac]}</span>
+              <span class="mono faint" style="font-size:10px;letter-spacing:0;text-transform:none">${withEdition}/${total} <span class="meter"><i style="width:${pct}%"></i></span></span>
+            </div>
+            ${list.map((s) => `
+              <button class="s-row ${s.id === selected ? "on" : ""}" data-id="${s.id}">
+                <span class="s-name">${s.name}</span>
+                <span class="dot-status" style="background:${s.kind === "MANUAL" ? "var(--violet)" : !s.edition ? "var(--tax)" : s.edition.status === "ACTIVE" ? "var(--yield)" : "var(--accent)"}"></span>
+                <span class="count">${s.kind === "MANUAL" ? `${s.bucket.length} ativos` : s.edition ? `${s.tickers.length} ativos` : "—"}</span>
+              </button>`).join("")}
+          </div>`;
+        }).join("");
+      }
+
+      // ---- detail pane ----
+      function detailHead(s, variant) {
+        const meta =
+          s.kind === "MANUAL"
+            ? variant === "B"
+              ? `${CLASS_LABEL[s.ac]} · <span class="chip violet">Legado</span>`
+              : variant === "C"
+                ? `${CLASS_LABEL[s.ac]} · <span class="faint">sem relatório</span>`
+                : `${CLASS_LABEL[s.ac]} · Legado · <b>${s.bucket.length} ativos</b>`
+            : variant === "B"
+              ? `${CLASS_LABEL[s.ac]} · ${editionChip(s)}`
+              : variant === "C"
+                ? `${CLASS_LABEL[s.ac]} · <b>${s.tickers.length} ativos</b>`
+                : `${CLASS_LABEL[s.ac]} · <b>${s.tickers.length} ativos</b> · edição ${monthLabel(s.edition.month)}`;
+        const action =
+          s.kind === "MANUAL"
+            ? '<span class="faint" style="font-size:12px">Posições e transferências: Alocação</span>'
+            : '<button class="btn">Importar relatório</button>';
+        return `
+          <div class="detail-head">
+            <div>
+              <h2>${s.name}</h2>
+              <div class="meta">${meta}</div>
+            </div>
+            ${action}
+          </div>`;
+      }
+
+      function reportDetail(s) {
+        const chips = s.edition
+          ? `<div class="chips"><span class="chip ${s.edition.status === "ACTIVE" ? "green" : "amber"}">${monthLabel(s.edition.month)}${s.edition.status === "ACTIVE" ? " · ativa" : " · em revisão"}</span><span class="chip neutral">mês atual</span></div>`
+          : "";
+        const rows = s.tickers.map((t, i) => `
+          <tr>
+            <td class="mono" style="font-weight:500">${t}</td>
+            <td class="r">${[9, 8, 6, 5, 4, 3][i % 6]}%</td>
+            <td>${["Compra", "Neutro", "Venda"][i % 3]}</td>
+            <td class="r mono">${i % 2 === 0 ? "R$ 42,10" : "—"}</td>
+          </tr>`).join("");
+        return `${chips}
+          <div class="panel">
+            <table>
+              <thead><tr><th>Ticker</th><th class="r">Peso</th><th>Rating</th><th class="r">Preço-alvo</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }
+
+      function bucketDetail(s) {
+        const total = s.bucket.reduce((sum, row) => sum + row.value, 0);
+        const rows = s.bucket.map((row) => `
+          <tr>
+            <td class="mono" style="font-weight:500">${row.ticker}</td>
+            <td class="r mono">${row.qty.toLocaleString("pt-BR")}</td>
+            <td class="r mono">${money(row.value)}</td>
+            <td class="r mono muted">${Math.round((row.value / total) * 100)}%</td>
+          </tr>`).join("");
+        return `
+          <div class="panel">
+            <div class="panel-title">Posições atribuídas · ${money(total)}</div>
+            <table>
+              <thead><tr><th>Ticker</th><th class="r">Cotas</th><th class="r">Valor</th><th class="r">Fatia</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p class="faint" style="font-size:12px;margin:10px 2px 0">Sem relatório e sem alvo: o legado não entra em Alvos nem gera ordens de plano. A entrada em massa e as transferências ficam na Alocação.</p>`;
+      }
+
+      function render() {
+        const variant = current();
+        document.getElementById("page").className = variant;
+        const meta = VARIANTS.find((v) => v.key === variant) || VARIANTS[0];
+        document.getElementById("variant-note").innerHTML = meta.note;
+        document.getElementById("switcher-label").textContent = meta.name;
+
+        const catalog = document.getElementById("catalog");
+        catalog.innerHTML = variant === "A" ? renderA() : variant === "B" ? renderB() : renderC();
+        catalog.querySelectorAll("[data-id]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selected = Number(button.dataset.id);
+            render();
+          });
+        });
+
+        const s = STRATEGIES.find((x) => x.id === selected) || STRATEGIES[0];
+        document.getElementById("detail").innerHTML =
+          detailHead(s, variant) + (s.kind === "MANUAL" ? bucketDetail(s) : reportDetail(s));
+      }
+
+      function go(key) {
+        const url = new URL(location.href);
+        url.searchParams.set("variant", key);
+        history.replaceState(null, "", url);
+        render();
+      }
+
+      document.getElementById("prev").addEventListener("click", () => {
+        const i = VARIANTS.findIndex((v) => v.key === current());
+        go(VARIANTS[(i - 1 + VARIANTS.length) % VARIANTS.length].key);
+      });
+      document.getElementById("next").addEventListener("click", () => {
+        const i = VARIANTS.findIndex((v) => v.key === current());
+        go(VARIANTS[(i + 1) % VARIANTS.length].key);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.target.matches("input, textarea, [contenteditable]")) return;
+        if (event.key === "ArrowLeft") document.getElementById("prev").click();
+        if (event.key === "ArrowRight") document.getElementById("next").click();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
