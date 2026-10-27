@@ -254,6 +254,8 @@ export interface ClassAllocation {
   drift: number;
   unattributed: number;
   strategies: StrategyAllocation[];
+  manual?: ManualAllocation;
+  outside: OutsideAllocation;
   sub_classes: SubClassAllocation[];
 }
 
@@ -265,6 +267,33 @@ export interface StrategyAllocation {
   deficit: number;
   drift: number;
   tickers: TickerAllocation[];
+}
+
+// The Manual Strategy (bucket) rung: Actual only, so Alvo, Ideal, Δ R$ and Δ p.p. are absent rather
+// than zero — a zero would draw an excess bar for money that has no target.
+export interface ManualAllocation {
+  strategy: string;
+  actual: number;
+  tickers: ActualTickerAllocation[];
+}
+
+// The class's outside custody, after the bucket, so the class's rows sum to its Actual.
+export interface OutsideAllocation {
+  actual: number;
+  tickers: ActualTickerAllocation[];
+}
+
+// A held ticker whose catalog class is unknown: a data-quality state, counted in the Portfolio total
+// but in no class or Strategy rung.
+export interface UnclassifiedAllocation {
+  actual: number;
+  tickers: ActualTickerAllocation[];
+}
+
+// A leaf with only an Actual — a bucket, outside or unclassified ticker.
+export interface ActualTickerAllocation {
+  ticker: string;
+  actual: number;
 }
 
 export interface SubClassAllocation {
@@ -293,7 +322,9 @@ export interface Allocation {
   actual: number;
   deficit: number;
   drift: number;
+  // Custody inside no Strategy — outside plus unclassified; bucket units are attributed.
   unattributed: number;
+  unclassified: UnclassifiedAllocation;
   classes: ClassAllocation[];
 }
 
@@ -616,6 +647,22 @@ export interface StrategyCreation {
   name: string;
   asset_class: AssetClass;
   kind: StrategyKind;
+}
+
+// A Strategy's attributed holdings, priced at the current quote — the read behind the read-only
+// manual Strategy detail. `share` is the slice's percentage of the bucket total.
+export interface StrategyHolding {
+  ticker: string;
+  quantity: number;
+  value: number;
+  share: number;
+}
+
+export interface StrategyHoldings {
+  strategy_id: number;
+  strategy_name: string;
+  total_value: number;
+  holdings: StrategyHolding[];
 }
 
 export interface EditionEntry {

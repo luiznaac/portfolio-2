@@ -112,6 +112,35 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
   The reads are then deterministic: `GET /month/current/orders?phase=funding` returns an ITUB4 BUY, no SELL, `outside_strategy: []`, and one `unclassified` entry for ZZZZ3; `POST /positions/ZZZZ3/attribution` and a cross-class attribution both answer 400.
 
+- **Allocation seed**: the Alocação tree and the manual Strategy detail read this scenario. It resets the same tables as the order-plan seed and seeds one report Strategy (Top Dividendos, id 9001), two manual buckets (Legado Ações id 9002, Legado FIIs id 9003), an open 2027-04 month, a 100% Ações class target whose report Strategy targets VALE3, three positions and quotes at R$10 (VALE3 100, ITUB4 50, ZZZZ9 10), the ledger split (VALE3: 60 to Top Dividendos + 20 to Legado Ações; ITUB4: 30 to Legado Ações), and a catalog row for ZZZZ9 with no class. The tree then reads: class Ações Actual 1.500,00 = Top Dividendos 600,00 + Legado Ações 500,00 + outside 400,00; the root adds the unclassified 100,00 for Actual 1.600,00 and unattributed 500,00; the manual detail for id 9002 totals 500,00 and id 9003 is empty. Run it independently of the other seeds.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()), \
+          (9003,'Legado FIIs','FIIS','MANUAL',NOW()); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9100, '2027-04', 100000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9100,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9100,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('VALE3',100,8), ('ITUB4',50,8), ('ZZZZ9',10,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('VALE3',9001,60), ('VALE3',9002,20), ('ITUB4',9002,30); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('VALE3','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ZZZZ9','2027-04-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
+  ```
+
 - **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
 
   The carry state seeds the three bucket openings (SWING 500, DAY_TRADE 300, FII 250) at the 2027-02 close, so the roll starts at March. Two prior-month losses bank before April: a CSNA3 swing loss of R$100 in the exempt March month (gross R$900, so it stays under the meter) and a KNRI11 FII loss of R$1,000. April therefore opens with SWING 600 and FII 1,250; the SWING carry offsets R$600 of the month's R$4,600 gain (taxable R$4,000, tax R$600), the FII carry offsets the whole R$1,000 gain (closing R$250), and the day-trade bucket stays at R$300 because April's CSNA3 round trip is flat. That round trip is imported so the day-trade warning guard sees it:

@@ -20,6 +20,7 @@ import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
@@ -237,5 +238,6 @@ private fun allocation(actual: String) = Allocation(
     deficit = BigDecimal.ZERO,
     drift = BigDecimal.ZERO,
     unattributed = BigDecimal.ZERO,
+    unclassified = UnclassifiedAllocation(actual = BigDecimal.ZERO, tickers = emptyList()),
     classes = emptyList(),
 )

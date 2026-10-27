@@ -33,7 +33,9 @@ import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
+import dev.agner.portfolio.usecase.portfolio.model.OutsideAllocation
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
@@ -217,6 +219,7 @@ private val allocation = Allocation(
     deficit = BigDecimal("45000.00"),
     drift = BigDecimal("18.37"),
     unattributed = BigDecimal("50000.00"),
+    unclassified = UnclassifiedAllocation(actual = BigDecimal.ZERO, tickers = emptyList()),
     classes = listOf(
         ClassAllocation(
             assetClass = AssetClass.ACOES,
@@ -227,6 +230,8 @@ private val allocation = Allocation(
             drift = BigDecimal("-1.02"),
             unattributed = BigDecimal("120000.00"),
             strategies = emptyList(),
+            manual = null,
+            outside = OutsideAllocation(actual = BigDecimal("120000.00"), tickers = emptyList()),
             subClasses = emptyList(),
         ),
     ),

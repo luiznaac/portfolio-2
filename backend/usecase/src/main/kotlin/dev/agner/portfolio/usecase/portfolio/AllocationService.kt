@@ -7,8 +7,13 @@ import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Position
+import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
+import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import kotlinx.coroutines.awaitAll
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -24,6 +29,8 @@ class AllocationService(
     private val quotes: QuoteService,
     private val bonds: BondService,
     private val bondPositions: BondPositionService,
+    private val strategies: IStrategyRepository,
+    private val attributions: IAttributionRepository,
 ) {
 
     // Null when no month is open — the edge maps that to the 404 the current-month reads promise.
@@ -36,6 +43,21 @@ class AllocationService(
         // summing the accounts too would count the account-held bonds a second time.
         val fixedIncome = bonds.fetchAll().mapNotNull { toFixedIncomeHolding(it) }
 
+        val strategyList = strategies.fetchAll()
+        val strategyById = strategyList.associateBy { it.id }
+        // The ledger is keyed by strategy name because that is how the Target chain names its
+        // strategies; the id resolves the name and the kind in one read.
+        val ledger: AttributionLedger = attributions.fetchAll()
+            .mapNotNull { row ->
+                strategyById[row.strategyId]?.let { strategy ->
+                    StrategyTicker(strategy.name, row.ticker) to row.quantity
+                }
+            }
+            .toMap()
+        val manual = strategyList
+            .filter { it.kind == StrategyKind.MANUAL }
+            .map { ManualStrategyHolding(it.name, it.assetClass) }
+
         return AllocationCalculator.compute(
             period = current.month.period,
             capital = current.month.capital,
@@ -43,6 +65,8 @@ class AllocationService(
             targets = current.targets,
             listed = listed,
             fixedIncome = fixedIncome,
+            attributions = ledger,
+            manualStrategies = manual,
         )
     }
 
