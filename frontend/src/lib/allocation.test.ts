@@ -193,6 +193,24 @@ describe("allocationRows", () => {
     expect(subClass?.target).toBe(55);
   });
 
+  it("blanks every planning column when the read has no period", () => {
+    const rows = allocationRows(monthFree, new Set(["class:ACOES"]));
+
+    const capital = rows.find((row) => row.kind === "capital");
+    expect(capital?.ideal).toBeUndefined();
+    expect(capital?.deficit).toBeUndefined();
+    expect(capital?.drift).toBeUndefined();
+
+    const acoes = rows.find((row) => row.label === "Ações");
+    expect(acoes?.ideal).toBeUndefined();
+    expect(acoes?.deficit).toBeUndefined();
+    expect(acoes?.drift).toBeUndefined();
+    expect(acoes?.actual).toBe(1500);
+
+    expect(rows.find((row) => row.label === "Legado Ações")?.actual).toBe(500);
+    expect(rows.find((row) => row.label === "Fora da estratégia")?.actual).toBe(400);
+  });
+
   it("marks a class with children expandable and a leaf not", () => {
     const rows = allocationRows(allocation, new Set());
 
@@ -250,3 +268,68 @@ describe("allocation formatting", () => {
     expect(formatPoints(undefined)).toBe("—");
   });
 });
+
+// A month-free read: no period, no chain to scale, so every planning column is absent while the
+// custody-driven rows (class Actual, bucket, outside, unclassified) stay live.
+const monthFree: Allocation = {
+  capital: 0,
+  floor: 0,
+  ideal: 0,
+  actual: 1600,
+  deficit: -1600,
+  drift: 0,
+  unattributed: 500,
+  unclassified: {
+    actual: 100,
+    tickers: [{ ticker: "ZZZZ9", actual: 100 }],
+  },
+  classes: [
+    {
+      asset_class: "ACOES",
+      ideal: 0,
+      actual: 1500,
+      deficit: -1500,
+      drift: 0,
+      unattributed: 400,
+      strategies: [],
+      manual: {
+        strategy: "Legado Ações",
+        actual: 500,
+        tickers: [
+          { ticker: "ITUB4", actual: 300 },
+          { ticker: "VALE3", actual: 200 },
+        ],
+      },
+      outside: {
+        actual: 400,
+        tickers: [
+          { ticker: "ITUB4", actual: 200 },
+          { ticker: "VALE3", actual: 200 },
+        ],
+      },
+      sub_classes: [],
+    },
+    {
+      asset_class: "FIIS",
+      ideal: 0,
+      actual: 0,
+      deficit: 0,
+      drift: 0,
+      unattributed: 0,
+      strategies: [],
+      outside: { actual: 0, tickers: [] },
+      sub_classes: [],
+    },
+    {
+      asset_class: "RENDA_FIXA",
+      ideal: 0,
+      actual: 0,
+      deficit: 0,
+      drift: 0,
+      unattributed: 0,
+      strategies: [],
+      outside: { actual: 0, tickers: [] },
+      sub_classes: [],
+    },
+  ],
+};

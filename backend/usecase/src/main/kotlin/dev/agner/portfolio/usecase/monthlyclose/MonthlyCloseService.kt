@@ -89,7 +89,7 @@ class MonthlyCloseService(
         val pending = persisted.transfers.filter { it.status == TransferStatus.PENDING }
         if (pending.isNotEmpty()) throw PendingTransfersException(pending)
 
-        val allocation = allocations.fetchCurrent() ?: return null
+        val allocation = allocations.fetchCurrent()
         val report = tax.fetchCurrent() ?: return null
         val state = closeState(month = open.month, allocation = allocation, report = report, orderList = persisted)
         val closed = months.close(open.month.id) ?: return null

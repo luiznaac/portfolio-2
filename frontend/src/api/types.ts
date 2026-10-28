@@ -297,7 +297,9 @@ export interface MonthUpdate {
 
 // The computed allocation tree (GET /month/current/allocation). Ideal/Actual/Deficit are R$; Drift
 // is in percentage points (Actual − Ideal over Capital) and `target` is the rung's percentage, absent
-// when the month's chain declares none (the backend omits nulls).
+// when the month's chain declares none (the backend omits nulls). The read is month-free: with no
+// open month `period` is absent, the chain has no targets and only the custody-driven Actuals mean
+// anything — the page blanks the planning columns rather than drawing zeroes.
 export interface ClassAllocation {
   asset_class: AssetClass;
   target?: number;
@@ -368,7 +370,8 @@ export interface TickerAllocation {
 }
 
 export interface Allocation {
-  period: string;
+  // Absent when no month is open: the read is month-free and carries Actual only.
+  period?: string;
   capital: number;
   floor: number;
   ideal: number;

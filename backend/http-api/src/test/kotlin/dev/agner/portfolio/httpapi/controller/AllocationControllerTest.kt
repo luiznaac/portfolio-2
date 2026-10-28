@@ -55,14 +55,21 @@ class AllocationControllerTest : DescribeSpec({
             }
         }
 
-        it("404s when no month is open") {
+        it("serves an Actual-only tree with no period when no month is open") {
             val service = mockk<AllocationService>()
-            coEvery { service.fetchCurrent() } returns null
+            coEvery { service.fetchCurrent() } returns allocation.copy(period = null)
 
             testApplication {
                 application { installRoutes(AllocationController(service)) }
 
-                client.get("/month/current/allocation").status shouldBe HttpStatusCode.NotFound
+                val response = client.get("/month/current/allocation")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.has("period") shouldBe false
+                body.get("actual").decimalValue().compareTo(BigDecimal("1500.00")) shouldBe 0
+                body.get("classes").get(0).get("actual").decimalValue()
+                    .compareTo(BigDecimal("1500.00")) shouldBe 0
             }
         }
     }

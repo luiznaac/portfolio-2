@@ -13,11 +13,15 @@ import java.math.BigDecimal
 // consolidation engine's product values plus Position × current quote for the listed book. Deficit is
 // Ideal − Actual (positive = short); Drift is (Actual − Ideal) ÷ Capital, in percentage points.
 //
+// The read is month-free: with no open month there is no chain to scale, so `period` is absent and the
+// tree carries Actual only. The bucket, outside and unclassified rows stay live because they come from
+// custody and attribution, not from the month.
+//
 // The listed tree is additive: a class's report Strategy slices, its Manual Strategy (bucket) and its
 // outside row sum to the class Actual, which stays full custody. `unattributed` is the custody inside
 // no Strategy — outside plus unclassified — so bucket units never count as unattributed.
 data class Allocation(
-    val period: YearMonth,
+    val period: YearMonth?,
     val capital: BigDecimal,
     val floor: BigDecimal,
     val ideal: BigDecimal,

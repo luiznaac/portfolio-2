@@ -29,7 +29,6 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -60,13 +59,25 @@ class AllocationServiceTest : StringSpec({
 
     beforeTest { clearAllMocks() }
 
-    "returns null when no month is open and reads no book" {
+    "returns an Actual-only tree when no month is open" {
         coEvery { months.fetchCurrent() } returns null
+        coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
+        coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
+        coEvery { bonds.fetchAll() } returns emptySet()
+        coEvery { strategies.fetchAll() } returns listOf(manualStrategy)
+        coEvery { attributions.fetchAll() } returns listOf(
+            Attribution("VALE3", manualStrategy.id, BigDecimal("40")),
+        )
 
-        service.fetchCurrent() shouldBe null
+        val allocation = service.fetchCurrent()
 
-        coVerify(exactly = 0) { positions.fetchAll() }
-        coVerify(exactly = 0) { bonds.fetchAll() }
+        allocation.period shouldBe null
+        allocation.actual.plain() shouldBe "1000"
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+        acoes.actual.plain() shouldBe "1000"
+        acoes.manual!!.actual.plain() shouldBe "400"
+        acoes.outside.actual.plain() shouldBe "600"
     }
 
     "composes the listed positions (Position × quote) and the RF consolidated values" {
