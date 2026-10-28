@@ -12,6 +12,11 @@ frontend/dist-ssr/
 .vite/
 npm-debug.log*
 
+### Local secrets (see .env.example) ###
+.env
+.env.*.local
+docker-compose.override.yml
+
 ### STS ###
 .apt_generated
 .classpath
@@ -45,6 +50,9 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### Fixtures (development/test only, git-ignored) ###
+/references/
 
 ### Claude Code ###
 .claude/

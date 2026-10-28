@@ -30,3 +30,7 @@ fun <T> Arb<T>.toSet(size: Int = 5) = this.take(size).toSet()
 inline fun <reified E : Enum<E>> enum() = Arb.enum<E>().next()
 
 fun arbAsciiString() = Arb.string(codepoints = Codepoint.ascii(), size = 20).next()
+
+// Assertions compare money through its plain text form: BigDecimal.equals is scale-sensitive
+// (0 != 0.000), so `toPlainString` stripped of trailing zeros is the stable expected-value shape.
+fun BigDecimal.plain(): String = stripTrailingZeros().toPlainString()

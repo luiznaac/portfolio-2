@@ -1,4 +1,4 @@
-package dev.agner.chameidor.usecase.configuration.serializers
+package dev.agner.portfolio.usecase.configuration.serializers
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser

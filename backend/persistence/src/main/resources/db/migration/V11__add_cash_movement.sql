@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS cash_movement (id INT AUTO_INCREMENT PRIMARY KEY, ticker VARCHAR(12) NOT NULL, `date` DATE NOT NULL, gross_amount DECIMAL(18, 6) NOT NULL, retained_amount DECIMAL(18, 6) NOT NULL, net_amount DECIMAL(18, 6) NOT NULL, tax_nature VARCHAR(20) NOT NULL, provenance VARCHAR(20) NOT NULL, status VARCHAR(20) DEFAULT 'ANNOUNCED' NOT NULL, income_type VARCHAR(20) NOT NULL, created_at DATETIME(6) NOT NULL);
+ALTER TABLE cash_movement ADD CONSTRAINT cash_movement_ticker_date_income_type_unique UNIQUE (ticker, `date`, income_type);

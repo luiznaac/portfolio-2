@@ -38,7 +38,7 @@ class YieldRateServiceTest : StringSpec({
         val bond = Bond.FloatingRateBond(
             id = 1,
             name = "Test Floating Bond",
-            value = BigDecimal("120"), // 120% of index
+            rate = BigDecimal("120"), // 120% of index
             maturityDate = LocalDate.parse("2030-12-31"),
             indexId = indexId,
         )
@@ -64,7 +64,7 @@ class YieldRateServiceTest : StringSpec({
         val bond = Bond.FixedRateBond(
             id = 1,
             name = "Test Floating Bond",
-            value = rate,
+            rate = rate,
             maturityDate = LocalDate.parse("2030-12-31"),
         )
 
@@ -99,7 +99,7 @@ class YieldRateServiceTest : StringSpec({
         val bond = Bond.FixedRateBond(
             id = 2,
             name = "Fixed Bond Filter Test",
-            value = BigDecimal("10.00"),
+            rate = BigDecimal("10.00"),
             maturityDate = LocalDate.parse("2030-12-31"),
         )
 

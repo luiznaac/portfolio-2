@@ -1,0 +1,1 @@
+ALTER TABLE import_row MODIFY COLUMN `date` DATE NULL;
