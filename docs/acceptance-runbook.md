@@ -460,3 +460,29 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,NULL,'2027-01-01','2027-05-31',NOW()), \
           ('YYYY9','YYYY','12',NULL,'FII','FIIS','ACOES','2027-01-01','2027-05-31',NOW());"
   ```
+
+- **Bucket-transfer seed**: the plan-suggested bucket transfer reads the order plan, the attribution ledger, the strategies catalog and the current month. This seed gives one report Strategy (Top Dividendos, id 9001) whose ITUB4 Target is its whole 100-unit custody, with 90 units attributed to it and 10 to the Legado bucket (id 9002) at a R$10 close. `POST /orders/plan/refresh` therefore proposes one PENDING transfer of 10 whole units, worth R$100 — below the R$500 threshold that would auto-approve a report-to-report move — from Legado to Top Dividendos; the bucket row keeps its shape and its source id resolves to the Legado Strategy. A second refresh after a rejection would drop it, and `POST /month/current/close` answers 409 while it is pending. Run it independently of the other seeds.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado','ACOES','MANUAL',NOW()); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9200, '2027-06', 1000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9200,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9200,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+          (9200,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4',9001,90), ('ITUB4',9002,10); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES ('ITUB4','2027-06-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW());"
+  ```
+
+  The reads are then deterministic: `GET /orders` (after the refresh) carries one transfer with `from_strategy: "Legado"`, `to_strategy: "Top Dividendos"`, `quantity: 10`, `amount: 100`, `auto_approved: false`, `status: "PENDING"`; the Ordens page renders its caption as `move R$ 100,00 do legado`.

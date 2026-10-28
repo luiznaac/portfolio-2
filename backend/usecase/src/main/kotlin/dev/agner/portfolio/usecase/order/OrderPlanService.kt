@@ -16,6 +16,7 @@ import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.targetedTickers
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.StrategyService
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import kotlinx.coroutines.awaitAll
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -44,6 +45,7 @@ class OrderPlanService(
         val targets = current.targets.normalized()
         val positionByTicker = positions.fetchAll().associate { it.ticker to it.quantity }
         val ledger = attributions.fetchLedger()
+        val manualNames = strategies.fetchManualNames()
         // The report-membership half comes from the chain leaves, exactly as the order calculator
         // reads it, so a Target the chain does not carry cannot make a ticker inside.
         val investableCapital = (current.month.capital - current.month.floor).defaultScale()
@@ -51,7 +53,7 @@ class OrderPlanService(
             positions = positionByTicker,
             targetedTickers = TargetChainCalculator.compute(investableCapital, targets).targetedTickers(),
             ledger = ledger,
-            manualStrategies = strategies.fetchManualNames(),
+            manualStrategies = manualNames,
             unclassifiedTickers = catalog.fetchUnclassified(positionByTicker.keys),
         )
 
@@ -68,21 +70,21 @@ class OrderPlanService(
         // Uninvested Balance and its RF part sizes the sub-class orders.
         val allocation = if (phase.includesFunding) allocations.fetchCurrent() else null
 
-        val plan = OrderPlanCalculator.compute(
-            OrderPlanContext(
-                period = current.month.period,
-                phase = phase,
-                capital = current.month.capital,
-                floor = current.month.floor,
-                targets = targets,
-                positions = positionByTicker,
-                prices = prices,
-                placement = placement,
-                neutroSlices = strategies.fetchNeutroSlices(),
-                attributionBySlice = ledger,
-                fixedIncomeActualBySubClass = allocation?.fixedIncomeActual.orEmpty(),
-            ),
+        val context = OrderPlanContext(
+            period = current.month.period,
+            phase = phase,
+            capital = current.month.capital,
+            floor = current.month.floor,
+            targets = targets,
+            positions = positionByTicker,
+            prices = prices,
+            placement = placement,
+            neutroSlices = strategies.fetchNeutroSlices(),
+            attributionBySlice = ledger,
+            manualSlices = ledger.filterKeys { it.strategy in manualNames },
+            fixedIncomeActualBySubClass = allocation?.fixedIncomeActual.orEmpty(),
         )
+        val plan = OrderPlanCalculator.compute(context)
         if (allocation == null) return plan
 
         val funded = plan.withFunding(
@@ -91,7 +93,11 @@ class OrderPlanService(
             prices = prices,
             placement = placement,
         )
-        return if (phase.isFull) funded.withFullPlan() else funded
+        return if (phase.isFull) {
+            funded.withFullPlan(manualSlices = context.manualSlices)
+        } else {
+            funded
+        }
     }
 
     // The whole book's Actual is exactly the holdings the Capital is not sitting in cash; the
@@ -120,10 +126,16 @@ class OrderPlanService(
     // The full phase's last two layers: scale the buys to what the funding pass could deploy, then
     // aim the attribution at the scaled orders and finish with the cross-slice transfers. The funding
     // summary is restated in scaled terms so the plan never reports buying more than it can fund.
-    private fun OrderPlan.withFullPlan(): OrderPlan {
+    // `manualSlices` is the bucket half of the ledger, so the transfer pass can suggest moving its
+    // units into a short report slice.
+    private fun OrderPlan.withFullPlan(manualSlices: Map<StrategyTicker, BigDecimal>): OrderPlan {
         val funding = funding ?: return this
         val proRata = ProRataCalculator.compute(candidates = candidates, funding = funding)
-        val attribution = AttributionPlanner.compute(slices = tickerSlices, candidates = proRata.candidates)
+        val attribution = AttributionPlanner.compute(
+            slices = tickerSlices,
+            candidates = proRata.candidates,
+            manualSlices = manualSlices,
+        )
         return copy(
             candidates = proRata.candidates,
             funding = funding.copy(

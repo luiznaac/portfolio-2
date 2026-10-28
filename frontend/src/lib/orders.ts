@@ -3,8 +3,10 @@
 
 import type {
   OrderSide,
+  Strategy,
   SuggestedOrder,
   SuggestedOrderStatus,
+  TransferProposal,
   TransferStatus,
 } from "../api/types.ts";
 import { formatCurrency } from "./format.ts";
@@ -38,6 +40,34 @@ export function orderStatusLabel(status: SuggestedOrderStatus): string {
 
 export function transferStatusLabel(status: TransferStatus): string {
   return TRANSFER_STATUS_LABELS[status];
+}
+
+// The inbox row's source kind comes from the strategies catalog: a Manual Strategy means the move
+// draws on the legacy bucket. Undefined while the catalog has not resolved; an unknown source is not
+// the bucket — the copy must not claim a legacy move it cannot see.
+export function transferSourceIsBucket(
+  transfer: TransferProposal,
+  strategies: Strategy[] | undefined,
+): boolean | undefined {
+  if (strategies === undefined) return undefined;
+  return (
+    strategies.find((strategy) => strategy.id === transfer.from_strategy_id)?.kind === "MANUAL"
+  );
+}
+
+// The caption beside a transfer row: "evita vender" only makes sense when a report slice's surplus
+// funds the move; a bucket source moves legacy units, so no sale is at stake. Absent while the
+// catalog is still loading — claiming the report copy before the source kind is known would be wrong.
+export function transferCopy(
+  transfer: TransferProposal,
+  strategies: Strategy[] | undefined,
+): string | undefined {
+  if (transfer.amount === undefined) return "sem cotação";
+  const fromBucket = transferSourceIsBucket(transfer, strategies);
+  if (fromBucket === undefined) return undefined;
+  return fromBucket
+    ? `move ${formatCurrency(transfer.amount)} do legado`
+    : `evita vender ${formatCurrency(transfer.amount)}`;
 }
 
 export interface OrderGroup {

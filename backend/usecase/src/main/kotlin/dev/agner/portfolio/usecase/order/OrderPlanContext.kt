@@ -29,11 +29,12 @@ typealias SubClassAmounts = Map<FixedIncomeSubClass, BigDecimal>
 //
 // `neutroSlices` is the Edition Entries flagged "não operar" and `attributionBySlice` maps each
 // (strategy, ticker) slice to its stored Attribution quantity — the only way to size a NEUTRO slice's
-// sell. `placement` is the shared inside/outside/unclassified verdict per held ticker (see
-// PlacementCalculator); both this calculator and the funding pass read it instead of re-deriving the
-// rule. `fixedIncomeActualBySubClass` values the RF book for the full phase's sub-class orders; not
-// every phase reads it. The funding pass's cash input lives in FundingContext, so a phase that does
-// not fund never touches the whole-book valuation.
+// sell. `manualSlices` is the same map filtered to Manual Strategies: the target-less donors the full
+// phase's transfer pass may move from. `placement` is the shared inside/outside/unclassified verdict
+// per held ticker (see PlacementCalculator); both this calculator and the funding pass read it
+// instead of re-deriving the rule. `fixedIncomeActualBySubClass` values the RF book for the full
+// phase's sub-class orders; not every phase reads it. The funding pass's cash input lives in
+// FundingContext, so a phase that does not fund never touches the whole-book valuation.
 data class OrderPlanContext(
     val period: YearMonth,
     val phase: OrderPlanPhase,
@@ -45,6 +46,7 @@ data class OrderPlanContext(
     val placement: TickerPlacements,
     val neutroSlices: Set<StrategyTicker> = emptySet(),
     val attributionBySlice: Map<StrategyTicker, BigDecimal> = emptyMap(),
+    val manualSlices: Map<StrategyTicker, BigDecimal> = emptyMap(),
     val fixedIncomeActualBySubClass: SubClassAmounts = emptyMap(),
 )
 

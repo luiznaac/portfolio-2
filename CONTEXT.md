@@ -85,7 +85,7 @@ _UI:_ —
 _Avoid_: Rebalancing (that is the whole plan), liquidation
 
 **Attribution Transfer**:
-Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind. Suggested whenever two slices of a ticker sit ≥ 1 whole unit off their Ideal.
+Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind. Suggested whenever two slices of a ticker sit ≥ 1 whole unit off their Ideal, or a report slice is short while its custody is satisfied — a Manual Strategy (the bucket) may donate units as a target-less source, but such a suggestion always waits for a human, whatever the R$ amount.
 _UI:_ "Transferência"
 _Avoid_: Custody transfer (that is between institutions, ticketed separately), reallocation
 
