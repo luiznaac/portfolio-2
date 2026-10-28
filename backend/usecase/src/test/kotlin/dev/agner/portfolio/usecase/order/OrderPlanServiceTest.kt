@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.order
 
+import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.listedasset.AttributionService
@@ -19,6 +20,7 @@ import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
@@ -43,9 +45,13 @@ class OrderPlanServiceTest : StringSpec({
     val allocations = mockk<AllocationService>(relaxed = true)
     val strategies = mockk<StrategyService>(relaxed = true)
     val attributions = mockk<AttributionService>(relaxed = true)
-    val service = OrderPlanService(months, positions, quotes, allocations, strategies, attributions)
+    val catalog = mockk<CatalogService>(relaxed = true)
+    val service = OrderPlanService(months, positions, quotes, allocations, strategies, attributions, catalog)
 
-    beforeTest { clearAllMocks() }
+    beforeTest {
+        clearAllMocks()
+        coEvery { catalog.fetchUnclassified(any()) } returns emptySet()
+    }
 
     "returns null when no month is open and reads no book" {
         coEvery { months.fetchCurrent() } returns null
@@ -152,6 +158,83 @@ class OrderPlanServiceTest : StringSpec({
         )
         plan.attribution.single().quantity.plain() shouldBe "249"
     }
+
+    "reads the manual ledger into the placement instead of calling the bucket outside" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(
+            Position("VALE3", BigDecimal("10"), BigDecimal("8")),
+            Position("MXRF11", BigDecimal("40"), BigDecimal("9")),
+        )
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { quotes.latestClose("MXRF11") } returns BigDecimal("10")
+        coEvery { strategies.fetchManualNames() } returns setOf("Legado")
+        coEvery { attributions.fetchLedger() } returns mapOf(
+            StrategyTicker("Legado", "MXRF11") to BigDecimal("40"),
+        )
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.outsideStrategy shouldBe emptyList()
+        plan.unclassified shouldBe emptyList()
+    }
+
+    "feeds the full phase's transfer pass the bucket as a target-less donor" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { allocations.fetchCurrent() } returns allocation(actual = "9992")
+        coEvery { positions.fetchAll() } returns listOf(
+            Position("VALE3", BigDecimal("416"), BigDecimal("8")),
+            Position("ITUB4", BigDecimal("250"), BigDecimal("8")),
+        )
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { strategies.fetchManualNames() } returns setOf("Legado")
+        coEvery { attributions.fetchLedger() } returns mapOf(
+            StrategyTicker("Top", "ITUB4") to BigDecimal("50"),
+            StrategyTicker("Legado", "ITUB4") to BigDecimal("100"),
+        )
+
+        val plan = service.computePlan(OrderPlanPhase.FULL)!!
+
+        // The report slice is short while the ticker's custody already meets its Target, so the plan
+        // moves bucket units instead of buying.
+        plan.candidates shouldBe emptyList()
+        plan.transfers.single().let {
+            it.fromStrategy shouldBe "Legado"
+            it.toStrategy shouldBe "Top"
+            it.quantity.plain() shouldBe "100"
+        }
+    }
+
+    "reports a ticker the catalog has not classified separately from the outside holdings" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("ZZZZ3", BigDecimal("10"), BigDecimal("9")))
+        coEvery { quotes.latestClose("ZZZZ3") } returns BigDecimal("10")
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { catalog.fetchUnclassified(any()) } returns setOf("ZZZZ3")
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.outsideStrategy shouldBe emptyList()
+        plan.unclassified.single().ticker shouldBe "ZZZZ3"
+    }
+
+    "keeps a ticker named only by a Strategy the chain does not carry outside" {
+        coEvery { months.fetchCurrent() } returns currentMonth.copy(
+            targets = currentMonth.targets.copy(
+                tickers = currentMonth.targets.tickers + tickerTarget("Ghost", "MXRF11", "100"),
+            ),
+        )
+        coEvery { positions.fetchAll() } returns listOf(Position("MXRF11", BigDecimal("40"), BigDecimal("9")))
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { quotes.latestClose("MXRF11") } returns BigDecimal("10")
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.outsideStrategy.single().ticker shouldBe "MXRF11"
+    }
 })
 
 private val currentMonth = CurrentMonth(
@@ -182,5 +265,6 @@ private fun allocation(actual: String) = Allocation(
     deficit = BigDecimal.ZERO,
     drift = BigDecimal.ZERO,
     unattributed = BigDecimal.ZERO,
+    unclassified = UnclassifiedAllocation(actual = BigDecimal.ZERO, tickers = emptyList()),
     classes = emptyList(),
 )

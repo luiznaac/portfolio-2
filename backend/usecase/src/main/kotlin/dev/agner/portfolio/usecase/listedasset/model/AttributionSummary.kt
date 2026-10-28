@@ -1,5 +1,7 @@
 package dev.agner.portfolio.usecase.listedasset.model
 
+import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import java.math.BigDecimal
 
 // The attribution read for the Ativos detail: the custody quantity, the strategy slices and the
@@ -19,3 +21,14 @@ data class AttributionSlice(
     val strategyName: String,
     val quantity: BigDecimal,
 )
+
+// The ticker-keyed slice read — the attribution ledger's source shape, named so the two projections
+// (the ledger and the bulk planner) cannot drift.
+typealias AttributionSlicesByTicker = Map<String, List<AttributionSlice>>
+
+// The (strategy, ticker) ledger the placement rule and the order engine consume, projected from the
+// ticker-keyed slice read — one projection, so the two reads can never disagree.
+fun AttributionSlicesByTicker.toLedger(): AttributionLedger =
+    flatMap { (ticker, slices) ->
+        slices.map { slice -> StrategyTicker(strategy = slice.strategyName, ticker = ticker) to slice.quantity }
+    }.toMap()

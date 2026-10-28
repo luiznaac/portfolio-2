@@ -17,8 +17,15 @@ export interface CatalogEntry {
   isin?: string;
   asset_kind: AssetKind;
   asset_class?: AssetClass;
+  // A manual classification that outranks the BDI-derived class and survives a COTAHIST refresh.
+  asset_class_override?: AssetClass;
   first_seen: string;
   last_seen: string;
+}
+
+/** The manual classification request (PUT /tickers/{ticker}/classification). */
+export interface TickerClassification {
+  asset_class: AssetClass;
 }
 
 export type QuoteSource = "COTAHIST";
@@ -86,6 +93,8 @@ export interface Trade {
   source: TradeSource;
   confirmed_by_b3: boolean;
   ordinal: number;
+  // How much of an OPENING seed the history backfill has already absorbed; zero on a regular trade.
+  absorbed_quantity: number;
 }
 
 export interface TradeCreation {
@@ -136,6 +145,60 @@ export interface Attribution {
 export interface AttributionSliceCreation {
   strategy_id: number;
   quantity: number;
+}
+
+// The manual Attribution Transfer: units move from the source slice to the destination slice and
+// custody never changes. The endpoint is month-free and writes no inbox row.
+export interface AttributionTransferCreation {
+  from_strategy_id: number;
+  to_strategy_id: number;
+  quantity: number;
+}
+
+// The bulk legacy action's dry-run: every held Ticker that can enter its class's Manual Strategy,
+// grouped per class, plus the Tickers it skips and why. `quantity` is the slice's new total (the
+// whole custody), never a delta.
+export type LegacyAttributionSkipReason =
+  | "UNCLASSIFIED"
+  | "NO_BUCKET"
+  | "HAS_ATTRIBUTION"
+  | "WRITE_FAILED";
+
+export interface LegacyAttributionAdd {
+  ticker: string;
+  quantity: number;
+  value: number;
+}
+
+export interface LegacyAttributionGroup {
+  asset_class: AssetClass;
+  strategy_id: number;
+  strategy_name: string;
+  adds: LegacyAttributionAdd[];
+}
+
+export interface LegacyAttributionSkip {
+  ticker: string;
+  reason: LegacyAttributionSkipReason;
+  asset_class?: AssetClass | null;
+  message?: string;
+}
+
+export interface LegacyAttributionPreview {
+  groups: LegacyAttributionGroup[];
+  skips: LegacyAttributionSkip[];
+}
+
+export interface LegacyAttributionApplied extends LegacyAttributionAdd {
+  strategy_id: number;
+  strategy_name: string;
+}
+
+// Each Ticker is written independently, so the result reports the ones that landed beside the ones
+// that were skipped — a bad Ticker never aborts the run.
+export interface LegacyAttributionResult {
+  attributed: LegacyAttributionApplied[];
+  skipped: LegacyAttributionSkip[];
 }
 
 export type IndexId = "IPCA" | "CDI" | "SELIC";
@@ -244,7 +307,9 @@ export interface MonthUpdate {
 
 // The computed allocation tree (GET /month/current/allocation). Ideal/Actual/Deficit are R$; Drift
 // is in percentage points (Actual − Ideal over Capital) and `target` is the rung's percentage, absent
-// when the month's chain declares none (the backend omits nulls).
+// when the month's chain declares none (the backend omits nulls). The read is month-free: with no
+// open month `period` is absent, the chain has no targets and only the custody-driven Actuals mean
+// anything — the page blanks the planning columns rather than drawing zeroes.
 export interface ClassAllocation {
   asset_class: AssetClass;
   target?: number;
@@ -254,6 +319,8 @@ export interface ClassAllocation {
   drift: number;
   unattributed: number;
   strategies: StrategyAllocation[];
+  manual?: ManualAllocation;
+  outside: OutsideAllocation;
   sub_classes: SubClassAllocation[];
 }
 
@@ -265,6 +332,33 @@ export interface StrategyAllocation {
   deficit: number;
   drift: number;
   tickers: TickerAllocation[];
+}
+
+// The Manual Strategy (bucket) rung: Actual only, so Alvo, Ideal, Δ R$ and Δ p.p. are absent rather
+// than zero — a zero would draw an excess bar for money that has no target.
+export interface ManualAllocation {
+  strategy: string;
+  actual: number;
+  tickers: ActualTickerAllocation[];
+}
+
+// The class's outside custody, after the bucket, so the class's rows sum to its Actual.
+export interface OutsideAllocation {
+  actual: number;
+  tickers: ActualTickerAllocation[];
+}
+
+// A held ticker whose catalog class is unknown: a data-quality state, counted in the Portfolio total
+// but in no class or Strategy rung.
+export interface UnclassifiedAllocation {
+  actual: number;
+  tickers: ActualTickerAllocation[];
+}
+
+// A leaf with only an Actual — a bucket, outside or unclassified ticker.
+export interface ActualTickerAllocation {
+  ticker: string;
+  actual: number;
 }
 
 export interface SubClassAllocation {
@@ -286,14 +380,17 @@ export interface TickerAllocation {
 }
 
 export interface Allocation {
-  period: string;
+  // Absent when no month is open: the read is month-free and carries Actual only.
+  period?: string;
   capital: number;
   floor: number;
   ideal: number;
   actual: number;
   deficit: number;
   drift: number;
+  // Custody inside no Strategy — outside plus unclassified; bucket units are attributed.
   unattributed: number;
+  unclassified: UnclassifiedAllocation;
   classes: ClassAllocation[];
 }
 
@@ -551,6 +648,14 @@ export interface OutsideStrategyHolding {
   suggested_exit_quantity: number;
 }
 
+/** A held ticker the catalog has not classified — a data-quality state, never an outside holding. */
+export interface UnclassifiedHolding {
+  ticker: string;
+  quantity: number;
+  price?: number;
+  amount?: number;
+}
+
 export type AttributionSide = "ALLOCATE" | "DEALLOCATE";
 
 /** A suggested change to the Attribution ledger caused by a buy or a sell. */
@@ -581,6 +686,7 @@ export interface OrderPlan {
   candidates: OrderCandidate[];
   funding?: FundingSummary;
   outside_strategy: OutsideStrategyHolding[];
+  unclassified: UnclassifiedHolding[];
   /** Present from the full phase on. */
   pro_rata?: ProRataSummary;
   attribution: AttributionMove[];
@@ -592,17 +698,37 @@ export type Rating = "BUY" | "NEUTRAL" | "SELL";
 
 export type EditionStatus = "STAGED" | "ACTIVE";
 
+// A Strategy is either report-driven (fed by an Edition, planned through Targets) or manual — the
+// legacy bucket, one per Asset Class, with no Edition and no Targets.
+export type StrategyKind = "REPORT_DRIVEN" | "MANUAL";
+
 export interface Strategy {
   id: number;
   name: string;
   asset_class: AssetClass;
-  weight: number;
+  kind: StrategyKind;
 }
 
 export interface StrategyCreation {
   name: string;
   asset_class: AssetClass;
-  weight: number;
+  kind: StrategyKind;
+}
+
+// A Strategy's attributed holdings, priced at the current quote — the read behind the read-only
+// manual Strategy detail. `share` is the slice's percentage of the bucket total.
+export interface StrategyHolding {
+  ticker: string;
+  quantity: number;
+  value: number;
+  share: number;
+}
+
+export interface StrategyHoldings {
+  strategy_id: number;
+  strategy_name: string;
+  total_value: number;
+  holdings: StrategyHolding[];
 }
 
 export interface EditionEntry {
@@ -707,7 +833,10 @@ export interface CorporateAction {
   process_number?: string;
   raw_type?: string;
   ordinal: number;
+  file_hash?: string;
   status: CorporateActionStatus;
+  // Derived on read from `status`; the API serialises it beside the stored fields.
+  is_applied: boolean;
 }
 
 // The POST /corporate-actions/import response: how many rows each destination absorbed and the
@@ -792,6 +921,17 @@ export interface ClassTotalSnapshot {
   unattributed: number;
 }
 
+// One Strategy's frozen slice at the close, the manual bucket included. The identity is frozen
+// beside the value so a later rename or kind change cannot rewrite a closed month; `flow` is the
+// month's netted bookkeeping flow, valued at the same close.
+export interface StrategySliceSnapshot {
+  strategy_id: number;
+  strategy: string;
+  kind: StrategyKind;
+  value_end: number;
+  flow: number;
+}
+
 export interface IncomeTotals {
   gross: number;
   retained: number;
@@ -823,6 +963,7 @@ export interface CloseState {
   holdings: HoldingSnapshot[];
   attributions: AttributionSnapshot[];
   classes: ClassTotalSnapshot[];
+  strategies?: StrategySliceSnapshot[];
   income: IncomeTotals;
   income_by_ticker?: TickerIncomeSnapshot[];
   orders: OrdersSnapshot;
@@ -865,6 +1006,8 @@ export interface PerformanceDecomposition {
   value_end: number;
   net_aportes: number;
   net_income: number;
+  // A strategy slice's bookkeeping attribution change valued at the close; the return nets it out.
+  flow?: number;
   return_percentage?: number;
 }
 
@@ -880,10 +1023,22 @@ export interface BenchmarkBlend {
   contributions: BenchmarkContribution[];
 }
 
+// One Strategy's realised return for the month, the Manual Strategy (bucket) included. There is no
+// plan-vs-actual comparison here; the slice is measured on its own attributed units.
+export interface StrategyPerformance {
+  strategy_id: number;
+  strategy: string;
+  kind: StrategyKind;
+  decomposition: PerformanceDecomposition;
+}
+
 export interface ClassPerformance {
   asset_class: AssetClass;
   decomposition: PerformanceDecomposition;
   benchmark_return?: number;
+  // The class line equals its slices plus the read-only outside row.
+  strategies?: StrategyPerformance[];
+  outside?: PerformanceDecomposition;
 }
 
 export interface TickerPerformance {
@@ -913,6 +1068,8 @@ export interface PeriodPerformance {
   benchmarks?: PeriodBenchmark[];
   // Each class's frozen value at the close, plus the previous close when the series has one.
   classes?: PeriodClass[];
+  // Each Strategy's frozen slice at the close, the bucket included.
+  strategies?: PeriodStrategy[];
 }
 
 // One policy index's return in a period; absent when the SGS series could not price it.
@@ -924,6 +1081,15 @@ export interface PeriodBenchmark {
 export interface PeriodClass {
   asset_class: AssetClass;
   value_end: number;
+}
+
+// One Strategy's frozen value at the month's close; the identity is frozen with it.
+export interface PeriodStrategy {
+  strategy_id: number;
+  strategy: string;
+  kind: StrategyKind;
+  value_end: number;
+  flow: number;
 }
 
 export interface PerformanceSeries {
@@ -943,6 +1109,10 @@ export interface Gap {
   quantity: number;
   unit_price?: number;
   status: GapStatus;
+  // The highest trade/corporate-action id the ledger held when the gap was created: only a newer
+  // record can fill it. Internal bookkeeping, but part of the wire shape.
+  trade_watermark: number;
+  action_watermark: number;
   // A missing sale with no price yet; the backend serializes it only on that variant.
   realized_pending?: boolean;
 }

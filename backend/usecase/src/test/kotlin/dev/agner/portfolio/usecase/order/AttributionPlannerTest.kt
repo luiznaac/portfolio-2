@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.order.model.OrderCandidate
 import dev.agner.portfolio.usecase.order.model.OrderSide
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
 import dev.agner.portfolio.usecase.plain
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -81,12 +82,72 @@ class AttributionPlannerTest : StringSpec({
         )
         outcome.transfers.shouldBeEmpty()
     }
+
+    "moves bucket units to the largest-deficit report slice first and leaves the remainder in the bucket" {
+        val outcome = plan(
+            slices = listOf(
+                slice(ticker = "ITUB4", strategy = "Top", target = "60", attributed = "40"),
+                slice(ticker = "ITUB4", strategy = "Dividendos", target = "30", attributed = "20"),
+            ),
+            candidates = emptyList(),
+            manual = mapOf("Legado" to "45"),
+        )
+
+        outcome.transfers.map { (it.fromStrategy to it.toStrategy) to it.quantity.plain() } shouldBe listOf(
+            ("Legado" to "Top") to "20",
+            ("Legado" to "Dividendos") to "10",
+        )
+    }
+
+    "moves bucket units in whole units only" {
+        val outcome = plan(
+            slices = listOf(slice(ticker = "ITUB4", strategy = "Top", target = "60", attributed = "40")),
+            candidates = emptyList(),
+            manual = mapOf("Legado" to "20.9"),
+        )
+
+        outcome.transfers.map { (it.fromStrategy to it.toStrategy) to it.quantity.plain() } shouldBe
+            listOf(("Legado" to "Top") to "20")
+    }
+
+    "proposes no bucket transfer when no report slice targets the ticker" {
+        val outcome = plan(
+            slices = emptyList(),
+            candidates = emptyList(),
+            manual = mapOf("Legado" to "50"),
+        )
+
+        outcome.transfers.shouldBeEmpty()
+    }
+
+    "prefers a report slice's surplus over the bucket when both can fund a deficit" {
+        val outcome = plan(
+            slices = listOf(
+                slice(ticker = "ITUB4", strategy = "Top", target = "100", attributed = "120"),
+                slice(ticker = "ITUB4", strategy = "Dividendos", target = "100", attributed = "60"),
+            ),
+            candidates = emptyList(),
+            manual = mapOf("Legado" to "50"),
+        )
+
+        outcome.transfers.map { (it.fromStrategy to it.toStrategy) to it.quantity.plain() } shouldBe listOf(
+            ("Top" to "Dividendos") to "20",
+            ("Legado" to "Dividendos") to "20",
+        )
+    }
 })
 
 private fun plan(
     slices: List<TickerOrderPlan>,
     candidates: List<OrderCandidate>,
-) = AttributionPlanner.compute(slices = slices, candidates = candidates)
+    manual: Map<String, String> = emptyMap(),
+) = AttributionPlanner.compute(
+    slices = slices,
+    candidates = candidates,
+    manualSlices = manual.map { (strategy, quantity) ->
+        StrategyTicker(strategy, "ITUB4") to BigDecimal(quantity)
+    }.toMap(),
+)
 
 private fun slices(targets: List<String>, attributed: List<String>) = listOf(
     slice(ticker = "ITUB4", strategy = "Top", target = targets[0], attributed = attributed[0]),

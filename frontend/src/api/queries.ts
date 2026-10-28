@@ -1,7 +1,15 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api } from "./client.ts";
 import type {
+  AssetClass,
   AttributionSliceCreation,
+  AttributionTransferCreation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -12,6 +20,7 @@ import type {
   HarvestPairCreation,
   HarvestReport,
   ImportSource,
+  LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
   OrderList,
@@ -103,11 +112,95 @@ export function useRemoveAttribution(ticker: string) {
   });
 }
 
+// The month-free manual transfer: the attribution ledger and the open month's tree both read the
+// moved units, so one invalidation refreshes the detail, the leaf and the class Actual.
+export function useTransferAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: AttributionTransferCreation) =>
+      api.transferAttribution(ticker, creation),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+    },
+  });
+}
+
+// The bulk legacy action's dry-run. It is enabled only while the Alocação banner has outside
+// custody to offer, so the page does not pay for the read when there is nothing to attribute.
+export function useLegacyAttributionPreview(enabled: boolean) {
+  return useQuery({
+    queryKey: ["positions", "legacy-attribution", "preview"],
+    queryFn: api.getLegacyAttributionPreview,
+    enabled,
+  });
+}
+
+// The apply writes slices through the attribution path, so the position, allocation, strategy and
+// order reads are all stale in one step.
+export function useApplyLegacyAttribution() {
+  const queryClient = useQueryClient();
+  return useMutation<LegacyAttributionResult, Error, void>({
+    mutationFn: () => api.applyLegacyAttribution(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
+  });
+}
+
 export function useTickerQuotes(ticker: string) {
   return useQuery({
     queryKey: ["tickers", ticker, "quotes"],
     queryFn: () => api.getTickerQuotes(ticker),
     enabled: ticker.length > 0,
+  });
+}
+
+// The ticker's catalog row — its BDI-derived class and any manual override. A 404 (a ticker the
+// catalog has never seen) is a normal state for the classification action, not an error.
+export function useTicker(ticker: string) {
+  return useQuery({
+    queryKey: ["tickers", ticker],
+    queryFn: () => api.getTicker(ticker),
+    enabled: ticker.length > 0,
+    retry: false,
+  });
+}
+
+// A classification changes the allocation tree, the funding pass and the asset detail at once, so
+// every read that groups by class is invalidated.
+function invalidateClassReads(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["tickers"] });
+  queryClient.invalidateQueries({ queryKey: ["month"] });
+  queryClient.invalidateQueries({ queryKey: ["months"] });
+  queryClient.invalidateQueries({ queryKey: ["orders"] });
+  queryClient.invalidateQueries({ queryKey: ["positions"] });
+  queryClient.invalidateQueries({ queryKey: ["performance"] });
+}
+
+export function useClassifyTicker(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assetClass: AssetClass) => api.classifyTicker(ticker, assetClass),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRevertTickerClassification(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.revertTickerClassification(ticker),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.refreshCatalog,
+    onSuccess: () => invalidateClassReads(queryClient),
   });
 }
 
@@ -178,7 +271,8 @@ export function useReplaceTargets() {
 export function useCurrentAllocation() {
   return useQuery({
     queryKey: ["month", "current", "allocation"],
-    queryFn: nullOn404(api.getCurrentAllocation),
+    // The read is month-free: it answers even without an open month, with Actual only.
+    queryFn: api.getCurrentAllocation,
   });
 }
 
@@ -283,16 +377,26 @@ export function useOrderPlan() {
   });
 }
 
-// One editions read per strategy, sharing the `useEditions` cache key. The Cockpit only needs the
-// coverage count, so it asks in parallel rather than opening each strategy's detail.
-export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
+// One editions read per strategy, sharing the `useEditions` cache key, so both the catalog's status
+// chips and the Cockpit's coverage count ask in parallel rather than opening each detail.
+function useEditionsFor(strategies: Strategy[], enabled: boolean) {
   return useQueries({
     queries: strategies.map((strategy) => ({
       queryKey: ["strategies", strategy.id, "editions"],
       queryFn: (): Promise<Edition[]> => api.getEditions(strategy.id),
-      enabled: period !== undefined,
+      enabled,
     })),
   });
+}
+
+// The catalog's chips always fetch: a chip shows the latest edition even when no month is open.
+export function useStrategyEditions(strategies: Strategy[]) {
+  return useEditionsFor(strategies, true);
+}
+
+// The Cockpit's coverage count only matters for an open month, so it skips the reads otherwise.
+export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
+  return useEditionsFor(strategies, period !== undefined);
 }
 
 export function useRefreshOrders() {
@@ -361,9 +465,29 @@ export function useStrategies() {
 
 export function useCreateStrategy() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<Strategy, Error, StrategyCreation>({
     mutationFn: (creation: StrategyCreation) => api.createStrategy(creation),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+    // The created Strategy enters the cached catalog immediately, so the page can select it
+    // without waiting for the refetch; the invalidation still reconciles with the server's order.
+    onSuccess: (created) => {
+      queryClient.setQueryData<Strategy[]>(["strategies"], (current) =>
+        current === undefined
+          ? [created]
+          : [...current.filter((item) => item.id !== created.id), created],
+      );
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
+  });
+}
+
+export function useStrategyHoldings(strategyId: number | null) {
+  return useQuery({
+    queryKey: ["strategies", strategyId, "holdings"],
+    queryFn: () => {
+      if (strategyId === null) throw new Error("strategyId is required to fetch holdings");
+      return api.getStrategyHoldings(strategyId);
+    },
+    enabled: strategyId !== null,
   });
 }
 

@@ -2,16 +2,20 @@ package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
+import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.order.model.EquitiesOrderPlan
 import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderPlan
 import dev.agner.portfolio.usecase.order.model.FixedIncomeOrderSide
+import dev.agner.portfolio.usecase.order.model.OrderPlan
 import dev.agner.portfolio.usecase.order.model.OrderPlanPhase
 import dev.agner.portfolio.usecase.order.model.OrderSide
 import dev.agner.portfolio.usecase.plain
+import dev.agner.portfolio.usecase.portfolio.TargetChainCalculator
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
+import dev.agner.portfolio.usecase.portfolio.targetedTickers
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.subClassTarget
@@ -164,6 +168,99 @@ class OrderPlanCalculatorTest : StringSpec({
         )
         plan.outsideStrategy.single { it.ticker == "MXRF11" }.amount!!.plain() shouldBe "250"
         plan.outsideStrategy.single { it.ticker == "ITUB4" }.suggestedExitQuantity.plain() shouldBe "7"
+    }
+
+    "keeps a manually attributed holding inside the strategy instead of reporting it outside" {
+        val plan = compute(
+            capital = "10000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf(
+                "VALE3" to "400",
+                "MXRF11" to "25",
+            ),
+            prices = mapOf(
+                "VALE3" to "30",
+                "MXRF11" to "10",
+            ),
+            attributionBySlice = mapOf(StrategyTicker("Legado", "MXRF11") to BigDecimal("25")),
+            manualStrategies = setOf("Legado"),
+        )
+
+        plan.outsideStrategy shouldBe emptyList()
+        plan.unclassified shouldBe emptyList()
+        plan.candidates shouldBe emptyList()
+    }
+
+    "keeps a target-and-manual ticker inside and buys only the shortfall" {
+        val plan = compute(
+            capital = "1000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf("VALE3" to "80"),
+            prices = mapOf("VALE3" to "10"),
+            attributionBySlice = mapOf(StrategyTicker("Legado", "VALE3") to BigDecimal("30")),
+            manualStrategies = setOf("Legado"),
+        )
+
+        val candidate = plan.candidates.single()
+        candidate.side shouldBe OrderSide.BUY
+        candidate.quantity.plain() shouldBe "20"
+        plan.outsideStrategy shouldBe emptyList()
+    }
+
+    "keeps an inert report-driven attribution outside" {
+        val plan = compute(
+            capital = "10000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf("MXRF11" to "25"),
+            prices = mapOf("MXRF11" to "10"),
+            attributionBySlice = mapOf(StrategyTicker("Top", "MXRF11") to BigDecimal("25")),
+            manualStrategies = setOf("Legado"),
+        )
+
+        plan.outsideStrategy.single().ticker shouldBe "MXRF11"
+        plan.unclassified shouldBe emptyList()
+    }
+
+    "lists an unclassified holding apart from the outside holdings" {
+        val plan = compute(
+            capital = "10000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "VALE3", "100"))),
+            positions = mapOf(
+                "VALE3" to "400",
+                "PETR4" to "10",
+            ),
+            prices = mapOf(
+                "VALE3" to "30",
+                "PETR4" to "40",
+            ),
+            unclassifiedTickers = setOf("PETR4"),
+        )
+
+        plan.outsideStrategy shouldBe emptyList()
+        val unclassified = plan.unclassified.single()
+        unclassified.ticker shouldBe "PETR4"
+        unclassified.quantity.plain() shouldBe "10"
+        unclassified.amount!!.plain() shouldBe "400"
+        plan.candidates shouldBe emptyList()
+    }
+
+    "emits no order for an unclassified ticker even when a Target names it" {
+        val plan = compute(
+            capital = "10000",
+            floor = "0",
+            targets = chain(tickers = listOf(tickerTarget("Top", "PETR4", "100"))),
+            positions = mapOf("PETR4" to "10"),
+            prices = mapOf("PETR4" to "40"),
+            unclassifiedTickers = setOf("PETR4"),
+        )
+
+        plan.candidates shouldBe emptyList()
+        plan.outsideStrategy shouldBe emptyList()
+        plan.unclassified.single().ticker shouldBe "PETR4"
     }
 
     "lists a held FII outside the strategy without emitting an order" {
@@ -388,20 +485,34 @@ private fun compute(
     neutroSlices: Set<StrategyTicker> = emptySet(),
     attributionBySlice: Map<StrategyTicker, BigDecimal> = emptyMap(),
     fixedIncomeActualBySubClass: Map<FixedIncomeSubClass, BigDecimal> = emptyMap(),
-) = OrderPlanCalculator.compute(
-    OrderPlanContext(
-        period = YearMonth.parse("2026-10"),
-        phase = phase,
-        capital = BigDecimal(capital),
-        floor = BigDecimal(floor),
-        targets = targets,
-        positions = positions.mapValues { BigDecimal(it.value) },
-        prices = prices.mapValues { BigDecimal(it.value) },
-        neutroSlices = neutroSlices,
-        attributionBySlice = attributionBySlice,
-        fixedIncomeActualBySubClass = fixedIncomeActualBySubClass,
-    ),
-)
+    manualStrategies: Set<String> = emptySet(),
+    unclassifiedTickers: Set<String> = emptySet(),
+): OrderPlan {
+    val positionByTicker = positions.mapValues { BigDecimal(it.value) }
+    return OrderPlanCalculator.compute(
+        OrderPlanContext(
+            period = YearMonth.parse("2026-10"),
+            phase = phase,
+            capital = BigDecimal(capital),
+            floor = BigDecimal(floor),
+            targets = targets,
+            positions = positionByTicker,
+            prices = prices.mapValues { BigDecimal(it.value) },
+            neutroSlices = neutroSlices,
+            attributionBySlice = attributionBySlice,
+            fixedIncomeActualBySubClass = fixedIncomeActualBySubClass,
+            placement = PlacementCalculator.compute(
+                positions = positionByTicker,
+                targetedTickers = TargetChainCalculator
+                    .compute((BigDecimal(capital) - BigDecimal(floor)).defaultScale(), targets)
+                    .targetedTickers(),
+                ledger = attributionBySlice,
+                manualStrategies = manualStrategies,
+                unclassifiedTickers = unclassifiedTickers,
+            ),
+        ),
+    )
+}
 
 private fun chain(
     assetClass: AssetClass = AssetClass.ACOES,

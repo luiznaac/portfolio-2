@@ -5,8 +5,9 @@ import {
   useOrders,
   useOverrideOrderMatch,
   useRefreshOrders,
+  useStrategies,
 } from "../api/queries.ts";
-import type { OrderList, SuggestedOrder, TransferProposal } from "../api/types.ts";
+import type { OrderList, Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip, type ChipTone } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -21,6 +22,7 @@ import {
   orderTotals,
   ordersCsv,
   toTradeId,
+  transferCopy,
   transferStatusLabel,
 } from "../lib/orders.ts";
 
@@ -57,6 +59,8 @@ export function Orders() {
 
 function OrdersView({ list }: { list: OrderList }) {
   const refresh = useRefreshOrders();
+  // The catalog resolves a transfer row's source kind: a MANUAL Strategy means a legacy move.
+  const strategies = useStrategies().data;
   const groups = groupOrders(list.orders);
   const totals = orderTotals(list.orders);
   const pending = list.transfers.filter((transfer) => transfer.status === "PENDING");
@@ -121,7 +125,7 @@ function OrdersView({ list }: { list: OrderList }) {
             ) : (
               <div className="divide-y divide-line-soft">
                 {pending.map((transfer) => (
-                  <TransferRow key={transfer.id} transfer={transfer} />
+                  <TransferRow key={transfer.id} transfer={transfer} strategies={strategies} />
                 ))}
               </div>
             )}
@@ -132,7 +136,7 @@ function OrdersView({ list }: { list: OrderList }) {
                 </h3>
                 <div className="divide-y divide-line-soft">
                   {decided.map((transfer) => (
-                    <TransferRow key={transfer.id} transfer={transfer} />
+                    <TransferRow key={transfer.id} transfer={transfer} strategies={strategies} />
                   ))}
                 </div>
               </div>
@@ -184,7 +188,13 @@ function Summary({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TransferRow({ transfer }: { transfer: TransferProposal }) {
+function TransferRow({
+  transfer,
+  strategies,
+}: {
+  transfer: TransferProposal;
+  strategies: Strategy[] | undefined;
+}) {
   const decide = useDecideTransfer();
   const isPending = transfer.status === "PENDING";
 
@@ -196,11 +206,7 @@ function TransferRow({ transfer }: { transfer: TransferProposal }) {
           <Chip>{transfer.from_strategy}</Chip>
           <span className="text-ink-faint">→</span>
           <Chip tone="blue">{transfer.to_strategy}</Chip>
-          <span className="text-[11.5px] text-ink-faint">
-            {transfer.amount === undefined
-              ? "sem cotação"
-              : `evita vender ${formatCurrency(transfer.amount)}`}
-          </span>
+          <span className="text-[11.5px] text-ink-faint">{transferCopy(transfer, strategies)}</span>
         </div>
         <div className="mt-1 text-[12px] text-ink-dim">
           {formatNumber(transfer.quantity)} cotas

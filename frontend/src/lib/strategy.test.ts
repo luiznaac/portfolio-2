@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Edition, EditionDiff, EditionEntry, Strategy } from "../api/types.ts";
 import {
   editionDiffSummary,
+  editionStatusChip,
   editionWeightSum,
   groupStrategiesByClass,
   isEditionForMonth,
@@ -9,6 +10,9 @@ import {
   overrideEntry,
   ratingLabel,
   referenceMonthLabel,
+  reportDrivenStrategies,
+  strategyCoverage,
+  strategyCoverageLabel,
   suggestStrategy,
 } from "./strategy.ts";
 
@@ -34,14 +38,37 @@ const diff: EditionDiff = {
 };
 
 const entries: EditionEntry[] = [
-  { ticker: "PETR4", weight: 12.5, rating: "BUY", target_price: 63, do_not_trade: false },
-  { ticker: "VALE3", weight: 12.5, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+  {
+    ticker: "PETR4",
+    weight: 12.5,
+    rating: "BUY",
+    target_price: 63,
+    do_not_trade: false,
+  },
+  {
+    ticker: "VALE3",
+    weight: 12.5,
+    rating: "NEUTRAL",
+    target_price: 85,
+    do_not_trade: false,
+  },
 ];
 
 const strategies: Strategy[] = [
-  { id: 1, name: "Top Dividendos", asset_class: "ACOES", weight: 34 },
-  { id: 5, name: "Fundamentalista FII", asset_class: "FIIS", weight: 100 },
-  { id: 2, name: "Top Ações", asset_class: "ACOES", weight: 30 },
+  { id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" },
+  {
+    id: 1,
+    name: "Top Dividendos",
+    asset_class: "ACOES",
+    kind: "REPORT_DRIVEN",
+  },
+  {
+    id: 5,
+    name: "Fundamentalista FII",
+    asset_class: "FIIS",
+    kind: "REPORT_DRIVEN",
+  },
+  { id: 2, name: "Top Ações", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
 ];
 
 describe("referenceMonthLabel", () => {
@@ -109,6 +136,7 @@ describe("groupStrategiesByClass", () => {
     expect(groups[0].strategies.map((strategy) => strategy.name)).toEqual([
       "Top Dividendos",
       "Top Ações",
+      "Legado",
     ]);
     expect(groups[1].strategies.map((strategy) => strategy.name)).toEqual(["Fundamentalista FII"]);
   });
@@ -145,21 +173,43 @@ describe("isEditionForMonth", () => {
 
 describe("overrideEntry", () => {
   it("replaces one entry immutably and leaves the others untouched", () => {
-    const result = overrideEntry(entries, 0, { do_not_trade: true, weight: 15 });
+    const result = overrideEntry(entries, 0, {
+      do_not_trade: true,
+      weight: 15,
+    });
 
     expect(result).not.toBe(entries);
-    expect(result[0]).toEqual({ ...entries[0], do_not_trade: true, weight: 15 });
+    expect(result[0]).toEqual({
+      ...entries[0],
+      do_not_trade: true,
+      weight: 15,
+    });
     expect(result[1]).toBe(entries[1]);
   });
 });
 
 describe("suggestStrategy", () => {
   const catalog: Strategy[] = [
-    { id: 1, name: "Top Dividendos", asset_class: "ACOES", weight: 34 },
-    { id: 2, name: "Top Ações", asset_class: "ACOES", weight: 30 },
-    { id: 3, name: "Dividendos Plus", asset_class: "ACOES", weight: 18 },
-    { id: 4, name: "Small Caps", asset_class: "ACOES", weight: 18 },
-    { id: 5, name: "Fundamentalista FII", asset_class: "FIIS", weight: 100 },
+    {
+      id: 1,
+      name: "Top Dividendos",
+      asset_class: "ACOES",
+      kind: "REPORT_DRIVEN",
+    },
+    { id: 2, name: "Top Ações", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
+    {
+      id: 3,
+      name: "Dividendos Plus",
+      asset_class: "ACOES",
+      kind: "REPORT_DRIVEN",
+    },
+    { id: 4, name: "Small Caps", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
+    {
+      id: 5,
+      name: "Fundamentalista FII",
+      asset_class: "FIIS",
+      kind: "REPORT_DRIVEN",
+    },
   ];
 
   it.each([
@@ -174,5 +224,96 @@ describe("suggestStrategy", () => {
 
   it("falls back to the first strategy for an unrecognised file name", () => {
     expect(suggestStrategy(catalog, "relatorio.pdf")?.id).toBe(1);
+  });
+
+  it("never suggests a manual strategy, even when its name matches", () => {
+    const withBucket: Strategy[] = [
+      { id: 9, name: "Top Dividendos", asset_class: "ACOES", kind: "MANUAL" },
+      { id: 2, name: "Top Ações", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
+    ];
+
+    expect(suggestStrategy(withBucket, "Top Dividendos.pdf")?.id).toBe(2);
+    expect(suggestStrategy(withBucket, "relatorio.pdf")?.id).toBe(2);
+  });
+});
+
+describe("reportDrivenStrategies", () => {
+  it("keeps only the report-driven strategies", () => {
+    expect(reportDrivenStrategies(strategies).map((strategy) => strategy.name)).toEqual([
+      "Top Dividendos",
+      "Fundamentalista FII",
+      "Top Ações",
+    ]);
+  });
+});
+
+describe("strategyCoverage", () => {
+  const editions = new Map([
+    [1, [{ reference_month: "2026-09" }]],
+    [2, [{ reference_month: "2026-08" }]],
+  ]);
+
+  it("counts report-driven strategies with an edition for the month", () => {
+    expect(strategyCoverage(strategies, editions, "2026-09")).toEqual({
+      withEdition: 1,
+      total: 3,
+    });
+    expect(strategyCoverageLabel(strategyCoverage(strategies, editions, "2026-09"))).toBe(
+      "1 de 3 com edição",
+    );
+  });
+
+  it("leaves the bucket out of both the numerator and the denominator", () => {
+    const withBucketEdition = new Map([
+      [1, [{ reference_month: "2026-09" }]],
+      [2, [{ reference_month: "2026-09" }]],
+      [9, [{ reference_month: "2026-09" }]],
+    ]);
+
+    expect(strategyCoverage(strategies, withBucketEdition, "2026-09")).toEqual({
+      withEdition: 2,
+      total: 3,
+    });
+  });
+});
+
+describe("editionStatusChip", () => {
+  it("shows the latest active edition with a check", () => {
+    expect(
+      editionStatusChip([
+        {
+          id: 9,
+          strategy_id: 1,
+          reference_month: "2026-09",
+          status: "ACTIVE",
+          entries: [],
+        },
+      ]),
+    ).toEqual({ label: "set/26 ✓", tone: "green" });
+  });
+
+  it("shows a staged edition as in review", () => {
+    expect(
+      editionStatusChip([
+        {
+          id: 9,
+          strategy_id: 1,
+          reference_month: "2026-09",
+          status: "STAGED",
+          entries: [],
+        },
+      ]),
+    ).toEqual({ label: "set/26 · revisão", tone: "amber" });
+  });
+
+  it("reads sem edição when the strategy has none", () => {
+    expect(editionStatusChip([])).toEqual({
+      label: "sem edição",
+      tone: "neutral",
+    });
+    expect(editionStatusChip(undefined)).toEqual({
+      label: "sem edição",
+      tone: "neutral",
+    });
   });
 });

@@ -1,10 +1,11 @@
 package dev.agner.portfolio.usecase.order
 
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
-import dev.agner.portfolio.usecase.listedasset.model.Attribution
+import dev.agner.portfolio.usecase.listedasset.AttributionService
+import dev.agner.portfolio.usecase.listedasset.InvalidTransferException
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.isImported
-import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.order.model.InvalidOrderMatchException
 import dev.agner.portfolio.usecase.order.model.OrderList
@@ -22,6 +23,7 @@ import dev.agner.portfolio.usecase.order.repository.ISuggestedOrderRepository
 import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.Month
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -40,7 +42,7 @@ class OrderLifecycleService(
     private val trades: ITradeRepository,
     private val suggestions: ISuggestedOrderRepository,
     private val transfers: ITransferProposalRepository,
-    private val attributions: IAttributionRepository,
+    private val attributionService: AttributionService,
     private val strategies: IStrategyRepository,
     private val transaction: ITransactionTemplate,
 ) {
@@ -138,13 +140,17 @@ class OrderLifecycleService(
     // The inbox refresh keeps the month's decided trail: a rejected proposal is not proposed again
     // (the user already said no), and the pending rows are replaced by the fresh computation. The
     // transfers themselves are the full plan's attribution pass — this method only resolves their
-    // strategy names to ids, records the decision and applies the auto-approved moves.
+    // strategy names to ids, records the decision and applies the auto-approved moves. A bucket as
+    // the source never auto-approves: the engine may not move legacy units on its own, whatever the
+    // R$ amount, so only a report-to-report move is decided by the threshold.
     private suspend fun refreshTransfers(month: Month, plan: OrderPlan) {
         val rejected = transfers.fetchBy(month.id)
             .filter { it.status == TransferStatus.REJECTED }
             .map { ProposalKey(it.ticker, it.fromStrategyId, it.toStrategyId) }
             .toSet()
-        val idsByName = strategies.fetchAll().associate { it.name to it.id }
+        val catalog = strategies.fetchAll()
+        val idsByName = catalog.associate { it.name to it.id }
+        val manualIds = catalog.filter { it.kind == StrategyKind.MANUAL }.map { it.id }.toSet()
 
         transfers.deletePending(month.id)
         for (transfer in plan.transfers) {
@@ -155,7 +161,9 @@ class OrderLifecycleService(
             if (ProposalKey(transfer.ticker, fromStrategyId, toStrategyId) in rejected) continue
 
             // An unpriced transfer has no R$ value, so the threshold cannot decide it: it waits.
-            val autoApproved = transfer.amount?.let { it < AUTO_APPROVAL_THRESHOLD } ?: false
+            // A bucket-sourced move always waits, whatever the amount.
+            val autoApproved = fromStrategyId !in manualIds &&
+                transfer.amount?.let { it < AUTO_APPROVAL_THRESHOLD } == true
             transfers.save(
                 month.id,
                 TransferProposalCreation(
@@ -192,22 +200,16 @@ class OrderLifecycleService(
         toStrategyId: Int,
         quantity: BigDecimal,
     ) {
-        val rows = attributions.fetchBy(ticker)
-        val from = rows.firstOrNull { it.strategyId == fromStrategyId }
-            ?: throw InvalidTransferException("$ticker has no slice for strategy $fromStrategyId")
-        if (from.quantity < quantity) {
-            throw InvalidTransferException(
-                "$ticker strategy $fromStrategyId holds ${from.quantity}, but the transfer moves $quantity",
-            )
-        }
-        val toQuantity = rows.firstOrNull { it.strategyId == toStrategyId }?.quantity ?: BigDecimal.ZERO
-
-        if (from.quantity == quantity) {
-            attributions.delete(ticker, fromStrategyId)
-        } else {
-            attributions.save(Attribution(ticker, fromStrategyId, from.quantity - quantity))
-        }
-        attributions.save(Attribution(ticker, toStrategyId, toQuantity + quantity))
+        attributionService.transfer(
+            ticker,
+            AttributionTransferCreation(
+                fromStrategyId = fromStrategyId,
+                toStrategyId = toStrategyId,
+                quantity = quantity,
+            ),
+        ) ?: throw InvalidTransferException(
+            "$ticker can no longer move $quantity from strategy $fromStrategyId to strategy $toStrategyId",
+        )
     }
 
     private suspend fun monthTrades(period: YearMonth): List<Trade> =

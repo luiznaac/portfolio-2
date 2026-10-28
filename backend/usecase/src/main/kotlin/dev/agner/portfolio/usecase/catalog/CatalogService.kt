@@ -1,8 +1,10 @@
 package dev.agner.portfolio.usecase.catalog
 
 import dev.agner.portfolio.usecase.catalog.gateway.ICotahistSource
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.logger
@@ -22,10 +24,22 @@ class CatalogService(
 
     suspend fun fetchBy(ticker: String) = repository.fetchBy(ticker.normalizedTicker())
 
+    // Which of the given tickers the catalog has not classified yet. A missing row counts as
+    // unclassified: without a class a ticker belongs to no class rung and waits for classification.
+    suspend fun fetchUnclassified(tickers: Set<String>): Set<String> {
+        val classByTicker = repository.fetchAll().effectiveClassByTicker()
+        return tickers.filter { classByTicker[it] == null }.toSet()
+    }
+
     // Upsert the catalog from the latest published COTAHIST file. Unknown BDI codes still enter
     // (AssetKind.UNKNOWN) but are logged so the mapping can be extended instead of silently guessed.
+    // A manual classification outlives the refresh: the stored override is carried onto the new
+    // entry, so a re-derived BDI class never overwrites the owner's call.
     suspend fun refresh(): Int {
-        val entries = source.fetchTradingDay().map { it.toCatalogEntry() }
+        val overrides = repository.fetchAll().associate { it.ticker to it.assetClassOverride }
+        val entries = source.fetchTradingDay().map { row ->
+            row.toCatalogEntry().copy(assetClassOverride = overrides[row.ticker])
+        }
 
         entries.filter { it.assetKind == AssetKind.UNKNOWN }
             .forEach { log.warn("COTAHIST record {} has unclassified BDI type {}", it.ticker, it.bdiType) }
@@ -56,6 +70,20 @@ class CatalogService(
     }
 
     private val log = logger()
+
+    // The owner's manual classification, outranking whatever the BDI mapping derived. A ticker the
+    // catalog has never seen is auto-entered first, so classifying a held ticker never dead-ends.
+    suspend fun classify(ticker: String, assetClass: AssetClass): CatalogEntry? {
+        if (assetClass == AssetClass.RENDA_FIXA) throw InvalidCatalogClassException(assetClass)
+
+        val normalized = ticker.normalizedTicker()
+        upsertTicker(normalized)
+        return repository.setAssetClassOverride(normalized, assetClass)
+    }
+
+    // Hand the ticker back to the BDI-derived class; the row itself stays in the catalog.
+    suspend fun revertClassification(ticker: String): CatalogEntry? =
+        repository.setAssetClassOverride(ticker.normalizedTicker(), null)
 
     // A ticker change is an identity remap, not a new paper: the new code inherits the old entry's
     // ISIN, kind and class, while the old code stays resolvable for its historical rows. The new

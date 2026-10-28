@@ -266,6 +266,57 @@ function hasPercentage(row: { percentage: string }): boolean {
   return trimmed.length > 0 && Number.isFinite(Number(trimmed));
 }
 
+// Strategy Targets are shares of their class, so the whole class is the ceiling. The server rejects
+// a class above it; the form mirrors the same rule.
+export const STRATEGY_TARGET_LIMIT = 100;
+
+// The per-class sum of the Strategy Targets the form would submit. Nameless and blank rows are
+// ignored exactly as toTargets drops them, so the sum validated is the sum the server receives.
+export function strategyTargetSums(form: TargetsFormState): Partial<Record<AssetClass, number>> {
+  const sums: Partial<Record<AssetClass, number>> = {};
+  for (const row of form.strategies) {
+    if (row.strategy.trim().length === 0 || !hasPercentage(row)) continue;
+    sums[row.assetClass] = (sums[row.assetClass] ?? 0) + Number(row.percentage);
+  }
+  return sums;
+}
+
+// Binary floating-point can put a hand-typed 100 a hair above it (33,33 + 33,33 + 33,34); the
+// server sums exact decimals, so the form tolerates that noise but not a real over-allocation.
+const SHARE_EPSILON = 1e-9;
+
+// The classes whose report shares over-plan the class — the rule the targets write path enforces,
+// surfaced inline so the form never sends a chain the server will reject.
+export function overplannedStrategyClasses(form: TargetsFormState): AssetClass[] {
+  const sums = strategyTargetSums(form);
+  return ASSET_CLASSES.filter(
+    (assetClass) => (sums[assetClass] ?? 0) > STRATEGY_TARGET_LIMIT + SHARE_EPSILON,
+  );
+}
+
+export interface RemainingLegacyShare {
+  assetClass: AssetClass;
+  percentage: number;
+}
+
+// The read-only "restante" share of a class that has a Manual Strategy (bucket): the part no report
+// Strategy targets. It is derived, never stored — the bucket carries no Target row. A class without a
+// bucket has no line, and an over-planned class clamps to zero while the form shows the error.
+// Renda Fixa has no Strategy rung at all (the server refuses a Strategy in that class), so it can
+// never carry a bucket.
+export function remainingLegacyShares(
+  form: TargetsFormState,
+  manualClasses: ReadonlySet<AssetClass>,
+): RemainingLegacyShare[] {
+  const sums = strategyTargetSums(form);
+  return ASSET_CLASSES.filter(
+    (assetClass) => assetClass !== "RENDA_FIXA" && manualClasses.has(assetClass),
+  ).map((assetClass) => ({
+    assetClass,
+    percentage: Math.max(0, STRATEGY_TARGET_LIMIT - (sums[assetClass] ?? 0)),
+  }));
+}
+
 // Row add/remove are the entry form's state transitions, kept pure so the page stays a thin
 // renderer and the behaviour is covered here.
 export function addStrategyRow(form: TargetsFormState): TargetsFormState {

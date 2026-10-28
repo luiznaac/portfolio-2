@@ -17,3 +17,12 @@ data class AttributionSliceCreation(
     val strategyId: Int,
     val quantity: BigDecimal,
 )
+
+// The transfer write shape: the quantity moves from the source slice to the destination slice, and
+// custody never changes. Both strategies are addressed by id because the destination may be a
+// Manual Strategy the ticker has not been attributed to yet.
+data class AttributionTransferCreation(
+    val fromStrategyId: Int,
+    val toStrategyId: Int,
+    val quantity: BigDecimal,
+)

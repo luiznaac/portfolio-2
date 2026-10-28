@@ -35,7 +35,7 @@ _UI:_ "Aporte"
 _Avoid_: Deposit (that is an RF movement), contribution
 
 **Target**:
-A percentage a level of the chain is managed against: class, strategy or sub-class share, or ticker weight. Targets belong to a month, never standing config.
+A percentage a level of the chain is managed against: class, Report Strategy or sub-class share, or ticker weight. Targets belong to a month, never standing config.
 _UI:_ "Alvo"
 _Avoid_: Goal, weight (that is the edition's per-ticker number)
 
@@ -85,14 +85,24 @@ _UI:_ —
 _Avoid_: Rebalancing (that is the whole plan), liquidation
 
 **Attribution Transfer**:
-Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind. Suggested whenever two slices of a ticker sit ≥ 1 whole unit off their Ideal.
+Moving part of a listed asset's Attribution from one Strategy to another without touching custody; rides in the orders list as its own kind. Suggested whenever two slices of a ticker sit ≥ 1 whole unit off their Ideal, or a report slice is short while its custody is satisfied — a Manual Strategy (the bucket) may donate units as a target-less source, but such a suggestion always waits for a human, whatever the R$ amount.
 _UI:_ "Transferência"
 _Avoid_: Custody transfer (that is between institutions, ticketed separately), reallocation
 
-**Dropped Ticker (Outside Strategy)**:
-A ticker that reached weight 0 everywhere in the current Edition while still held: the engine holds it and surfaces it for attention, never auto-exits it, and a manual EXIT defaults to the full position.
+**Inside a Strategy**:
+A held Ticker is inside a Strategy when a Target names it with weight > 0, or when a Manual Strategy's Attribution holds at least one of its units. It is a property of the Ticker, not of a unit; an Attribution to a Report Strategy alone is inert.
+_UI:_ —
+_Avoid_: Attributed (that is the ledger row), targeted (that is only the Target half)
+
+**Outside Strategy**:
+A held, classified Ticker that no Target names and no Manual Strategy holds: the engine holds it and surfaces it for attention, never auto-exits it, and a manual EXIT defaults to the full position. It is a transient state, not a home for legacy money.
 _UI:_ "Fora da estratégia"
 _Avoid_: Exited (that is the manual act), untracked
+
+**Unclassified Ticker**:
+A held Ticker whose effective catalog class is null: it counts in the Portfolio total, belongs to no class or Strategy rung, is never sold by Funding and waits for classification. It is a data-quality state, never an Outside Strategy holding.
+_UI:_ "Sem classe"
+_Avoid_: Outside strategy (a planning state), unknown ticker
 
 **Pro-rata Scaling**:
 The full plan's last resort when funding still cannot cover the buys: every BUY is scaled by the same fraction of its demand, floored to whole units, leaving the remainder unfunded; NEUTRO never participates.
@@ -154,12 +164,22 @@ _Avoid_: Index (the series itself), target
 ### Listed assets
 
 **Strategy**:
-A named bucket of the user's Listed-Assets money driven by an external report (the five XP strategies); carries a Target share within its Asset Class.
+The umbrella for a named bucket of the user's Listed-Assets money; it is either a Report Strategy or a Manual Strategy, told apart by its stored kind.
 _UI:_ "Estratégia"
 _Avoid_: Report (that is the Edition's source), carteira
 
+**Report Strategy**:
+A Strategy fed by an Edition and planned through Targets; its share within its Asset Class lives in the month's Targets, never on the Strategy.
+_UI:_ "Com relatório"
+_Avoid_: XP strategy, report (that is the Edition's source)
+
+**Manual Strategy**:
+The legacy bucket: a Strategy with no Edition and no Targets, at most one per Asset Class. It counts in its class Actual through Attribution, generates no plan orders, is ring-fenced from Funding, and its units leave only through an Attribution Transfer or a manual sell.
+_UI:_ "Manual (legado)" / "Legado"
+_Avoid_: Legacy Holding (there is no separate entity), synthetic strategy
+
 **Edition**:
-One monthly instance of a Strategy: the parsed report for a month, holding per-ticker weights; staged as a diff against the previous Edition before it goes active. One active Edition per Strategy; history kept; a ticker leaving a report means weight 0, not deletion.
+One monthly instance of a Report Strategy: the parsed report for a month, holding per-ticker weights; staged as a diff against the previous Edition before it goes active. One active Edition per Report Strategy; history kept; a ticker leaving a report means weight 0, not deletion.
 _UI:_ "Edição"
 _Avoid_: Report (the PDF artifact), import (the act)
 

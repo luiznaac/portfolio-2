@@ -5,7 +5,12 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Cockpit } from "./Cockpit.tsx";
 
-const mock = vi.hoisted(() => ({ openMonth: true }));
+const mock = vi.hoisted(() => ({
+  openMonth: true,
+  manualBucket: false,
+  outsideCustody: 1_000,
+  unclassified: 0,
+}));
 
 vi.mock("../api/queries.ts", () => {
   const month = {
@@ -24,8 +29,23 @@ vi.mock("../api/queries.ts", () => {
     actual,
     deficit: (target / 100) * 100_000 - actual,
     drift,
-    unattributed: assetClass === "ACOES" ? 1_000 : 0,
+    unattributed: assetClass === "ACOES" ? mock.outsideCustody : 0,
     strategies: [],
+    manual:
+      mock.manualBucket && assetClass === "ACOES"
+        ? {
+            strategy: "Legado",
+            actual: 5_000,
+            tickers: [{ ticker: "ITUB4", actual: 5_000 }],
+          }
+        : undefined,
+    outside:
+      assetClass === "ACOES" && mock.outsideCustody > 0
+        ? {
+            actual: mock.outsideCustody,
+            tickers: [{ ticker: "ORVR3", actual: mock.outsideCustody }],
+          }
+        : { actual: 0, tickers: [] },
     sub_classes: [],
   });
 
@@ -35,7 +55,15 @@ vi.mock("../api/queries.ts", () => {
     useCurrentMonth: () =>
       query(
         mock.openMonth
-          ? { month, targets: { classes: [], strategies: [], sub_classes: [], tickers: [] } }
+          ? {
+              month,
+              targets: {
+                classes: [],
+                strategies: [],
+                sub_classes: [],
+                tickers: [],
+              },
+            }
           : null,
       ),
     useCurrentAllocation: () =>
@@ -47,7 +75,17 @@ vi.mock("../api/queries.ts", () => {
         actual: 80_000,
         deficit: 20_000,
         drift: 0,
-        unattributed: 1_000,
+        unattributed: mock.outsideCustody + mock.unclassified,
+        unclassified:
+          mock.unclassified > 0
+            ? {
+                actual: mock.unclassified * 500,
+                tickers: Array.from({ length: mock.unclassified }, (_, index) => ({
+                  ticker: `ZZZ${index + 1}3`,
+                  actual: 500,
+                })),
+              }
+            : { actual: 0, tickers: [] },
         classes: [
           classRung("ACOES", 55_000, 5, 50),
           classRung("FIIS", 20_000, -10, 30),
@@ -98,6 +136,7 @@ vi.mock("../api/queries.ts", () => {
           neutro_deficit: 0,
         },
         outside_strategy: [],
+        unclassified: [],
         attribution: [],
         transfers: [],
       }),
@@ -118,7 +157,17 @@ vi.mock("../api/queries.ts", () => {
         },
       ]),
     useStrategies: () =>
-      query([{ id: 1, name: "Top Dividendos", asset_class: "ACOES", weight: 1 }]),
+      query([
+        {
+          id: 1,
+          name: "Top Dividendos",
+          asset_class: "ACOES",
+          kind: "REPORT_DRIVEN",
+        },
+        ...(mock.manualBucket
+          ? [{ id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" }]
+          : []),
+      ]),
     useEditionCoverage: () => [{ data: [{ reference_month: "2026-10", status: "ACTIVE" }] }],
     useIncome: () => query([]),
     useUpcomingIncome: () => query([]),
@@ -139,6 +188,9 @@ vi.mock("../api/queries.ts", () => {
 beforeEach(() => {
   localStorage.clear();
   mock.openMonth = true;
+  mock.manualBucket = false;
+  mock.outsideCustody = 1_000;
+  mock.unclassified = 0;
 });
 
 afterEach(cleanup);
@@ -180,16 +232,54 @@ describe("Cockpit", () => {
     expect(screen.getByTestId("ritual-step-transfers").textContent).toContain("1 transferências");
   });
 
-  it("lists the attention cards and the allocation strip", () => {
+  it("keeps the editions step counting report-driven strategies only", () => {
+    mock.manualBucket = true;
     render(
       <MemoryRouter>
         <Cockpit />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/cotas não atribuídas/)).toBeDefined();
+    expect(screen.getByTestId("ritual-step-editions").textContent).toContain("1 de 1");
+  });
+
+  it("renders outside custody as an info card with its own action", () => {
+    render(
+      <MemoryRouter>
+        <Cockpit />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Cotas fora da estratégia/)).toBeDefined();
+    expect(screen.getByRole("link", { name: "Atribuir" })).toBeDefined();
     expect(screen.getByText(/segue sem funding/)).toBeDefined();
     expect(screen.getByText("55,0%")).toBeDefined();
+  });
+
+  it("renders unclassified tickers as a critical card with a classify action", () => {
+    mock.outsideCustody = 0;
+    mock.unclassified = 2;
+    render(
+      <MemoryRouter>
+        <Cockpit />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/2 tickers sem classe — classificar/)).toBeDefined();
+    expect(screen.getByRole("link", { name: "Classificar" })).toBeDefined();
+    expect(screen.queryByText(/Cotas fora da estratégia/)).toBeNull();
+  });
+
+  it("raises no attention card for the manual bucket", () => {
+    mock.manualBucket = true;
+    mock.outsideCustody = 0;
+    render(
+      <MemoryRouter>
+        <Cockpit />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText(/legado/i)).toBeNull();
   });
 
   it("removes an agenda item once it is marked read", async () => {

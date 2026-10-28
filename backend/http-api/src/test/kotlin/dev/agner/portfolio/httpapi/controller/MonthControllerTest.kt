@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.portfolio.MonthService
+import dev.agner.portfolio.usecase.portfolio.StrategyTargetsExceedClassException
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
@@ -180,6 +181,37 @@ class MonthControllerTest : DescribeSpec({
                         },
                     )
                 }
+            }
+        }
+
+        it("rejects strategy targets above 100% in a class as a domain error") {
+            val service = mockk<MonthService>()
+            coEvery { service.replaceCurrentTargets(any()) } throws
+                StrategyTargetsExceedClassException(AssetClass.ACOES, BigDecimal("110.00"))
+
+            testApplication {
+                application { installRoutes(MonthController(service)) }
+
+                val response = client.put("/month/current/targets") {
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {
+                          "classes": [{"asset_class": "ACOES", "percentage": 100.00}],
+                          "strategies": [
+                            {"asset_class": "ACOES", "strategy": "Top Dividendos", "percentage": 60.00},
+                            {"asset_class": "ACOES", "strategy": "Small Caps", "percentage": 50.00}
+                          ],
+                          "sub_classes": [],
+                          "tickers": []
+                        }
+                        """.trimIndent(),
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("error").asText() shouldBe "strategy-targets-exceed-class"
             }
         }
     }
