@@ -17,6 +17,7 @@ import { addDays, monthKey } from "./dates.ts";
 import { pendingTransfers } from "./fechamento.ts";
 import { formatCurrency } from "./format.ts";
 import { netTotal } from "./income.ts";
+import { outsideCustody, shouldShowBanner } from "./legacyAttribution.ts";
 import { assetClassLabel, monthPeriodLabel } from "./month.ts";
 
 function roundCents(value: number): number {
@@ -209,6 +210,8 @@ export interface AttentionItem {
   severity: AttentionSeverity;
   text: string;
   to: string;
+  // The link's verb, so a planning act ("Atribuir") and a data fix ("Classificar") do not share one.
+  actionLabel?: string;
 }
 
 export interface AttentionInput {
@@ -225,19 +228,17 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   const items: AttentionItem[] = [];
   const { allocation, plan } = input;
 
-  const unattributed = (allocation?.classes ?? []).filter((rung) => rung.unattributed > 0);
-  const unattributedTotal = allocation?.unattributed ?? 0;
-  if (unattributed.length > 0 || unattributedTotal > 0) {
-    // A holding with no class does not appear in any rung — the root total catches it.
-    const names = unattributed.map((rung) => assetClassLabel(rung.asset_class)).join(", ");
+  // An unclassified Ticker is a data-quality state, so it is the critical card and points at the
+  // classify surface. The bucket never appears: its units are attributed, and it has no target to
+  // miss.
+  const unclassified = allocation?.unclassified.tickers.length ?? 0;
+  if (unclassified > 0) {
     items.push({
-      key: "unattributed",
+      key: "unclassified",
       severity: "critical",
-      text:
-        unattributed.length > 0
-          ? `${unattributed.length} ${unattributed.length === 1 ? "classe" : "classes"} com cotas não atribuídas — ${names}`
-          : "Cotas não atribuídas — posições sem classe",
-      to: "/trades",
+      text: `${unclassified} ${unclassified === 1 ? "ticker" : "tickers"} sem classe — classificar`,
+      to: "/allocation",
+      actionLabel: "Classificar",
     });
   }
 
@@ -272,6 +273,23 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       severity: "warning",
       text: `NEUTRO sem funding: ${formatCurrency(funding.neutro_deficit)}`,
       to: "/orders",
+    });
+  }
+
+  // Real outside custody is a planning act, not a data fix: the owner decides whether it joins the
+  // legacy book, so it stays an info card pointing at the bulk action on Alocação.
+  const hasOutsideCustody = allocation !== null && shouldShowBanner(allocation);
+  const outsideValue = allocation === null ? 0 : outsideCustody(allocation);
+  if (hasOutsideCustody) {
+    items.push({
+      key: "outside",
+      severity: "info",
+      text:
+        outsideValue > 0
+          ? `Cotas fora da estratégia: ${formatCurrency(outsideValue)}`
+          : "Cotas fora da estratégia — sem cotação",
+      to: "/allocation",
+      actionLabel: "Atribuir",
     });
   }
 
