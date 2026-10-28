@@ -1,11 +1,15 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.springframework.stereotype.Component
 
@@ -29,11 +33,20 @@ class CatalogController(
             }
 
             get("/{ticker}") {
-                val entry = catalogService.fetchBy(call.requiredString("ticker"))
-                when (entry) {
-                    null -> call.respond(HttpStatusCode.NotFound)
-                    else -> call.respond(HttpStatusCode.OK, entry)
-                }
+                call.respondOr404(catalogService.fetchBy(call.requiredString("ticker")))
+            }
+
+            // The owner's manual classification, outranking the BDI-derived class. PUT sets it,
+            // DELETE hands the ticker back to the catalog; both return the updated catalog row.
+            put("/{ticker}/classification") {
+                val payload = call.receive<TickerClassification>()
+                call.respondOr404(
+                    catalogService.classify(call.requiredString("ticker"), payload.assetClass),
+                )
+            }
+
+            delete("/{ticker}/classification") {
+                call.respondOr404(catalogService.revertClassification(call.requiredString("ticker")))
             }
 
             get("/{ticker}/quotes") {
@@ -42,6 +55,11 @@ class CatalogController(
         }
     }
 }
+
+// Mirrored in frontend/src/api/types.ts (TickerClassification).
+private data class TickerClassification(
+    val assetClass: AssetClass,
+)
 
 // Mirrored in frontend/src/api/types.ts (TickerRefreshResult).
 private data class TickerRefreshResult(

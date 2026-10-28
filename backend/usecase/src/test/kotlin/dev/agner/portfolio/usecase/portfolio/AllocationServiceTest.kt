@@ -136,6 +136,22 @@ class AllocationServiceTest : StringSpec({
         acoes.outside.actual.plain() shouldBe "400"
     }
 
+    "files a manually classified ticker under the override's class, not its BDI class" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
+        coEvery { catalog.fetchBy("VALE3") } returns catalogEntry.copy(
+            assetClass = AssetClass.FIIS,
+            assetClassOverride = AssetClass.ACOES,
+        )
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
+        coEvery { bonds.fetchAll() } returns emptySet()
+
+        val allocation = service.fetchCurrent()!!
+
+        allocation.classes.single { it.assetClass == AssetClass.ACOES }.actual.plain() shouldBe "1000"
+        allocation.unclassified.actual.plain() shouldBe "0"
+    }
+
     "values a position with no stored quote at zero" {
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))

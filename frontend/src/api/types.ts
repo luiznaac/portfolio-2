@@ -17,8 +17,15 @@ export interface CatalogEntry {
   isin?: string;
   asset_kind: AssetKind;
   asset_class?: AssetClass;
+  // A manual classification that outranks the BDI-derived class and survives a COTAHIST refresh.
+  asset_class_override?: AssetClass;
   first_seen: string;
   last_seen: string;
+}
+
+/** The manual classification request (PUT /tickers/{ticker}/classification). */
+export interface TickerClassification {
+  asset_class: AssetClass;
 }
 
 export type QuoteSource = "COTAHIST";

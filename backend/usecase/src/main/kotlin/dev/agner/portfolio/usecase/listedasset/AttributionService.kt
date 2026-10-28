@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.listedasset
 
+import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
@@ -114,7 +115,7 @@ class AttributionService(
     // A ticker enters a Strategy only once the catalog gives it a class, and only the Strategy of
     // that class may hold it. Classification is a precondition, not an inference.
     private suspend fun requireClassMatch(ticker: String, strategy: Strategy) {
-        val assetClass = catalog.fetchBy(ticker)?.assetClass
+        val assetClass = catalog.fetchBy(ticker)?.effectiveAssetClass
             ?: throw InvalidAttributionException("$ticker has no Asset Class; classify it before attributing")
         if (assetClass != strategy.assetClass) {
             throw InvalidAttributionException(

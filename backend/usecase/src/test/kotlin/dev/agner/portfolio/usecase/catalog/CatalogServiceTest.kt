@@ -5,7 +5,9 @@ import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.model.CotahistRow
+import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -84,12 +86,112 @@ class CatalogServiceTest : StringSpec({
         service.fetchUnclassified(setOf("PETR4", "XPTO3", "MISS3")) shouldBe setOf("XPTO3", "MISS3")
     }
 
+    "fetchUnclassified counts a manually classified ticker as classified" {
+        coEvery { repository.fetchAll() } returns listOf(
+            entry(
+                ticker = "XPTO3",
+                isin = null,
+                kind = AssetKind.UNKNOWN,
+                assetClass = null,
+                override = AssetClass.FIIS,
+            ),
+        )
+
+        service.fetchUnclassified(setOf("XPTO3")) shouldBe emptySet()
+    }
+
+    "refresh moves the BDI class forward but keeps the manual override" {
+        coEvery { repository.fetchAll() } returns listOf(
+            entry(
+                ticker = "XPTO3",
+                isin = null,
+                kind = AssetKind.UNKNOWN,
+                assetClass = null,
+                override = AssetClass.ACOES,
+            ),
+        )
+        coEvery { source.fetchTradingDay() } returns listOf(row(ticker = "XPTO3", bdiType = "12"))
+        val captured = slot<List<CatalogEntry>>()
+        coEvery { repository.upsertAll(capture(captured)) } returns 1
+
+        service.refresh()
+
+        captured.captured.single().assetClass shouldBe AssetClass.FIIS
+        captured.captured.single().assetClassOverride shouldBe AssetClass.ACOES
+        captured.captured.single().effectiveAssetClass shouldBe AssetClass.ACOES
+    }
+
+    "classify sets the override on the catalog row" {
+        coEvery { repository.fetchBy("XPTO3") } returns entry(
+            ticker = "XPTO3",
+            isin = null,
+            kind = AssetKind.UNKNOWN,
+            assetClass = null,
+        )
+        coEvery { repository.setAssetClassOverride("XPTO3", AssetClass.ACOES) } returns entry(
+            ticker = "XPTO3",
+            isin = null,
+            kind = AssetKind.UNKNOWN,
+            assetClass = null,
+            override = AssetClass.ACOES,
+        )
+
+        service.classify("xpto3", AssetClass.ACOES)?.effectiveAssetClass shouldBe AssetClass.ACOES
+
+        coVerify(exactly = 1) { repository.setAssetClassOverride("XPTO3", AssetClass.ACOES) }
+    }
+
+    "classify auto-enters a ticker the catalog has never seen" {
+        coEvery { repository.fetchBy("NOVA3") } returns null
+        coEvery { repository.setAssetClassOverride("NOVA3", AssetClass.FIIS) } returns entry(
+            ticker = "NOVA3",
+            isin = null,
+            kind = AssetKind.UNKNOWN,
+            assetClass = null,
+            override = AssetClass.FIIS,
+        )
+
+        service.classify("NOVA3", AssetClass.FIIS)?.effectiveAssetClass shouldBe AssetClass.FIIS
+
+        coVerify(exactly = 1) { repository.upsertAll(any()) }
+        coVerify(exactly = 1) { repository.setAssetClassOverride("NOVA3", AssetClass.FIIS) }
+    }
+
+    "classify rejects a class a listed ticker cannot hold" {
+        coEvery { repository.fetchBy("XPTO3") } returns entry(
+            ticker = "XPTO3",
+            isin = null,
+            kind = AssetKind.UNKNOWN,
+            assetClass = null,
+        )
+
+        shouldThrow<InvalidCatalogClassException> {
+            service.classify("XPTO3", AssetClass.RENDA_FIXA)
+        }
+
+        coVerify(exactly = 0) { repository.setAssetClassOverride(any(), any()) }
+    }
+
+    "revert clears the override, leaving the BDI-derived class in charge" {
+        coEvery { repository.setAssetClassOverride("XPTO3", null) } returns entry(
+            ticker = "XPTO3",
+            isin = null,
+            kind = AssetKind.UNKNOWN,
+            assetClass = null,
+        )
+
+        service.revertClassification("xpto3")
+
+        coVerify(exactly = 1) { repository.setAssetClassOverride("XPTO3", null) }
+    }
+
     "remapTicker copies the ISIN and descriptive fields into the new ticker's entry" {
         coEvery { repository.fetchBy("PETR4") } returns entry(
             ticker = "PETR4",
             isin = "BRPETRACNPR6",
             kind = AssetKind.STOCK,
             assetClass = AssetClass.ACOES,
+            override = AssetClass.FIIS,
         )
         val captured = slot<List<CatalogEntry>>()
         coEvery { repository.upsertAll(capture(captured)) } returns 1
@@ -101,6 +203,7 @@ class CatalogServiceTest : StringSpec({
         remapped.isin shouldBe "BRPETRACNPR6"
         remapped.assetKind shouldBe AssetKind.STOCK
         remapped.assetClass shouldBe AssetClass.ACOES
+        remapped.assetClassOverride shouldBe AssetClass.FIIS
         remapped.firstSeen shouldBe LocalDate.parse("2026-10-22")
         captured.captured.single { it.ticker == "PETR4" }.isin shouldBe null
     }
@@ -124,6 +227,7 @@ private fun entry(
     isin: String?,
     kind: AssetKind,
     assetClass: AssetClass?,
+    override: AssetClass? = null,
 ) = CatalogEntry(
     ticker = ticker,
     shortName = ticker,
@@ -131,6 +235,7 @@ private fun entry(
     isin = isin,
     assetKind = kind,
     assetClass = assetClass,
+    assetClassOverride = override,
     firstSeen = LocalDate.parse("2026-01-02"),
     lastSeen = LocalDate.parse("2026-10-01"),
 )

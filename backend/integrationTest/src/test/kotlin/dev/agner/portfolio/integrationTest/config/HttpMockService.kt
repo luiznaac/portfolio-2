@@ -26,6 +26,9 @@ object HttpMockService {
         var queryParams: Map<String, String> = emptyMap()
         var httpStatus: Int = 200
         var payload: Any = emptyMap<String, String>()
+
+        // A binary body (the COTAHIST daily file is a ZIP) bypasses the JSON serialization above.
+        var body: ByteArray? = null
     }
 
     class ResponseScope {
@@ -47,6 +50,7 @@ object HttpMockService {
                     queryParams = configuration.queryParams,
                     httpStatus = configuration.httpStatus,
                     desiredResponsePayload = configuration.payload,
+                    desiredResponseBody = configuration.body,
                 )
             }
     }
@@ -57,6 +61,7 @@ object HttpMockService {
         queryParams: Map<String, String>,
         httpStatus: Int,
         desiredResponsePayload: Any,
+        desiredResponseBody: ByteArray? = null,
     ) {
         server.stubFor(
             WireMock.request(method.value(), WireMock.urlPathMatching(endpoint))
@@ -67,7 +72,13 @@ object HttpMockService {
                     WireMock.aResponse()
                         .withHeader("Content-Type", "application/json")
                         .withStatus(httpStatus)
-                        .withBody(mapper.writeValueAsBytes(desiredResponsePayload)),
+                        .apply {
+                            if (desiredResponseBody == null) {
+                                withBody(mapper.writeValueAsBytes(desiredResponsePayload))
+                            } else {
+                                withBody(desiredResponseBody)
+                            }
+                        },
                 ),
         )
     }

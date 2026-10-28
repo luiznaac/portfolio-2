@@ -74,6 +74,22 @@ class PerformanceServiceTest : StringSpec({
         petr4.decomposition.returnPercentage?.compareTo(BigDecimal("1.0000")) shouldBe 0
     }
 
+    "files a ticker under its manual override's class, not its BDI class" {
+        val performance = service(
+            snapshots = listOf(january, february),
+            targets = targets(),
+            quotes = petr4Quotes,
+            catalogEntries = listOf(
+                petr4CatalogEntry.copy(
+                    assetClass = AssetClass.FIIS,
+                    assetClassOverride = AssetClass.ACOES,
+                ),
+            ),
+        ).fetchForMonth(monthId = 2)!!
+
+        performance.tickers.single().assetClass shouldBe AssetClass.ACOES
+    }
+
     "has no decomposition for the first snapshot in the series" {
         val performance = service.fetchForMonth(monthId = 1)!!
 
