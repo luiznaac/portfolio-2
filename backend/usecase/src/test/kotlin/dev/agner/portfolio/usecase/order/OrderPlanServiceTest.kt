@@ -179,6 +179,33 @@ class OrderPlanServiceTest : StringSpec({
         plan.unclassified shouldBe emptyList()
     }
 
+    "feeds the full phase's transfer pass the bucket as a target-less donor" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { allocations.fetchCurrent() } returns allocation(actual = "9992")
+        coEvery { positions.fetchAll() } returns listOf(
+            Position("VALE3", BigDecimal("416"), BigDecimal("8")),
+            Position("ITUB4", BigDecimal("250"), BigDecimal("8")),
+        )
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { strategies.fetchManualNames() } returns setOf("Legado")
+        coEvery { attributions.fetchLedger() } returns mapOf(
+            StrategyTicker("Top", "ITUB4") to BigDecimal("50"),
+            StrategyTicker("Legado", "ITUB4") to BigDecimal("100"),
+        )
+
+        val plan = service.computePlan(OrderPlanPhase.FULL)!!
+
+        // The report slice is short while the ticker's custody already meets its Target, so the plan
+        // moves bucket units instead of buying.
+        plan.candidates shouldBe emptyList()
+        plan.transfers.single().let {
+            it.fromStrategy shouldBe "Legado"
+            it.toStrategy shouldBe "Top"
+            it.quantity.plain() shouldBe "100"
+        }
+    }
+
     "reports a ticker the catalog has not classified separately from the outside holdings" {
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("ZZZZ3", BigDecimal("10"), BigDecimal("9")))

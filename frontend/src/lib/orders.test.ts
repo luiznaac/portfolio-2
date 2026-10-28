@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SuggestedOrder } from "../api/types.ts";
+import type { Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
 import {
   groupOrders,
   isBuySide,
@@ -10,6 +10,8 @@ import {
   orderTotals,
   ordersCsv,
   toTradeId,
+  transferCopy,
+  transferSourceIsBucket,
   transferStatusLabel,
 } from "./orders.ts";
 
@@ -171,3 +173,46 @@ describe("ordersCsv", () => {
     expect(csv.split("\n")[1]?.startsWith('"IT;UB4"')).toBe(true);
   });
 });
+
+describe("transfer copy", () => {
+  const strategies: Strategy[] = [
+    { id: 1, name: "Top", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
+    { id: 2, name: "Legado", asset_class: "ACOES", kind: "MANUAL" },
+  ];
+
+  it("resolves the bucket source from the strategies catalog", () => {
+    expect(transferSourceIsBucket(transfer({ from_strategy_id: 2 }), strategies)).toBe(true);
+    expect(transferSourceIsBucket(transfer({ from_strategy_id: 1 }), strategies)).toBe(false);
+    // An unknown source is not the bucket, and an unresolved catalog is not a verdict.
+    expect(transferSourceIsBucket(transfer({ from_strategy_id: 99 }), strategies)).toBe(false);
+    expect(transferSourceIsBucket(transfer({ from_strategy_id: 2 }), undefined)).toBeUndefined();
+  });
+
+  it("keeps 'evita vender' for report-to-report and reads 'move' for the bucket", () => {
+    expect(transferCopy(transfer({ amount: 600, from_strategy_id: 1 }), strategies)).toBe(
+      "evita vender R$ 600,00",
+    );
+    expect(transferCopy(transfer({ amount: 100, from_strategy_id: 2 }), strategies)).toBe(
+      "move R$ 100,00 do legado",
+    );
+    expect(transferCopy(transfer({ amount: undefined }), strategies)).toBe("sem cotação");
+    // While the catalog loads there is no honest source kind, so no caption is claimed.
+    expect(transferCopy(transfer({ amount: 100 }), undefined)).toBeUndefined();
+  });
+});
+
+function transfer(overrides: Partial<TransferProposal> = {}): TransferProposal {
+  return {
+    id: 1,
+    ticker: "ITUB4",
+    from_strategy_id: 1,
+    from_strategy: "Top",
+    to_strategy_id: 2,
+    to_strategy: "Small",
+    quantity: 10,
+    amount: 100,
+    auto_approved: false,
+    status: "PENDING",
+    ...overrides,
+  };
+}

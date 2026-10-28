@@ -21,8 +21,9 @@ data class AttributionMove(
 
 // A bookkeeping move between two slices of the same ticker: the slice above its whole-unit Target
 // gives units to the one below it, without touching custody or taxes (CONTEXT.md -> Attribution
-// Transfer). `amount` values the moved units at the latest close; it is absent when no quote prices
-// the ticker.
+// Transfer). A Manual Strategy is a target-less donor — it has no Ideal, so it may give from its
+// attributed units. `amount` values the moved units at the latest close; it is absent when no quote
+// prices the ticker.
 data class AttributionTransfer(
     val ticker: String,
     val fromStrategy: String,

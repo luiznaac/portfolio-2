@@ -74,7 +74,11 @@ class OrderLifecycleServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { trades.fetchAll() } returns emptyList()
         coEvery { transfers.fetchBy(any()) } returns emptyList()
-        coEvery { strategies.fetchAll() } returns listOf(strategy(1, "Top"), strategy(2, "Small"))
+        coEvery { strategies.fetchAll() } returns listOf(
+            strategy(1, "Top"),
+            strategy(2, "Small"),
+            strategy(3, "Legado", StrategyKind.MANUAL),
+        )
         coEvery { suggestions.replaceAll(any(), any()) } returns emptyList()
         coEvery { attributionService.transfer(any(), any()) } returns transferSummary
     }
@@ -160,6 +164,82 @@ class OrderLifecycleServiceTest : StringSpec({
                 ),
             )
         }
+    }
+
+    "refresh keeps a bucket-sourced transfer pending whatever its amount" {
+        coEvery { plans.computePlan(OrderPlanPhase.FULL) } returns plan(
+            price = "10",
+            capital = "1000",
+            strategies = listOf("Top" to "50", "Small" to "50"),
+            tickers = listOf("Top" to "100", "Small" to "100"),
+            position = "70",
+            attributions = mapOf("Top" to "10", "Small" to "60"),
+            transfers = listOf(bucketTransfer(amount = "50")),
+        )
+        val creations = slot<TransferProposalCreation>()
+        coEvery { transfers.save(1, capture(creations)) } answers {
+            persistedTransfer(1, creations.captured)
+        }
+
+        service.refresh()
+
+        val creation = creations.captured
+        creation.fromStrategyId shouldBe 3
+        creation.autoApproved shouldBe false
+        creation.status shouldBe TransferStatus.PENDING
+        // No move happens on the engine's own call: the bucket's units wait for a human.
+        coVerify(exactly = 0) { attributionService.transfer(any(), any()) }
+    }
+
+    "refresh keeps the R$500 auto-approval threshold for a report-to-report transfer" {
+        coEvery { plans.computePlan(OrderPlanPhase.FULL) } returns plan(
+            price = "10",
+            capital = "1000",
+            strategies = listOf("Top" to "50", "Small" to "50"),
+            tickers = listOf("Top" to "100", "Small" to "100"),
+            position = "70",
+            attributions = mapOf("Top" to "10", "Small" to "60"),
+            transfers = listOf(transfer(amount = "500")),
+        )
+        val creations = slot<TransferProposalCreation>()
+        coEvery { transfers.save(1, capture(creations)) } answers {
+            persistedTransfer(1, creations.captured)
+        }
+
+        service.refresh()
+
+        creations.captured.autoApproved shouldBe false
+        creations.captured.status shouldBe TransferStatus.PENDING
+    }
+
+    "refresh never re-proposes a bucket transfer the user rejected" {
+        coEvery { plans.computePlan(OrderPlanPhase.FULL) } returns plan(
+            price = "10",
+            capital = "1000",
+            strategies = listOf("Top" to "50", "Small" to "50"),
+            tickers = listOf("Top" to "100", "Small" to "100"),
+            position = "70",
+            attributions = mapOf("Top" to "10", "Small" to "60"),
+            transfers = listOf(bucketTransfer(amount = "50")),
+        )
+        coEvery { transfers.fetchBy(1) } returns listOf(
+            persistedTransfer(
+                1,
+                TransferProposalCreation(
+                    ticker = "ITUB4",
+                    fromStrategyId = 3,
+                    toStrategyId = 1,
+                    quantity = BigDecimal("10"),
+                    amount = BigDecimal("50"),
+                    autoApproved = false,
+                    status = TransferStatus.REJECTED,
+                ),
+            ),
+        )
+
+        service.refresh()
+
+        coVerify(exactly = 0) { transfers.save(any(), any()) }
     }
 
     "refresh never re-proposes a transfer the user rejected" {
@@ -372,11 +452,14 @@ private fun transfer(amount: String) = AttributionTransfer(
     amount = BigDecimal(amount),
 )
 
-private fun strategy(id: Int, name: String) = Strategy(
+// The plan's bucket-sourced transfer: the source is the Manual Strategy, never a chain leaf.
+private fun bucketTransfer(amount: String) = transfer(amount = amount).copy(fromStrategy = "Legado")
+
+private fun strategy(id: Int, name: String, kind: StrategyKind = StrategyKind.REPORT_DRIVEN) = Strategy(
     id = id,
     name = name,
     assetClass = AssetClass.ACOES,
-    kind = StrategyKind.REPORT_DRIVEN,
+    kind = kind,
 )
 
 private fun trade(

@@ -23,6 +23,7 @@ import dev.agner.portfolio.usecase.order.repository.ISuggestedOrderRepository
 import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.Month
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -139,13 +140,17 @@ class OrderLifecycleService(
     // The inbox refresh keeps the month's decided trail: a rejected proposal is not proposed again
     // (the user already said no), and the pending rows are replaced by the fresh computation. The
     // transfers themselves are the full plan's attribution pass — this method only resolves their
-    // strategy names to ids, records the decision and applies the auto-approved moves.
+    // strategy names to ids, records the decision and applies the auto-approved moves. A bucket as
+    // the source never auto-approves: the engine may not move legacy units on its own, whatever the
+    // R$ amount, so only a report-to-report move is decided by the threshold.
     private suspend fun refreshTransfers(month: Month, plan: OrderPlan) {
         val rejected = transfers.fetchBy(month.id)
             .filter { it.status == TransferStatus.REJECTED }
             .map { ProposalKey(it.ticker, it.fromStrategyId, it.toStrategyId) }
             .toSet()
-        val idsByName = strategies.fetchAll().associate { it.name to it.id }
+        val catalog = strategies.fetchAll()
+        val idsByName = catalog.associate { it.name to it.id }
+        val manualIds = catalog.filter { it.kind == StrategyKind.MANUAL }.map { it.id }.toSet()
 
         transfers.deletePending(month.id)
         for (transfer in plan.transfers) {
@@ -156,7 +161,9 @@ class OrderLifecycleService(
             if (ProposalKey(transfer.ticker, fromStrategyId, toStrategyId) in rejected) continue
 
             // An unpriced transfer has no R$ value, so the threshold cannot decide it: it waits.
-            val autoApproved = transfer.amount?.let { it < AUTO_APPROVAL_THRESHOLD } ?: false
+            // A bucket-sourced move always waits, whatever the amount.
+            val autoApproved = fromStrategyId !in manualIds &&
+                transfer.amount?.let { it < AUTO_APPROVAL_THRESHOLD } == true
             transfers.save(
                 month.id,
                 TransferProposalCreation(
