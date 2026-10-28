@@ -167,6 +167,7 @@ describe("allocationRows", () => {
       ["ITUB4", 3, 300],
       ["VALE3", 3, 200],
     ]);
+    expect(manualTickers.map((row) => row.assetClass)).toEqual(["ACOES", "ACOES"]);
 
     const outsideTickers = rows.filter((row) => row.kind === "outside_ticker");
     expect(outsideTickers.map((row) => [row.label, row.depth, row.actual])).toEqual([

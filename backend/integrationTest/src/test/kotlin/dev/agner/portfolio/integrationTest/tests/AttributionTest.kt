@@ -88,6 +88,16 @@ class AttributionTest : StringSpec({
         (after["attributed_quantity"] as Number).toInt() shouldBe 25
         (after["unattributed_quantity"] as Number).toInt() shouldBe 75
         (after["slices"] as List<*>).size shouldBe 1
+
+        // The manual transfer moves units between slices and deletes the source at zero.
+        val moved = transfer(fromStrategyId = acoes.id, toStrategyId = dividends.id, quantity = "10")
+        (moved["attributed_quantity"] as Number).toInt() shouldBe 25
+        (moved["slices"] as List<*>).size shouldBe 2
+
+        val drained = transfer(fromStrategyId = acoes.id, toStrategyId = dividends.id, quantity = "15")
+        (drained["attributed_quantity"] as Number).toInt() shouldBe 25
+        (drained["unattributed_quantity"] as Number).toInt() shouldBe 75
+        (drained["slices"] as List<*>).size shouldBe 1
     }
 
     "the bulk legacy action previews, applies and re-runs idempotently" {
@@ -139,6 +149,16 @@ class AttributionTest : StringSpec({
         (readAttribution("ITUB4")["attributed_quantity"] as Number).toInt() shouldBe 130
     }
 })
+
+private suspend fun transfer(fromStrategyId: Int, toStrategyId: Int, quantity: String) =
+    postRequest<Map<String, Any>> {
+        path = "/positions/PETR4/attribution/transfer"
+        body = mapOf(
+            "from_strategy_id" to fromStrategyId,
+            "to_strategy_id" to toStrategyId,
+            "quantity" to BigDecimal(quantity),
+        )
+    }
 
 private suspend fun buy(ticker: String, quantity: String, institutionId: Int) {
     postRequest<Map<String, Any>> {

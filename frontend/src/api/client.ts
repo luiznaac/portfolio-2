@@ -3,6 +3,7 @@ import type {
   AssetClass,
   Attribution,
   AttributionSliceCreation,
+  AttributionTransferCreation,
   Bond,
   CatalogEntry,
   CheckingAccount,
@@ -136,6 +137,13 @@ export const api = {
   removeAttribution(ticker: string, strategyId: number): Promise<Attribution> {
     return request(`/positions/${encodeURIComponent(ticker)}/attribution/${strategyId}`, {
       method: "DELETE",
+    });
+  },
+
+  transferAttribution(ticker: string, creation: AttributionTransferCreation): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution/transfer`, {
+      method: "POST",
+      body: JSON.stringify(creation),
     });
   },
 

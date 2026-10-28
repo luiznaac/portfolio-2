@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.listedasset.AttributionService
 import dev.agner.portfolio.usecase.listedasset.InvalidAttributionException
+import dev.agner.portfolio.usecase.listedasset.InvalidTransferException
 import dev.agner.portfolio.usecase.listedasset.LegacyAttributionService
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSlice
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionAdd
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionApplied
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionGroup
@@ -124,6 +126,72 @@ class AttributionControllerTest : DescribeSpec({
                 }
 
                 response.status shouldBe HttpStatusCode.NotFound
+            }
+        }
+    }
+
+    describe("transferring attribution") {
+
+        it("returns 200 with the refreshed attribution and passes the body through") {
+            val service = mockk<AttributionService>()
+            coEvery { service.transfer("PETR4", any()) } returns summary
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                val response = client.post("/positions/PETR4/attribution/transfer") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"from_strategy_id":2,"to_strategy_id":1,"quantity":10}""")
+                }
+
+                response.status shouldBe HttpStatusCode.OK
+                ObjectMapper().readTree(response.bodyAsText()).get("attributed_quantity").asText() shouldBe "60"
+                coVerify(exactly = 1) {
+                    service.transfer(
+                        "PETR4",
+                        match {
+                            it == AttributionTransferCreation(
+                                fromStrategyId = 2,
+                                toStrategyId = 1,
+                                quantity = BigDecimal("10"),
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        it("returns 404 when the position or a strategy does not exist") {
+            val service = mockk<AttributionService>()
+            coEvery { service.transfer("PETR4", any()) } returns null
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                val response = client.post("/positions/PETR4/attribution/transfer") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"from_strategy_id":2,"to_strategy_id":1,"quantity":10}""")
+                }
+
+                response.status shouldBe HttpStatusCode.NotFound
+            }
+        }
+
+        it("returns 400 with the canonical error body when the transfer is invalid") {
+            val service = mockk<AttributionService>()
+            coEvery { service.transfer("PETR4", any()) } throws
+                InvalidTransferException("slice above custody")
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                val response = client.post("/positions/PETR4/attribution/transfer") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"from_strategy_id":2,"to_strategy_id":1,"quantity":10}""")
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe "invalid-transfer"
             }
         }
     }

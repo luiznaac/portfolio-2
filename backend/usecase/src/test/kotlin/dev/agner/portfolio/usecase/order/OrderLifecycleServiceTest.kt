@@ -3,11 +3,13 @@ package dev.agner.portfolio.usecase.order
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
-import dev.agner.portfolio.usecase.listedasset.model.Attribution
+import dev.agner.portfolio.usecase.listedasset.AttributionService
+import dev.agner.portfolio.usecase.listedasset.InvalidTransferException
+import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
-import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.order.model.AttributionTransfer
 import dev.agner.portfolio.usecase.order.model.InvalidOrderMatchException
@@ -54,7 +56,7 @@ class OrderLifecycleServiceTest : StringSpec({
     val trades = mockk<ITradeRepository>(relaxed = true)
     val suggestions = mockk<ISuggestedOrderRepository>(relaxed = true)
     val transfers = mockk<ITransferProposalRepository>(relaxed = true)
-    val attributions = mockk<IAttributionRepository>(relaxed = true)
+    val attributionService = mockk<AttributionService>(relaxed = true)
     val strategies = mockk<IStrategyRepository>(relaxed = true)
     val service = OrderLifecycleService(
         months = months,
@@ -62,7 +64,7 @@ class OrderLifecycleServiceTest : StringSpec({
         trades = trades,
         suggestions = suggestions,
         transfers = transfers,
-        attributions = attributions,
+        attributionService = attributionService,
         strategies = strategies,
         transaction = immediateTransactions,
     )
@@ -74,6 +76,7 @@ class OrderLifecycleServiceTest : StringSpec({
         coEvery { transfers.fetchBy(any()) } returns emptyList()
         coEvery { strategies.fetchAll() } returns listOf(strategy(1, "Top"), strategy(2, "Small"))
         coEvery { suggestions.replaceAll(any(), any()) } returns emptyList()
+        coEvery { attributionService.transfer(any(), any()) } returns transferSummary
     }
 
     "returns null when no month is open and writes nothing" {
@@ -129,10 +132,6 @@ class OrderLifecycleServiceTest : StringSpec({
             attributions = mapOf("Top" to "10", "Small" to "60"),
             transfers = listOf(transfer(amount = "100")),
         )
-        coEvery { attributions.fetchBy("ITUB4") } returns listOf(
-            Attribution("ITUB4", 1, BigDecimal("10")),
-            Attribution("ITUB4", 2, BigDecimal("60")),
-        )
         val creations = slot<TransferProposalCreation>()
         coEvery { transfers.save(1, capture(creations)) } answers {
             persistedTransfer(1, creations.captured)
@@ -150,9 +149,17 @@ class OrderLifecycleServiceTest : StringSpec({
         creation.autoApproved shouldBe true
         creation.status shouldBe TransferStatus.APPROVED
 
-        // The approved move rebalances the ledger: Small gives 10 units, Top gains them.
-        coVerify { attributions.save(Attribution("ITUB4", 2, BigDecimal("50"))) }
-        coVerify { attributions.save(Attribution("ITUB4", 1, BigDecimal("20"))) }
+        // The approved move is the one domain operation: the lifecycle only hands it the rows' ids.
+        coVerify {
+            attributionService.transfer(
+                "ITUB4",
+                AttributionTransferCreation(
+                    fromStrategyId = 2,
+                    toStrategyId = 1,
+                    quantity = BigDecimal("10"),
+                ),
+            )
+        }
     }
 
     "refresh never re-proposes a transfer the user rejected" {
@@ -215,17 +222,30 @@ class OrderLifecycleServiceTest : StringSpec({
         coEvery { transfers.fetchById(7) } returns pendingTransfer(7)
         coEvery { transfers.decide(7, TransferStatus.APPROVED) } returns
             persistedTransfer(7, pendingCreation(status = TransferStatus.APPROVED))
-        coEvery { attributions.fetchBy("ITUB4") } returns listOf(
-            Attribution("ITUB4", 1, BigDecimal("10")),
-            Attribution("ITUB4", 2, BigDecimal("60")),
-        )
 
         val decided = service.approveTransfer(7)!!
 
         decided.status shouldBe TransferStatus.APPROVED
-        coVerify { attributions.save(Attribution("ITUB4", 2, BigDecimal("50"))) }
-        coVerify { attributions.save(Attribution("ITUB4", 1, BigDecimal("20"))) }
+        coVerify {
+            attributionService.transfer(
+                "ITUB4",
+                AttributionTransferCreation(
+                    fromStrategyId = 2,
+                    toStrategyId = 1,
+                    quantity = BigDecimal("10"),
+                ),
+            )
+        }
         coVerify { transfers.decide(7, TransferStatus.APPROVED) }
+    }
+
+    "an approval whose slice vanished is rejected instead of recording the decision" {
+        coEvery { transfers.fetchById(7) } returns pendingTransfer(7)
+        coEvery { attributionService.transfer(any(), any()) } returns null
+
+        shouldThrow<InvalidTransferException> { service.approveTransfer(7) }
+
+        coVerify(exactly = 0) { transfers.decide(any(), any()) }
     }
 
     "rejecting a transfer records the decision without touching the ledger" {
@@ -235,7 +255,7 @@ class OrderLifecycleServiceTest : StringSpec({
 
         service.rejectTransfer(7)!!.status shouldBe TransferStatus.REJECTED
 
-        coVerify(exactly = 0) { attributions.save(any()) }
+        coVerify(exactly = 0) { attributionService.transfer(any(), any()) }
     }
 
     "an override retargets the match at a trade of the same ticker and side" {
@@ -277,6 +297,14 @@ class OrderLifecycleServiceTest : StringSpec({
 private val immediateTransactions = object : ITransactionTemplate {
     override suspend fun <T> execute(block: suspend () -> T): T = block()
 }
+
+private val transferSummary = AttributionSummary(
+    ticker = "ITUB4",
+    custodyQuantity = BigDecimal("70"),
+    attributedQuantity = BigDecimal("70"),
+    unattributedQuantity = BigDecimal.ZERO,
+    slices = emptyList(),
+)
 
 private val currentMonth = CurrentMonth(
     month = Month(

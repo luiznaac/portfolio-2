@@ -9,6 +9,7 @@ import { ApiError, api } from "./client.ts";
 import type {
   AssetClass,
   AttributionSliceCreation,
+  AttributionTransferCreation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -108,6 +109,20 @@ export function useRemoveAttribution(ticker: string) {
   return useMutation({
     mutationFn: (strategyId: number) => api.removeAttribution(ticker, strategyId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["positions", ticker] }),
+  });
+}
+
+// The month-free manual transfer: the attribution ledger and the open month's tree both read the
+// moved units, so one invalidation refreshes the detail, the leaf and the class Actual.
+export function useTransferAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: AttributionTransferCreation) =>
+      api.transferAttribution(ticker, creation),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+    },
   });
 }
 

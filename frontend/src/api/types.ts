@@ -145,6 +145,14 @@ export interface AttributionSliceCreation {
   quantity: number;
 }
 
+// The manual Attribution Transfer: units move from the source slice to the destination slice and
+// custody never changes. The endpoint is month-free and writes no inbox row.
+export interface AttributionTransferCreation {
+  from_strategy_id: number;
+  to_strategy_id: number;
+  quantity: number;
+}
+
 // The bulk legacy action's dry-run: every held Ticker that can enter its class's Manual Strategy,
 // grouped per class, plus the Tickers it skips and why. `quantity` is the slice's new total (the
 // whole custody), never a delta.
