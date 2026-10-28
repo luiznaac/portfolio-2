@@ -41,6 +41,7 @@ distributions {
         contents {
             from(migrateStartScripts) {
                 into("bin")
+                filePermissions { unix("rwxr-xr-x") }
             }
         }
     }
