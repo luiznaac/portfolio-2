@@ -20,10 +20,10 @@ suspend fun getIndexValues(index: String) =
 
 suspend fun createFloatingBond(value: String, index: String, maturityDate: String = "2025-10-20") =
     postRequest<Map<String, String>> {
-        path = "/bonds/floating"
+        path = "/fixed-income/bonds/floating"
         body = mapOf(
             "name" to "pipipipopopo",
-            "value" to value,
+            "rate" to value,
             "index_id" to index,
             "maturity_date" to maturityDate,
         )
@@ -31,17 +31,17 @@ suspend fun createFloatingBond(value: String, index: String, maturityDate: Strin
 
 suspend fun createFixedBond(value: String, maturityDate: String = "2025-10-20") =
     postRequest<Map<String, String>> {
-        path = "/bonds/fixed"
+        path = "/fixed-income/bonds/fixed"
         body = mapOf(
             "name" to "papapapepepe",
-            "value" to value,
+            "rate" to value,
             "maturity_date" to maturityDate,
         )
     }["id"]!!
 
 suspend fun createBondOrder(bondId: String, type: String, date: String, amount: String? = null) =
     postRequest<Unit> {
-        path = "/bonds/orders"
+        path = "/fixed-income/bonds/orders"
         body = mapOf(
             "bond_id" to bondId,
             "type" to type,
@@ -52,7 +52,7 @@ suspend fun createBondOrder(bondId: String, type: String, date: String, amount: 
 
 suspend fun consolidateBond(bondId: String) =
     postRequest<Unit> {
-        path = "/bonds/$bondId/consolidate"
+        path = "/fixed-income/bonds/$bondId/consolidate"
     }
 
 suspend fun scheduleConsolidations() =
@@ -74,15 +74,15 @@ suspend fun consolidateProduct(productType: String, productId: Int) {
 
 suspend fun bondPositions(bondId: String) =
     getRequest<List<Map<String, Any>>> {
-        path = "/bonds/$bondId/positions"
+        path = "/fixed-income/bonds/$bondId/positions"
     }
 
 suspend fun createCheckingAccount(value: String, index: String, maturityDuration: String) =
     postRequest<Map<String, String>> {
-        path = "/checking-accounts"
+        path = "/fixed-income/accounts"
         body = mapOf(
             "name" to "pipipipopopo",
-            "value" to value,
+            "rate" to value,
             "index_id" to index,
             "maturity_duration" to maturityDuration,
         )
@@ -90,7 +90,7 @@ suspend fun createCheckingAccount(value: String, index: String, maturityDuration
 
 suspend fun createDeposit(checkingAccountId: String, date: String, amount: String) =
     postRequest<Unit> {
-        path = "/checking-accounts/$checkingAccountId/deposit"
+        path = "/fixed-income/accounts/$checkingAccountId/deposit"
         body = mapOf(
             "date" to date,
             "amount" to amount.toBigDecimal(),
@@ -99,7 +99,7 @@ suspend fun createDeposit(checkingAccountId: String, date: String, amount: Strin
 
 suspend fun createWithdrawal(checkingAccountId: String, date: String, amount: String) =
     postRequest<Unit> {
-        path = "/checking-accounts/$checkingAccountId/withdraw"
+        path = "/fixed-income/accounts/$checkingAccountId/withdraw"
         body = mapOf(
             "date" to date,
             "amount" to amount.toBigDecimal(),
@@ -108,7 +108,7 @@ suspend fun createWithdrawal(checkingAccountId: String, date: String, amount: St
 
 suspend fun createFullWithdrawal(checkingAccountId: String, date: String) =
     postRequest<Unit> {
-        path = "/checking-accounts/$checkingAccountId/full-withdraw"
+        path = "/fixed-income/accounts/$checkingAccountId/full-withdraw"
         body = mapOf(
             "date" to date,
         )
@@ -116,10 +116,10 @@ suspend fun createFullWithdrawal(checkingAccountId: String, date: String) =
 
 suspend fun consolidateCheckingAccount(checkingAccountId: String) =
     postRequest<Unit> {
-        path = "/checking-accounts/$checkingAccountId/consolidate"
+        path = "/fixed-income/accounts/$checkingAccountId/consolidate"
     }
 
 suspend fun checkingAccountPositions(checkingAccountId: String) =
     getRequest<List<Map<String, Any>>> {
-        path = "/checking-accounts/$checkingAccountId/positions"
+        path = "/fixed-income/accounts/$checkingAccountId/positions"
     }

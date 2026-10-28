@@ -1,0 +1,8 @@
+# Lane lineage for the kotlin scaffold: written at bootstrap, advanced only by propagation.
+# `allow` records accepted divergences ({ entry, reason }).
+source: kotlin
+lane: backend
+applied:
+  revision: 4
+  scaffold_sha: 95b7b3ed91078831644afbda05c68b0258c0577b
+allow: []

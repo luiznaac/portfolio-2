@@ -49,6 +49,6 @@ private fun IndexId.getBacenCode() = when (this) {
 private data class BacenIndexValue(val data: String, val valor: BigDecimal) {
     fun toDomain() = TheirIndexValue(
         date = brazilianLocalDateFormat.parse(data),
-        value = valor,
+        observation = valor,
     )
 }

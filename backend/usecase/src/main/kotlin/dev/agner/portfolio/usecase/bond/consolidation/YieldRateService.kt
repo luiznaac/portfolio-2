@@ -31,7 +31,7 @@ class YieldRateService(
 
     private suspend fun FloatingRateBond.buildRates(startingAt: LocalDate) =
         indexValueService.fetchAllBy(indexId, startingAt)
-            .associate { it.date to YieldRateContext(value, it) }
+            .associate { it.date to YieldRateContext(rate, it) }
 
     private suspend fun FixedRateBond.buildRates(startingAt: LocalDate) =
         (startingAt.year..LocalDate.today(clock).year)
@@ -41,7 +41,7 @@ class YieldRateService(
                 val allWorkingDays = (firstDayOfTheYear..lastDayOfTheYear).removeWeekends()
 
                 // Calculate daily rate
-                val annualRate = value.divide(BigDecimal("100"), 20, HALF_EVEN)
+                val annualRate = rate.divide(BigDecimal("100"), 20, HALF_EVEN)
                 val onePlusRate = BigDecimal.ONE.add(annualRate) // e.g., 1.15
                 val daysCount = BigDecimal(allWorkingDays.size)
                 val exponent = BigDecimal.ONE.divide(daysCount, 20, HALF_EVEN)

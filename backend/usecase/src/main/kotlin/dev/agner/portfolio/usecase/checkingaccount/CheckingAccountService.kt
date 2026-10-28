@@ -74,7 +74,7 @@ class CheckingAccountService(
 
 private fun CheckingAccount.toBondCreation(date: LocalDate) = FloatingRateBondCreation(
     name = name + " [${date.yearMonth}]",
-    value = value,
+    rate = rate,
     maturityDate = date.plus(maturityDuration).toMondayIfWeekend(),
     indexId = indexId,
 )
