@@ -18,6 +18,7 @@ const split: CorporateAction = {
   raw_type: "Desdobramento",
   ordinal: 1,
   status: "APPLIED",
+  is_applied: true,
 };
 
 const group: CorporateAction = {

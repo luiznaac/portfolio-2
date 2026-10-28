@@ -15,6 +15,7 @@ function trade(overrides: Partial<Trade>): Trade {
     source: "B3_IMPORT",
     confirmed_by_b3: false,
     ordinal: 1,
+    absorbed_quantity: 0,
     ...overrides,
   };
 }

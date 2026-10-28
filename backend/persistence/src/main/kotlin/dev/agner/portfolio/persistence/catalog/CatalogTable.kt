@@ -19,6 +19,10 @@ object CatalogTable : IdTable<String>("ticker_catalog") {
     val isin = varchar("isin", 12).nullable()
     val assetKind = enumerationByName<AssetKind>("asset_kind", 20)
     val assetClass = enumerationByName<AssetClass>("asset_class", 20).nullable()
+
+    // A manual classification that wins over the BDI-derived class; a COTAHIST refresh never
+    // clears it, because the refresh carries the stored override forward.
+    val assetClassOverride = enumerationByName<AssetClass>("asset_class_override", 20).nullable()
     val firstSeen = date("first_seen")
     val lastSeen = date("last_seen")
     val createdAt = datetime("created_at")
@@ -35,6 +39,7 @@ class CatalogEntity(id: EntityID<String>) : Entity<String>(id) {
     var isin by CatalogTable.isin
     var assetKind by CatalogTable.assetKind
     var assetClass by CatalogTable.assetClass
+    var assetClassOverride by CatalogTable.assetClassOverride
     var firstSeen by CatalogTable.firstSeen
     var lastSeen by CatalogTable.lastSeen
     var createdAt by CatalogTable.createdAt
@@ -46,6 +51,7 @@ class CatalogEntity(id: EntityID<String>) : Entity<String>(id) {
         isin = isin,
         assetKind = assetKind,
         assetClass = assetClass,
+        assetClassOverride = assetClassOverride,
         firstSeen = firstSeen,
         lastSeen = lastSeen,
     )

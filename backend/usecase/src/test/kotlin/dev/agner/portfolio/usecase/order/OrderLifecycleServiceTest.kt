@@ -3,11 +3,13 @@ package dev.agner.portfolio.usecase.order
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
-import dev.agner.portfolio.usecase.listedasset.model.Attribution
+import dev.agner.portfolio.usecase.listedasset.AttributionService
+import dev.agner.portfolio.usecase.listedasset.InvalidTransferException
+import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
+import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
-import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.order.model.AttributionTransfer
 import dev.agner.portfolio.usecase.order.model.InvalidOrderMatchException
@@ -28,6 +30,7 @@ import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.strategyTarget
@@ -53,7 +56,7 @@ class OrderLifecycleServiceTest : StringSpec({
     val trades = mockk<ITradeRepository>(relaxed = true)
     val suggestions = mockk<ISuggestedOrderRepository>(relaxed = true)
     val transfers = mockk<ITransferProposalRepository>(relaxed = true)
-    val attributions = mockk<IAttributionRepository>(relaxed = true)
+    val attributionService = mockk<AttributionService>(relaxed = true)
     val strategies = mockk<IStrategyRepository>(relaxed = true)
     val service = OrderLifecycleService(
         months = months,
@@ -61,7 +64,7 @@ class OrderLifecycleServiceTest : StringSpec({
         trades = trades,
         suggestions = suggestions,
         transfers = transfers,
-        attributions = attributions,
+        attributionService = attributionService,
         strategies = strategies,
         transaction = immediateTransactions,
     )
@@ -71,8 +74,13 @@ class OrderLifecycleServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { trades.fetchAll() } returns emptyList()
         coEvery { transfers.fetchBy(any()) } returns emptyList()
-        coEvery { strategies.fetchAll() } returns listOf(strategy(1, "Top"), strategy(2, "Small"))
+        coEvery { strategies.fetchAll() } returns listOf(
+            strategy(1, "Top"),
+            strategy(2, "Small"),
+            strategy(3, "Legado", StrategyKind.MANUAL),
+        )
         coEvery { suggestions.replaceAll(any(), any()) } returns emptyList()
+        coEvery { attributionService.transfer(any(), any()) } returns transferSummary
     }
 
     "returns null when no month is open and writes nothing" {
@@ -128,10 +136,6 @@ class OrderLifecycleServiceTest : StringSpec({
             attributions = mapOf("Top" to "10", "Small" to "60"),
             transfers = listOf(transfer(amount = "100")),
         )
-        coEvery { attributions.fetchBy("ITUB4") } returns listOf(
-            Attribution("ITUB4", 1, BigDecimal("10")),
-            Attribution("ITUB4", 2, BigDecimal("60")),
-        )
         val creations = slot<TransferProposalCreation>()
         coEvery { transfers.save(1, capture(creations)) } answers {
             persistedTransfer(1, creations.captured)
@@ -149,9 +153,93 @@ class OrderLifecycleServiceTest : StringSpec({
         creation.autoApproved shouldBe true
         creation.status shouldBe TransferStatus.APPROVED
 
-        // The approved move rebalances the ledger: Small gives 10 units, Top gains them.
-        coVerify { attributions.save(Attribution("ITUB4", 2, BigDecimal("50"))) }
-        coVerify { attributions.save(Attribution("ITUB4", 1, BigDecimal("20"))) }
+        // The approved move is the one domain operation: the lifecycle only hands it the rows' ids.
+        coVerify {
+            attributionService.transfer(
+                "ITUB4",
+                AttributionTransferCreation(
+                    fromStrategyId = 2,
+                    toStrategyId = 1,
+                    quantity = BigDecimal("10"),
+                ),
+            )
+        }
+    }
+
+    "refresh keeps a bucket-sourced transfer pending whatever its amount" {
+        coEvery { plans.computePlan(OrderPlanPhase.FULL) } returns plan(
+            price = "10",
+            capital = "1000",
+            strategies = listOf("Top" to "50", "Small" to "50"),
+            tickers = listOf("Top" to "100", "Small" to "100"),
+            position = "70",
+            attributions = mapOf("Top" to "10", "Small" to "60"),
+            transfers = listOf(bucketTransfer(amount = "50")),
+        )
+        val creations = slot<TransferProposalCreation>()
+        coEvery { transfers.save(1, capture(creations)) } answers {
+            persistedTransfer(1, creations.captured)
+        }
+
+        service.refresh()
+
+        val creation = creations.captured
+        creation.fromStrategyId shouldBe 3
+        creation.autoApproved shouldBe false
+        creation.status shouldBe TransferStatus.PENDING
+        // No move happens on the engine's own call: the bucket's units wait for a human.
+        coVerify(exactly = 0) { attributionService.transfer(any(), any()) }
+    }
+
+    "refresh keeps the R$500 auto-approval threshold for a report-to-report transfer" {
+        coEvery { plans.computePlan(OrderPlanPhase.FULL) } returns plan(
+            price = "10",
+            capital = "1000",
+            strategies = listOf("Top" to "50", "Small" to "50"),
+            tickers = listOf("Top" to "100", "Small" to "100"),
+            position = "70",
+            attributions = mapOf("Top" to "10", "Small" to "60"),
+            transfers = listOf(transfer(amount = "500")),
+        )
+        val creations = slot<TransferProposalCreation>()
+        coEvery { transfers.save(1, capture(creations)) } answers {
+            persistedTransfer(1, creations.captured)
+        }
+
+        service.refresh()
+
+        creations.captured.autoApproved shouldBe false
+        creations.captured.status shouldBe TransferStatus.PENDING
+    }
+
+    "refresh never re-proposes a bucket transfer the user rejected" {
+        coEvery { plans.computePlan(OrderPlanPhase.FULL) } returns plan(
+            price = "10",
+            capital = "1000",
+            strategies = listOf("Top" to "50", "Small" to "50"),
+            tickers = listOf("Top" to "100", "Small" to "100"),
+            position = "70",
+            attributions = mapOf("Top" to "10", "Small" to "60"),
+            transfers = listOf(bucketTransfer(amount = "50")),
+        )
+        coEvery { transfers.fetchBy(1) } returns listOf(
+            persistedTransfer(
+                1,
+                TransferProposalCreation(
+                    ticker = "ITUB4",
+                    fromStrategyId = 3,
+                    toStrategyId = 1,
+                    quantity = BigDecimal("10"),
+                    amount = BigDecimal("50"),
+                    autoApproved = false,
+                    status = TransferStatus.REJECTED,
+                ),
+            ),
+        )
+
+        service.refresh()
+
+        coVerify(exactly = 0) { transfers.save(any(), any()) }
     }
 
     "refresh never re-proposes a transfer the user rejected" {
@@ -214,17 +302,30 @@ class OrderLifecycleServiceTest : StringSpec({
         coEvery { transfers.fetchById(7) } returns pendingTransfer(7)
         coEvery { transfers.decide(7, TransferStatus.APPROVED) } returns
             persistedTransfer(7, pendingCreation(status = TransferStatus.APPROVED))
-        coEvery { attributions.fetchBy("ITUB4") } returns listOf(
-            Attribution("ITUB4", 1, BigDecimal("10")),
-            Attribution("ITUB4", 2, BigDecimal("60")),
-        )
 
         val decided = service.approveTransfer(7)!!
 
         decided.status shouldBe TransferStatus.APPROVED
-        coVerify { attributions.save(Attribution("ITUB4", 2, BigDecimal("50"))) }
-        coVerify { attributions.save(Attribution("ITUB4", 1, BigDecimal("20"))) }
+        coVerify {
+            attributionService.transfer(
+                "ITUB4",
+                AttributionTransferCreation(
+                    fromStrategyId = 2,
+                    toStrategyId = 1,
+                    quantity = BigDecimal("10"),
+                ),
+            )
+        }
         coVerify { transfers.decide(7, TransferStatus.APPROVED) }
+    }
+
+    "an approval whose slice vanished is rejected instead of recording the decision" {
+        coEvery { transfers.fetchById(7) } returns pendingTransfer(7)
+        coEvery { attributionService.transfer(any(), any()) } returns null
+
+        shouldThrow<InvalidTransferException> { service.approveTransfer(7) }
+
+        coVerify(exactly = 0) { transfers.decide(any(), any()) }
     }
 
     "rejecting a transfer records the decision without touching the ledger" {
@@ -234,7 +335,7 @@ class OrderLifecycleServiceTest : StringSpec({
 
         service.rejectTransfer(7)!!.status shouldBe TransferStatus.REJECTED
 
-        coVerify(exactly = 0) { attributions.save(any()) }
+        coVerify(exactly = 0) { attributionService.transfer(any(), any()) }
     }
 
     "an override retargets the match at a trade of the same ticker and side" {
@@ -277,6 +378,14 @@ private val immediateTransactions = object : ITransactionTemplate {
     override suspend fun <T> execute(block: suspend () -> T): T = block()
 }
 
+private val transferSummary = AttributionSummary(
+    ticker = "ITUB4",
+    custodyQuantity = BigDecimal("70"),
+    attributedQuantity = BigDecimal("70"),
+    unattributedQuantity = BigDecimal.ZERO,
+    slices = emptyList(),
+)
+
 private val currentMonth = CurrentMonth(
     month = Month(
         id = 1,
@@ -296,27 +405,42 @@ private fun plan(
     position: String,
     attributions: Map<String, String> = emptyMap(),
     transfers: List<AttributionTransfer> = emptyList(),
-): OrderPlan = OrderPlanCalculator.compute(
-    OrderPlanContext(
-        period = YearMonth.parse("2026-10"),
-        phase = OrderPlanPhase.FUNDING,
-        capital = BigDecimal(capital),
-        floor = BigDecimal.ZERO,
-        targets = Targets(
-            classes = listOf(classTarget(AssetClass.ACOES, "100")),
-            strategies = strategies.map { (strategy, percentage) ->
-                strategyTarget(AssetClass.ACOES, strategy, percentage)
-            },
-            subClasses = emptyList(),
-            tickers = tickers.map { (strategy, percentage) -> tickerTarget(strategy, "ITUB4", percentage) },
+): OrderPlan {
+    val targets = Targets(
+        classes = listOf(classTarget(AssetClass.ACOES, "100")),
+        strategies = strategies.map { (strategy, percentage) ->
+            strategyTarget(AssetClass.ACOES, strategy, percentage)
+        },
+        subClasses = emptyList(),
+        tickers = tickers.map { (strategy, percentage) -> tickerTarget(strategy, "ITUB4", percentage) },
+    )
+    val positionByTicker = mapOf("ITUB4" to BigDecimal(position))
+    val ledger = attributions.map { (strategy, quantity) ->
+        StrategyTicker(strategy, "ITUB4") to BigDecimal(quantity)
+    }.toMap()
+    return OrderPlanCalculator.compute(
+        OrderPlanContext(
+            period = YearMonth.parse("2026-10"),
+            phase = OrderPlanPhase.FUNDING,
+            capital = BigDecimal(capital),
+            floor = BigDecimal.ZERO,
+            targets = targets,
+            positions = positionByTicker,
+            prices = mapOf("ITUB4" to BigDecimal(price)),
+            placement = PlacementCalculator.compute(
+                positions = positionByTicker,
+                targetedTickers = targets.tickers
+                    .filter { it.percentage.signum() > 0 }
+                    .map { it.ticker }
+                    .toSet(),
+                ledger = ledger,
+                manualStrategies = emptySet(),
+                unclassifiedTickers = emptySet(),
+            ),
+            attributionBySlice = ledger,
         ),
-        positions = mapOf("ITUB4" to BigDecimal(position)),
-        prices = mapOf("ITUB4" to BigDecimal(price)),
-        attributionBySlice = attributions.map { (strategy, quantity) ->
-            StrategyTicker(strategy, "ITUB4") to BigDecimal(quantity)
-        }.toMap(),
-    ),
-).copy(transfers = transfers)
+    ).copy(transfers = transfers)
+}
 
 // The full plan's attribution transfer, as the planner emits it (both slices priced).
 private fun transfer(amount: String) = AttributionTransfer(
@@ -328,11 +452,14 @@ private fun transfer(amount: String) = AttributionTransfer(
     amount = BigDecimal(amount),
 )
 
-private fun strategy(id: Int, name: String) = Strategy(
+// The plan's bucket-sourced transfer: the source is the Manual Strategy, never a chain leaf.
+private fun bucketTransfer(amount: String) = transfer(amount = amount).copy(fromStrategy = "Legado")
+
+private fun strategy(id: Int, name: String, kind: StrategyKind = StrategyKind.REPORT_DRIVEN) = Strategy(
     id = id,
     name = name,
     assetClass = AssetClass.ACOES,
-    weight = BigDecimal("50"),
+    kind = kind,
 )
 
 private fun trade(

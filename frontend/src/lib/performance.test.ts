@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BenchmarkBlend, PeriodPerformance } from "../api/types.ts";
+import type { BenchmarkBlend, ClassPerformance, PeriodPerformance } from "../api/types.ts";
 import {
   aportesPerformanceRows,
   benchmarkRows,
@@ -11,6 +11,8 @@ import {
   projectY,
   returnFillClass,
   returnTextClass,
+  strategyRows,
+  strategyValueSeries,
   valueExtent,
 } from "./performance.ts";
 
@@ -53,6 +55,140 @@ describe("decompositionResult", () => {
         net_income: 0,
       }),
     ).toBeUndefined();
+  });
+
+  it("nets a strategy slice's bookkeeping flow out of its result", () => {
+    expect(
+      decompositionResult({
+        value_start: 3_000,
+        value_end: 4_000,
+        net_aportes: 0,
+        net_income: 0,
+        flow: 1_000,
+        return_percentage: 0,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("strategyRows", () => {
+  const classes: ClassPerformance[] = [
+    {
+      asset_class: "ACOES",
+      decomposition: {
+        value_start: 10_000,
+        value_end: 12_100,
+        net_aportes: 0,
+        net_income: 110,
+        return_percentage: 9,
+      },
+      benchmark_return: 9,
+      strategies: [
+        {
+          strategy_id: 1,
+          strategy: "Top Dividendos",
+          kind: "REPORT_DRIVEN",
+          decomposition: {
+            value_start: 4_000,
+            value_end: 4_400,
+            net_aportes: 0,
+            net_income: 40,
+            return_percentage: 9,
+          },
+        },
+        {
+          strategy_id: 2,
+          strategy: "Legado",
+          kind: "MANUAL",
+          decomposition: {
+            value_start: 6_000,
+            value_end: 6_600,
+            net_aportes: 0,
+            net_income: 60,
+            return_percentage: 9,
+          },
+        },
+      ],
+      outside: {
+        value_start: 1_000,
+        value_end: 1_100,
+        net_aportes: 0,
+        net_income: 10,
+        return_percentage: 9,
+      },
+    },
+    {
+      asset_class: "RENDA_FIXA",
+      decomposition: {
+        value_start: 5_000,
+        value_end: 5_050,
+        net_aportes: 0,
+        net_income: 0,
+        return_percentage: 1,
+      },
+      benchmark_return: 1,
+    },
+  ];
+
+  it("lists each Strategy slice then the read-only outside row, per class", () => {
+    const rows = strategyRows(classes);
+
+    expect(rows.map((row) => row.label)).toEqual([
+      "Top Dividendos",
+      "Legado",
+      "Fora da estratégia",
+    ]);
+    expect(rows.map((row) => row.kind)).toEqual(["strategy", "strategy", "outside"]);
+    expect(rows.at(-1)?.assetClass).toBe("ACOES");
+    expect(rows.at(-1)?.decomposition.value_end).toBe(1_100);
+  });
+
+  it("keeps the outside row only for a class that carries one", () => {
+    expect(strategyRows(classes).filter((row) => row.kind === "outside")).toHaveLength(1);
+  });
+});
+
+describe("strategyValueSeries", () => {
+  it("plots one frozen value series per Strategy, ordered by first appearance", () => {
+    const months: PeriodPerformance[] = [
+      {
+        ...point("2026-01", undefined),
+        strategies: [
+          {
+            strategy_id: 1,
+            strategy: "Top Dividendos",
+            kind: "REPORT_DRIVEN",
+            value_end: 4_000,
+            flow: 0,
+          },
+          { strategy_id: 2, strategy: "Legado", kind: "MANUAL", value_end: 6_000, flow: 0 },
+        ],
+      },
+      {
+        ...point("2026-02", 9),
+        strategies: [
+          {
+            strategy_id: 1,
+            strategy: "Top Dividendos",
+            kind: "REPORT_DRIVEN",
+            value_end: 4_400,
+            flow: 0,
+          },
+          { strategy_id: 2, strategy: "Legado", kind: "MANUAL", value_end: 6_600, flow: 0 },
+        ],
+      },
+    ];
+
+    const series = strategyValueSeries(months);
+
+    expect(series.map((line) => line.strategyId)).toEqual([1, 2]);
+    expect(series.map((line) => line.strategy)).toEqual(["Top Dividendos", "Legado"]);
+    expect(series[0].kind).toBe("REPORT_DRIVEN");
+    expect(series[1].kind).toBe("MANUAL");
+    expect(series[1].points).toEqual([
+      { period: "2026-01", value: 6_000 },
+      { period: "2026-02", value: 6_600 },
+    ]);
   });
 });
 

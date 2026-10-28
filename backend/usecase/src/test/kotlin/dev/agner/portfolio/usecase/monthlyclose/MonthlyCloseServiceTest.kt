@@ -3,6 +3,11 @@ package dev.agner.portfolio.usecase.monthlyclose
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.closeStateFixture
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSource
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
+import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.income.IncomeService
 import dev.agner.portfolio.usecase.income.model.Income
 import dev.agner.portfolio.usecase.income.model.IncomeStatus
@@ -15,6 +20,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.monthFixture
+import dev.agner.portfolio.usecase.monthlyclose.model.AttributionSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.CloseState
 import dev.agner.portfolio.usecase.monthlyclose.model.Snapshot
 import dev.agner.portfolio.usecase.monthlyclose.repository.ISnapshotRepository
@@ -33,8 +39,14 @@ import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
+import dev.agner.portfolio.usecase.portfolio.model.OutsideAllocation
+import dev.agner.portfolio.usecase.portfolio.model.StrategyAllocation
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.model.TickerAllocation
+import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
+import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.tax.StockTaxService
 import dev.agner.portfolio.usecase.tax.model.CarryBucket
@@ -67,6 +79,8 @@ class MonthlyCloseServiceTest : StringSpec({
     val tax = mockk<StockTaxService>(relaxed = true)
     val attributions = mockk<IAttributionRepository>(relaxed = true)
     val strategies = mockk<IStrategyRepository>(relaxed = true)
+    val corporateActions = mockk<ICorporateActionRepository>(relaxed = true)
+    val quotes = mockk<QuoteService>(relaxed = true)
     val snapshots = mockk<ISnapshotRepository>(relaxed = true)
     val service = MonthlyCloseService(
         months = months,
@@ -77,6 +91,8 @@ class MonthlyCloseServiceTest : StringSpec({
         tax = tax,
         attributions = attributions,
         strategies = strategies,
+        corporateActions = corporateActions,
+        quotes = quotes,
         snapshots = snapshots,
         transaction = immediateTransactions,
     )
@@ -92,6 +108,10 @@ class MonthlyCloseServiceTest : StringSpec({
         coEvery { positions.fetchAll() } returns listOf(position("VALE3"), position("ITUB4"))
         coEvery { strategies.fetchAll() } returns listOf(strategy(1, "Top Dividendos"))
         coEvery { attributions.fetchAll() } returns listOf(Attribution("ITUB4", 1, BigDecimal("40")))
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("10")
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { corporateActions.fetchApplied() } returns emptyList()
+        coEvery { snapshots.fetchAll() } returns emptyList()
         coEvery { income.fetchAll() } returns listOf(octoberIncome, septemberIncome)
         coEvery { months.close(month.id) } returns closedMonth
         coEvery { snapshots.save(month.id, any()) } returns persistedSnapshot
@@ -150,6 +170,12 @@ class MonthlyCloseServiceTest : StringSpec({
         persisted.attributions.single().quantity.plain() shouldBe "40"
         persisted.classes.single().assetClass shouldBe AssetClass.ACOES
         persisted.classes.single().actual.plain() shouldBe "120000"
+        persisted.classes.single().unattributed.plain() shouldBe "119600"
+        persisted.strategies.single().strategyId shouldBe 1
+        persisted.strategies.single().strategy shouldBe "Top Dividendos"
+        persisted.strategies.single().kind shouldBe StrategyKind.REPORT_DRIVEN
+        persisted.strategies.single().valueEnd.plain() shouldBe "400"
+        persisted.strategies.single().flow.plain() shouldBe "0"
         persisted.income.gross.plain() shouldBe "100"
         persisted.income.retained.plain() shouldBe "15"
         persisted.income.net.plain() shouldBe "85"
@@ -160,6 +186,65 @@ class MonthlyCloseServiceTest : StringSpec({
         persisted.orders.unplannedTrades.single().ticker shouldBe "CURY3"
         persisted.tax.meter shouldBe taxReport.meter
         persisted.tax.carry shouldBe taxReport.carry
+    }
+
+    "freezes the bucket slice and nets each slice's attribution change against the previous close" {
+        coEvery { snapshots.fetchAll() } returns listOf(previousSnapshot)
+        coEvery { strategies.fetchAll() } returns listOf(
+            strategy(1, "Top Dividendos"),
+            Strategy(id = 2, name = "Legado", assetClass = AssetClass.ACOES, kind = StrategyKind.MANUAL),
+        )
+        coEvery { attributions.fetchAll() } returns listOf(
+            Attribution("ITUB4", 1, BigDecimal("40")),
+            Attribution("VALE3", 2, BigDecimal("40")),
+        )
+        val state = slot<CloseState>()
+        coEvery { snapshots.save(month.id, capture(state)) } answers {
+            Snapshot(id = 9, monthId = month.id, state = state.captured, createdAt = closedAt)
+        }
+
+        service.closeCurrent()!!.id shouldBe 9
+
+        val slices = state.captured.strategies.associateBy { it.strategyId }
+        slices.getValue(1).valueEnd.plain() shouldBe "400"
+        slices.getValue(1).flow.plain() shouldBe "100"
+        slices.getValue(2).strategy shouldBe "Legado"
+        slices.getValue(2).kind shouldBe StrategyKind.MANUAL
+        slices.getValue(2).valueEnd.plain() shouldBe "480"
+        slices.getValue(2).flow.plain() shouldBe "480"
+        state.captured.classes.single().actual.plain() shouldBe "120000"
+        state.captured.classes.single().unattributed.plain() shouldBe "119120"
+    }
+
+    "nets a slice whose row was deleted at zero against the previous close" {
+        coEvery { snapshots.fetchAll() } returns listOf(previousSnapshot)
+        coEvery { attributions.fetchAll() } returns emptyList()
+        val state = slot<CloseState>()
+        coEvery { snapshots.save(month.id, capture(state)) } answers {
+            Snapshot(id = 9, monthId = month.id, state = state.captured, createdAt = closedAt)
+        }
+
+        service.closeCurrent()!!.id shouldBe 9
+
+        val slice = state.captured.strategies.single()
+        slice.valueEnd.plain() shouldBe "0"
+        slice.flow.plain() shouldBe "-300"
+    }
+
+    "does not read a corporate action's quantity scaling as a flow" {
+        coEvery { snapshots.fetchAll() } returns listOf(previousSnapshot)
+        coEvery { attributions.fetchAll() } returns listOf(Attribution("ITUB4", 1, BigDecimal("60")))
+        coEvery { corporateActions.fetchApplied() } returns listOf(splitAction)
+        val state = slot<CloseState>()
+        coEvery { snapshots.save(month.id, capture(state)) } answers {
+            Snapshot(id = 9, monthId = month.id, state = state.captured, createdAt = closedAt)
+        }
+
+        service.closeCurrent()!!.id shouldBe 9
+
+        val slice = state.captured.strategies.single()
+        slice.valueEnd.plain() shouldBe "600"
+        slice.flow.plain() shouldBe "0"
     }
 
     "returns null and persists no snapshot when the month is no longer open" {
@@ -207,6 +292,36 @@ private val currentMonth = CurrentMonth(
 
 private val persistedSnapshot = Snapshot(id = 1, monthId = 7, state = closeStateFixture(), createdAt = closedAt)
 
+// The close before the month under test: ITUB4 was 30 units into Top Dividendos, so the current
+// 40-unit slice carries a 10-unit bookkeeping flow valued at the month's close.
+private val previousSnapshot = Snapshot(
+    id = 1,
+    monthId = 6,
+    state = closeStateFixture().copy(
+        period = YearMonth.parse("2026-09"),
+        attributions = listOf(AttributionSnapshot("ITUB4", 1, "Top Dividendos", BigDecimal("30"))),
+    ),
+    createdAt = closedAt,
+)
+
+// A 2:1 split inside the month: custody and every slice double, so the 60-unit slice is the same
+// book as the prior 30 units and carries no flow.
+private val splitAction = CorporateAction(
+    id = 1,
+    ticker = "ITUB4",
+    kind = CorporateActionKind.SPLIT,
+    exDate = LocalDate.parse("2026-10-15"),
+    approvalDate = null,
+    ratio = BigDecimal("2"),
+    declaredValuePerShare = null,
+    targetTicker = null,
+    source = CorporateActionSource.B3_MOVEMENTS,
+    processNumber = null,
+    rawType = null,
+    ordinal = 1,
+    status = CorporateActionStatus.APPLIED,
+)
+
 private val allocation = Allocation(
     period = period,
     capital = BigDecimal("245000.00"),
@@ -216,6 +331,7 @@ private val allocation = Allocation(
     deficit = BigDecimal("45000.00"),
     drift = BigDecimal("18.37"),
     unattributed = BigDecimal("50000.00"),
+    unclassified = UnclassifiedAllocation(actual = BigDecimal.ZERO, tickers = emptyList()),
     classes = listOf(
         ClassAllocation(
             assetClass = AssetClass.ACOES,
@@ -225,7 +341,28 @@ private val allocation = Allocation(
             deficit = BigDecimal("2500.00"),
             drift = BigDecimal("-1.02"),
             unattributed = BigDecimal("120000.00"),
-            strategies = emptyList(),
+            strategies = listOf(
+                StrategyAllocation(
+                    strategy = "Top Dividendos",
+                    target = BigDecimal.ZERO,
+                    ideal = BigDecimal.ZERO,
+                    actual = BigDecimal("400.00"),
+                    deficit = BigDecimal.ZERO,
+                    drift = BigDecimal.ZERO,
+                    tickers = listOf(
+                        TickerAllocation(
+                            ticker = "ITUB4",
+                            target = BigDecimal("100.00"),
+                            ideal = BigDecimal.ZERO,
+                            actual = BigDecimal("400.00"),
+                            deficit = BigDecimal.ZERO,
+                            drift = BigDecimal.ZERO,
+                        ),
+                    ),
+                ),
+            ),
+            manual = null,
+            outside = OutsideAllocation(actual = BigDecimal("120000.00"), tickers = emptyList()),
             subClasses = emptyList(),
         ),
     ),
@@ -286,7 +423,7 @@ private fun strategy(id: Int, name: String) = Strategy(
     id = id,
     name = name,
     assetClass = AssetClass.ACOES,
-    weight = BigDecimal("50"),
+    kind = StrategyKind.REPORT_DRIVEN,
 )
 
 private val octoberIncome = Income(

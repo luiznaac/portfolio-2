@@ -1,8 +1,11 @@
 import type {
   Allocation,
+  AssetClass,
   Attribution,
   AttributionSliceCreation,
+  AttributionTransferCreation,
   Bond,
+  CatalogEntry,
   CheckingAccount,
   CheckingAccountCreation,
   CorporateAction,
@@ -20,6 +23,8 @@ import type {
   ImportRow,
   ImportSource,
   Income,
+  LegacyAttributionPreview,
+  LegacyAttributionResult,
   Month,
   MonthCreation,
   MonthPerformance,
@@ -36,8 +41,11 @@ import type {
   StockTaxReport,
   Strategy,
   StrategyCreation,
+  StrategyHoldings,
   SuggestedOrder,
   Targets,
+  TickerClassification,
+  TickerRefreshResult,
   Trade,
   TransferProposal,
 } from "./types.ts";
@@ -132,8 +140,42 @@ export const api = {
     });
   },
 
+  transferAttribution(ticker: string, creation: AttributionTransferCreation): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution/transfer`, {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
+  },
+
+  getLegacyAttributionPreview(): Promise<LegacyAttributionPreview> {
+    return request("/positions/legacy-attribution/preview");
+  },
+
+  applyLegacyAttribution(): Promise<LegacyAttributionResult> {
+    return request("/positions/legacy-attribution", { method: "POST" });
+  },
+
   getTickerQuotes(ticker: string): Promise<Quote[]> {
     return request(`/tickers/${encodeURIComponent(ticker)}/quotes`);
+  },
+
+  getTicker(ticker: string): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}`);
+  },
+
+  classifyTicker(ticker: string, assetClass: AssetClass): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/classification`, {
+      method: "PUT",
+      body: JSON.stringify({ asset_class: assetClass } satisfies TickerClassification),
+    });
+  },
+
+  revertTickerClassification(ticker: string): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/classification`, { method: "DELETE" });
+  },
+
+  refreshCatalog(): Promise<TickerRefreshResult> {
+    return request("/tickers/refresh", { method: "POST" });
   },
 
   getBonds(): Promise<Bond[]> {
@@ -257,6 +299,10 @@ export const api = {
 
   createStrategy(creation: StrategyCreation): Promise<Strategy> {
     return request("/strategies", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  getStrategyHoldings(strategyId: number): Promise<StrategyHoldings> {
+    return request(`/strategies/${strategyId}/holdings`);
   },
 
   getEditions(strategyId: number): Promise<Edition[]> {

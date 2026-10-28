@@ -1,20 +1,27 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
 import {
   useAttribution,
   usePosition,
   useRemoveAttribution,
+  useRevertTickerClassification,
   useSetAttribution,
   useStrategies,
+  useTicker,
   useTickerQuotes,
 } from "../api/queries.ts";
 import type { Trade } from "../api/types.ts";
 import { AttributionPanel } from "../components/AttributionPanel.tsx";
 import { Badge } from "../components/Badge.tsx";
+import { Button } from "../components/Button.tsx";
+import { ClassifyTickerModal } from "../components/ClassifyTickerModal.tsx";
 import { Kpi } from "../components/Kpi.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
+import { classificationNote, effectiveAssetClass } from "../lib/catalog.ts";
 import { formatCurrency, formatNumber, formatTradeSide } from "../lib/format.ts";
+import { assetClassLabel } from "../lib/month.ts";
 import { latestQuote, positionValue } from "../lib/position.ts";
 
 const BACK_LINK =
@@ -55,10 +62,13 @@ export function AssetDetail() {
   const { ticker = "" } = useParams();
   const position = usePosition(ticker);
   const quotes = useTickerQuotes(ticker);
+  const catalog = useTicker(ticker);
   const attribution = useAttribution(ticker);
   const strategies = useStrategies();
   const setSlice = useSetAttribution(ticker);
   const removeSlice = useRemoveAttribution(ticker);
+  const revertClassification = useRevertTickerClassification(ticker);
+  const [classifying, setClassifying] = useState(false);
 
   if (position.isLoading) return <p className="text-[13.5px] text-ink-dim">Carregando…</p>;
 
@@ -82,6 +92,14 @@ export function AssetDetail() {
   const { position: current, trades } = position.data;
   const close = latestQuote(quotes.data ?? [])?.close;
   const value = close === undefined ? undefined : positionValue(current.quantity, close);
+  const entry = catalog.data;
+  const effectiveClass = effectiveAssetClass(entry);
+  const note = entry === undefined ? null : classificationNote(entry);
+  // A failed catalog read is not an unclassified ticker: only a successful read (or the 404 that
+  // says the row is missing) can justify offering the action.
+  const catalogMissing = catalog.error instanceof ApiError && catalog.error.status === 404;
+  const canClassify =
+    !catalog.isLoading && effectiveClass === null && (catalog.isSuccess || catalogMissing);
 
   return (
     <section>
@@ -93,6 +111,27 @@ export function AssetDetail() {
               todos os ativos
             </Link>
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {effectiveClass !== null && (
+              <Badge tone="neutral">{assetClassLabel(effectiveClass)}</Badge>
+            )}
+            {canClassify && <Button onClick={() => setClassifying(true)}>Classificar</Button>}
+          </div>
+          {note !== null && (
+            <p className="mt-2 flex items-center gap-2 text-[12.5px] text-accent">
+              {note}
+              <Button
+                variant="ghost"
+                onClick={() => revertClassification.mutate()}
+                disabled={revertClassification.isPending}
+              >
+                Reverter
+              </Button>
+            </p>
+          )}
+          {revertClassification.error && (
+            <p className="mt-1 text-[12.5px] text-tax">{revertClassification.error.message}</p>
+          )}
         </div>
         <Link to="/trades" className={BACK_LINK}>
           ← Voltar
@@ -131,6 +170,10 @@ export function AssetDetail() {
           <Table columns={COLUMNS} rows={trades} rowKey={(trade) => trade.id} />
         )}
       </Panel>
+
+      {classifying && (
+        <ClassifyTickerModal ticker={current.ticker} onClose={() => setClassifying(false)} />
+      )}
     </section>
   );
 }

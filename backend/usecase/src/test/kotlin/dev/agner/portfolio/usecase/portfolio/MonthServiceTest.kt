@@ -7,6 +7,7 @@ import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthCreation
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.MonthUpdate
+import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.portfolio.repository.IMonthRepository
@@ -125,6 +126,36 @@ class MonthServiceTest : StringSpec({
         service.replaceCurrentTargets(targets) shouldBe CurrentMonth(openMonth, targets)
 
         coVerify(exactly = 1) { targetRepository.replaceAll(7, targets) }
+    }
+
+    "replaceCurrentTargets rejects strategy shares above 100 in a class" {
+        coEvery { monthRepository.fetchOpen() } returns openMonth
+        val overplanned = targets.copy(
+            strategies = listOf(
+                StrategyTarget(AssetClass.ACOES, "Top Dividendos", BigDecimal("60.00")),
+                StrategyTarget(AssetClass.ACOES, "Small Caps", BigDecimal("50.00")),
+            ),
+        )
+
+        val error = runCatching { service.replaceCurrentTargets(overplanned) }.exceptionOrNull()
+
+        (error is StrategyTargetsExceedClassException) shouldBe true
+        coVerify(exactly = 0) { targetRepository.replaceAll(any(), any()) }
+    }
+
+    "replaceCurrentTargets accepts strategy shares that sum to exactly 100" {
+        coEvery { monthRepository.fetchOpen() } returns openMonth
+        coEvery { targetRepository.fetchByMonth(7) } returns targets
+        val full = targets.copy(
+            strategies = listOf(
+                StrategyTarget(AssetClass.ACOES, "Top Dividendos", BigDecimal("60.00")),
+                StrategyTarget(AssetClass.ACOES, "Small Caps", BigDecimal("40.00")),
+            ),
+        )
+
+        service.replaceCurrentTargets(full) shouldBe CurrentMonth(openMonth, targets)
+
+        coVerify(exactly = 1) { targetRepository.replaceAll(7, full) }
     }
 
     "replaceCurrentTargets normalizes each ticker to its canonical key" {

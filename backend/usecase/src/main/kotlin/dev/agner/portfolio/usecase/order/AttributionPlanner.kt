@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.order.model.AttributionSide
 import dev.agner.portfolio.usecase.order.model.AttributionTransfer
 import dev.agner.portfolio.usecase.order.model.OrderCandidate
 import dev.agner.portfolio.usecase.order.model.TickerOrderPlan
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -28,16 +29,24 @@ private typealias StrategyQuantities = Map<String, BigDecimal>
 // The engine's Attribution bias (D5): one custody Position per ticker, its slices are the stored
 // Attribution ledger. A BUY is assigned to the most-below-ideal slice first, a SELL taken from the
 // most-above-ideal slice first, and whenever two slices of a ticker still sit ≥ 1 whole unit off
-// their Ideal the planner suggests an Attribution Transfer between them. Transfers are bookkeeping
-// only: no tax effect, no custody movement. An unpriced ticker cannot be measured in units, so it is
-// left alone.
+// their Ideal the planner suggests an Attribution Transfer between them. A Manual Strategy (the
+// legacy bucket) is a target-less donor: it has no Ideal to be short of, but a report slice below
+// its Target may draw on the bucket's units. Transfers are bookkeeping only: no tax effect, no
+// custody movement. An unpriced ticker cannot be measured in units, so it is left alone.
 object AttributionPlanner {
 
     private val ONE = BigDecimal.ONE
 
-    fun compute(slices: List<TickerOrderPlan>, candidates: List<OrderCandidate>): AttributionOutcome {
+    fun compute(
+        slices: List<TickerOrderPlan>,
+        candidates: List<OrderCandidate>,
+        manualSlices: Map<StrategyTicker, BigDecimal> = emptyMap(),
+    ): AttributionOutcome {
         val slicesByTicker = slices.groupBy { it.ticker }
         val candidatesByTicker = candidates.groupBy { it.ticker }
+        val bucketByTicker = manualSlices.entries
+            .groupBy({ it.key.ticker }, { it.key.strategy to it.value })
+            .mapValues { (_, bucket) -> bucket.toMap() }
         val tickers = (slicesByTicker.keys + candidatesByTicker.keys).sorted()
 
         val plans = tickers.mapNotNull { ticker ->
@@ -45,6 +54,7 @@ object AttributionPlanner {
                 ticker = ticker,
                 slices = slicesByTicker[ticker].orEmpty(),
                 candidates = candidatesByTicker[ticker].orEmpty(),
+                bucket = bucketByTicker[ticker].orEmpty(),
             )
         }
 
@@ -60,6 +70,7 @@ object AttributionPlanner {
         ticker: String,
         slices: List<TickerOrderPlan>,
         candidates: List<OrderCandidate>,
+        bucket: Map<String, BigDecimal>,
     ): TickerAttribution? {
         if (slices.isEmpty() || slices.any { it.targetQuantity == null }) return null
 
@@ -73,7 +84,7 @@ object AttributionPlanner {
 
         return TickerAttribution(
             moves = applied.moves,
-            transfers = transfers(ticker = ticker, slices = slices, projected = applied.projected),
+            transfers = transfers(ticker = ticker, slices = slices, projected = applied.projected, bucket = bucket),
         )
     }
 
@@ -176,19 +187,20 @@ object AttributionPlanner {
 
     // The transfer pass: pair every slice above its whole-unit Target with one below, largest-surplus
     // donors to largest-deficit receivers, and move only whole units (≥ 1, so a sub-unit drift is not
-    // a transfer).
+    // a transfer). The bucket's units join as target-less donors after the report surpluses: a report
+    // slice already over its own Target must be the one to give first, or the move would leave a
+    // second correction due. Only the part of a receiver's shortfall the report surpluses cannot
+    // cover is left for the bucket.
     private fun transfers(
         ticker: String,
         slices: List<TickerOrderPlan>,
         projected: StrategyQuantities,
+        bucket: Map<String, BigDecimal>,
     ): List<AttributionTransfer> {
         val price = slices.first().price?.takeIf { it.signum() > 0 }
-        val donors = slices
-            .map { Donor(strategy = it.strategy, available = it.surplus(projected).setScale(0, RoundingMode.FLOOR)) }
-            .filter { it.available >= ONE }
-            .sortedWith(compareByDescending<Donor> { it.available }.thenBy { it.strategy })
+        val donors = reportDonors(slices = slices, projected = projected) + bucketDonors(bucket = bucket)
         val receivers = slices
-            .map { Receiver(strategy = it.strategy, deficit = it.shortfall(projected).setScale(0, RoundingMode.FLOOR)) }
+            .map { Receiver(strategy = it.strategy, deficit = wholeUnits(it.shortfall(projected))) }
             .filter { it.deficit >= ONE }
             .sortedWith(compareByDescending<Receiver> { it.deficit }.thenBy { it.strategy })
 
@@ -197,6 +209,22 @@ object AttributionPlanner {
         }
         return state.transfers
     }
+
+    // Report slices above their whole-unit Target, largest surplus first.
+    private fun reportDonors(slices: List<TickerOrderPlan>, projected: StrategyQuantities): List<Donor> =
+        slices
+            .map { Donor(strategy = it.strategy, available = wholeUnits(it.surplus(projected))) }
+            .rankDonors()
+
+    // The bucket's slice per strategy, whole units only — it has no Ideal, so every unit it holds is
+    // available to give.
+    private fun bucketDonors(bucket: Map<String, BigDecimal>): List<Donor> =
+        bucket.map { (strategy, quantity) -> Donor(strategy = strategy, available = wholeUnits(quantity)) }
+            .rankDonors()
+
+    // Both donor lists rank and drop the sub-unit drifts the same way.
+    private fun List<Donor>.rankDonors(): List<Donor> =
+        filter { it.available >= ONE }.sortedWith(compareByDescending<Donor> { it.available }.thenBy { it.strategy })
 
     private data class Donor(val strategy: String, val available: BigDecimal)
 
@@ -246,4 +274,7 @@ object AttributionPlanner {
     // Units the slice sits above its Target (the negative of the shortfall).
     private fun TickerOrderPlan.surplus(projected: StrategyQuantities): BigDecimal =
         -shortfall(projected)
+
+    // Transfers move whole units only, so any deficit, surplus or bucket quantity floors.
+    private fun wholeUnits(quantity: BigDecimal): BigDecimal = quantity.setScale(0, RoundingMode.FLOOR)
 }

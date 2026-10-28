@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.strategy
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
+import dev.agner.portfolio.usecase.configuration.JsonMapper
 import dev.agner.portfolio.usecase.strategy.model.DiffChange
 import dev.agner.portfolio.usecase.strategy.model.DiffWeight
 import dev.agner.portfolio.usecase.strategy.model.EditionDetail
@@ -13,6 +14,7 @@ import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IEditionRepository
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
@@ -51,6 +53,53 @@ class StrategyServiceTest : StringSpec({
         val error = runCatching { service.create(creation) }.exceptionOrNull()
 
         (error is DuplicateStrategyNameException) shouldBe true
+        coVerify(exactly = 0) { strategies.save(any()) }
+    }
+
+    "create returns a strategy without the dropped weight field" {
+        coEvery { strategies.fetchByName("Top Dividendos") } returns null
+        coEvery { strategies.save(creation) } returns strategy
+
+        val created = service.create(creation)
+
+        JsonMapper.mapper.writeValueAsString(created).contains("weight") shouldBe false
+    }
+
+    "create requires a kind" {
+        val error = runCatching { service.create(creation.copy(kind = null)) }.exceptionOrNull()
+
+        (error is MissingStrategyKindException) shouldBe true
+        coVerify(exactly = 0) { strategies.save(any()) }
+    }
+
+    "create refuses a second manual strategy in the same class" {
+        coEvery { strategies.fetchByName("Outro legado") } returns null
+        coEvery { strategies.fetchManualByClass(AssetClass.ACOES) } returns manualStrategy
+
+        val error = runCatching {
+            service.create(StrategyCreation("Outro legado", AssetClass.ACOES, StrategyKind.MANUAL))
+        }.exceptionOrNull()
+
+        (error is DuplicateManualStrategyException) shouldBe true
+        coVerify(exactly = 0) { strategies.save(any()) }
+    }
+
+    "create allows a manual strategy in a class that has none" {
+        coEvery { strategies.fetchByName("Legado") } returns null
+        coEvery { strategies.fetchManualByClass(AssetClass.ACOES) } returns null
+        coEvery { strategies.save(manualCreation) } returns manualStrategy
+
+        service.create(manualCreation) shouldBe manualStrategy
+
+        coVerify(exactly = 1) { strategies.save(manualCreation) }
+    }
+
+    "create refuses Renda Fixa for either kind" {
+        val reportDriven = StrategyCreation("RF report", AssetClass.RENDA_FIXA, StrategyKind.REPORT_DRIVEN)
+        val manual = StrategyCreation("RF legado", AssetClass.RENDA_FIXA, StrategyKind.MANUAL)
+
+        (runCatching { service.create(reportDriven) }.exceptionOrNull() is InvalidStrategyClassException) shouldBe true
+        (runCatching { service.create(manual) }.exceptionOrNull() is InvalidStrategyClassException) shouldBe true
         coVerify(exactly = 0) { strategies.save(any()) }
     }
 
@@ -228,13 +277,26 @@ private val strategy = Strategy(
     id = 1,
     name = "Top Dividendos",
     assetClass = AssetClass.ACOES,
-    weight = BigDecimal("34.00"),
+    kind = StrategyKind.REPORT_DRIVEN,
 )
 
 private val creation = StrategyCreation(
     name = "Top Dividendos",
     assetClass = AssetClass.ACOES,
-    weight = BigDecimal("34.00"),
+    kind = StrategyKind.REPORT_DRIVEN,
+)
+
+private val manualStrategy = Strategy(
+    id = 7,
+    name = "Legado",
+    assetClass = AssetClass.ACOES,
+    kind = StrategyKind.MANUAL,
+)
+
+private val manualCreation = StrategyCreation(
+    name = "Legado",
+    assetClass = AssetClass.ACOES,
+    kind = StrategyKind.MANUAL,
 )
 
 private val report = ParsedStrategyReport(

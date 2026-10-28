@@ -17,12 +17,71 @@ export interface StrategyGroup {
 }
 
 // The list groups by asset class in the chain's order, skipping a class with no strategies. Input
-// order is preserved inside a group.
+// order is preserved inside a group, except that the manual bucket is listed last.
 export function groupStrategiesByClass(strategies: Strategy[]): StrategyGroup[] {
   return ASSET_CLASSES.map((assetClass) => ({
     assetClass,
-    strategies: strategies.filter((strategy) => strategy.asset_class === assetClass),
+    strategies: strategies
+      .filter((strategy) => strategy.asset_class === assetClass)
+      .sort((left, right) => Number(left.kind === "MANUAL") - Number(right.kind === "MANUAL")),
   })).filter((group) => group.strategies.length > 0);
+}
+
+export function isReportDriven(strategy: Strategy | null | undefined): boolean {
+  return strategy?.kind === "REPORT_DRIVEN";
+}
+
+export function reportDrivenStrategies(strategies: Strategy[]): Strategy[] {
+  return strategies.filter(isReportDriven);
+}
+
+export interface StrategyCoverage {
+  withEdition: number;
+  total: number;
+}
+
+// The class header's coverage count: report-driven Strategies only, so the bucket never keeps the
+// count permanently short. `period` absent means no open month, so nothing counts as covered.
+export function strategyCoverage(
+  strategies: Strategy[],
+  editionsByStrategyId: ReadonlyMap<number, readonly { reference_month: string }[]>,
+  period: string | undefined,
+): StrategyCoverage {
+  const report = reportDrivenStrategies(strategies);
+  const withEdition =
+    period === undefined
+      ? 0
+      : report.filter((strategy) =>
+          (editionsByStrategyId.get(strategy.id) ?? []).some(
+            (edition) => edition.reference_month === period,
+          ),
+        ).length;
+  return { withEdition, total: report.length };
+}
+
+export function strategyCoverageLabel(coverage: StrategyCoverage): string {
+  return `${coverage.withEdition} de ${coverage.total} com edição`;
+}
+
+export interface EditionStatusChip {
+  label: string;
+  tone: "green" | "amber" | "neutral";
+}
+
+// The catalog row's right-aligned chip: the latest edition is active (✓) or still in review; a
+// strategy with no edition reads "sem edição". The bucket gets the violet Legado chip instead.
+export function editionStatusChip(editions: readonly Edition[] | undefined): EditionStatusChip {
+  const latest = editions?.[0];
+  if (!latest) return { label: "sem edição", tone: "neutral" };
+  return latest.status === "ACTIVE"
+    ? {
+        label: `${referenceMonthLabel(latest.reference_month)} ✓`,
+        tone: "green",
+      }
+    : {
+        label: `${referenceMonthLabel(latest.reference_month)} · revisão`,
+        tone: "amber",
+      };
 }
 
 // "2026-09" -> "set/26", matching the reference's edition chips.
@@ -88,12 +147,14 @@ const FILE_HINTS: { pattern: RegExp; name: string }[] = [
   { pattern: /dividendos/i, name: "Top Dividendos" },
 ];
 
-// Suggests the strategy a dropped report belongs to, from its file name. The import view seeds each
-// row with this and the user can override it; an unrecognised name falls back to the first strategy.
+// Suggests the strategy a dropped report belongs to, from its file name. Only report-driven
+// Strategies can receive a report, so the bucket is never a candidate; an unrecognised name falls
+// back to the first report-driven Strategy.
 export function suggestStrategy(strategies: Strategy[], fileName: string): Strategy | undefined {
+  const report = reportDrivenStrategies(strategies);
   const hint = FILE_HINTS.find(({ pattern }) => pattern.test(fileName));
   const match = hint
-    ? strategies.find((strategy) => strategy.name.toLowerCase().includes(hint.name.toLowerCase()))
+    ? report.find((strategy) => strategy.name.toLowerCase().includes(hint.name.toLowerCase()))
     : undefined;
-  return match ?? strategies[0];
+  return match ?? report[0];
 }

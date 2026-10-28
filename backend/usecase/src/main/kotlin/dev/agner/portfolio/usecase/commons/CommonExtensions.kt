@@ -100,6 +100,11 @@ fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
 
+// A quantity valued at a price, treating a missing quote as zero — the rule the allocation tree and
+// the manual Strategy holdings read share.
+fun BigDecimal.valueAt(price: BigDecimal?): BigDecimal =
+    if (price == null) BigDecimal.ZERO else (this * price).defaultScale()
+
 private val HUNDRED = BigDecimal("100")
 
 // A percentage rate (15 for 15%) applied to an amount, at the repo's money scale.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Month, Targets } from "../api/types.ts";
 import {
   MONTH_OPTIONS,
+  type StrategyTargetRow,
   addStrategyRow,
   addTickerRow,
   assetClassLabel,
@@ -11,9 +12,11 @@ import {
   monthFormFrom,
   monthPeriodLabel,
   monthStatusLabel,
+  overplannedStrategyClasses,
   periodMonth,
   periodYear,
   periodYearOptions,
+  remainingLegacyShares,
   removeStrategyRow,
   removeTickerRow,
   targetsFormFrom,
@@ -288,6 +291,68 @@ describe("targets form rows", () => {
 
     expect(removeTickerRow(form, 0).tickers).toEqual([
       { id: "i", strategy: "Top Dividendos", ticker: "ITUB4", percentage: "" },
+    ]);
+  });
+});
+
+describe("strategy target shares", () => {
+  const row = (
+    assetClass: StrategyTargetRow["assetClass"],
+    strategy: string,
+    percentage: string,
+  ): StrategyTargetRow => ({ id: `${assetClass}:${strategy}`, assetClass, strategy, percentage });
+
+  it("sums each class's strategy shares, ignoring nameless and blank rows", () => {
+    const form = {
+      ...emptyTargetsForm(),
+      strategies: [
+        row("ACOES", "Top Dividendos", "60"),
+        row("ACOES", "Small Caps", "20"),
+        row("FIIS", "Fundos", "30"),
+        row("ACOES", "  ", "50"),
+        row("FIIS", "Em branco", ""),
+      ],
+    };
+
+    expect(overplannedStrategyClasses(form)).toEqual([]);
+    expect(remainingLegacyShares(form, new Set(["ACOES", "FIIS"]))).toEqual([
+      { assetClass: "ACOES", percentage: 20 },
+      { assetClass: "FIIS", percentage: 70 },
+    ]);
+  });
+
+  it("flags a class whose strategy shares exceed 100", () => {
+    const form = {
+      ...emptyTargetsForm(),
+      strategies: [row("ACOES", "Top Dividendos", "60"), row("ACOES", "Small Caps", "50")],
+    };
+
+    expect(overplannedStrategyClasses(form)).toEqual(["ACOES"]);
+  });
+
+  it("accepts exactly 100 and derives a zero remainder", () => {
+    const form = { ...emptyTargetsForm(), strategies: [row("ACOES", "Top Dividendos", "100")] };
+
+    expect(overplannedStrategyClasses(form)).toEqual([]);
+    expect(remainingLegacyShares(form, new Set(["ACOES"]))).toEqual([
+      { assetClass: "ACOES", percentage: 0 },
+    ]);
+  });
+
+  it("shows a remainder only for a class that has a bucket", () => {
+    const form = emptyTargetsForm();
+
+    expect(remainingLegacyShares(form, new Set(["FIIS"]))).toEqual([
+      { assetClass: "FIIS", percentage: 100 },
+    ]);
+    expect(remainingLegacyShares(form, new Set())).toEqual([]);
+  });
+
+  it("never derives a negative remainder", () => {
+    const form = { ...emptyTargetsForm(), strategies: [row("ACOES", "Top Dividendos", "120")] };
+
+    expect(remainingLegacyShares(form, new Set(["ACOES"]))).toEqual([
+      { assetClass: "ACOES", percentage: 0 },
     ]);
   });
 });

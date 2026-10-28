@@ -5,10 +5,12 @@ import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.portfolio.AllocationCalculator
 import dev.agner.portfolio.usecase.portfolio.AllocationService
 import dev.agner.portfolio.usecase.portfolio.ListedHolding
+import dev.agner.portfolio.usecase.portfolio.ManualStrategyHolding
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
+import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.get
@@ -44,17 +46,30 @@ class AllocationControllerTest : DescribeSpec({
                 acoes.get("target").isNumber shouldBe true
                 acoes.get("strategies").get(0).get("strategy").asText() shouldBe "Top Dividendos"
                 acoes.get("strategies").get(0).get("tickers").get(0).get("ticker").asText() shouldBe "VALE3"
+                acoes.get("manual").get("strategy").asText() shouldBe "Legado Ações"
+                acoes.get("manual").has("target") shouldBe false
+                acoes.get("outside").get("actual").decimalValue()
+                    .compareTo(BigDecimal("400.00")) shouldBe 0
+                body.get("unclassified").get("actual").decimalValue()
+                    .compareTo(BigDecimal.ZERO) shouldBe 0
             }
         }
 
-        it("404s when no month is open") {
+        it("serves an Actual-only tree with no period when no month is open") {
             val service = mockk<AllocationService>()
-            coEvery { service.fetchCurrent() } returns null
+            coEvery { service.fetchCurrent() } returns allocation.copy(period = null)
 
             testApplication {
                 application { installRoutes(AllocationController(service)) }
 
-                client.get("/month/current/allocation").status shouldBe HttpStatusCode.NotFound
+                val response = client.get("/month/current/allocation")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.has("period") shouldBe false
+                body.get("actual").decimalValue().compareTo(BigDecimal("1500.00")) shouldBe 0
+                body.get("classes").get(0).get("actual").decimalValue()
+                    .compareTo(BigDecimal("1500.00")) shouldBe 0
             }
         }
     }
@@ -77,6 +92,18 @@ private val allocation = AllocationCalculator.compute(
             quantity = BigDecimal("100"),
             price = BigDecimal("10"),
         ),
+        ListedHolding(
+            ticker = "ITUB4",
+            assetClass = AssetClass.ACOES,
+            quantity = BigDecimal("50"),
+            price = BigDecimal("10"),
+        ),
     ),
     fixedIncome = emptyList(),
+    attributions = mapOf(
+        StrategyTicker("Top Dividendos", "VALE3") to BigDecimal("60"),
+        StrategyTicker("Legado Ações", "VALE3") to BigDecimal("20"),
+        StrategyTicker("Legado Ações", "ITUB4") to BigDecimal("30"),
+    ),
+    manualStrategies = listOf(ManualStrategyHolding("Legado Ações", AssetClass.ACOES)),
 )
