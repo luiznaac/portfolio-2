@@ -75,6 +75,14 @@ function allocation(overrides: Partial<Allocation> = {}): Allocation {
   };
 }
 
+function outsideRung(actual: number): Allocation["classes"][number]["outside"] {
+  return { actual, tickers: [{ ticker: "ORVR3", actual }] };
+}
+
+function unclassifiedHolding(actual: number, ticker = "ZZZZ3"): Allocation["unclassified"] {
+  return { actual, tickers: [{ ticker, actual }] };
+}
+
 function orderPlan(overrides: Partial<OrderPlan> = {}): OrderPlan {
   return {
     period: "2026-10",
@@ -326,29 +334,91 @@ describe("attentionItems", () => {
     expect(attentionItems({ allocation: clean, plan: orderPlan() })).toEqual([]);
   });
 
-  it("flags unattributed units as critical and names the classes", () => {
+  it("flags real outside custody as an info card that points at Alocação", () => {
     const classes = allocation().classes.map((rung) =>
-      rung.asset_class === "ACOES" ? { ...rung, unattributed: 1_500 } : rung,
+      rung.asset_class === "ACOES"
+        ? { ...rung, unattributed: 1_500, outside: outsideRung(1_500) }
+        : rung,
     );
     const items = attentionItems({
-      allocation: allocation({ classes }),
+      allocation: allocation({ classes, unattributed: 1_500 }),
       plan: null,
     });
-    const critical = items.find((item) => item.severity === "critical");
-    expect(critical?.text).toContain("Ações");
-    expect(critical?.to).toBe("/trades");
+    const outside = items.find((item) => item.key === "outside");
+    expect(outside?.severity).toBe("info");
+    expect(outside?.text).toContain("Cotas fora da estratégia");
+    expect(outside?.text).toContain("1.500,00");
+    expect(outside?.to).toBe("/allocation");
+    expect(outside?.actionLabel).toBe("Atribuir");
   });
 
-  it("flags a root-level unattributed holding with no class rung", () => {
-    const classes = allocation().classes.map((rung) => ({
-      ...rung,
-      unattributed: 0,
-    }));
+  it("flags unclassified tickers as a critical data-quality card", () => {
     const items = attentionItems({
-      allocation: allocation({ classes, unattributed: 500 }),
+      allocation: allocation({ unclassified: unclassifiedHolding(500), unattributed: 500 }),
       plan: null,
     });
-    expect(items.find((item) => item.key === "unattributed")?.text).toContain("sem classe");
+    const unclassified = items.find((item) => item.key === "unclassified");
+    expect(unclassified?.severity).toBe("critical");
+    expect(unclassified?.text).toBe("1 ticker sem classe — classificar");
+    expect(unclassified?.to).toBe("/allocation");
+    expect(unclassified?.actionLabel).toBe("Classificar");
+  });
+
+  it("counts unclassified tickers in the plural", () => {
+    const items = attentionItems({
+      allocation: allocation({
+        unclassified: {
+          actual: 900,
+          tickers: [
+            { ticker: "ZZZZ3", actual: 500 },
+            { ticker: "QQQQ3", actual: 400 },
+          ],
+        },
+        unattributed: 900,
+      }),
+      plan: null,
+    });
+    expect(items.find((item) => item.key === "unclassified")?.text).toBe(
+      "2 tickers sem classe — classificar",
+    );
+  });
+
+  it("splits outside custody and unclassified holdings into separate cards", () => {
+    const classes = allocation().classes.map((rung) =>
+      rung.asset_class === "ACOES"
+        ? { ...rung, unattributed: 1_500, outside: outsideRung(1_500) }
+        : rung,
+    );
+    const items = attentionItems({
+      allocation: allocation({
+        classes,
+        unclassified: unclassifiedHolding(500),
+        unattributed: 2_000,
+      }),
+      plan: null,
+    });
+    const unclassified = items.find((item) => item.key === "unclassified");
+    const outside = items.find((item) => item.key === "outside");
+    expect(unclassified?.severity).not.toBe(outside?.severity);
+    expect(unclassified?.actionLabel).not.toBe(outside?.actionLabel);
+  });
+
+  it("never raises a card for the manual bucket", () => {
+    const classes = allocation().classes.map((rung) =>
+      rung.asset_class === "ACOES"
+        ? {
+            ...rung,
+            drift: 0,
+            manual: {
+              strategy: "Legado",
+              actual: 5_000,
+              tickers: [{ ticker: "ITUB4", actual: 5_000 }],
+            },
+          }
+        : { ...rung, drift: 0 },
+    );
+    const items = attentionItems({ allocation: allocation({ classes }), plan: null });
+    expect(items).toEqual([]);
   });
 
   it("reports the largest class drift above one point", () => {

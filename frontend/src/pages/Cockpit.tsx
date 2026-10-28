@@ -221,7 +221,7 @@ function AttentionCard({ item }: { item: AttentionItem }) {
       <div className="text-ink">
         {item.text}{" "}
         <Link to={item.to} className="font-medium text-principal underline">
-          Ver
+          {item.actionLabel ?? "Ver"}
         </Link>
       </div>
     </div>
