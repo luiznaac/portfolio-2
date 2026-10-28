@@ -13,7 +13,7 @@ import kotlin.time.ExperimentalTime
 object IndexValueTable : IntIdTable("index_value") {
     val indexId = reference("index_id", IndexTable.id)
     val date = date("date")
-    val value = decimal("value", 12, 8)
+    val observation = decimal("observation", 12, 8)
     val createdAt = datetime("created_at")
 
     init { uniqueIndex(indexId, date) }
@@ -24,11 +24,11 @@ class IndexValueEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var indexId by IndexEntity referencedOn IndexValueTable.indexId
     var date by IndexValueTable.date
-    var value by IndexValueTable.value
+    var observation by IndexValueTable.observation
     var createdAt by IndexValueTable.createdAt
 
     fun toIndexValue() = IndexValue(
         date = date,
-        value = value,
+        observation = observation,
     )
 }

@@ -15,7 +15,7 @@ import kotlin.time.ExperimentalTime
 @OptIn(ExperimentalTime::class)
 object CheckingAccountTable : IntIdTable("checking_account") {
     val name = varchar("name", 100)
-    val value = decimal("value", 8, 4)
+    val rate = decimal("rate", 8, 4)
     val index = reference("index_id", IndexTable.id)
     val maturityDuration = varchar("maturity_duration", 5)
     val createdAt = datetime("created_at")
@@ -25,7 +25,7 @@ class CheckingAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<CheckingAccountEntity>(CheckingAccountTable)
 
     var name by CheckingAccountTable.name
-    var value by CheckingAccountTable.value
+    var rate by CheckingAccountTable.rate
     var index by IndexEntity referencedOn CheckingAccountTable.index
     var maturityDuration by CheckingAccountTable.maturityDuration
     var createdAt by CheckingAccountTable.createdAt
@@ -33,7 +33,7 @@ class CheckingAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     fun toModel() = CheckingAccount(
         id = id.value,
         name = name,
-        value = value,
+        rate = rate,
         indexId = IndexId.valueOf(index.id.value),
         maturityDuration = DatePeriod.parse(maturityDuration),
     )

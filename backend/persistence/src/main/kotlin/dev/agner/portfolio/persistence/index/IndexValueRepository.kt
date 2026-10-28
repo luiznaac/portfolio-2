@@ -48,10 +48,10 @@ class IndexValueRepository(
          *        In a real world scenario, we would probably want to correctly generate the date range without
          *        duplicates, considering the indexes that are daily vs monthly.
          **/
-        IndexValueTable.batchInsert(indexValues, ignore = true) { (date, value) ->
+        IndexValueTable.batchInsert(indexValues, ignore = true) { (date, observation) ->
             this[IndexValueTable.indexId] = indexId.name
             this[IndexValueTable.date] = date
-            this[IndexValueTable.value] = value
+            this[IndexValueTable.observation] = observation
             this[IndexValueTable.createdAt] = LocalDateTime.now(clock)
         }
     }

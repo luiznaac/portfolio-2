@@ -15,8 +15,14 @@ import org.testcontainers.containers.ComposeContainer
 import org.testcontainers.containers.wait.strategy.Wait
 import java.io.File
 
+const val WIREMOCK_PORT_PROPERTY = "wiremock.port"
+
 object DockerComposeExtension : Extension, BeforeProjectListener, AfterProjectListener, AfterTestListener {
     override suspend fun beforeProject() {
+        // Started here so the dynamic port is known before any Spring context resolves
+        // ${wiremock.port} from application-test.yaml.
+        System.setProperty(WIREMOCK_PORT_PROPERTY, HttpMockService.port.toString())
+
         DockerCompose.start()
         // backend/docker-compose.yml no longer seeds a schema (mysql/init.sql is gone) — the
         // container starts empty, same as it would in prod on a fresh volume. Migrate it once,

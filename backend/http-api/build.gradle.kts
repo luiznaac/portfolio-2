@@ -15,4 +15,5 @@ dependencies {
 
     testImplementation(libs.bundles.testDependencies)
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(testFixtures(project(":usecase")))
 }

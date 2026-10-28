@@ -24,7 +24,7 @@ class CheckingAccountController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/checking-accounts") {
+        route("/fixed-income/accounts") {
             get {
                 call.respond(HttpStatusCode.OK, service.fetchAll())
             }
