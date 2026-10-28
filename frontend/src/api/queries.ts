@@ -1,6 +1,13 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api } from "./client.ts";
 import type {
+  AssetClass,
   AttributionSliceCreation,
   AttributionTransferCreation,
   Bond,
@@ -13,6 +20,7 @@ import type {
   HarvestPairCreation,
   HarvestReport,
   ImportSource,
+  LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
   OrderList,
@@ -118,11 +126,81 @@ export function useTransferAttribution(ticker: string) {
   });
 }
 
+// The bulk legacy action's dry-run. It is enabled only while the Alocação banner has outside
+// custody to offer, so the page does not pay for the read when there is nothing to attribute.
+export function useLegacyAttributionPreview(enabled: boolean) {
+  return useQuery({
+    queryKey: ["positions", "legacy-attribution", "preview"],
+    queryFn: api.getLegacyAttributionPreview,
+    enabled,
+  });
+}
+
+// The apply writes slices through the attribution path, so the position, allocation, strategy and
+// order reads are all stale in one step.
+export function useApplyLegacyAttribution() {
+  const queryClient = useQueryClient();
+  return useMutation<LegacyAttributionResult, Error, void>({
+    mutationFn: () => api.applyLegacyAttribution(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
+  });
+}
+
 export function useTickerQuotes(ticker: string) {
   return useQuery({
     queryKey: ["tickers", ticker, "quotes"],
     queryFn: () => api.getTickerQuotes(ticker),
     enabled: ticker.length > 0,
+  });
+}
+
+// The ticker's catalog row — its BDI-derived class and any manual override. A 404 (a ticker the
+// catalog has never seen) is a normal state for the classification action, not an error.
+export function useTicker(ticker: string) {
+  return useQuery({
+    queryKey: ["tickers", ticker],
+    queryFn: () => api.getTicker(ticker),
+    enabled: ticker.length > 0,
+    retry: false,
+  });
+}
+
+// A classification changes the allocation tree, the funding pass and the asset detail at once, so
+// every read that groups by class is invalidated.
+function invalidateClassReads(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["tickers"] });
+  queryClient.invalidateQueries({ queryKey: ["month"] });
+  queryClient.invalidateQueries({ queryKey: ["months"] });
+  queryClient.invalidateQueries({ queryKey: ["orders"] });
+  queryClient.invalidateQueries({ queryKey: ["positions"] });
+  queryClient.invalidateQueries({ queryKey: ["performance"] });
+}
+
+export function useClassifyTicker(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assetClass: AssetClass) => api.classifyTicker(ticker, assetClass),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRevertTickerClassification(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.revertTickerClassification(ticker),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.refreshCatalog,
+    onSuccess: () => invalidateClassReads(queryClient),
   });
 }
 
@@ -193,7 +271,8 @@ export function useReplaceTargets() {
 export function useCurrentAllocation() {
   return useQuery({
     queryKey: ["month", "current", "allocation"],
-    queryFn: nullOn404(api.getCurrentAllocation),
+    // The read is month-free: it answers even without an open month, with Actual only.
+    queryFn: api.getCurrentAllocation,
   });
 }
 

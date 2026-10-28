@@ -280,6 +280,38 @@ class AllocationCalculatorTest : StringSpec({
         acoes.manual shouldBe null
     }
 
+    "a month-free read lays out every class with its Actual and no period" {
+        val allocation = compute(
+            period = null,
+            capital = "0",
+            targets = emptyTargets(),
+            listed = listOf(
+                listed("VALE3", AssetClass.ACOES, "100", "10"),
+                listed("ZZZZ9", null, "10", "10"),
+            ),
+            fixedIncome = listOf(fixedIncome(FixedIncomeSubClass.FLOATING_RATE, "2000")),
+            attributions = mapOf(
+                attributed("Legado Ações", "VALE3", "40"),
+                // A report attribution with no chain leaf to name it is inert: without a month the
+                // ticker stays outside rather than forming a phantom Strategy row.
+                attributed("Top Dividendos", "VALE3", "60"),
+            ),
+            manualStrategies = listOf(manualStrategy("Legado Ações", AssetClass.ACOES)),
+        )
+
+        allocation.period shouldBe null
+        allocation.actual.plain() shouldBe "3100"
+        allocation.unattributed.plain() shouldBe "700"
+        allocation.unclassified.actual.plain() shouldBe "100"
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+        acoes.strategies shouldBe emptyList()
+        acoes.actual.plain() shouldBe "1000"
+        acoes.manual!!.actual.plain() shouldBe "400"
+        acoes.outside.actual.plain() shouldBe "600"
+        allocation.classes.single { it.assetClass == AssetClass.RENDA_FIXA }.actual.plain() shouldBe "2000"
+    }
+
     "a zero capital never divides by zero" {
         val allocation = compute(
             capital = "0",
@@ -304,6 +336,7 @@ private fun chainWithStrategy(vararg tickers: TickerTarget) = Targets(
 private fun emptyTargets() = Targets(emptyList(), emptyList(), emptyList(), emptyList())
 
 private fun compute(
+    period: YearMonth? = YearMonth.parse("2026-09"),
     capital: String,
     targets: Targets,
     listed: List<ListedHolding>,
@@ -311,7 +344,7 @@ private fun compute(
     attributions: AttributionLedger = emptyMap(),
     manualStrategies: List<ManualStrategyHolding> = emptyList(),
 ) = AllocationCalculator.compute(
-    period = YearMonth.parse("2026-09"),
+    period = period,
     capital = BigDecimal(capital),
     floor = BigDecimal("20000"),
     targets = targets,

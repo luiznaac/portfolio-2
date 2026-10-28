@@ -176,6 +176,21 @@ class AttributionServiceTest : StringSpec({
         coVerify(exactly = 0) { attributions.save(any()) }
     }
 
+    "setSlice accepts a ticker whose manual override outranks its BDI class" {
+        coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { catalog.fetchBy("PETR4") } returns catalogEntry(AssetClass.FIIS)
+            .copy(assetClassOverride = AssetClass.ACOES)
+
+        val summary = service.setSlice(
+            "PETR4",
+            AttributionSliceCreation(strategyId = 2, quantity = BigDecimal("10")),
+        )!!
+
+        summary.attributedQuantity.compareTo(BigDecimal("10")) shouldBe 0
+        coVerify(exactly = 1) { attributions.save(Attribution("PETR4", 2, BigDecimal("10"))) }
+    }
+
     "setSlice accepts a Manual Strategy of the ticker's class" {
         coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
         coEvery { strategies.fetchById(3) } returns Strategy(

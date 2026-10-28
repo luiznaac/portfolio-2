@@ -44,6 +44,39 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 - **DB readiness**: the app section needs no runbook-level DB probe — the mysql section's ready probe plus compose `depends_on: mysql: condition: service_healthy` covers it; the app self-migrates an empty MySQL via Flyway (`bin/migrate` in `deploy/entrypoint.sh`) before serving.
 
 - **chameidor**: not booted; scheduling-side intents are unreachable and fine (job registration is lazy — `ScheduleService` is reached only through consolidation runs).
+- **Snapshot slice seed**: the monthly close freezes one slice per Strategy, the manual bucket included. This seed is self-contained: reset the close/plan tables, seed one report strategy that targets nothing and one manual bucket that owns the whole position, then the close's HTTP intents read the frozen slice. Run it alone — do **not** apply any other seed section.
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+  DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM trade; DELETE FROM position;
+  DELETE FROM institution; DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  INSERT INTO strategy (name, asset_class, kind, created_at) VALUES
+    ('Top Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW()),
+    ('Legado', 'ACOES', 'MANUAL', NOW());
+  SET @bucket := (SELECT id FROM strategy WHERE name = 'Legado');
+  INSERT INTO month (id, period, capital, `floor`, aportes, status, created_at) VALUES
+    (9001, '2026-10', 1000, 0, 0, 'OPEN', NOW());
+  INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+    (9001, 'CLASS', 'ACOES', NULL, NULL, NULL, 100, NOW()),
+    (9001, 'STRATEGY', 'ACOES', 'Top Dividendos', NULL, NULL, 0, NOW());
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('ITUB4', 'ITAUUNIBANCO', '02', NULL, 'STOCK', 'ACOES', '2026-10-01', '2026-10-31', NOW());
+  INSERT INTO quote (ticker, date, close, source, created_at) VALUES
+    ('ITUB4', '2026-10-30', 10, 'COTAHIST', NOW());
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('ITUB4', '2026-10-05', 'VISTA', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW());
+  REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 100, 10);
+  REPLACE INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4', @bucket, 100);
+  SQL
+  ```
+
+  The close is then `POST /month/current/close` (200) and the read is `GET /months/9001` (200). The
+  frozen state must carry two `strategies` slices: `Legado` (`kind: MANUAL`, `value_end: 1000`,
+  `flow: 0`) and `Top Dividendos` (`kind: REPORT_DRIVEN`, `value_end: 0`); the Ações class total is
+  `actual: 1000` with `unattributed: 0`.
 - **Order-plan seed**: the order plan prices positions from the latest stored close and reads the NEUTRO flag from a strategy's active Edition; the COTAHIST feed and a report import are not reachable in acceptance. After the app is healthy, reset the order tables and seed the scenario the plan, lifecycle and transfer intents read. The month and its chain are seeded here too (not posted over HTTP) so the run is deterministic. The scenario: two strategies (Dividendos / Small Caps) share ITUB4, B3SA3 and CSNA3 at a R$10 close; ITUB4 sits below its target (a BUY candidate the seeded manual trade executes), B3SA3 and CSNA3 sit above theirs (funding sells), and the Dividendos attribution is off-ideal against Small Caps so the refresh proposes one auto-approved transfer (ITUB4, R$200) and two pending ones (B3SA3 and CSNA3, R$600 each):
 
   ```
@@ -138,6 +171,77 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
         REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
           ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
           ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
+  ```
+
+- **Month-free allocation seed**: the Alocação read no longer needs an open month. This seed clears the month and target tables but keeps the Allocation seed's custody: one report Strategy (Top Dividendos, id 9001), two manual buckets (Legado Ações id 9002, Legado FIIs id 9003), three positions and quotes at R$10 (VALE3 100, ITUB4 50, ZZZZ9 10), the ledger split (VALE3: 60 to Top Dividendos + 20 to Legado Ações; ITUB4: 30 to Legado Ações) and a catalog row for ZZZZ9 with no class. With no month the chain is empty, so the report attribution is inert: class Ações Actual 1.500,00 = Legado Ações 500,00 + outside 1.000,00 (VALE3's 60 report units and the 40 unstored remainder sit outside), while the root adds the unclassified 100,00 for Actual 1.600,00 and unattributed 1.100,00. `GET /month/current/allocation` answers 200 with no `period`; the Alocação page blanks Alvo/Ideal/Δ and the Capital panel stays empty. Run it independently of the other seeds.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()), \
+          (9003,'Legado FIIs','FIIS','MANUAL',NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('VALE3',100,8), ('ITUB4',50,8), ('ZZZZ9',10,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('VALE3',9001,60), ('VALE3',9002,20), ('ITUB4',9002,30); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('VALE3','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ZZZZ9','2027-04-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
+  ```
+
+- **Strategy target ceiling seed**: run the Month-free allocation seed first, then add an open month whose report shares exercise the ceiling. Ações targets 80 (so the Legado Ações bucket's restante reads 20%), while Fundos imob. targets 60 + 50 = 110 — a state the write path now refuses, seeded directly so the form's inline mirror can be read. The Alvos Estratégias rung shows `Ações · restante: 20% — posições legadas, sem alvo` and `Fundos imob. · restante: 0% — posições legadas, sem alvo` (the Legado FIIs bucket has no target left), beside the Fundos imob. over-allocation error and a disabled Salvar alvos. `PUT /month/current/targets` with the seeded 110 answers 400 (`strategy-targets-exceed-class`); a replacement chain with Ações 100 and no FIIS strategy rows answers 200.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; DELETE FROM target; DELETE FROM month; \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9100, '2027-07', 100000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9100,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9100,'CLASS','FIIS',NULL,NULL,NULL,0,NOW()), \
+          (9100,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,80,NOW()), \
+          (9100,'STRATEGY','FIIS','Fundo A',NULL,NULL,60,NOW()), \
+          (9100,'STRATEGY','FIIS','Fundo B',NULL,NULL,50,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',100,NOW());"
+  ```
+
+- **Legacy attribution seed** (issue #260): the bulk legacy action reads outside custody, the manual slices and the catalog. Apply this seed after the app is healthy and before the bulk-legacy intents; it is independent of the other seeds. It gives one bucket Ticker with a custody delta (ITUB4: 30-unit bucket slice against 50 units of custody, so the preview grows it to 50), one Ticker with a report slice plus a bucket slice (VALE3, skipped with HAS_ATTRIBUTION), one FII with no bucket (HGLG11, skipped with NO_BUCKET) and one unclassified Ticker (ZZZZ9, skipped with UNCLASSIFIED). The Ações report Strategy targets VALE3 so that Ticker stays inside; the outside rows are ITUB4, VALE3 and HGLG11, for R$ 500,00 of outside custody.
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9100, '2027-04', 100000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9100,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9100,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+          (9100,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES \
+          ('ITUB4',50,8), ('VALE3',100,8), ('HGLG11',10,8), ('ZZZZ9',10,8); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+          ('VALE3',9001,60), ('VALE3',9002,20), ('ITUB4',9002,30); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), \
+          ('VALE3','2027-04-30',10,'COTAHIST',NOW()), \
+          ('HGLG11','2027-04-30',10,'COTAHIST',NOW()), \
+          ('ZZZZ9','2027-04-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+          ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS','2027-01-01','2027-04-30',NOW()), \
           ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,'2027-01-01','2027-04-30',NOW());"
   ```
 
@@ -336,3 +440,23 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   Browser intents then read the shell against real data: `/` shows the four KPIs, the seven-step stepper (step 3 pending transfers, step 7 blocked), the unattributed-cotas attention card (2.000 cotas held, 500 attributed), the class strip with a 19,3% Ações bar and the 60/80/100 target markers, `Vencimento de CDB Aceite` and a `Fechamento de … pendente` agenda item, and `PETR4` among the próximos proventos; Ctrl+K opens the command palette; the agenda's `Marcar como lida` removes the item, and after a close the same item turns into a `concluído` notice that also waits for the mark-as-read before it leaves the list.
+
+- **Catalog classification seed**: the Alocação "Sem classe" line and the asset detail's classify/revert action read this scenario. It resets the allocation tables and seeds an open 2027-05 month with a 100% Ações class target, two positions and quotes at R$10, a catalog row for ZZZZ9 with no class at all (the unclassified state), and a catalog row for YYYY9 whose BDI class is FII but whose manual override is Ações (the disagreement the detail's revert action reads). The tree then reads class Ações Actual 100,00 plus the unclassified 100,00; classifying ZZZZ9 as Ações moves it into the class and removes the "Sem classe" line. Run it independently of the other seeds.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9200, '2027-05', 1000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9200,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES ('ZZZZ9',10,8), ('YYYY9',10,8); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('ZZZZ9','2027-05-31',10,'COTAHIST',NOW()), \
+          ('YYYY9','2027-05-31',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, asset_class_override, first_seen, last_seen, created_at) VALUES \
+          ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,NULL,'2027-01-01','2027-05-31',NOW()), \
+          ('YYYY9','YYYY','12',NULL,'FII','FIIS','ACOES','2027-01-01','2027-05-31',NOW());"
+  ```

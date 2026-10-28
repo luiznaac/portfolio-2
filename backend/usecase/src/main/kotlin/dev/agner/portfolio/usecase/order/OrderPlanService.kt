@@ -66,7 +66,7 @@ class OrderPlanService(
 
         // The funding pass and the full phase need the whole book's Actual: its listed part prices the
         // Uninvested Balance and its RF part sizes the sub-class orders.
-        val allocation = if (phase.includesFunding) allocations.fetchCurrent() ?: return null else null
+        val allocation = if (phase.includesFunding) allocations.fetchCurrent() else null
 
         val plan = OrderPlanCalculator.compute(
             OrderPlanContext(

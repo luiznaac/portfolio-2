@@ -1,5 +1,7 @@
 package dev.agner.portfolio.usecase.performance
 
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.logger
@@ -21,10 +23,15 @@ import dev.agner.portfolio.usecase.performance.model.PerformanceSeries
 import dev.agner.portfolio.usecase.performance.model.PeriodBenchmark
 import dev.agner.portfolio.usecase.performance.model.PeriodClass
 import dev.agner.portfolio.usecase.performance.model.PeriodPerformance
+import dev.agner.portfolio.usecase.performance.model.PeriodStrategy
+import dev.agner.portfolio.usecase.performance.model.StrategyPerformance
 import dev.agner.portfolio.usecase.performance.model.TickerPerformance
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.repository.ITargetRepository
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
+import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
+import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -44,6 +51,7 @@ class PerformanceService(
     private val catalog: ICatalogRepository,
     private val quotes: IQuoteRepository,
     private val targets: ITargetRepository,
+    private val strategies: IStrategyRepository,
     private val benchmarks: IBenchmarkGateway,
 ) {
 
@@ -122,6 +130,15 @@ class PerformanceService(
                         valueEnd = classTotal.actual,
                     )
                 },
+                strategies = snapshot.state.strategies.map { slice ->
+                    PeriodStrategy(
+                        strategyId = slice.strategyId,
+                        strategy = slice.strategy,
+                        kind = slice.kind,
+                        valueEnd = slice.valueEnd,
+                        flow = slice.flow,
+                    )
+                },
             )
         }
 
@@ -162,31 +179,146 @@ class PerformanceService(
         val previousByClass = context.previous?.classes?.associateBy { it.assetClass }.orEmpty()
         val targetByClass = context.chain.classes.associate { it.assetClass to it.percentage }
         val totalTarget = targetByClass.values.fold(BigDecimal.ZERO, BigDecimal::add)
-        val assetClasses = catalog.fetchAll().associate { it.ticker to it.assetClass }
+        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
         val incomeByClass = context.incomeByTicker.entries
             .groupBy({ (ticker, _) -> assetClasses[ticker] }, { (_, net) -> net })
             .mapValues { (_, amounts) -> amounts.fold(BigDecimal.ZERO, BigDecimal::add).defaultScale() }
+        // A Strategy's Asset Class is immutable — there is no conversion — so the live catalog
+        // supplies the rung a frozen slice was written under; the slice itself freezes its identity.
+        val strategyCatalog = strategies.fetchAll().associateBy { it.id }
+        val reportTickers = context.chain.tickers
+            .groupBy({ it.strategy }, { it.ticker })
+            .mapValues { (_, tickers) -> tickers.toSet() }
 
         return context.current.classes.map { classTotal ->
             val target = targetByClass[classTotal.assetClass] ?: BigDecimal.ZERO
             val aportes = shareOf(context.current.aportes, target, totalTarget)
+            val classStart = previousByClass[classTotal.assetClass]?.actual
+            val classIncome = incomeByClass[classTotal.assetClass] ?: BigDecimal.ZERO
+            val classDecomposition = PerformanceCalculator.decompose(
+                valueStart = classStart,
+                valueEnd = classTotal.actual,
+                netAportes = aportes,
+                netIncome = classIncome,
+            )
+            val slices = strategySlices(
+                context = StrategySliceContext(
+                    assetClass = classTotal.assetClass,
+                    current = context.current,
+                    previous = context.previous,
+                    classAportes = aportes,
+                    classEnd = classTotal.actual,
+                    strategyCatalog = strategyCatalog,
+                    reportTickers = reportTickers,
+                ),
+            )
             ClassPerformance(
                 assetClass = classTotal.assetClass,
-                decomposition = PerformanceCalculator.decompose(
-                    valueStart = previousByClass[classTotal.assetClass]?.actual,
-                    valueEnd = classTotal.actual,
-                    netAportes = aportes,
-                    netIncome = incomeByClass[classTotal.assetClass] ?: BigDecimal.ZERO,
-                ),
+                decomposition = classDecomposition,
                 benchmarkReturn = context.blend.classBenchmark(classTotal.assetClass),
+                strategies = slices,
+                outside = outsideDecomposition(
+                    assetClass = classTotal.assetClass,
+                    classDecomposition = classDecomposition,
+                    slices = slices,
+                    // A snapshot written before the strategy rung froze no prior slices, so its prior
+                    // class value cannot be split between the slices and the outside row. Treat the
+                    // prior book as unknown rather than handing the row the whole class value.
+                    priorSliceBookKnown = context.previous == null ||
+                        context.previous.strategies.isNotEmpty() ||
+                        slices.isEmpty(),
+                ),
             )
         }
+    }
+
+    // One realised-return slice per Strategy of the class, the Manual Strategy included. A report
+    // Strategy owns only the tickers its Target chain names; the bucket owns every ticker it is
+    // attributed. A shared Ticker splits by quantity: each slice takes its own units' share of the
+    // ticker's income, and its end value drives its share of the class aportes. `flow` is the frozen
+    // bookkeeping change valued at the close, so a transfer is not read as performance.
+    private fun strategySlices(context: StrategySliceContext): List<StrategyPerformance> {
+        val previous = context.previous
+        val previousSlices = previous?.strategies.orEmpty().associateBy { it.strategyId }
+        val attributionsByStrategy = context.current.attributions.groupBy { it.strategyId }
+        val custodyByTicker = context.current.holdings.associate { it.ticker to it.quantity }
+        val incomeByTicker = context.current.incomeByTicker.associate { it.ticker to it.net }
+
+        return context.current.strategies
+            .filter { context.strategyCatalog[it.strategyId]?.assetClass == context.assetClass }
+            .sortedBy { it.strategy }
+            .map { slice ->
+                val insideTickers = if (slice.kind == StrategyKind.MANUAL) {
+                    null
+                } else {
+                    context.reportTickers[slice.strategy].orEmpty()
+                }
+                val netIncome = attributionsByStrategy[slice.strategyId].orEmpty()
+                    .filter { row -> insideTickers == null || row.ticker in insideTickers }
+                    .fold(BigDecimal.ZERO) { total, row ->
+                        total + shareOf(
+                            total = incomeByTicker[row.ticker] ?: BigDecimal.ZERO,
+                            part = row.quantity,
+                            whole = custodyByTicker[row.ticker] ?: BigDecimal.ZERO,
+                        )
+                    }
+                    .defaultScale()
+                val valueStart = when {
+                    // The first close has no prior point to measure any slice from.
+                    previous == null -> null
+                    previousSlices.containsKey(slice.strategyId) -> previousSlices.getValue(slice.strategyId).valueEnd
+                    // A snapshot written before the strategy rung froze no prior slices: the prior
+                    // book is unknown, not zero.
+                    previous.strategies.isEmpty() -> null
+                    // A genuinely new Strategy started from a zero book this month.
+                    else -> BigDecimal.ZERO
+                }
+                StrategyPerformance(
+                    strategyId = slice.strategyId,
+                    strategy = slice.strategy,
+                    kind = slice.kind,
+                    decomposition = PerformanceCalculator.decompose(
+                        valueStart = valueStart,
+                        valueEnd = slice.valueEnd,
+                        netAportes = shareOf(
+                            total = context.classAportes,
+                            part = slice.valueEnd,
+                            whole = context.classEnd,
+                        ),
+                        netIncome = netIncome,
+                        flow = slice.flow,
+                    ),
+                )
+            }
+    }
+
+    // The read-only remainder after the class's slices: the class line is the direct formula over all
+    // its holdings, and this row carries whatever no Strategy holds. It nets the counterpart of the
+    // slices' flows, so the class result equals its slices plus this row. Renda Fixa has no Strategy
+    // and is never "outside" one, so it carries no row.
+    private fun outsideDecomposition(
+        assetClass: AssetClass,
+        classDecomposition: PerformanceDecomposition,
+        slices: List<StrategyPerformance>,
+        priorSliceBookKnown: Boolean,
+    ): PerformanceDecomposition? {
+        if (assetClass == AssetClass.RENDA_FIXA) return null
+
+        return PerformanceCalculator.decompose(
+            valueStart = classDecomposition.valueStart
+                ?.takeIf { priorSliceBookKnown }
+                ?.minus(slices.sumOf { it.decomposition.valueStart ?: BigDecimal.ZERO }),
+            valueEnd = classDecomposition.valueEnd - slices.sumOf { it.decomposition.valueEnd },
+            netAportes = classDecomposition.netAportes - slices.sumOf { it.decomposition.netAportes },
+            netIncome = classDecomposition.netIncome - slices.sumOf { it.decomposition.netIncome },
+            flow = slices.sumOf { it.decomposition.flow }.negate(),
+        )
     }
 
     private suspend fun tickerPerformances(context: TickerPerformanceContext): List<TickerPerformance> {
         val previousByTicker = context.previous?.holdings?.associateBy { it.ticker }.orEmpty()
         val currentByTicker = context.current.holdings.associateBy { it.ticker }
-        val assetClasses = catalog.fetchAll().associate { it.ticker to it.assetClass }
+        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
 
         val endValues = currentByTicker.mapValues { (_, holding) -> valueAt(holding, context.currentEnd) }
         val endByClass = endValues.entries
@@ -285,6 +417,16 @@ private data class ClassPerformanceContext(
     val incomeByTicker: Map<String, BigDecimal>,
     val chain: Targets,
     val blend: BenchmarkBlend,
+)
+
+private data class StrategySliceContext(
+    val assetClass: AssetClass,
+    val current: CloseState,
+    val previous: CloseState?,
+    val classAportes: BigDecimal,
+    val classEnd: BigDecimal,
+    val strategyCatalog: Map<Int, Strategy>,
+    val reportTickers: Map<String, Set<String>>,
 )
 
 private data class TickerPerformanceContext(

@@ -63,7 +63,7 @@ object AllocationCalculator {
     private const val DRIFT_SCALE = 2
 
     fun compute(
-        period: YearMonth,
+        period: YearMonth?,
         capital: BigDecimal,
         floor: BigDecimal,
         targets: Targets,

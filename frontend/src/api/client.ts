@@ -1,9 +1,11 @@
 import type {
   Allocation,
+  AssetClass,
   Attribution,
   AttributionSliceCreation,
   AttributionTransferCreation,
   Bond,
+  CatalogEntry,
   CheckingAccount,
   CheckingAccountCreation,
   CorporateAction,
@@ -21,6 +23,8 @@ import type {
   ImportRow,
   ImportSource,
   Income,
+  LegacyAttributionPreview,
+  LegacyAttributionResult,
   Month,
   MonthCreation,
   MonthPerformance,
@@ -40,6 +44,8 @@ import type {
   StrategyHoldings,
   SuggestedOrder,
   Targets,
+  TickerClassification,
+  TickerRefreshResult,
   Trade,
   TransferProposal,
 } from "./types.ts";
@@ -141,8 +147,35 @@ export const api = {
     });
   },
 
+  getLegacyAttributionPreview(): Promise<LegacyAttributionPreview> {
+    return request("/positions/legacy-attribution/preview");
+  },
+
+  applyLegacyAttribution(): Promise<LegacyAttributionResult> {
+    return request("/positions/legacy-attribution", { method: "POST" });
+  },
+
   getTickerQuotes(ticker: string): Promise<Quote[]> {
     return request(`/tickers/${encodeURIComponent(ticker)}/quotes`);
+  },
+
+  getTicker(ticker: string): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}`);
+  },
+
+  classifyTicker(ticker: string, assetClass: AssetClass): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/classification`, {
+      method: "PUT",
+      body: JSON.stringify({ asset_class: assetClass } satisfies TickerClassification),
+    });
+  },
+
+  revertTickerClassification(ticker: string): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/classification`, { method: "DELETE" });
+  },
+
+  refreshCatalog(): Promise<TickerRefreshResult> {
+    return request("/tickers/refresh", { method: "POST" });
   },
 
   getBonds(): Promise<Bond[]> {
