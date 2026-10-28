@@ -4,6 +4,10 @@ Development guidelines for anyone (human, agent, or tool) working in `backend/`.
 
 > This repo is a monorepo: `backend/` (this Gradle project) + `frontend/` (a React SPA that consumes the HTTP API — see [../frontend/README.md](../frontend/README.md)). The repo root holds the combined `Dockerfile`/`docker-compose.yml`, the `deploy/` templates and a script-only `package.json` task runner. **Cross-cutting rule:** `frontend/src/api/types.ts` is a hand-maintained mirror of the DTOs the controllers in `http-api/.../controller/` serialize (Jackson `SNAKE_CASE`, see `usecase/.../configuration/JsonMapper.kt`). Change a request/response shape on one side and update the other in the same commit. The domain-exception error body is pinned by the shared fixture `contracts/error-response.json` instead, asserted by `DomainExceptionContractTest`.
 
+## Code map
+
+- [`docs/code-map.md`](../docs/code-map.md)
+
 ## What this service does
 
 portfolio-2 tracks and consolidates a personal investment portfolio, focused on the Brazilian fixed-income market:
@@ -40,8 +44,8 @@ application  →  http-api  →  usecase  ←  persistence
 - **Model "creation" separately from the persisted entity** when the two shapes differ (e.g. `BondCreation` vs. `Bond`, `IndexValueCreation` vs. `IndexValue`, `CheckingAccountMovementCreation`) — this mirrors chameidor's `TaskCreation` pattern.
 - Domain-specific "context" and "result" model objects (`BondCalculationContext`/ `BondCalculationResult`, `BondConsolidationContext`, `CheckingAccountConsolidationContext`) are used to pass structured intermediate state through multi-step calculations instead of long parameter lists — follow this shape for new multi-step domain logic.
 - **Model variants as algebraic data types, never as sentinel values.** When a value can be one of several kinds, that is a `sealed class`/`sealed interface` with a `data class` per case, and callers branch on it with an exhaustive `when` — never a sign convention, a magic number, a nullable field that is only set for "some" cases, or a boolean pair. `Bond`, `BondOrder`, `BondOrderStatement`, `CorporateAction`, `TaxIncidence` and `Trade` all follow this. Concretely: `Trade` is `Trade.Buy`/`Trade.Sell` with a always-positive `quantity`, *not* one signed number — the sign convention silently made "quantity zero" a sell and forced every consumer to re-derive the direction. If the database column is still a single signed value, the repository is the one place that translates (see `TradeTable.toModel`).
-- **A `*Creation` model never carries an owner id it doesn't own.** When the parent is addressed by the URL path (`POST /listed-assets/{listed_asset_id}/trades`), the id is a **parameter** of the service and repository call — `tradeService.create(assetId, creation)` — and is absent from the data class. Do not add `val assetId: Int = 0` "because the controller overwrites it anyway": the default is a lie the type system then enforces nowhere, `0` is a valid-looking id, and every caller has to remember the `copy(...)`. `TradeCreation`, `CorporateActionCreation`, `AttributionMovementCreation` and `StrategyWeightCreation` all follow the parameter form.
-- **Separate commands from queries.** A `GET` handler must not write. `OrderPlanService` splits `computePlan()` (pure read, safe for previews and for any other service to call) from `refreshPlan()` (persists newly matched transfer proposals and auto-applies the small ones). At the HTTP boundary that split is observable: `GET /orders/plan` only returns the stored proposals, `POST /orders/plan/refresh` is the route that reconciles the month, and `MonthlyCloseService.close()` calls `refreshPlan()` internally — so a client should refresh before closing a fresh month, or the close can create the proposals it then blocks on. Multi-repository writes go inside `transaction.execute { }` so a partial failure can't leave two tables disagreeing.
+- **A `*Creation` model never carries an owner id it doesn't own.** When the parent is addressed by the URL path (`POST /listed-assets/{listed_asset_id}/trades`), the id is a **parameter** of the service and repository call — `tradeService.create(assetId, creation)` — and is absent from the data class. Do not add `val assetId: Int = 0` "because the controller overwrites it anyway": the default is a lie the type system then enforces nowhere, `0` is a valid-looking id, and every caller has to remember the `copy(...)`. `TradeCreation`, `CorporateActionCreation`, `AttributionSliceCreation` and `StrategyWeightCreation` all follow the parameter form.
+- **Separate commands from queries.** A `GET` handler must not write. `OrderPlanService.computePlan()` is the pure read behind `GET /month/current/orders?phase=<ideals|candidates|funding>` (the funding pass is `FundingCalculator`, a pure cascade over the NEUTRO slices, outside-strategy positions and largest surpluses), safe for previews and for any other service to call. Persisting a plan is a separate write that lands as `refreshPlan()` with the order-lifecycle slice on its own route — never a `GET` side effect; until then the calculation stays in memory. A close or reconcile step calls the service directly, never a read endpoint. Multi-repository writes go inside `transaction.execute { }` so a partial failure can't leave two tables disagreeing.
 - **Format-specific parsing is a Strategy, chosen at runtime, and lives outside `usecase`.** Broker file layouts vary by broker and even by desk, so each layout is its own `@Component` implementing `IImportParser` (`http-api/.../import/IImportParser.kt`): `shouldExecute(fileName, content): Boolean` claims a file, `parse(fileName, content): List<ImportRowPayload>` turns it into staged rows. `ImportParserResolver` injects the `List<IImportParser>` and picks the first that claims the file (`firstOrNull { it.shouldExecute(...) }`); a file no layout recognises is rejected loudly — the resolver raises `UnsupportedImportFileException` (a 4xx canonical error body) and nothing is staged, rather than recording a silently empty import. Adding a layout is adding a class. The domain service receives the already-parsed rows (`ImportService.stage`) and never sees bytes, a file, or a `Content-Type`.
 - **A ticker normalises to a canonical key at the domain boundary.** `String.normalizedTicker()` (`usecase/catalog/model/TickerNormalization.kt`) uppercases and strips the fractional-market suffix: a fractional-market ticker (`ALUP11F`, "Mercado Fracionário") is the same paper as its round-lot form (`ALUP11`), and B3's class code is always numeric, so a trailing `F` is unambiguous. Every ticker crossing the domain boundary goes through it first.
 
@@ -51,7 +55,7 @@ Same shape as chameidor (model in `usecase` → port → service → Exposed per
 
 ## Code style
 
-Same Detekt setup as chameidor: `config/detekt/{config,format}.yml`, `maxIssues: 0`, `autoCorrect: true`, `MaximumLineLength: 120`, trailing commas mandatory, no wildcard imports, `allWarningsAsErrors = true`. Run `./gradlew detekt` before finishing a change.
+Same Detekt setup as chameidor: `config/detekt/{config,format}.yml`, `maxIssues: 0`, `autoCorrect: true`, `MaximumLineLength: 120`, trailing commas mandatory, no wildcard imports, `allWarningsAsErrors = true`. Run `./gradlew detekt --no-daemon` before finishing a change.
 
 **The codebase is written in English.** Identifiers, enum constants, comments, KDoc, log lines, exception messages, test names, commit messages and branch names — all English, with no exceptions for domain jargon. Brazilian financial concepts get their English name plus a one-line gloss where the translation isn't obvious (`FixedIncomeSubClass.FLOATING_RATE`, "IRRF withheld at source"); where there genuinely is no English term, keep the Portuguese one and say so in a comment (`JCP` — *Juros sobre Capital Próprio*). Two things are deliberately **not** translated:
 
@@ -70,10 +74,18 @@ Renaming an enum whose values are persisted as strings (an Exposed `enumerationB
 
 Kotest `StringSpec`, MockK, `kotest-extensions-spring`. Reuse `testFixtures` builders rather than hand-rolling fixture objects per test. Existing unit test coverage worth using as a style reference: `BondCalculatorTest`, `BondConsolidationServiceTest`, `BondContributionConsolidatorTest`, `YieldRateServiceTest`, `CheckingAccountConsolidatorTest`, `IndexValueServiceTest`, `TaxServiceTest`, `IOFIncidenceCalculatorTest`, `RendaIncidenceCalculatorTest`.
 
+Two speeds of verification, two lanes:
+
 ```bash
-./gradlew test                 # unit tests
-./gradlew testCoverageReport   # aggregated JaCoCo report
+npm run be:unit                    # unit lane — `unitTest`: every module except :integrationTest; no Docker
+npm run be:integration             # integration lane — :integrationTest; needs Docker
+./gradlew test --no-daemon         # every test (both lanes)
+./gradlew testCoverageReport --no-daemon  # aggregated JaCoCo report
 ```
+
+The unit lane is the `unitTest` task — the same one the `test (backend, unit)` pre-commit hook runs — so committing never needs Docker; the integration lane stays in CI (`./gradlew clean build`, Docker present). `:integrationTest:dockerPreflight` probes the daemon before any spec starts and fails in seconds with a message that says how to proceed, instead of leaving an opaque Testcontainers error to be found in the HTML report.
+
+Run check commands with `--no-daemon` — the `npm` scripts already do. A Gradle daemon left behind by a failed build inherits the shell's output pipe and keeps the command from returning: that is how a Docker-less `test` appeared to hang for over an hour after its output file already held the failure.
 
 ## Database migrations
 
@@ -100,14 +112,15 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 | `gateways.chameidor.host` | fixed (overridable) | `http://localhost:8081` locally — chameidor must be running separately for scheduling to work end-to-end |
 | `gateways.chameidor.token` | `CHAMEIDOR_TOKEN` | required — portfolio's Bearer token in chameidor's external_systems registry (dev fixture: `dev-portfolio-fixture-token`) |
 | `gateways.cotahist.host` | fixed | `https://bvmf.bmfbovespa.com.br` — B3 COTAHIST daily file (ticker catalog + EOD quotes) |
+| `gateways.sgs.host` | fixed (overridable) | `https://api.bcb.gov.br` — BCB SGS benchmark series (CDI 12, IPCA 433, IBOV 7); `application-test.yaml` points it at WireMock |
 | `app-own-host` | fixed | `localhost:8080` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 
 ## Build, run, deploy
 
 ```bash
-./gradlew clean build
-./gradlew test
-./gradlew testCoverageReport
+./gradlew clean build --no-daemon
+./gradlew test --no-daemon
+./gradlew testCoverageReport --no-daemon
 ```
 
 Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the repo root (or `npm run db`) — MySQL 9.4.0 only, database `portfolio`, empty — run `./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`, `MYSQL_USER=root`, `MYSQL_PASSWORD=`. If you need scheduled-job registration to actually fire, also run chameidor locally on port `8081` and set `CHAMEIDOR_TOKEN` to the token registered for `portfolio` in chameidor (`dev-portfolio-fixture-token` against a local chameidor).

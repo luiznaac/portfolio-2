@@ -1,17 +1,35 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ApiError, api } from "./client.ts";
 import type {
+  AssetClass,
+  AttributionSliceCreation,
+  AttributionTransferCreation,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
+  Edition,
   EditionActivation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  HarvestPairCreation,
+  HarvestReport,
   ImportSource,
+  LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
+  OrderList,
+  Snapshot,
+  Strategy,
   StrategyCreation,
+  SuggestedOrder,
   Targets,
+  TransferProposal,
 } from "./types.ts";
 
 // The three create shapes the RF form can produce, tagged so one mutation dispatches to the right
@@ -21,6 +39,19 @@ export type FixedIncomeProductInput =
   | { kind: "FIXED_BOND"; creation: FixedRateBondCreation }
   | { kind: "FLOATING_BOND"; creation: FloatingRateBondCreation }
   | { kind: "ACCOUNT"; creation: CheckingAccountCreation };
+
+// No open month is a normal state, not an error — every month-scoped read resolves to null so the
+// page points at the month opener instead of rendering a failure.
+function nullOn404<T>(query: () => Promise<T>): () => Promise<T | null> {
+  return async () => {
+    try {
+      return await query();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  };
+}
 
 export function useHealth() {
   return useQuery({
@@ -55,11 +86,121 @@ export function usePosition(ticker: string) {
   });
 }
 
+export function useAttribution(ticker: string) {
+  return useQuery({
+    queryKey: ["positions", ticker, "attribution"],
+    queryFn: () => api.getAttribution(ticker),
+    enabled: ticker.length > 0,
+  });
+}
+
+// Both attribution writes invalidate the whole `positions/{ticker}` branch, so the detail and its
+// attribution ledger refetch together.
+export function useSetAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: AttributionSliceCreation) => api.setAttribution(ticker, creation),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["positions", ticker] }),
+  });
+}
+
+export function useRemoveAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (strategyId: number) => api.removeAttribution(ticker, strategyId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["positions", ticker] }),
+  });
+}
+
+// The month-free manual transfer: the attribution ledger and the open month's tree both read the
+// moved units, so one invalidation refreshes the detail, the leaf and the class Actual.
+export function useTransferAttribution(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (creation: AttributionTransferCreation) =>
+      api.transferAttribution(ticker, creation),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions", ticker] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+    },
+  });
+}
+
+// The bulk legacy action's dry-run. It is enabled only while the Alocação banner has outside
+// custody to offer, so the page does not pay for the read when there is nothing to attribute.
+export function useLegacyAttributionPreview(enabled: boolean) {
+  return useQuery({
+    queryKey: ["positions", "legacy-attribution", "preview"],
+    queryFn: api.getLegacyAttributionPreview,
+    enabled,
+  });
+}
+
+// The apply writes slices through the attribution path, so the position, allocation, strategy and
+// order reads are all stale in one step.
+export function useApplyLegacyAttribution() {
+  const queryClient = useQueryClient();
+  return useMutation<LegacyAttributionResult, Error, void>({
+    mutationFn: () => api.applyLegacyAttribution(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
+  });
+}
+
 export function useTickerQuotes(ticker: string) {
   return useQuery({
     queryKey: ["tickers", ticker, "quotes"],
     queryFn: () => api.getTickerQuotes(ticker),
     enabled: ticker.length > 0,
+  });
+}
+
+// The ticker's catalog row — its BDI-derived class and any manual override. A 404 (a ticker the
+// catalog has never seen) is a normal state for the classification action, not an error.
+export function useTicker(ticker: string) {
+  return useQuery({
+    queryKey: ["tickers", ticker],
+    queryFn: () => api.getTicker(ticker),
+    enabled: ticker.length > 0,
+    retry: false,
+  });
+}
+
+// A classification changes the allocation tree, the funding pass and the asset detail at once, so
+// every read that groups by class is invalidated.
+function invalidateClassReads(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["tickers"] });
+  queryClient.invalidateQueries({ queryKey: ["month"] });
+  queryClient.invalidateQueries({ queryKey: ["months"] });
+  queryClient.invalidateQueries({ queryKey: ["orders"] });
+  queryClient.invalidateQueries({ queryKey: ["positions"] });
+  queryClient.invalidateQueries({ queryKey: ["performance"] });
+}
+
+export function useClassifyTicker(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (assetClass: AssetClass) => api.classifyTicker(ticker, assetClass),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRevertTickerClassification(ticker: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.revertTickerClassification(ticker),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.refreshCatalog,
+    onSuccess: () => invalidateClassReads(queryClient),
   });
 }
 
@@ -99,15 +240,7 @@ export function useCreateFixedIncomeProduct() {
 export function useCurrentMonth() {
   return useQuery({
     queryKey: ["month", "current"],
-    queryFn: async () => {
-      try {
-        return await api.getCurrentMonth();
-      } catch (error) {
-        // No open month is a normal state, not an error — the page offers the opener instead.
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
+    queryFn: nullOn404(api.getCurrentMonth),
   });
 }
 
@@ -138,15 +271,160 @@ export function useReplaceTargets() {
 export function useCurrentAllocation() {
   return useQuery({
     queryKey: ["month", "current", "allocation"],
-    queryFn: async () => {
-      try {
-        return await api.getCurrentAllocation();
-      } catch (error) {
-        // No open month is a normal state, not an error — the page points at the opener instead.
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
+    // The read is month-free: it answers even without an open month, with Actual only.
+    queryFn: api.getCurrentAllocation,
+  });
+}
+
+export function useClosedMonths() {
+  return useQuery({
+    queryKey: ["months"],
+    queryFn: api.getClosedMonths,
+  });
+}
+
+export function useMonthSnapshot(monthId: number | null) {
+  return useQuery({
+    queryKey: ["months", monthId],
+    queryFn: () => {
+      if (monthId === null) throw new Error("monthId is required to fetch a snapshot");
+      return api.getMonthSnapshot(monthId);
     },
+    enabled: monthId !== null,
+  });
+}
+
+// Closing a month locks it and rewrites the order plan on the way in; the current month, the closed
+// list, the order inbox and every performance read are stale in one step.
+export function useCloseMonth() {
+  const queryClient = useQueryClient();
+  return useMutation<Snapshot, Error, void>({
+    mutationFn: () => api.closeCurrentMonth(),
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(["months", snapshot.month_id], snapshot);
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      queryClient.invalidateQueries({ queryKey: ["months"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["performance"] });
+    },
+  });
+}
+
+export function useMonthPerformance(monthId: number | null) {
+  return useQuery({
+    queryKey: ["months", monthId, "performance"],
+    queryFn: () => {
+      if (monthId === null) throw new Error("monthId is required to fetch performance");
+      return api.getMonthPerformance(monthId);
+    },
+    enabled: monthId !== null,
+  });
+}
+
+export function usePerformanceSeries() {
+  return useQuery({
+    queryKey: ["performance", "series"],
+    queryFn: api.getPerformanceSeries,
+  });
+}
+
+export function useStockTax() {
+  return useQuery({
+    queryKey: ["tax", "current"],
+    queryFn: nullOn404(api.getStockTax),
+  });
+}
+
+export function useHarvest() {
+  return useQuery({
+    queryKey: ["tax", "harvest"],
+    queryFn: nullOn404(api.getHarvest),
+  });
+}
+
+// Both harvest writes return the fresh report, so the page updates in one round trip and the tax
+// read (whose headroom the pass depends on) is refreshed beside it.
+export function useAcceptHarvestPair() {
+  const queryClient = useQueryClient();
+  return useMutation<HarvestReport, Error, HarvestPairCreation>({
+    mutationFn: (creation) => api.acceptHarvestPair(creation),
+    onSuccess: (report) => queryClient.setQueryData(["tax", "harvest"], report),
+  });
+}
+
+export function useSetHarvestOptOut() {
+  const queryClient = useQueryClient();
+  return useMutation<HarvestReport, Error, { ticker: string; optedOut: boolean }>({
+    mutationFn: ({ ticker, optedOut }) => api.setHarvestOptOut(ticker, optedOut),
+    onSuccess: (report) => queryClient.setQueryData(["tax", "harvest"], report),
+  });
+}
+
+export function useOrders() {
+  return useQuery({
+    queryKey: ["orders"],
+    queryFn: nullOn404(api.getOrders),
+  });
+}
+
+// The computed plan read (never the persisted lifecycle): the Cockpit reads the funding arithmetic
+// and the outside-strategy holdings the persisted list does not carry. The funding phase is the
+// shallowest depth that carries both, so the Cockpit does not pay for the pro-rata/attribution pass.
+export function useOrderPlan() {
+  return useQuery({
+    queryKey: ["month", "current", "orders", "funding"],
+    queryFn: nullOn404(() => api.getOrderPlan("FUNDING")),
+  });
+}
+
+// One editions read per strategy, sharing the `useEditions` cache key, so both the catalog's status
+// chips and the Cockpit's coverage count ask in parallel rather than opening each detail.
+function useEditionsFor(strategies: Strategy[], enabled: boolean) {
+  return useQueries({
+    queries: strategies.map((strategy) => ({
+      queryKey: ["strategies", strategy.id, "editions"],
+      queryFn: (): Promise<Edition[]> => api.getEditions(strategy.id),
+      enabled,
+    })),
+  });
+}
+
+// The catalog's chips always fetch: a chip shows the latest edition even when no month is open.
+export function useStrategyEditions(strategies: Strategy[]) {
+  return useEditionsFor(strategies, true);
+}
+
+// The Cockpit's coverage count only matters for an open month, so it skips the reads otherwise.
+export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
+  return useEditionsFor(strategies, period !== undefined);
+}
+
+export function useRefreshOrders() {
+  const queryClient = useQueryClient();
+  return useMutation<OrderList, Error, void>({
+    mutationFn: () => api.refreshOrders(),
+    onSuccess: (list) => {
+      queryClient.setQueryData(["orders"], list);
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+    },
+  });
+}
+
+// One decision hook for both buttons; the inbox row is replaced by the server's decided proposal.
+export function useDecideTransfer() {
+  const queryClient = useQueryClient();
+  return useMutation<TransferProposal, Error, { id: number; decision: "approve" | "reject" }>({
+    mutationFn: ({ id, decision }) =>
+      decision === "approve" ? api.approveTransfer(id) : api.rejectTransfer(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
+export function useOverrideOrderMatch() {
+  const queryClient = useQueryClient();
+  return useMutation<SuggestedOrder, Error, { orderId: number; tradeId: number | null }>({
+    mutationFn: ({ orderId, tradeId }) => api.overrideOrderMatch(orderId, { trade_id: tradeId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
   });
 }
 
@@ -187,9 +465,29 @@ export function useStrategies() {
 
 export function useCreateStrategy() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<Strategy, Error, StrategyCreation>({
     mutationFn: (creation: StrategyCreation) => api.createStrategy(creation),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+    // The created Strategy enters the cached catalog immediately, so the page can select it
+    // without waiting for the refetch; the invalidation still reconciles with the server's order.
+    onSuccess: (created) => {
+      queryClient.setQueryData<Strategy[]>(["strategies"], (current) =>
+        current === undefined
+          ? [created]
+          : [...current.filter((item) => item.id !== created.id), created],
+      );
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+    },
+  });
+}
+
+export function useStrategyHoldings(strategyId: number | null) {
+  return useQuery({
+    queryKey: ["strategies", strategyId, "holdings"],
+    queryFn: () => {
+      if (strategyId === null) throw new Error("strategyId is required to fetch holdings");
+      return api.getStrategyHoldings(strategyId);
+    },
+    enabled: strategyId !== null,
   });
 }
 
@@ -246,5 +544,28 @@ export function useImportIncome() {
   return useMutation({
     mutationFn: (file: File) => api.importIncome(file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["income"] }),
+  });
+}
+
+export function useCorporateActions() {
+  return useQuery({
+    queryKey: ["corporate-actions"],
+    queryFn: api.getCorporateActions,
+  });
+}
+
+// One Movimentação upload touches four destinations: trades, income, the corporate-action log and
+// the positions their replay feeds.
+export function useImportMovements() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.importMovements(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["corporate-actions"] });
+      queryClient.invalidateQueries({ queryKey: ["income"] });
+      queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["imports"] });
+    },
   });
 }

@@ -3,6 +3,8 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.import.strategy.StrategyReportParserResolver
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.strategy.MissingStrategyKindException
+import dev.agner.portfolio.usecase.strategy.StrategyHoldingsService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.DiffChange
 import dev.agner.portfolio.usecase.strategy.model.DiffWeight
@@ -15,6 +17,9 @@ import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
+import dev.agner.portfolio.usecase.strategy.model.StrategyHolding
+import dev.agner.portfolio.usecase.strategy.model.StrategyHoldings
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.forms.MultiPartFormDataContent
@@ -38,6 +43,8 @@ import java.math.BigDecimal
 
 class StrategyControllerTest : DescribeSpec({
 
+    val holdingsService = mockk<StrategyHoldingsService>(relaxed = true)
+
     describe("listing strategies") {
 
         it("serves the catalog with snake_case fields") {
@@ -45,7 +52,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.fetchAll() } returns listOf(strategy)
 
             testApplication {
-                application { installRoutes(StrategyController(service, resolver())) }
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
 
                 val response = client.get("/strategies")
 
@@ -53,31 +60,54 @@ class StrategyControllerTest : DescribeSpec({
                 val body = ObjectMapper().readTree(response.bodyAsText()).get(0)
                 body.get("name").asText() shouldBe "Top Dividendos"
                 body.get("asset_class").asText() shouldBe "ACOES"
-                body.get("weight").decimalValue().compareTo(BigDecimal("34.00")) shouldBe 0
+                body.get("kind").asText() shouldBe "REPORT_DRIVEN"
+                body.has("weight") shouldBe false
             }
         }
     }
 
     describe("creating a strategy") {
 
-        it("creates from the name, class and weight") {
+        it("creates from the name, class and kind, ignoring a stale weight") {
             val service = mockk<StrategyService>()
             coEvery { service.create(any()) } returns strategy
 
             testApplication {
-                application { installRoutes(StrategyController(service, resolver())) }
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
 
                 val response = client.post("/strategies") {
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":"Top Dividendos","asset_class":"ACOES","weight":34.00}""")
+                    setBody(
+                        """{"name":"Top Dividendos","asset_class":"ACOES","kind":"REPORT_DRIVEN","weight":34.00}""",
+                    )
                 }
 
                 response.status shouldBe HttpStatusCode.Created
                 coVerify(exactly = 1) {
                     service.create(
-                        match { it == StrategyCreation("Top Dividendos", AssetClass.ACOES, BigDecimal("34.00")) },
+                        match {
+                            it == StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN)
+                        },
                     )
                 }
+            }
+        }
+
+        it("rejects a creation without a kind through the canonical error body") {
+            val service = mockk<StrategyService>()
+            coEvery { service.create(any()) } throws MissingStrategyKindException()
+
+            testApplication {
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
+
+                val response = client.post("/strategies") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"name":"Top Dividendos","asset_class":"ACOES"}""")
+                }
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "missing-strategy-kind"
             }
         }
     }
@@ -89,7 +119,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.fetchEditions(1) } returns listOf(edition)
 
             testApplication {
-                application { installRoutes(StrategyController(service, resolver())) }
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
 
                 val response = client.get("/strategies/1/editions")
 
@@ -110,9 +140,43 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.fetchEditions(404) } returns null
 
             testApplication {
-                application { installRoutes(StrategyController(service, resolver())) }
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
 
                 client.get("/strategies/404/editions").status shouldBe HttpStatusCode.NotFound
+            }
+        }
+    }
+
+    describe("reading a strategy's holdings") {
+
+        it("serves the attributed slices with their value and share") {
+            val service = mockk<StrategyService>()
+            coEvery { holdingsService.fetch(9) } returns holdings
+
+            testApplication {
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
+
+                val response = client.get("/strategies/9/holdings")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("strategy_name").asText() shouldBe "Legado Ações"
+                body.get("total_value").decimalValue().compareTo(BigDecimal("200.00")) shouldBe 0
+                body.get("holdings").get(0).get("ticker").asText() shouldBe "ITUB4"
+                body.get("holdings").get(0).get("quantity").decimalValue().compareTo(BigDecimal("20")) shouldBe 0
+                body.get("holdings").get(0).get("value").decimalValue().compareTo(BigDecimal("100.00")) shouldBe 0
+                body.get("holdings").get(0).get("share").decimalValue().compareTo(BigDecimal("50.00")) shouldBe 0
+            }
+        }
+
+        it("404s when the strategy does not exist") {
+            val service = mockk<StrategyService>()
+            coEvery { holdingsService.fetch(404) } returns null
+
+            testApplication {
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
+
+                client.get("/strategies/404/holdings").status shouldBe HttpStatusCode.NotFound
             }
         }
     }
@@ -126,7 +190,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.importEdition(1, parsedReport) } returns EditionImport("XpEquityCarteira", edition)
 
             testApplication {
-                application { installRoutes(StrategyController(service, parser)) }
+                application { installRoutes(StrategyController(service, parser, holdingsService)) }
 
                 val response = client.post("/strategies/1/editions/import") {
                     setBody(
@@ -159,7 +223,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.importEdition(404, parsedReport) } returns null
 
             testApplication {
-                application { installRoutes(StrategyController(service, parser)) }
+                application { installRoutes(StrategyController(service, parser, holdingsService)) }
 
                 val response = client.post("/strategies/404/editions/import") {
                     setBody(
@@ -189,7 +253,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.activateEdition(1, YearMonth.parse("2026-09"), any()) } returns edition
 
             testApplication {
-                application { installRoutes(StrategyController(service, resolver())) }
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
 
                 val response = client.post("/strategies/1/editions") {
                     contentType(ContentType.Application.Json)
@@ -217,7 +281,7 @@ class StrategyControllerTest : DescribeSpec({
             coEvery { service.activateEdition(1, any(), any()) } returns null
 
             testApplication {
-                application { installRoutes(StrategyController(service, resolver())) }
+                application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
 
                 val response = client.post("/strategies/1/editions") {
                     contentType(ContentType.Application.Json)
@@ -232,7 +296,7 @@ class StrategyControllerTest : DescribeSpec({
 
 private fun resolver() = StrategyReportParserResolver(emptyList())
 
-private val strategy = Strategy(1, "Top Dividendos", AssetClass.ACOES, BigDecimal("34.00"))
+private val strategy = Strategy(1, "Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN)
 
 private val entry = EditionEntry(
     ticker = "PETR4",
@@ -260,6 +324,26 @@ private val edition = EditionDetail(
         ),
     ),
     entries = listOf(entry),
+)
+
+private val holdings = StrategyHoldings(
+    strategyId = 9,
+    strategyName = "Legado Ações",
+    totalValue = BigDecimal("200.00"),
+    holdings = listOf(
+        StrategyHolding(
+            ticker = "ITUB4",
+            quantity = BigDecimal("20"),
+            value = BigDecimal("100.00"),
+            share = BigDecimal("50.00"),
+        ),
+        StrategyHolding(
+            ticker = "VALE3",
+            quantity = BigDecimal("10"),
+            value = BigDecimal("100.00"),
+            share = BigDecimal("50.00"),
+        ),
+    ),
 )
 
 private val parsedReport = ParsedStrategyReport(

@@ -1,8 +1,12 @@
 package dev.agner.portfolio.usecase.listedasset
 
+import dev.agner.portfolio.usecase.corporateAction
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
+import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import io.kotest.core.spec.style.StringSpec
@@ -18,12 +22,14 @@ import java.math.BigDecimal
 class PositionServiceTest : StringSpec({
     val positions = mockk<IPositionRepository>(relaxed = true)
     val trades = mockk<ITradeRepository>(relaxed = true)
-    val service = PositionService(positions, trades)
+    val corporateActions = mockk<ICorporateActionRepository>(relaxed = true)
+    val service = PositionService(positions, trades, corporateActions, mockk<IGapRepository>(relaxed = true))
 
     beforeTest { clearAllMocks() }
 
     "reproject replays the ticker's ledger and persists the result" {
         coEvery { trades.fetchAllBy("PETR4") } returns listOf(buy(quantity = "100", unitPrice = "10"))
+        coEvery { corporateActions.fetchByTicker("PETR4") } returns emptyList()
         val saved = slot<Position>()
         coEvery { positions.save(capture(saved)) } returns Unit
 
@@ -36,6 +42,7 @@ class PositionServiceTest : StringSpec({
     }
 
     "reprojectAll groups the whole ledger by ticker and saves one position each" {
+        coEvery { corporateActions.fetchApplied() } returns emptyList()
         coEvery { trades.fetchAll() } returns listOf(
             buy(id = 1, ticker = "PETR4", quantity = "100", unitPrice = "10"),
             buy(id = 2, ticker = "VALE3", quantity = "50", unitPrice = "20"),
@@ -47,6 +54,19 @@ class PositionServiceTest : StringSpec({
         reprojected.map { it.ticker } shouldBe listOf("PETR4", "VALE3")
         reprojected.single { it.ticker == "PETR4" }.averagePrice.compareTo(BigDecimal("15")) shouldBe 0
         coVerify(exactly = 2) { positions.save(any()) }
+    }
+
+    "reproject folds in the ticker's applied corporate actions" {
+        coEvery { trades.fetchAllBy("PETR4") } returns listOf(buy(quantity = "100", unitPrice = "10"))
+        coEvery { corporateActions.fetchByTicker("PETR4") } returns listOf(split())
+        val saved = slot<Position>()
+        coEvery { positions.save(capture(saved)) } returns Unit
+
+        val position = service.reproject("PETR4")
+
+        position.quantity.compareTo(BigDecimal("200")) shouldBe 0
+        position.averagePrice.compareTo(BigDecimal("5")) shouldBe 0
+        saved.captured shouldBe position
     }
 
     "fetchBy looks the ticker up under its normalized key" {
@@ -75,6 +95,8 @@ class PositionServiceTest : StringSpec({
 })
 
 private val storedPosition = Position("PETR4", BigDecimal("100"), BigDecimal("10"))
+
+private fun split() = corporateAction(CorporateActionKind.SPLIT, ratio = "2")
 
 private fun buy(
     id: Int = 1,

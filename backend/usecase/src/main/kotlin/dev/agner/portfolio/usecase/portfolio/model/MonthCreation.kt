@@ -8,4 +8,5 @@ data class MonthCreation(
     val period: YearMonth,
     val capital: BigDecimal,
     val floor: BigDecimal,
+    val aportes: BigDecimal = BigDecimal.ZERO,
 )

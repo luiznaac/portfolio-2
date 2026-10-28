@@ -1,0 +1,559 @@
+// @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "../api/client.ts";
+import type {
+  Allocation as AllocationModel,
+  Attribution,
+  Edition,
+  LegacyAttributionPreview,
+  LegacyAttributionResult,
+  OrderPlan,
+  Strategy,
+} from "../api/types.ts";
+import { Allocation } from "./Allocation.tsx";
+
+const mock = vi.hoisted(() => ({
+  allocation: null as AllocationModel | null,
+  strategies: [] as Strategy[],
+  editions: {} as Record<number, Edition[]>,
+  attribution: null as Attribution | null,
+  plan: null as OrderPlan | null,
+  settled: null as AllocationModel | null,
+  preview: null as LegacyAttributionPreview | null,
+  result: null as LegacyAttributionResult | null,
+  applied: 0,
+  classified: [] as Array<[string, string]>,
+  refreshed: 0,
+}));
+
+vi.mock("../api/client.ts", () => ({
+  ApiError: class ApiError extends Error {},
+  api: {
+    getCurrentAllocation: () => Promise.resolve(mock.allocation),
+    getStrategies: () => Promise.resolve(mock.strategies),
+    getEditions: (strategyId: number) => Promise.resolve(mock.editions[strategyId] ?? []),
+    getAttribution: () => Promise.resolve(mock.attribution),
+    getOrderPlan: () => Promise.resolve(mock.plan),
+    transferAttribution: vi.fn(() => Promise.resolve(mock.attribution)),
+    getLegacyAttributionPreview: () => Promise.resolve(mock.preview),
+    applyLegacyAttribution: () => {
+      mock.applied += 1;
+      if (mock.settled) mock.allocation = mock.settled;
+      return Promise.resolve(mock.result);
+    },
+    classifyTicker: (ticker: string, assetClass: string) => {
+      mock.classified.push([ticker, assetClass]);
+      return Promise.resolve({ ticker });
+    },
+    refreshCatalog: () => {
+      mock.refreshed += 1;
+      return Promise.resolve({ catalog: 1, quotes: 1 });
+    },
+  },
+}));
+
+function renderAllocation() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <Allocation />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function rowFor(label: string): HTMLElement {
+  const cell = screen.getByText(label);
+  const row = cell.closest("tr");
+  if (!row) throw new Error(`no row for ${label}`);
+  return row;
+}
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  mock.allocation = null;
+  mock.strategies = [];
+  mock.editions = {};
+  mock.attribution = null;
+  mock.plan = null;
+  mock.settled = null;
+  mock.preview = null;
+  mock.result = null;
+  mock.applied = 0;
+  mock.classified = [];
+  mock.refreshed = 0;
+});
+
+describe("the Alocação tree", () => {
+  it("renders the bucket and the outside row under their class, and the unclassified line at the root", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Ações");
+    expect(screen.queryByText("Legado Ações")).toBeNull();
+    expect(screen.getByText("Sem classe")).toBeDefined();
+
+    await user.click(within(rowFor("Ações")).getByRole("button"));
+
+    expect(screen.getByText("Top Dividendos")).toBeDefined();
+    expect(screen.getByText("Legado Ações")).toBeDefined();
+    expect(screen.getByText("Fora da estratégia")).toBeDefined();
+  });
+
+  it("renders an em dash, not a zero, for the bucket's target, ideal and deltas", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Ações");
+    await user.click(within(rowFor("Ações")).getByRole("button"));
+    const manualRow = rowFor("Legado Ações");
+
+    expect(within(manualRow).getAllByText("—")).toHaveLength(4);
+    expect(within(manualRow).queryByText("R$ 0,00")).toBeNull();
+  });
+
+  it("expands the bucket and the unclassified line to their tickers", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Ações");
+    await user.click(within(rowFor("Ações")).getByRole("button"));
+    await user.click(within(rowFor("Legado Ações")).getByRole("button"));
+    expect(within(rowFor("Legado Ações")).getByText("▾")).toBeDefined();
+    expect(screen.getByText("ITUB4")).toBeDefined();
+
+    await user.click(within(rowFor("Sem classe")).getByRole("button"));
+    expect(screen.getByText("ZZZZ9")).toBeDefined();
+  });
+
+  it("renders an Actual-only tree and an empty Capital panel without an open month", async () => {
+    mock.allocation = monthFreeAllocation;
+    renderAllocation();
+
+    await screen.findByText("Ações");
+    expect(screen.queryByText(/Nenhum mês aberto/)).toBeNull();
+
+    const capitalRow = rowFor("Capital");
+    expect(within(capitalRow).getAllByText("—")).toHaveLength(4);
+    expect(within(capitalRow).getByText("R$ 3.600,00")).toBeDefined();
+
+    expect(screen.getByText("Capital do mês")).toBeDefined();
+    expect(screen.queryByText("Reserva (piso)")).toBeNull();
+  });
+
+  it("drops the stale strategy-distribution copy from the reconciliation bar", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+
+    expect(await screen.findByText(/fora de qualquer estratégia/)).toBeDefined();
+    expect(screen.queryByText(/distribuição por estratégia/)).toBeNull();
+  });
+
+  it("shows the bulk action above the tree and previews the adds and skips before anything changes", async () => {
+    mock.allocation = allocation;
+    mock.preview = preview;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    const open = await screen.findByRole("button", {
+      name: /Atribuir posições fora da estratégia ao legado/,
+    });
+    await user.click(open);
+
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    expect(within(dialog).getByText("ITUB4")).toBeDefined();
+    expect(within(dialog).getByText("Já tem atribuição")).toBeDefined();
+    expect(within(dialog).getByRole("link", { name: /Classificar/ })).toBeDefined();
+    expect(mock.applied).toBe(0);
+  });
+
+  it("applies the bulk attribution and reports the per-ticker result", async () => {
+    mock.allocation = allocation;
+    mock.preview = preview;
+    mock.result = result;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    await user.click(within(dialog).getByRole("button", { name: /Confirmar/ }));
+
+    expect(mock.applied).toBe(1);
+    expect(await screen.findByText(/1 posição atribuída ao legado/)).toBeDefined();
+  });
+
+  it("hides the bulk action when no outside custody remains", async () => {
+    mock.allocation = {
+      ...allocation,
+      classes: allocation.classes.map((cls) => ({
+        ...cls,
+        outside: { actual: 0, tickers: [] },
+      })),
+    };
+    renderAllocation();
+
+    await screen.findByText("Ações");
+    expect(
+      screen.queryByRole("button", { name: /Atribuir posições fora da estratégia ao legado/ }),
+    ).toBeNull();
+  });
+
+  it("keeps the apply result visible when the refetch clears the banner", async () => {
+    mock.allocation = allocation;
+    mock.settled = settledAllocation;
+    mock.preview = preview;
+    mock.result = result;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    await user.click(within(dialog).getByRole("button", { name: /Confirmar/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Atribuir posições fora da estratégia ao legado/ }),
+      ).toBeNull(),
+    );
+    expect(screen.getByRole("dialog", { name: /Atribuir ao legado/ })).toBeDefined();
+    expect(screen.getByText(/1 posição atribuída ao legado/)).toBeDefined();
+  });
+
+  it("classifies an unclassified ticker from its leaf", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Sem classe");
+    await user.click(within(rowFor("Sem classe")).getByRole("button"));
+    await user.click(screen.getByRole("button", { name: "Classificar" }));
+    await user.click(screen.getByRole("button", { name: "FIIs" }));
+
+    expect(mock.classified).toEqual([["ZZZZ9", "FIIS"]]);
+  });
+
+  it("offers the catalog refresh as the bulk alternative in the classify dialog", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Sem classe");
+    await user.click(within(rowFor("Sem classe")).getByRole("button"));
+    await user.click(screen.getByRole("button", { name: "Classificar" }));
+    await user.click(screen.getByRole("button", { name: "Atualizar catálogo" }));
+
+    expect(mock.refreshed).toBe(1);
+    expect(mock.classified).toEqual([]);
+  });
+});
+
+describe("the manual transfer from the bucket", () => {
+  it("offers only report-driven Strategies whose active edition weighs the ticker, with the shortfall as default", async () => {
+    mock.allocation = allocation;
+    mock.strategies = transferStrategies;
+    mock.editions = transferEditions;
+    mock.attribution = transferAttribution;
+    mock.plan = orderPlan({ targetQuantity: 25, attributedQuantity: 10 });
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await openTransferModal(user);
+
+    const dialog = screen.getByRole("dialog", { name: "Transferir do legado" });
+    const destination = within(dialog).getByLabelText("Estratégia de destino");
+    const options = within(destination).getAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
+      "Top Dividendos · falta 15 cotas",
+    ]);
+    expect((within(dialog).getByLabelText("Quantidade") as HTMLInputElement).value).toBe("15");
+    expect(within(dialog).getByText(/40 cotas no legado/)).toBeDefined();
+  });
+
+  it("applies the transfer from the manual bucket to the chosen report Strategy", async () => {
+    mock.allocation = allocation;
+    mock.strategies = transferStrategies;
+    mock.editions = transferEditions;
+    mock.attribution = transferAttribution;
+    mock.plan = orderPlan({ targetQuantity: 25, attributedQuantity: 10 });
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await openTransferModal(user);
+    await user.click(screen.getByRole("button", { name: "Transferir 15 cotas" }));
+
+    expect(vi.mocked(api.transferAttribution)).toHaveBeenCalledWith("ITUB4", {
+      from_strategy_id: 9002,
+      to_strategy_id: 9001,
+      quantity: 15,
+    });
+  });
+
+  it("tells the user to import an edition when no report Strategy weighs the ticker", async () => {
+    mock.allocation = allocation;
+    mock.strategies = transferStrategies;
+    mock.editions = {};
+    mock.attribution = transferAttribution;
+    mock.plan = null;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await openTransferModal(user);
+
+    expect(screen.getByText(/Importe uma edição/)).toBeDefined();
+  });
+});
+
+async function openTransferModal(user: ReturnType<typeof userEvent.setup>) {
+  await screen.findByText("Ações");
+  await user.click(within(rowFor("Ações")).getByRole("button"));
+  await user.click(within(rowFor("Legado Ações")).getByRole("button"));
+  await user.click(screen.getByRole("button", { name: "Transferir ITUB4" }));
+  await screen.findByRole("dialog", { name: "Transferir do legado" });
+}
+
+function strategy(
+  id: number,
+  name: string,
+  assetClass: Strategy["asset_class"],
+  kind: Strategy["kind"],
+): Strategy {
+  return { id, name, asset_class: assetClass, kind };
+}
+
+function edition(
+  strategyId: number,
+  status: Edition["status"],
+  entries: Edition["entries"],
+): Edition {
+  return {
+    id: strategyId,
+    strategy_id: strategyId,
+    reference_month: "2026-09",
+    status,
+    entries,
+  };
+}
+
+function orderPlan({
+  targetQuantity,
+  attributedQuantity,
+}: {
+  targetQuantity: number;
+  attributedQuantity: number;
+}): OrderPlan {
+  return {
+    period: "2026-09",
+    phase: "FUNDING",
+    capital: 100000,
+    floor: 20000,
+    investable_capital: 80000,
+    classes: [
+      {
+        asset_class: "ACOES",
+        target: 50,
+        ideal: 50000,
+        strategies: [
+          {
+            strategy: "Top Dividendos",
+            target: 100,
+            ideal: 50000,
+            tickers: [
+              {
+                ticker: "ITUB4",
+                strategy: "Top Dividendos",
+                target: 100,
+                ideal: 50000,
+                target_quantity: targetQuantity,
+                neutro: false,
+                attributed_quantity: attributedQuantity,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    candidates: [],
+    outside_strategy: [],
+    unclassified: [],
+    attribution: [],
+    transfers: [],
+  };
+}
+
+const transferStrategies: Strategy[] = [
+  strategy(9001, "Top Dividendos", "ACOES", "REPORT_DRIVEN"),
+  strategy(9002, "Legado Ações", "ACOES", "MANUAL"),
+  strategy(9003, "Sem edição", "ACOES", "REPORT_DRIVEN"),
+  strategy(9004, "Top FIIs", "FIIS", "REPORT_DRIVEN"),
+];
+
+const transferEditions: Record<number, Edition[]> = {
+  9001: [edition(9001, "ACTIVE", [{ ticker: "ITUB4", weight: 20, do_not_trade: false }])],
+  9004: [edition(9004, "ACTIVE", [{ ticker: "ITUB4", weight: 20, do_not_trade: false }])],
+};
+
+const transferAttribution: Attribution = {
+  ticker: "ITUB4",
+  custody_quantity: 100,
+  attributed_quantity: 100,
+  unattributed_quantity: 0,
+  slices: [
+    { strategy_id: 9001, strategy_name: "Top Dividendos", quantity: 60 },
+    { strategy_id: 9002, strategy_name: "Legado Ações", quantity: 40 },
+  ],
+};
+
+const allocation: AllocationModel = {
+  period: "2026-09",
+  capital: 100000,
+  floor: 20000,
+  ideal: 100000,
+  actual: 3600,
+  deficit: 96400,
+  drift: -96.4,
+  unattributed: 500,
+  unclassified: {
+    actual: 100,
+    tickers: [{ ticker: "ZZZZ9", actual: 100 }],
+  },
+  classes: [
+    {
+      asset_class: "ACOES",
+      target: 50,
+      ideal: 50000,
+      actual: 1500,
+      deficit: 48500,
+      drift: -48.5,
+      unattributed: 400,
+      strategies: [
+        {
+          strategy: "Top Dividendos",
+          target: 100,
+          ideal: 50000,
+          actual: 600,
+          deficit: 49400,
+          drift: -49.4,
+          tickers: [
+            { ticker: "VALE3", target: 12, ideal: 6000, actual: 600, deficit: 5400, drift: -5.4 },
+          ],
+        },
+      ],
+      manual: {
+        strategy: "Legado Ações",
+        actual: 500,
+        tickers: [
+          { ticker: "ITUB4", actual: 300 },
+          { ticker: "VALE3", actual: 200 },
+        ],
+      },
+      outside: {
+        actual: 400,
+        tickers: [
+          { ticker: "ITUB4", actual: 200 },
+          { ticker: "VALE3", actual: 200 },
+        ],
+      },
+      sub_classes: [],
+    },
+    {
+      asset_class: "FIIS",
+      ideal: 0,
+      actual: 0,
+      deficit: 0,
+      drift: 0,
+      unattributed: 0,
+      strategies: [],
+      outside: { actual: 0, tickers: [] },
+      sub_classes: [],
+    },
+    {
+      asset_class: "RENDA_FIXA",
+      target: 50,
+      ideal: 50000,
+      actual: 2000,
+      deficit: 48000,
+      drift: -48,
+      unattributed: 0,
+      strategies: [],
+      outside: { actual: 0, tickers: [] },
+      sub_classes: [
+        {
+          sub_class: "FLOATING_RATE",
+          target: 55,
+          ideal: 27500,
+          actual: 2000,
+          deficit: 25500,
+          drift: -25.5,
+        },
+      ],
+    },
+  ],
+};
+
+// The month-free read: no period and no chain, so the Capital root and every class blank their
+// planning columns while the custody-driven Actuals and the bucket/outside rows stay live.
+const monthFreeAllocation: AllocationModel = {
+  ...allocation,
+  period: undefined,
+  capital: 0,
+  floor: 0,
+  ideal: 0,
+  deficit: -3600,
+  drift: 0,
+  classes: allocation.classes.map((cls) => ({ ...cls, target: undefined })),
+};
+
+const settledAllocation: AllocationModel = {
+  ...allocation,
+  classes: allocation.classes.map((cls) => ({
+    ...cls,
+    outside: { actual: 0, tickers: [] },
+  })),
+};
+
+const preview: LegacyAttributionPreview = {
+  groups: [
+    {
+      asset_class: "ACOES",
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+      adds: [{ ticker: "ITUB4", quantity: 50, value: 500 }],
+    },
+  ],
+  skips: [
+    { ticker: "VALE3", reason: "HAS_ATTRIBUTION", asset_class: "ACOES" },
+    { ticker: "ZZZZ9", reason: "UNCLASSIFIED", asset_class: null },
+  ],
+};
+
+const result: LegacyAttributionResult = {
+  attributed: [
+    {
+      ticker: "ITUB4",
+      quantity: 50,
+      value: 500,
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+    },
+  ],
+  skipped: [{ ticker: "VALE3", reason: "HAS_ATTRIBUTION", asset_class: "ACOES" }],
+};

@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
+import java.math.BigDecimal
 import java.time.Clock
 
 @Component
@@ -33,6 +34,7 @@ class TradeRepository(
             sourceType = source
             confirmedByB3 = false
             this.ordinal = ordinal
+            absorbedQuantity = BigDecimal.ZERO
             createdAt = LocalDateTime.now(clock)
         }.toModel()
     }
@@ -41,6 +43,10 @@ class TradeRepository(
         TradeEntity.all()
             .orderBy(TradeTable.id to SortOrder.ASC)
             .map { it.toModel() }
+    }
+
+    override suspend fun fetchById(id: Int): Trade? = transaction {
+        TradeEntity.findById(id)?.toModel()
     }
 
     override suspend fun fetchAllBy(ticker: String): List<Trade> = transaction {
@@ -70,4 +76,26 @@ class TradeRepository(
             ?.apply { confirmedByB3 = true }
             ?.toModel()
     }
+
+    override suspend fun fetchAllBySource(source: TradeSource): List<Trade> = transaction {
+        TradeEntity.find { TradeTable.sourceType eq source }
+            .orderBy(TradeTable.date to SortOrder.ASC)
+            .map { it.toModel() }
+    }
+
+    override suspend fun delete(id: Int): Boolean = transaction {
+        val entity = TradeEntity.findById(id) ?: return@transaction false
+        entity.delete()
+        true
+    }
+
+    override suspend fun absorb(id: Int, remainingQuantity: BigDecimal, absorbedQuantity: BigDecimal): Trade? =
+        transaction {
+            TradeEntity.findById(id)
+                ?.apply {
+                    quantity = signedQuantity(toModel().side, remainingQuantity)
+                    this.absorbedQuantity = absorbedQuantity
+                }
+                ?.toModel()
+        }
 }

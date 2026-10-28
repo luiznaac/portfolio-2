@@ -18,8 +18,9 @@ export interface MonthFormState {
   floor: string;
 }
 
-export function emptyMonthForm(): MonthFormState {
-  return { period: "", capital: "", floor: "" };
+// The opener seeds the period with the given one (the current month) so both selects start set.
+export function emptyMonthForm(period = ""): MonthFormState {
+  return { period, capital: "", floor: "" };
 }
 
 // Seeds the edit form from the open month; the period is editable only at open time but kept so the
@@ -29,7 +30,7 @@ export function monthFormFrom(month: Month): MonthFormState {
 }
 
 // YYYY-MM with a real month — the ISO form the backend's YearMonth parses.
-const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
+const PERIOD = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 // An amount field is valid when blank-as-zero or a finite non-negative number.
 function parseAmount(value: string): number | null {
@@ -85,6 +86,32 @@ export const MONTHS = [
   "dez",
 ];
 
+// The opener's period is two pickable selects, never a native `<input type="month">` (Firefox and
+// Safari render that as a plain text box with no picker). A blank period has no parts.
+export const MONTH_OPTIONS = MONTHS.map((label, index) => ({
+  value: String(index + 1).padStart(2, "0"),
+  label,
+}));
+
+export function periodYear(period: string): string {
+  return PERIOD.exec(period)?.[1] ?? "";
+}
+
+export function periodMonth(period: string): string {
+  return PERIOD.exec(period)?.[2] ?? "";
+}
+
+// The years around today, so the default month is always pickable; a selected year outside that
+// window is kept rather than dropped from the select.
+export function periodYearOptions(period: string, today: string, span = 2): string[] {
+  const anchor = Number(today.slice(0, 4));
+  const selected = periodYear(period);
+  const years = new Set<string>();
+  for (let offset = -span; offset <= span; offset += 1) years.add(String(anchor + offset));
+  if (selected.length > 0) years.add(selected);
+  return [...years].sort();
+}
+
 export function monthPeriodLabel(period: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(period);
   if (!match) return period;
@@ -96,6 +123,11 @@ export function monthPeriodLabel(period: string): string {
 
 export function monthStatusLabel(status: MonthStatus): string {
   return status === "OPEN" ? "Aberto" : "Fechado";
+}
+
+// The backend lists closed months newest first; the newest one is what the history screens open on.
+export function defaultClosedMonthId(months: Month[]): number | null {
+  return months.length > 0 ? months[0].id : null;
 }
 
 const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
@@ -232,6 +264,57 @@ export function toTargets(form: TargetsFormState): Targets {
 function hasPercentage(row: { percentage: string }): boolean {
   const trimmed = row.percentage.trim();
   return trimmed.length > 0 && Number.isFinite(Number(trimmed));
+}
+
+// Strategy Targets are shares of their class, so the whole class is the ceiling. The server rejects
+// a class above it; the form mirrors the same rule.
+export const STRATEGY_TARGET_LIMIT = 100;
+
+// The per-class sum of the Strategy Targets the form would submit. Nameless and blank rows are
+// ignored exactly as toTargets drops them, so the sum validated is the sum the server receives.
+export function strategyTargetSums(form: TargetsFormState): Partial<Record<AssetClass, number>> {
+  const sums: Partial<Record<AssetClass, number>> = {};
+  for (const row of form.strategies) {
+    if (row.strategy.trim().length === 0 || !hasPercentage(row)) continue;
+    sums[row.assetClass] = (sums[row.assetClass] ?? 0) + Number(row.percentage);
+  }
+  return sums;
+}
+
+// Binary floating-point can put a hand-typed 100 a hair above it (33,33 + 33,33 + 33,34); the
+// server sums exact decimals, so the form tolerates that noise but not a real over-allocation.
+const SHARE_EPSILON = 1e-9;
+
+// The classes whose report shares over-plan the class — the rule the targets write path enforces,
+// surfaced inline so the form never sends a chain the server will reject.
+export function overplannedStrategyClasses(form: TargetsFormState): AssetClass[] {
+  const sums = strategyTargetSums(form);
+  return ASSET_CLASSES.filter(
+    (assetClass) => (sums[assetClass] ?? 0) > STRATEGY_TARGET_LIMIT + SHARE_EPSILON,
+  );
+}
+
+export interface RemainingLegacyShare {
+  assetClass: AssetClass;
+  percentage: number;
+}
+
+// The read-only "restante" share of a class that has a Manual Strategy (bucket): the part no report
+// Strategy targets. It is derived, never stored — the bucket carries no Target row. A class without a
+// bucket has no line, and an over-planned class clamps to zero while the form shows the error.
+// Renda Fixa has no Strategy rung at all (the server refuses a Strategy in that class), so it can
+// never carry a bucket.
+export function remainingLegacyShares(
+  form: TargetsFormState,
+  manualClasses: ReadonlySet<AssetClass>,
+): RemainingLegacyShare[] {
+  const sums = strategyTargetSums(form);
+  return ASSET_CLASSES.filter(
+    (assetClass) => assetClass !== "RENDA_FIXA" && manualClasses.has(assetClass),
+  ).map((assetClass) => ({
+    assetClass,
+    percentage: Math.max(0, STRATEGY_TARGET_LIMIT - (sums[assetClass] ?? 0)),
+  }));
 }
 
 // Row add/remove are the entry form's state transitions, kept pure so the page stays a thin

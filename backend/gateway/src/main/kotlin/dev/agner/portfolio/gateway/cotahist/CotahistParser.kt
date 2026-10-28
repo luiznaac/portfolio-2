@@ -29,6 +29,7 @@ class CotahistParser {
                 isin = line.substring(CODISI).trim().ifBlank { null },
                 date = cotahistDateFormat.parse(line.substring(DATPRE)),
                 closePrice = close.movePointLeft(2),
+                specification = line.substring(ESPECI).trim().ifBlank { null },
             )
         }
     }
@@ -47,6 +48,7 @@ class CotahistParser {
         val CODNEG = 12 until 24
         val TPMERC = 24 until 27
         val NOMRES = 27 until 39
+        val ESPECI = 39 until 49
         val PREULT = 108 until 121
         val CODISI = 224 until 236
     }

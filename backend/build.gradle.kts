@@ -130,3 +130,16 @@ tasks.register("testCoverageReport") {
 	dependsOn(subprojects.map { it.tasks.named("test") })
 	finalizedBy("codeCoverageReport")
 }
+
+// The Docker-free verification lane: the pre-commit hook and `npm run be:unit` both run this task,
+// so the module list lives here once instead of being repeated in the hook and the package scripts.
+// `test` still covers every module, :integrationTest included, for CI where Docker is present.
+tasks.register("unitTest") {
+	group = "verification"
+	description = "Runs the unit test suites of every module except :integrationTest."
+	dependsOn(
+		subprojects
+			.filterNot { it.name == "integrationTest" }
+			.map { it.tasks.named("test") },
+	)
+}

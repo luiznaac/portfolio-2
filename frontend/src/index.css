@@ -33,6 +33,13 @@
   --color-violet: #a78bfa;
   --color-violet-bg: #a78bfa1f;
 
+  /* Benchmark series — the reference's data colours. The portfolio line uses the ink chrome so the
+     four benchmark lines read as the comparison, never as a sign. */
+  --color-blend: #f59e0b;
+  --color-cdi: #38bdf8;
+  --color-ipca: #f472b6;
+  --color-ibov: #34d399;
+
   /* Radii scale, matching the reference's primitives: badge → chip/input → button → panel →
      overlay. */
   --radius-xs: 4px;

@@ -3,16 +3,19 @@ import {
   useCurrentMonth,
   useOpenMonth,
   useReplaceTargets,
+  useStrategies,
   useUpdateCurrentMonth,
 } from "../api/queries.ts";
 import type { AssetClass, CurrentMonth, Month as MonthModel, Targets } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { monthKey, todayIso } from "../lib/dates.ts";
 import { subClassLabel } from "../lib/fixedIncome.ts";
-import { formatCurrency } from "../lib/format.ts";
+import { formatCurrency, formatNumber } from "../lib/format.ts";
 import {
   ASSET_CLASSES,
+  MONTH_OPTIONS,
   type MonthFormState,
   type TargetsFormState,
   addStrategyRow,
@@ -22,6 +25,11 @@ import {
   monthFormFrom,
   monthPeriodLabel,
   monthStatusLabel,
+  overplannedStrategyClasses,
+  periodMonth,
+  periodYear,
+  periodYearOptions,
+  remainingLegacyShares,
   removeStrategyRow,
   removeTickerRow,
   targetsFormFrom,
@@ -58,7 +66,8 @@ export function Month() {
 // Opening a month closes any month still open (the backend owns that invariant), so the copy warns
 // before the button.
 function MonthOpener() {
-  const [form, setForm] = useState<MonthFormState>(emptyMonthForm());
+  const today = monthKey(todayIso());
+  const [form, setForm] = useState<MonthFormState>(() => emptyMonthForm(today));
   const open = useOpenMonth();
   const creation = toMonthCreation(form);
 
@@ -72,17 +81,46 @@ function MonthOpener() {
     <Panel title="Abrir mês">
       <form onSubmit={handleSubmit} data-testid="month-opener" className="space-y-4">
         <div className="flex flex-wrap gap-3">
-          <label className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
-            Período
-            <input
-              type="month"
-              value={form.period}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, period: event.target.value }))
-              }
-              className={FIELD}
-            />
-          </label>
+          {/* Two selects rather than a native month input: Firefox/Safari have no month picker. */}
+          <div className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
+            <span>Período</span>
+            <div className="flex gap-2">
+              <select
+                aria-label="Mês"
+                value={periodMonth(form.period)}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    period: `${periodYear(current.period)}-${event.target.value}`,
+                  }))
+                }
+                className={FIELD}
+              >
+                {MONTH_OPTIONS.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Ano"
+                value={periodYear(form.period)}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    period: `${event.target.value}-${periodMonth(current.period)}`,
+                  }))
+                }
+                className={FIELD}
+              >
+                {periodYearOptions(form.period, today).map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <NumberField
             label="Capital (R$)"
             value={form.capital}
@@ -174,6 +212,15 @@ function CapitalForm({ month }: { month: MonthModel }) {
 function TargetsForm({ targets }: { targets: Targets }) {
   const [form, setForm] = useState<TargetsFormState>(() => targetsFormFrom(targets));
   const replace = useReplaceTargets();
+  const strategies = useStrategies();
+  // The bucket carries no Target row, so its share is derived from the classes that have one.
+  const manualClasses = new Set(
+    (strategies.data ?? [])
+      .filter((strategy) => strategy.kind === "MANUAL")
+      .map((strategy) => strategy.asset_class),
+  );
+  const remainders = remainingLegacyShares(form, manualClasses);
+  const overplanned = overplannedStrategyClasses(form);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -279,6 +326,17 @@ function TargetsForm({ targets }: { targets: Targets }) {
           <Button variant="default" onClick={() => setForm((current) => addStrategyRow(current))}>
             Adicionar estratégia
           </Button>
+          {remainders.map(({ assetClass, percentage }) => (
+            <p key={assetClass} className="w-full text-[12.5px] text-ink-dim">
+              {assetClassLabel(assetClass)} · restante: {formatNumber(percentage)}% — posições
+              legadas, sem alvo
+            </p>
+          ))}
+          {overplanned.map((assetClass) => (
+            <p key={assetClass} className="w-full text-[12.5px] text-tax">
+              A soma dos alvos das estratégias de {assetClassLabel(assetClass)} passa de 100%.
+            </p>
+          ))}
         </Rung>
 
         <Rung title="Tickers por estratégia">
@@ -345,7 +403,11 @@ function TargetsForm({ targets }: { targets: Targets }) {
         {replace.error && <p className="text-[12.5px] text-tax">{replace.error.message}</p>}
         {replace.isSuccess && <p className="text-[12.5px] text-yield">Alvos salvos.</p>}
 
-        <Button type="submit" variant="primary" disabled={replace.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={replace.isPending || overplanned.length > 0}
+        >
           {replace.isPending ? "Salvando…" : "Salvar alvos"}
         </Button>
       </form>

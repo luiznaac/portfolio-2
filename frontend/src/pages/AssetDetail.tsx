@@ -1,15 +1,29 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../api/client.ts";
-import { usePosition, useTickerQuotes } from "../api/queries.ts";
+import {
+  useAttribution,
+  usePosition,
+  useRemoveAttribution,
+  useRevertTickerClassification,
+  useSetAttribution,
+  useStrategies,
+  useTicker,
+  useTickerQuotes,
+} from "../api/queries.ts";
 import type { Trade } from "../api/types.ts";
+import { AttributionPanel } from "../components/AttributionPanel.tsx";
 import { Badge } from "../components/Badge.tsx";
-import { Chip } from "../components/Chip.tsx";
+import { Button } from "../components/Button.tsx";
+import { ClassifyTickerModal } from "../components/ClassifyTickerModal.tsx";
+import { Kpi } from "../components/Kpi.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
+import { classificationNote, effectiveAssetClass } from "../lib/catalog.ts";
 import { formatCurrency, formatNumber, formatTradeSide } from "../lib/format.ts";
+import { assetClassLabel } from "../lib/month.ts";
 import { latestQuote, positionValue } from "../lib/position.ts";
 
-const KPI_LABEL = "font-mono text-[10px] tracking-[.09em] text-ink-faint uppercase";
 const BACK_LINK =
   "inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[12.5px] text-ink hover:border-surface-3 hover:bg-surface-3";
 
@@ -42,23 +56,19 @@ const COLUMNS: Column<Trade>[] = [
   },
 ];
 
-function Kpi({ label, value, hint }: { label: string; value?: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-surface px-4 py-3.5">
-      <div className={KPI_LABEL}>{label}</div>
-      <div className="mt-1 font-cond text-[22px] font-bold">{value ?? "—"}</div>
-      {hint !== undefined && <div className="mt-0.5 text-[11.5px] text-ink-faint">{hint}</div>}
-    </div>
-  );
-}
-
-// The Ativos detail: the stored position (quantity + fiscal average + market value), its trade
-// history, and the attribution slice. Attribution is a later slice — for now the whole position is
-// shown as "não atribuído".
+// The Ativos detail: the stored position (quantity + fiscal average + market value), the
+// attribution ledger, and the trade history.
 export function AssetDetail() {
   const { ticker = "" } = useParams();
   const position = usePosition(ticker);
   const quotes = useTickerQuotes(ticker);
+  const catalog = useTicker(ticker);
+  const attribution = useAttribution(ticker);
+  const strategies = useStrategies();
+  const setSlice = useSetAttribution(ticker);
+  const removeSlice = useRemoveAttribution(ticker);
+  const revertClassification = useRevertTickerClassification(ticker);
+  const [classifying, setClassifying] = useState(false);
 
   if (position.isLoading) return <p className="text-[13.5px] text-ink-dim">Carregando…</p>;
 
@@ -82,6 +92,14 @@ export function AssetDetail() {
   const { position: current, trades } = position.data;
   const close = latestQuote(quotes.data ?? [])?.close;
   const value = close === undefined ? undefined : positionValue(current.quantity, close);
+  const entry = catalog.data;
+  const effectiveClass = effectiveAssetClass(entry);
+  const note = entry === undefined ? null : classificationNote(entry);
+  // A failed catalog read is not an unclassified ticker: only a successful read (or the 404 that
+  // says the row is missing) can justify offering the action.
+  const catalogMissing = catalog.error instanceof ApiError && catalog.error.status === 404;
+  const canClassify =
+    !catalog.isLoading && effectiveClass === null && (catalog.isSuccess || catalogMissing);
 
   return (
     <section>
@@ -93,6 +111,27 @@ export function AssetDetail() {
               todos os ativos
             </Link>
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {effectiveClass !== null && (
+              <Badge tone="neutral">{assetClassLabel(effectiveClass)}</Badge>
+            )}
+            {canClassify && <Button onClick={() => setClassifying(true)}>Classificar</Button>}
+          </div>
+          {note !== null && (
+            <p className="mt-2 flex items-center gap-2 text-[12.5px] text-accent">
+              {note}
+              <Button
+                variant="ghost"
+                onClick={() => revertClassification.mutate()}
+                disabled={revertClassification.isPending}
+              >
+                Reverter
+              </Button>
+            </p>
+          )}
+          {revertClassification.error && (
+            <p className="mt-1 text-[12.5px] text-tax">{revertClassification.error.message}</p>
+          )}
         </div>
         <Link to="/trades" className={BACK_LINK}>
           ← Voltar
@@ -100,24 +139,28 @@ export function AssetDetail() {
       </div>
 
       <div className="mb-4 grid grid-cols-3 gap-3">
-        <Kpi label="Custódia" value={formatNumber(current.quantity)} />
-        <Kpi label="Preço médio (fiscal)" value={formatCurrency(current.average_price)} />
+        <Kpi size="lg" label="Custódia" value={formatNumber(current.quantity)} />
+        <Kpi size="lg" label="Preço médio (fiscal)" value={formatCurrency(current.average_price)} />
         <Kpi
+          size="lg"
           label="Valor de mercado"
           value={value === undefined ? undefined : formatCurrency(value)}
           hint={close === undefined ? "sem cotação" : `cotação ${formatCurrency(close)}`}
         />
       </div>
 
-      <div className="mb-4">
-        <Panel title="Atribuição">
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-dim">
-            <Chip tone="amber">{`${formatNumber(current.quantity)} não atribuído`}</Chip>
-            <span className="text-ink-faint">
-              A distribuição por estratégia chega com a fatia de Estratégias.
-            </span>
-          </div>
-        </Panel>
+      <div className="mb-4" data-testid="attribution-panel">
+        <AttributionPanel
+          attribution={attribution.data}
+          loading={attribution.isLoading}
+          loadError={attribution.isError ? attribution.error : null}
+          strategies={strategies.data ?? []}
+          strategiesLoading={strategies.isLoading}
+          pending={setSlice.isPending || removeSlice.isPending}
+          mutationError={setSlice.error ?? removeSlice.error}
+          onSave={(creation) => setSlice.mutateAsync(creation)}
+          onRemove={(strategyId) => removeSlice.mutateAsync(strategyId)}
+        />
       </div>
 
       <Panel title="Negócios">
@@ -127,6 +170,10 @@ export function AssetDetail() {
           <Table columns={COLUMNS} rows={trades} rowKey={(trade) => trade.id} />
         )}
       </Panel>
+
+      {classifying && (
+        <ClassifyTickerModal ticker={current.ticker} onClose={() => setClassifying(false)} />
+      )}
     </section>
   );
 }

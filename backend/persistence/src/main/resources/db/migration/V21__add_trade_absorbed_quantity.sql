@@ -1,0 +1,1 @@
+ALTER TABLE trade ADD COLUMN absorbed_quantity DECIMAL(18, 6) NOT NULL DEFAULT 0;

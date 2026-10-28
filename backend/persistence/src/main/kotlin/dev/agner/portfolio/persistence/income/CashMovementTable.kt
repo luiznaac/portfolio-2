@@ -13,7 +13,7 @@ import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.datetime
 import kotlin.time.ExperimentalTime
 
-// Every cash movement a listed asset pays — income today, corporate-action cash later. `tax_nature`
+// Every cash movement a listed asset pays — income and corporate-action cash. `tax_nature`
 // separates them: the Income reads select INCOME rows, so an amortization or a capital return is
 // stored beside a dividend without polluting it. `status` is the stored lifecycle stage, which only
 // carries information for RECONCILED — the other three are derived on read (IncomeLifecycle).
@@ -29,12 +29,19 @@ object CashMovementTable : IntIdTable("cash_movement") {
     val status = enumerationByName<IncomeStatus>("status", 20).default(IncomeStatus.ANNOUNCED)
 
     // The income kind (dividend / JCP / FII rendimento), beyond the ticket's column list so the page
-    // can show a "Tipo" column and the Movimentações match can route by it.
-    val incomeType = enumerationByName<IncomeType>("income_type", 20)
+    // can show a "Tipo" column and the Movimentações match can route by it. Null on a
+    // corporate-action cash row, whose identity is its event link, not an income type.
+    val incomeType = enumerationByName<IncomeType>("income_type", 20).nullable()
+
+    // Set on the cash a corporate action produced (a capital return, an amortization, a cash bonus,
+    // an auctioned fraction); null on income.
+    val corporateActionId = integer("corporate_action_id").nullable()
+
     val createdAt = datetime("created_at")
 
     // Income is per ticker, whole Position, so the natural key identifies a payment: dedup and the
-    // lifecycle both hang off (ticker, payable date, type).
+    // lifecycle both hang off (ticker, payable date, type). MySQL allows repeated NULL income types,
+    // so corporate-action cash does not collide with this key.
     init { uniqueIndex(ticker, date, incomeType) }
 }
 
@@ -51,13 +58,14 @@ class CashMovementEntity(id: EntityID<Int>) : IntEntity(id) {
     var provenance by CashMovementTable.provenance
     var status by CashMovementTable.status
     var incomeType by CashMovementTable.incomeType
+    var corporateActionId by CashMovementTable.corporateActionId
     var createdAt by CashMovementTable.createdAt
 
     fun toModel() = Income(
         id = id.value,
         ticker = ticker,
         date = date,
-        type = incomeType,
+        type = requireNotNull(incomeType) { "Income cash movement $id has no income type" },
         grossAmount = grossAmount,
         retainedAmount = retainedAmount,
         netAmount = netAmount,

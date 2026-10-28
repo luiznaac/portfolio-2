@@ -47,4 +47,28 @@ class QuoteServiceTest : StringSpec({
             source = QuoteSource.COTAHIST,
         )
     }
+
+    "latestClose is null when the ticker has no stored close" {
+        coEvery { repository.fetchAllBy("VALE3") } returns emptyList()
+
+        service.latestClose("vale3") shouldBe null
+    }
+
+    "latestClose picks the newest stored close from the canonical ticker" {
+        coEvery { repository.fetchAllBy("VALE3") } returns listOf(
+            quote("2026-10-08", "9"),
+            quote("2026-10-12", "12"),
+            quote("2026-10-10", "10"),
+        )
+
+        service.latestClose("vale3") shouldBe BigDecimal("12")
+        coVerify(exactly = 1) { repository.fetchAllBy("VALE3") }
+    }
 })
+
+private fun quote(date: String, close: String) = Quote(
+    ticker = "VALE3",
+    date = LocalDate.parse(date),
+    close = BigDecimal(close),
+    source = QuoteSource.COTAHIST,
+)

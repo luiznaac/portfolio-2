@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.httpapi.import.strategy.StrategyReportParserResolver
+import dev.agner.portfolio.usecase.strategy.StrategyHoldingsService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.EditionActivation
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component
 class StrategyController(
     private val service: StrategyService,
     private val parsers: StrategyReportParserResolver,
+    private val holdings: StrategyHoldingsService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -31,6 +33,15 @@ class StrategyController(
             post {
                 val payload = call.receive<StrategyCreation>()
                 call.respond(HttpStatusCode.Created, service.create(payload))
+            }
+
+            get("/{strategy_id}/holdings") {
+                val strategyHoldings = holdings.fetch(call.requiredInt("strategy_id"))
+                if (strategyHoldings == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                } else {
+                    call.respond(HttpStatusCode.OK, strategyHoldings)
+                }
             }
 
             route("/{strategy_id}/editions") {

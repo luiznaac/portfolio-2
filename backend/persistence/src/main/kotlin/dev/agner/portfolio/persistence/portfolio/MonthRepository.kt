@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.portfolio.model.MonthUpdate
 import dev.agner.portfolio.usecase.portfolio.repository.IMonthRepository
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.YearMonth
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
@@ -38,6 +39,7 @@ class MonthRepository(
             period = creation.period.toString()
             capital = creation.capital
             floor = creation.floor
+            aportes = creation.aportes
             status = MonthStatus.OPEN
             createdAt = LocalDateTime.now(clock)
         }.toModel()
@@ -49,7 +51,21 @@ class MonthRepository(
             ?.apply {
                 capital = update.capital
                 floor = update.floor
+                update.aportes?.let { aportes = it }
             }
             ?.toModel()
+    }
+
+    override suspend fun close(id: Int): Month? = transaction {
+        MonthEntity.findById(id)
+            ?.takeIf { it.status == MonthStatus.OPEN }
+            ?.apply { status = MonthStatus.CLOSED }
+            ?.toModel()
+    }
+
+    override suspend fun fetchClosed(): List<Month> = transaction {
+        MonthEntity.find { MonthTable.status eq MonthStatus.CLOSED }
+            .orderBy(MonthTable.period to SortOrder.DESC)
+            .map { it.toModel() }
     }
 }

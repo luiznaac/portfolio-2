@@ -7,8 +7,12 @@ mysql:
   password: ''
 
 gateways:
+  sgs:
+    host: 'http://localhost:${wiremock.port}'
   bacen:
     host: 'http://localhost:${wiremock.port}'
   chameidor:
     host: 'http://localhost:${wiremock.port}'
     token: 'dev-portfolio-fixture-token'
+  cotahist:
+    host: 'http://localhost:${wiremock.port}'

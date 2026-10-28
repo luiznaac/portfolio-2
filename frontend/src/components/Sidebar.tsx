@@ -7,14 +7,21 @@ import {
   IconAssets,
   IconBank,
   IconCalendar,
+  IconChart,
   IconCoins,
+  IconEvent,
+  IconGrid,
   IconLayers,
+  IconList,
+  IconLock,
+  IconReceipt,
   IconTarget,
   IconUpload,
 } from "./icons.tsx";
 
 // The reference icons are named in the nav table and resolved here.
 const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
+  grid: IconGrid,
   upload: IconUpload,
   assets: IconAssets,
   bank: IconBank,
@@ -22,6 +29,11 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   target: IconTarget,
   layers: IconLayers,
   coins: IconCoins,
+  event: IconEvent,
+  receipt: IconReceipt,
+  list: IconList,
+  lock: IconLock,
+  chart: IconChart,
 };
 
 // The shell's primary navigation: brand mark, grouped items, 236px wide collapsing to 60px. Groups
@@ -29,6 +41,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
 export function Sidebar({ collapsed }: { collapsed: boolean }) {
   return (
     <aside
+      data-testid="sidebar"
       className={cn(
         "flex shrink-0 flex-col overflow-hidden border-r border-line bg-surface",
         collapsed ? "w-[60px]" : "w-[236px]",
@@ -59,6 +72,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.to === "/"}
                   className={({ isActive }) =>
                     cn(
                       "my-px flex items-center gap-2.5 border-l-2 text-[13.5px] whitespace-nowrap",

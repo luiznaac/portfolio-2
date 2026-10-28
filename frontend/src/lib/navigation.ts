@@ -2,7 +2,20 @@
 // so a route lands in both at once. Pure (no React): icons are named here and resolved to SVG in
 // Sidebar.tsx, which keeps the crumb lookup unit-tested in src/lib.
 
-export type NavIcon = "upload" | "assets" | "bank" | "calendar" | "target" | "layers" | "coins";
+export type NavIcon =
+  | "grid"
+  | "upload"
+  | "assets"
+  | "bank"
+  | "calendar"
+  | "target"
+  | "layers"
+  | "coins"
+  | "event"
+  | "receipt"
+  | "list"
+  | "lock"
+  | "chart";
 
 export interface NavItem {
   to: string;
@@ -16,13 +29,17 @@ export interface NavGroup {
 }
 
 // The reference's three groups (frontend/design/front-prototype.html); items appear as their routes
-// land — "Resultados" joins when its pages ship. Sidebar renders only groups that have items.
+// land. The Cockpit is the root route; "Capital e alvos" stays beside it because it owns the month
+// opener the Cockpit points at when no month is open. Sidebar renders only groups that have items.
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Mês",
     items: [
+      { to: "/", label: "Cockpit", icon: "grid" },
       { to: "/month", label: "Capital e alvos", icon: "calendar" },
+      { to: "/orders", label: "Ordens", icon: "list" },
       { to: "/imports", label: "Importar extrato", icon: "upload" },
+      { to: "/fechamento", label: "Fechamento", icon: "lock" },
     ],
   },
   {
@@ -31,10 +48,18 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/allocation", label: "Alocação", icon: "target" },
       { to: "/strategies", label: "Estratégias", icon: "layers" },
       { to: "/trades", label: "Ativos", icon: "assets" },
+      { to: "/corporate-actions", label: "Eventos corporativos", icon: "event" },
       { to: "/fixed-income", label: "Renda fixa", icon: "bank" },
     ],
   },
-  { label: "Resultados", items: [{ to: "/income", label: "Proventos", icon: "coins" }] },
+  {
+    label: "Resultados",
+    items: [
+      { to: "/income", label: "Proventos", icon: "coins" },
+      { to: "/taxes", label: "Impostos", icon: "receipt" },
+      { to: "/performance", label: "Performance", icon: "chart" },
+    ],
+  },
 ];
 
 export interface NavCrumb {

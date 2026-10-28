@@ -10,6 +10,18 @@ describe("navCrumb", () => {
     expect(navCrumb("/trades")).toEqual({ group: "Carteira", title: "Ativos" });
   });
 
+  it("resolves the Ordens route under Mês", () => {
+    expect(navCrumb("/orders")).toEqual({ group: "Mês", title: "Ordens" });
+  });
+
+  it("resolves the Fechamento route under Mês", () => {
+    expect(navCrumb("/fechamento")).toEqual({ group: "Mês", title: "Fechamento" });
+  });
+
+  it("resolves the Performance route under Resultados", () => {
+    expect(navCrumb("/performance")).toEqual({ group: "Resultados", title: "Performance" });
+  });
+
   it("matches a nested path under an item's route", () => {
     expect(navCrumb("/imports/42")).toEqual({ group: "Mês", title: "Importar extrato" });
   });
@@ -18,8 +30,12 @@ describe("navCrumb", () => {
     expect(navCrumb("/tradesx")).toBeNull();
   });
 
+  it("resolves the Cockpit route at the root", () => {
+    expect(navCrumb("/")).toEqual({ group: "Mês", title: "Cockpit" });
+  });
+
   it("returns null for a route outside the nav", () => {
-    expect(navCrumb("/")).toBeNull();
+    expect(navCrumb("/health")).toBeNull();
   });
 
   it("every nav item carries a non-empty label and an absolute route", () => {

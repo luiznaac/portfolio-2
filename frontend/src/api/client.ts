@@ -1,27 +1,53 @@
 import type {
   Allocation,
+  AssetClass,
+  Attribution,
+  AttributionSliceCreation,
+  AttributionTransferCreation,
   Bond,
+  CatalogEntry,
   CheckingAccount,
   CheckingAccountCreation,
+  CorporateAction,
   CurrentMonth,
   Edition,
   EditionActivation,
   EditionImport,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  HarvestOptOutUpdate,
+  HarvestPairCreation,
+  HarvestReport,
   HealthCheckResult,
   Import,
   ImportRow,
   ImportSource,
   Income,
+  LegacyAttributionPreview,
+  LegacyAttributionResult,
+  Month,
   MonthCreation,
+  MonthPerformance,
   MonthUpdate,
+  MovementsImportResult,
+  OrderList,
+  OrderMatchUpdate,
+  OrderPlan,
+  OrderPlanPhase,
+  PerformanceSeries,
   PositionDetail,
   Quote,
+  Snapshot,
+  StockTaxReport,
   Strategy,
   StrategyCreation,
+  StrategyHoldings,
+  SuggestedOrder,
   Targets,
+  TickerClassification,
+  TickerRefreshResult,
   Trade,
+  TransferProposal,
 } from "./types.ts";
 
 const BASE = (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
@@ -97,8 +123,59 @@ export const api = {
     return request(`/positions/${encodeURIComponent(ticker)}`);
   },
 
+  getAttribution(ticker: string): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution`);
+  },
+
+  setAttribution(ticker: string, creation: AttributionSliceCreation): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution`, {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
+  },
+
+  removeAttribution(ticker: string, strategyId: number): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution/${strategyId}`, {
+      method: "DELETE",
+    });
+  },
+
+  transferAttribution(ticker: string, creation: AttributionTransferCreation): Promise<Attribution> {
+    return request(`/positions/${encodeURIComponent(ticker)}/attribution/transfer`, {
+      method: "POST",
+      body: JSON.stringify(creation),
+    });
+  },
+
+  getLegacyAttributionPreview(): Promise<LegacyAttributionPreview> {
+    return request("/positions/legacy-attribution/preview");
+  },
+
+  applyLegacyAttribution(): Promise<LegacyAttributionResult> {
+    return request("/positions/legacy-attribution", { method: "POST" });
+  },
+
   getTickerQuotes(ticker: string): Promise<Quote[]> {
     return request(`/tickers/${encodeURIComponent(ticker)}/quotes`);
+  },
+
+  getTicker(ticker: string): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}`);
+  },
+
+  classifyTicker(ticker: string, assetClass: AssetClass): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/classification`, {
+      method: "PUT",
+      body: JSON.stringify({ asset_class: assetClass } satisfies TickerClassification),
+    });
+  },
+
+  revertTickerClassification(ticker: string): Promise<CatalogEntry> {
+    return request(`/tickers/${encodeURIComponent(ticker)}/classification`, { method: "DELETE" });
+  },
+
+  refreshCatalog(): Promise<TickerRefreshResult> {
+    return request("/tickers/refresh", { method: "POST" });
   },
 
   getBonds(): Promise<Bond[]> {
@@ -150,12 +227,82 @@ export const api = {
     return request("/month/current/allocation");
   },
 
+  closeCurrentMonth(): Promise<Snapshot> {
+    return request("/month/current/close", { method: "POST" });
+  },
+
+  getClosedMonths(): Promise<Month[]> {
+    return request("/months");
+  },
+
+  getMonthSnapshot(monthId: number): Promise<Snapshot> {
+    return request(`/months/${monthId}`);
+  },
+
+  getMonthPerformance(monthId: number): Promise<MonthPerformance> {
+    return request(`/months/${monthId}/performance`);
+  },
+
+  getPerformanceSeries(): Promise<PerformanceSeries> {
+    return request("/performance/series");
+  },
+
+  getStockTax(): Promise<StockTaxReport> {
+    return request("/month/current/tax");
+  },
+
+  getHarvest(): Promise<HarvestReport> {
+    return request("/tax/harvest");
+  },
+
+  acceptHarvestPair(creation: HarvestPairCreation): Promise<HarvestReport> {
+    return request("/tax/harvest", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  setHarvestOptOut(ticker: string, optedOut: boolean): Promise<HarvestReport> {
+    const update: HarvestOptOutUpdate = { opted_out: optedOut };
+    return request(`/tax/harvest/${encodeURIComponent(ticker)}/opt-out`, {
+      method: "PUT",
+      body: JSON.stringify(update),
+    });
+  },
+
+  getOrders(): Promise<OrderList> {
+    return request("/orders");
+  },
+
+  // The computed plan at the requested depth; the funding phase carries the unfunded/NEUTRO
+  // arithmetic and the outside-strategy holdings (present from the candidates phase on).
+  getOrderPlan(phase: OrderPlanPhase = "FULL"): Promise<OrderPlan> {
+    return request(`/month/current/orders?phase=${phase.toLowerCase()}`);
+  },
+
+  refreshOrders(): Promise<OrderList> {
+    return request("/orders/plan/refresh", { method: "POST" });
+  },
+
+  approveTransfer(id: number): Promise<TransferProposal> {
+    return request(`/orders/transfers/${id}/approve`, { method: "POST" });
+  },
+
+  rejectTransfer(id: number): Promise<TransferProposal> {
+    return request(`/orders/transfers/${id}/reject`, { method: "POST" });
+  },
+
+  overrideOrderMatch(orderId: number, update: OrderMatchUpdate): Promise<SuggestedOrder> {
+    return request(`/orders/${orderId}/match`, { method: "PUT", body: JSON.stringify(update) });
+  },
+
   getStrategies(): Promise<Strategy[]> {
     return request("/strategies");
   },
 
   createStrategy(creation: StrategyCreation): Promise<Strategy> {
     return request("/strategies", { method: "POST", body: JSON.stringify(creation) });
+  },
+
+  getStrategyHoldings(strategyId: number): Promise<StrategyHoldings> {
+    return request(`/strategies/${strategyId}/holdings`);
   },
 
   getEditions(strategyId: number): Promise<Edition[]> {
@@ -187,5 +334,15 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return upload("/income/import", form);
+  },
+
+  getCorporateActions(): Promise<CorporateAction[]> {
+    return request("/corporate-actions");
+  },
+
+  importMovements(file: File): Promise<MovementsImportResult> {
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/corporate-actions/import", form);
   },
 };
