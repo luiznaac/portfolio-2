@@ -4,17 +4,17 @@ import dev.agner.portfolio.usecase.index.model.IndexId
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-sealed class BondCreation(open val name: String, open val value: BigDecimal, open val maturityDate: LocalDate) {
+sealed class BondCreation(open val name: String, open val rate: BigDecimal, open val maturityDate: LocalDate) {
     data class FixedRateBondCreation(
         override val name: String,
-        override val value: BigDecimal,
+        override val rate: BigDecimal,
         override val maturityDate: LocalDate,
-    ) : BondCreation(name, value, maturityDate)
+    ) : BondCreation(name, rate, maturityDate)
 
     data class FloatingRateBondCreation(
         override val name: String,
-        override val value: BigDecimal,
+        override val rate: BigDecimal,
         override val maturityDate: LocalDate,
         val indexId: IndexId,
-    ) : BondCreation(name, value, maturityDate)
+    ) : BondCreation(name, rate, maturityDate)
 }

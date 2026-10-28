@@ -31,7 +31,7 @@ class IndexValueServiceTest : StringSpec({
     }
 
     "fetchAllIndexValuesBy should call repository" {
-        val indexValues = listOf(IndexValue(date = LocalDate.parse("2025-01-03"), value = BigDecimal("12.50")))
+        val indexValues = listOf(IndexValue(date = LocalDate.parse("2025-01-03"), observation = BigDecimal("12.50")))
         coEvery { repository.fetchAllBy(any()) } returns indexValues
 
         val result = service.fetchAllBy(CDI)
@@ -134,5 +134,5 @@ class IndexValueServiceTest : StringSpec({
 
 private fun theirToCreation(their: TheirIndexValue) = IndexValueCreation(
     date = their.date,
-    value = their.value,
+    observation = their.observation,
 )

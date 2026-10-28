@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS position (ticker VARCHAR(12) PRIMARY KEY, quantity DECIMAL(18, 6) NOT NULL, average_price DECIMAL(18, 6) NOT NULL);

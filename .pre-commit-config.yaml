@@ -1,21 +1,33 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: no-commit-to-branch
-        args: [--branch, master]
+        args: [--branch, master, --branch, main]
 
   - repo: local
     hooks:
       - id: detekt
         name: detekt
-        entry: sh -c 'cd backend && ./gradlew detekt'
+        entry: sh -c 'cd backend && ./gradlew detekt --no-daemon'
         language: system
-        files: ^backend/.*\.kt$
+        files: ^backend/.*\.(kt|kts)$
         pass_filenames: false
       - id: frontend-typecheck
         name: frontend typecheck
         entry: sh -c 'cd frontend && npm run typecheck'
         language: system
         files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+      - id: test-backend
+        name: test (backend, unit)
+        entry: sh -c 'cd backend && ./gradlew unitTest --no-daemon'
+        language: system
+        files: ^backend/.*\.(kt|kts)$
+        pass_filenames: false
+      - id: test-frontend
+        name: test (frontend)
+        entry: sh -c 'cd frontend && npm test'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|mjs|cjs)$
         pass_filenames: false

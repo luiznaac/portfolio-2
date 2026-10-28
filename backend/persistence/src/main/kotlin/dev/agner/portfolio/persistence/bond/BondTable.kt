@@ -19,7 +19,7 @@ import kotlin.time.ExperimentalTime
 object BondTable : IntIdTable("bond") {
     val name = varchar("name", 100)
     val rateType = varchar("rate_type", 10)
-    val value = decimal("value", 8, 4)
+    val rate = decimal("rate", 8, 4)
     val indexId = reference("index_id", IndexTable.id).nullable()
     val maturityDate = date("maturity_date")
     val checkingAccount = reference("checking_account_id", CheckingAccountTable.id).nullable()
@@ -31,18 +31,18 @@ class BondEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var name by BondTable.name
     var rateType by BondTable.rateType
-    var value by BondTable.value
+    var rate by BondTable.rate
     var indexId by IndexEntity optionalReferencedOn BondTable.indexId
     var maturityDate by BondTable.maturityDate
     var checkingAccount by CheckingAccountEntity optionalReferencedOn BondTable.checkingAccount
     var createdAt by BondTable.createdAt
 
     fun toModel() = when (rateType) {
-        "FIXED" -> FixedRateBond(id = id.value, name = name, value = value, maturityDate = maturityDate)
+        "FIXED" -> FixedRateBond(id = id.value, name = name, rate = rate, maturityDate = maturityDate)
         "FLOATING" -> FloatingRateBond(
             id = id.value,
             name = name,
-            value = value,
+            rate = rate,
             maturityDate = maturityDate,
             indexId = IndexId.valueOf(indexId!!.id.value),
         )

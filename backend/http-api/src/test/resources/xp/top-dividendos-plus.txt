@@ -1,0 +1,75 @@
+===== PAGE 1 =====
+0 0 0
+50 52 54 Carteira Top Dividendos Plus 1 de setembro de 2026
+Estratégia Quantitativa
+255 188 0
+Setembro 2026
+0 210 197
+64 64 64
+126 126 126 Para quem é essa carteira: para o investidor em busca de ações com boa perspectiva de distribuição contínua de rendimento através de dividendos. O investimento Antonio Mello
+nesses nomes é uma alternativa para quem busca menor volatilidade no valor das ações e oportunidade de criar um fluxo de caixa recorrente por meio da Estrategista Quantitativo
+distribuição dos lucros pelas companhias.
+Nessa carteira, recomendamos todos os meses os melhores 10 nomes da nossa seleção de maiores pagadoras de dividendos utilizando dados do consenso. 
+Selecionamos as empresas com melhores expectativas de distribuição de lucros, boas perspectivas de crescimento no mercado e que aparecem na lista de 
+maiores pagadoras de dividendos com recorrência.
+Performance. Selecionamos esses nomes através de modelos estatísticos otimizados e calibrados a partir da performance histórica dos papéis. Essa estratégia 
+resultou em um retorno anualizado de +15,6% no período entre outubro de 2020  (primeira publicação da Seleção Top 20 Dividendos) e fevereiro de 2022, enquanto 
+o índice Ibovespa registrou ganhos de +13,2% durante o mesmo período. Desde a primeira publicação, em 31/03/22, a carteira Top Dividendos Plus teve retorno de 
+160,3%, enquanto o Ibovespa teve 47,8%.
+Alterações em relação à última publicação: Entrada de IGTI11 e RENT3, devido ao Dividend Yield atrativo e melhora nas expectativas de analistas, de acordo com 
+dados da LSEG. Saída de VALE3 e ITUB4, devido à redução no Dividend Yield esperado e piora nas expectativas de analistas, segundo dados da LSEG, bem como 
+para equilíbrio da estratégia.
+Companhia (em ordem alfabética) Ticker Peso Setor
+Allos ALOS3 10% Income Properties
+Bradesco BBDC4 10% Banks
+Cury CURY3 10% Homebuilders
+Direcional DIRR3 10% Homebuilders
+Iguatemi IGTI11 10% Income Properties
+Itausa ITSA4 10% Financials Non-Banks
+Petrobras PETR4 10% Oil, Gas & Petrochemicals
+Localiza RENT3 10% Transportation
+Tenda TEND3 10% Homebuilders
+Energisa ENGI11 10% Utilities & Energy
+Fonte: Economática, LSEG Refinitiv, Quantum e XP Inc Research XP RESEARCH 1
+
+===== PAGE 2 =====
+0 0 0
+50 52 54
+Estratégia Quantitativa
+255 188 0
+0 210 197
+64 64 64
+3. Dividend Yield
+126 126 126
+4. Desempenho da carteira
+Índice 5. Desempenho dos ativos
+6. Construção da carteira
+XP RESEARCH 2
+
+===== PAGE 3 =====
+0 0 0
+50 52 54 Carteira Top Dividendos Plus 1 de setembro de 2026
+Estratégia Quantitativa
+255 188 0
+Setembro 2026
+0 210 197
+64 64 64 Nessa carteira, recomendamos todos os meses os melhores 10 nomes a partir de uma seleção de maiores pagadoras de dividendos entre os membros dos índices Ibovespa, Small Caps (SMLL) e IBrX 100. 
+A partir das ações com maiores dividend yields esperados, selecionamos empresas com melhores expectativas de distribuição de lucros, boas perspectivas de crescimento no mercado e que aparecem na 
+126 126 126 lista de maiores pagadoras de dividendos com recorrência. 
+Alterações em relação à última publicação: Entrada de IGTI11 e RENT3, devido ao Dividend Yield atrativo e melhora nas expectativas de analistas, de acordo com dados da LSEG. Saída de VALE3 e ITUB4, 
+devido à redução no Dividend Yield esperado e piora nas expectativas de analistas, segundo dados da LSEG, bem como para equilíbrio da estratégia.
+Figura 1: Carteira Top Dividendos Plus
+Companhia Ticker Peso Setor Dividend Yield 2026E ¹
+Allos ALOS3 10% Income Properties 13.4%
+Bradesco BBDC4 10% Banks 8.8%
+Cury CURY3 10% Homebuilders 10.8%
+Direcional DIRR3 10% Homebuilders 10.4%
+Iguatemi IGTI11 10% Income Properties 5.6%
+Itausa ITSA4 10% Financials Non-Banks 10.1%
+Petrobras PETR4 10% Oil, Gas & Petrochemicals 16.1%
+Localiza RENT3 10% Transportation 7.6%
+Tenda TEND3 10% Homebuilders 7.6%
+Energisa ENGI11 10% Utilities & Energy 2.9%
+¹ Os valores de Dividend Yield esperado para o fim de 2026 são estimativas do consenso de mercado
+Fonte: Economática, LSEG Refinitiv, Quantum e XP Inc Research XP RESEARCH 3
+

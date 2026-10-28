@@ -33,7 +33,7 @@ class BondRepository(
         BondEntity.new {
             name = creation.name
             rateType = creation.resolveType()
-            value = creation.value
+            rate = creation.rate
             maturityDate = creation.maturityDate
             indexId = if (creation is FloatingRateBondCreation) IndexEntity.findById(creation.indexId.name) else null
             createdAt = LocalDateTime.now(clock)
@@ -44,7 +44,7 @@ class BondRepository(
         BondEntity.new {
             name = creation.name
             rateType = "FLOATING"
-            value = creation.value
+            rate = creation.rate
             maturityDate = creation.maturityDate
             indexId = IndexEntity.findById(creation.indexId.name)
             checkingAccount = CheckingAccountEntity.findById(checkingAccountId)

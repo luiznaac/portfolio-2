@@ -27,7 +27,7 @@ class CheckingAccountRepository(
     override suspend fun save(creation: CheckingAccountCreation) = transaction {
         CheckingAccountEntity.new {
             name = creation.name
-            value = creation.value
+            rate = creation.rate
             index = IndexEntity.findById(creation.indexId.name)!!
             maturityDuration = creation.maturityDuration.toString()
             createdAt = LocalDateTime.now(clock)

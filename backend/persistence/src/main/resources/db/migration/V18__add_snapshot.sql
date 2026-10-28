@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS snapshot (id INT AUTO_INCREMENT PRIMARY KEY, month_id INT NOT NULL, `state` LONGTEXT NOT NULL, created_at DATETIME(6) NOT NULL, CONSTRAINT fk_snapshot_month_id__id FOREIGN KEY (month_id) REFERENCES `month`(id) ON DELETE RESTRICT ON UPDATE RESTRICT);
+ALTER TABLE snapshot ADD CONSTRAINT snapshot_month_id_unique UNIQUE (month_id);
