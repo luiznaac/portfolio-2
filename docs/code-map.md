@@ -1,6 +1,6 @@
 # Code map
 
-Hand-authored module → key files → seam index, plus the app entry points — read it to go from a named seam to the file a change belongs to without a `find`/`ls` sweep. The vocabulary is the `codebase-design` one (**module**, **interface**, **seam**, **adapter**). The backend is a Gradle multi-module build (`backend/settings.gradle.kts`): `application → http-api → usecase ← persistence` and `gateway → usecase`; each Gradle module is one block below, then the frontend SPA and the repo-root infra.
+Hand-authored module → key files → seam index, plus the app entry points — read it to go from a named seam to the file a change belongs to without a `find`/`ls` sweep. The vocabulary is the `codebase-design` one (**module**, **interface**, **seam**, **adapter**). The backend is a Gradle multi-module build (`backend/settings.gradle.kts`): `application → http-api → usecase ← persistence` and `gateway → usecase`; each Gradle module is one block below, then the backend test roots and their mirror-package convention, the frontend SPA and the repo-root infra.
 
 ## Modules
 
@@ -59,6 +59,21 @@ Hand-authored module → key files → seam index, plus the app entry points —
 **Purpose**: the cross-cutting fixtures and the packaging/deploy story that bind backend + frontend together.
 **Files**: `contracts/error-response.json`, `contracts/chameidor/tasks-one-time-request.json`; `Dockerfile`, `docker-compose.yml`, `deploy/{entrypoint.sh,supervisord.conf,nginx.conf.template}`; `package.json` (script shims only), `scripts/backend-gradle.mjs`, `.github/workflows/ci.yml`, `.pre-commit-config.yaml`; `docs/{migrations.md,acceptance-runbook.md,adr/*}`
 **Seam(s)**: `contracts/*` are the versioned wire fixtures the tests pin against. `scripts/backend-gradle.mjs` is the single crossing from the package scripts and the pre-commit hooks into Gradle — it resolves `gradlew.bat`/`./gradlew` for the host, so a new `be:*`/`db:*` script goes through it rather than re-deriving the wrapper invocation. The one image runs the JVM app (`API_PORT`/8080) and nginx (`WEB_PORT`/8081, reverse-proxying `/api`) under supervisord; `deploy/entrypoint.sh` runs `bin/migrate` then the app. `package.json` is a script-only shim (`npm run be:unit`, `npm run check`, `npm run db:migrate`, `npm run up`, …), not a real package.
+
+## Backend tests
+
+Backend tests live in each module's `src/test/kotlin`, in the **mirrored package**: the same `dev.agner.portfolio.<module>.<feature>` path as the production code, so a change at the usecase `quotes` seam has its tests in `usecase/quotes/`. Most are `<ClassName>Test.kt` beside the class they cover; the rest are scenario tests named for the behaviour they pin. `usecase` also carries `src/testFixtures/kotlin`, holding helpers shared across its tests and by the module tests that depend on them.
+
+| Module | Test source root(s) |
+| --- | --- |
+| `usecase` | `src/test/kotlin`, `src/testFixtures/kotlin` |
+| `persistence` | `src/test/kotlin` |
+| `gateway` | `src/test/kotlin` |
+| `http-api` | `src/test/kotlin` (package `httpapi`, not `http-api`) |
+| `integrationTest` | `src/test/kotlin` — test-only module with no `src/main`, so its packages are not mirrored from production |
+| `application` | none |
+
+**Search the mirrored package for an existing test before creating one, and extend it rather than overwrite it** — an earlier session wrote a fresh `QuoteServiceTest` over the `fetchAllBy`/`refreshEod` cases already there; only a later `git status` caught it.
 
 ## Entry points
 
