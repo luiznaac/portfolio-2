@@ -18,6 +18,7 @@ import {
   CumulativeChart,
   DecompositionChart,
   ReturnChart,
+  StrategyChart,
 } from "../components/PerformanceCharts.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { useClosedMonthSelection } from "../hooks/useClosedMonthSelection.ts";
@@ -25,10 +26,12 @@ import { cn } from "../lib/cn.ts";
 import { formatCurrency, formatPercent, formatSignedPercent } from "../lib/format.ts";
 import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
 import {
+  type StrategyRow,
   benchmarkRows,
   decompositionResult,
   returnFillClass,
   returnTextClass,
+  strategyRows,
 } from "../lib/performance.ts";
 
 // Performance (issue #176): the closed months replayed from their immutable snapshots — the monthly
@@ -129,6 +132,12 @@ function PerformanceView({
         <Panel title="Série por classe">
           <ClassChart months={series.months} />
         </Panel>
+        <Panel title="Série por estratégia">
+          <StrategyChart months={series.months} />
+        </Panel>
+      </div>
+
+      <div className="mb-4">
         <Panel title="Decomposição mensal (R$)">
           <DecompositionChart months={series.months} />
         </Panel>
@@ -193,6 +202,23 @@ function MonthDetail({ detail }: { detail: MonthPerformance }) {
         <div data-testid="class-table">
           <Table columns={CLASS_COLUMNS} rows={detail.classes} rowKey={(row) => row.asset_class} />
         </div>
+      </div>
+
+      <div>
+        <h3 className="mb-2 font-cond text-[12px] font-bold tracking-[.04em] text-ink-dim uppercase">
+          Por estratégia
+        </h3>
+        <div data-testid="strategy-table">
+          <Table
+            columns={STRATEGY_COLUMNS}
+            rows={strategyRows(detail.classes)}
+            rowKey={(row) => row.key}
+          />
+        </div>
+        <p className="pt-1 text-[11.5px] text-ink-faint">
+          Cada linha é o retorno realizado da estratégia; a linha "Fora da estratégia" é o restante
+          da classe. Juntas, elas somam a linha da classe.
+        </p>
       </div>
 
       <div>
@@ -271,11 +297,17 @@ function decompositionCells(decomposition: PerformanceDecomposition) {
   };
 }
 
+// The shared decomposition columns. A strategy row drops the benchmark, which is a class-level
+// comparison; a period, class or ticker row carries it.
+interface DecompositionColumnOptions<T> {
+  benchmarkOf?: (row: T) => number | undefined;
+}
+
 function decompositionColumns<T>(
   decompositionOf: (row: T) => PerformanceDecomposition,
-  benchmarkOf: (row: T) => number | undefined,
+  options: DecompositionColumnOptions<T> = {},
 ): Column<T>[] {
-  return [
+  const columns: Column<T>[] = [
     {
       key: "start",
       header: "Início",
@@ -308,6 +340,9 @@ function decompositionColumns<T>(
         <span className="font-mono">{decompositionCells(decompositionOf(row)).income}</span>
       ),
     },
+  ];
+
+  columns.push(
     {
       key: "result",
       header: "Resultado",
@@ -326,15 +361,21 @@ function decompositionColumns<T>(
         </span>
       ),
     },
-    {
+  );
+
+  const benchmarkOf = options.benchmarkOf;
+  if (benchmarkOf) {
+    columns.push({
       key: "benchmark",
       header: "Benchmark",
       align: "right",
       render: (row) => (
         <span className="font-mono text-ink-dim">{formatSignedPercent(benchmarkOf(row))}</span>
       ),
-    },
-  ];
+    });
+  }
+
+  return columns;
 }
 
 const DECOMPOSITION_COLUMNS: Column<PeriodPerformance>[] = [
@@ -345,10 +386,9 @@ const DECOMPOSITION_COLUMNS: Column<PeriodPerformance>[] = [
       <span className="font-mono text-[12px] text-ink">{monthPeriodLabel(month.period)}</span>
     ),
   },
-  ...decompositionColumns<PeriodPerformance>(
-    (month) => month.decomposition,
-    (month) => month.benchmark_return,
-  ),
+  ...decompositionColumns<PeriodPerformance>((month) => month.decomposition, {
+    benchmarkOf: (month) => month.benchmark_return,
+  }),
 ];
 
 const CLASS_COLUMNS: Column<ClassPerformance>[] = [
@@ -359,10 +399,9 @@ const CLASS_COLUMNS: Column<ClassPerformance>[] = [
       <span className="text-[12.5px] text-ink">{assetClassLabel(row.asset_class)}</span>
     ),
   },
-  ...decompositionColumns<ClassPerformance>(
-    (row) => row.decomposition,
-    (row) => row.benchmark_return,
-  ),
+  ...decompositionColumns<ClassPerformance>((row) => row.decomposition, {
+    benchmarkOf: (row) => row.benchmark_return,
+  }),
 ];
 
 const TICKER_COLUMNS: Column<TickerPerformance>[] = [
@@ -382,8 +421,27 @@ const TICKER_COLUMNS: Column<TickerPerformance>[] = [
       </span>
     ),
   },
-  ...decompositionColumns<TickerPerformance>(
-    (row) => row.decomposition,
-    (row) => row.benchmark_return,
-  ),
+  ...decompositionColumns<TickerPerformance>((row) => row.decomposition, {
+    benchmarkOf: (row) => row.benchmark_return,
+  }),
+];
+
+const STRATEGY_COLUMNS: Column<StrategyRow>[] = [
+  {
+    key: "class",
+    header: "Classe",
+    render: (row) => (
+      <span className="text-[11.5px] text-ink-dim">{assetClassLabel(row.assetClass)}</span>
+    ),
+  },
+  {
+    key: "strategy",
+    header: "Estratégia",
+    render: (row) => (
+      <span className={cn("text-[12.5px]", row.kind === "outside" ? "text-ink-dim" : "text-ink")}>
+        {row.label}
+      </span>
+    ),
+  },
+  ...decompositionColumns<StrategyRow>((row) => row.decomposition),
 ];

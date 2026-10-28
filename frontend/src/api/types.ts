@@ -983,6 +983,8 @@ export interface PerformanceDecomposition {
   value_end: number;
   net_aportes: number;
   net_income: number;
+  // A strategy slice's bookkeeping attribution change valued at the close; the return nets it out.
+  flow?: number;
   return_percentage?: number;
 }
 
@@ -998,10 +1000,22 @@ export interface BenchmarkBlend {
   contributions: BenchmarkContribution[];
 }
 
+// One Strategy's realised return for the month, the Manual Strategy (bucket) included. There is no
+// plan-vs-actual comparison here; the slice is measured on its own attributed units.
+export interface StrategyPerformance {
+  strategy_id: number;
+  strategy: string;
+  kind: StrategyKind;
+  decomposition: PerformanceDecomposition;
+}
+
 export interface ClassPerformance {
   asset_class: AssetClass;
   decomposition: PerformanceDecomposition;
   benchmark_return?: number;
+  // The class line equals its slices plus the read-only outside row.
+  strategies?: StrategyPerformance[];
+  outside?: PerformanceDecomposition;
 }
 
 export interface TickerPerformance {
@@ -1031,6 +1045,8 @@ export interface PeriodPerformance {
   benchmarks?: PeriodBenchmark[];
   // Each class's frozen value at the close, plus the previous close when the series has one.
   classes?: PeriodClass[];
+  // Each Strategy's frozen slice at the close, the bucket included.
+  strategies?: PeriodStrategy[];
 }
 
 // One policy index's return in a period; absent when the SGS series could not price it.
@@ -1042,6 +1058,15 @@ export interface PeriodBenchmark {
 export interface PeriodClass {
   asset_class: AssetClass;
   value_end: number;
+}
+
+// One Strategy's frozen value at the month's close; the identity is frozen with it.
+export interface PeriodStrategy {
+  strategy_id: number;
+  strategy: string;
+  kind: StrategyKind;
+  value_end: number;
+  flow: number;
 }
 
 export interface PerformanceSeries {

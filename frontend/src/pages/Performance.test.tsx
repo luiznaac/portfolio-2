@@ -28,6 +28,16 @@ vi.mock("../api/queries.ts", () => ({
           xirr: undefined,
           benchmark_return: undefined,
           classes: [{ asset_class: "ACOES", value_end: 60000 }],
+          strategies: [
+            {
+              strategy_id: 1,
+              strategy: "Top Dividendos",
+              kind: "REPORT_DRIVEN",
+              value_end: 30000,
+              flow: 0,
+            },
+            { strategy_id: 2, strategy: "Legado", kind: "MANUAL", value_end: 20000, flow: 0 },
+          ],
         },
         {
           period: "2026-02",
@@ -41,6 +51,16 @@ vi.mock("../api/queries.ts", () => ({
           xirr: 12,
           benchmark_return: 0.9,
           classes: [{ asset_class: "ACOES", value_end: 62100 }],
+          strategies: [
+            {
+              strategy_id: 1,
+              strategy: "Top Dividendos",
+              kind: "REPORT_DRIVEN",
+              value_end: 31000,
+              flow: 0,
+            },
+            { strategy_id: 2, strategy: "Legado", kind: "MANUAL", value_end: 20000, flow: 0 },
+          ],
         },
       ],
       xirr: 12,
@@ -78,6 +98,40 @@ vi.mock("../api/queries.ts", () => ({
             return_percentage: 1.5,
           },
           benchmark_return: 2.5,
+          strategies: [
+            {
+              strategy_id: 1,
+              strategy: "Top Dividendos",
+              kind: "REPORT_DRIVEN",
+              decomposition: {
+                value_start: 30000,
+                value_end: 31000,
+                net_aportes: 600,
+                net_income: 40,
+                return_percentage: 1.3,
+              },
+            },
+            {
+              strategy_id: 2,
+              strategy: "Legado",
+              kind: "MANUAL",
+              decomposition: {
+                value_start: 20000,
+                value_end: 20000,
+                net_aportes: 400,
+                net_income: 60,
+                flow: 0,
+                return_percentage: -2,
+              },
+            },
+          ],
+          outside: {
+            value_start: 10000,
+            value_end: 11100,
+            net_aportes: 200,
+            net_income: 10,
+            return_percentage: 9,
+          },
         },
       ],
       tickers: [
@@ -139,5 +193,18 @@ describe("Performance", () => {
     expect(screen.getByTestId("ticker-table")).toBeTruthy();
     expect(screen.getAllByText("PETR4").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Ações").length).toBeGreaterThan(0);
+  });
+
+  it("renders the per-Strategy slices, the outside row and the strategy series", () => {
+    renderPage();
+
+    expect(screen.getByTestId("strategy-table")).toBeTruthy();
+    expect(screen.getAllByText("Top Dividendos").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Legado").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Fora da estratégia").length).toBeGreaterThan(0);
+    // The shared-Ticker split: the report slice takes 40 of the ticker's income, the bucket 60.
+    expect(screen.getAllByText("R$ 40,00").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("R$ 60,00").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("strategy-chart")).toBeTruthy();
   });
 });

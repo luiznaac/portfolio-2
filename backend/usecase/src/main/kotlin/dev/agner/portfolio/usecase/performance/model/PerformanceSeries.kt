@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.performance.model
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkIndex
+import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
 
@@ -23,6 +24,9 @@ data class PeriodPerformance(
     // Each class's frozen value at the close and, after the first snapshot, at the prior close — the
     // per-class value series the history screen plots across months.
     val classes: List<PeriodClass> = emptyList(),
+    // Each Strategy's frozen slice at the close, the Manual Strategy included — the per-Strategy value
+    // series the history screen plots beside the class lines.
+    val strategies: List<PeriodStrategy> = emptyList(),
 )
 
 // One policy index's return for the period. Null when the SGS series could not price it, so the
@@ -36,4 +40,15 @@ data class PeriodBenchmark(
 data class PeriodClass(
     val assetClass: AssetClass,
     val valueEnd: BigDecimal,
+)
+
+// One Strategy's frozen slice at the month's close: the identity and value the snapshot froze, plus
+// the netted bookkeeping flow that separates a transfer from performance. A later rename or kind
+// change cannot rewrite the series.
+data class PeriodStrategy(
+    val strategyId: Int,
+    val strategy: String,
+    val kind: StrategyKind,
+    val valueEnd: BigDecimal,
+    val flow: BigDecimal,
 )
