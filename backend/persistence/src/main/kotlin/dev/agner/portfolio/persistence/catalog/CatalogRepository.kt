@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.catalog
 
+import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.now
@@ -32,6 +33,7 @@ class CatalogRepository(
             this[CatalogTable.isin] = entry.isin
             this[CatalogTable.assetKind] = entry.assetKind
             this[CatalogTable.assetClass] = entry.assetClass
+            this[CatalogTable.assetClassOverride] = entry.assetClassOverride
             this[CatalogTable.firstSeen] = entry.firstSeen
             this[CatalogTable.lastSeen] = entry.lastSeen
             this[CatalogTable.createdAt] = LocalDateTime.now(clock)
@@ -48,5 +50,11 @@ class CatalogRepository(
 
     override suspend fun fetchBy(ticker: String): CatalogEntry? = transaction {
         CatalogEntity.findById(ticker)?.toModel()
+    }
+
+    override suspend fun setAssetClassOverride(ticker: String, assetClass: AssetClass?): CatalogEntry? = transaction {
+        val entity = CatalogEntity.findById(ticker) ?: return@transaction null
+        entity.assetClassOverride = assetClass
+        entity.toModel()
     }
 }

@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.bond.BondService
 import dev.agner.portfolio.usecase.bond.model.Bond
 import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Position
@@ -73,10 +74,10 @@ class AllocationService(
     }
 
     // A position is valued at the current quote; a ticker with no close yet values at zero. Its class
-    // is the catalog's.
+    // is the catalog's effective class, so a manual classification outranks the BDI-derived one.
     private suspend fun toListedHolding(position: Position) = ListedHolding(
         ticker = position.ticker,
-        assetClass = catalog.fetchBy(position.ticker)?.assetClass,
+        assetClass = catalog.fetchBy(position.ticker)?.effectiveAssetClass,
         quantity = position.quantity,
         price = quotes.latestClose(position.ticker) ?: BigDecimal.ZERO,
     )

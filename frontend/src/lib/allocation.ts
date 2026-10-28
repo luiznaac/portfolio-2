@@ -34,6 +34,8 @@ export interface AllocationRow {
   kind: AllocationRowKind;
   depth: number;
   label: string;
+  // The ticker a leaf row names — the classify action keys on it.
+  ticker?: string;
   target?: number;
   ideal?: number;
   actual: number;
@@ -162,6 +164,7 @@ export function allocationRows(
           kind: "unclassified_ticker",
           depth: 2,
           label: ticker.ticker,
+          ticker: ticker.ticker,
           actual: ticker.actual,
           expandable: false,
         });

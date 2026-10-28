@@ -1,13 +1,16 @@
 package dev.agner.portfolio.usecase.listedasset
 
+import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSlice
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
+import dev.agner.portfolio.usecase.listedasset.model.AttributionSlicesByTicker
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
 import dev.agner.portfolio.usecase.listedasset.model.Position
+import dev.agner.portfolio.usecase.listedasset.model.toLedger
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.strategy.model.Strategy
@@ -34,7 +37,7 @@ class AttributionService(
     // The ledger keyed by ticker, each slice carrying its strategy's name — the read the order
     // engine and the harvest pass both need. The id-to-name projection belongs here, beside the
     // other reads that join it.
-    suspend fun fetchSlicesByTicker(): Map<String, List<AttributionSlice>> {
+    suspend fun fetchSlicesByTicker(): AttributionSlicesByTicker {
         val names = strategies.fetchAll().associate { it.id to it.name }
         return attributions.fetchAll()
             .mapNotNull { row ->
@@ -47,12 +50,7 @@ class AttributionService(
 
     // The whole ledger keyed by (strategy name, ticker), the way the order engine's funding pass
     // consumes it. It is the same slice read flattened, so the two can never disagree.
-    suspend fun fetchLedger(): Map<StrategyTicker, BigDecimal> =
-        fetchSlicesByTicker()
-            .flatMap { (ticker, slices) ->
-                slices.map { StrategyTicker(it.strategyName, ticker) to it.quantity }
-            }
-            .toMap()
+    suspend fun fetchLedger(): Map<StrategyTicker, BigDecimal> = fetchSlicesByTicker().toLedger()
 
     suspend fun fetchSummary(ticker: String): AttributionSummary? {
         val normalized = ticker.normalizedTicker()
@@ -117,7 +115,7 @@ class AttributionService(
     // A ticker enters a Strategy only once the catalog gives it a class, and only the Strategy of
     // that class may hold it. Classification is a precondition, not an inference.
     private suspend fun requireClassMatch(ticker: String, strategy: Strategy) {
-        val assetClass = catalog.fetchBy(ticker)?.assetClass
+        val assetClass = catalog.fetchBy(ticker)?.effectiveAssetClass
             ?: throw InvalidAttributionException("$ticker has no Asset Class; classify it before attributing")
         if (assetClass != strategy.assetClass) {
             throw InvalidAttributionException(

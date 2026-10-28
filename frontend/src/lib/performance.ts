@@ -6,8 +6,10 @@ import type {
   AssetClass,
   BenchmarkBlend,
   BenchmarkIndex,
+  ClassPerformance,
   PerformanceDecomposition,
   PeriodPerformance,
+  StrategyKind,
 } from "../api/types.ts";
 import { ASSET_CLASSES } from "./month.ts";
 
@@ -21,15 +23,17 @@ export function returnFillClass(value: number | undefined): string {
   return (value ?? 0) < 0 ? "bg-principal" : "bg-yield";
 }
 
-// The month's return in R$: value_end − value_start − net aportes − net income. The first point has
-// no prior value, so it has no result.
+// The month's return in R$: value_end − value_start − net aportes − net income − flow. The first
+// point has no prior value, so it has no result. A strategy slice's flow is its bookkeeping
+// attribution change, which moved units without being performance.
 export function decompositionResult(decomposition: PerformanceDecomposition): number | undefined {
   if (decomposition.value_start === undefined) return undefined;
   return (
     decomposition.value_end -
     decomposition.value_start -
     decomposition.net_aportes -
-    decomposition.net_income
+    decomposition.net_income -
+    (decomposition.flow ?? 0)
   );
 }
 
@@ -132,6 +136,80 @@ export function classValueSeries(months: PeriodPerformance[]): ClassSeries[] {
     assetClass,
     points: points.get(assetClass) ?? [],
   }));
+}
+
+export type StrategyRowKind = "strategy" | "outside";
+
+// One row of the strategy-level decomposition: a Strategy slice, or the class's read-only outside
+// remainder after it. The class line equals its strategy rows plus the outside row.
+export interface StrategyRow {
+  key: string;
+  assetClass: AssetClass;
+  label: string;
+  kind: StrategyRowKind;
+  strategyId?: number;
+  decomposition: PerformanceDecomposition;
+}
+
+// Flattens the class rungs into their strategy rows, each class's outside row last, so the table can
+// render one additive list without re-deriving the nesting.
+export function strategyRows(classes: ClassPerformance[]): StrategyRow[] {
+  return classes.flatMap((cls) => {
+    const slices: StrategyRow[] = (cls.strategies ?? []).map((strategy) => ({
+      key: `strategy:${cls.asset_class}:${strategy.strategy_id}`,
+      assetClass: cls.asset_class,
+      label: strategy.strategy,
+      kind: "strategy",
+      strategyId: strategy.strategy_id,
+      decomposition: strategy.decomposition,
+    }));
+    const outside: StrategyRow[] = cls.outside
+      ? [
+          {
+            key: `outside:${cls.asset_class}`,
+            assetClass: cls.asset_class,
+            label: "Fora da estratégia",
+            kind: "outside",
+            decomposition: cls.outside,
+          },
+        ]
+      : [];
+    return [...slices, ...outside];
+  });
+}
+
+export interface StrategySeriesPoint {
+  period: string;
+  value: number;
+}
+
+export interface StrategySeries {
+  strategyId: number;
+  strategy: string;
+  kind: StrategyKind;
+  points: StrategySeriesPoint[];
+}
+
+// Each Strategy's frozen value at every close that carries it, ordered by first appearance so the
+// chart's colours and legend stay stable. A rename cannot rewrite the line: the id, name and kind
+// come from the snapshot.
+export function strategyValueSeries(months: PeriodPerformance[]): StrategySeries[] {
+  const series = new Map<number, StrategySeries>();
+
+  for (const month of months) {
+    for (const row of month.strategies ?? []) {
+      const line = series.get(row.strategy_id) ?? {
+        strategyId: row.strategy_id,
+        strategy: row.strategy,
+        kind: row.kind,
+        points: [],
+      };
+      line.points.push({ period: month.period, value: row.value_end });
+      series.set(row.strategy_id, line);
+    }
+  }
+
+  return [...series.values()];
 }
 
 export interface BenchmarkRow {
