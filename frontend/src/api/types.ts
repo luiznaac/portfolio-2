@@ -138,6 +138,52 @@ export interface AttributionSliceCreation {
   quantity: number;
 }
 
+// The bulk legacy action's dry-run: every held Ticker that can enter its class's Manual Strategy,
+// grouped per class, plus the Tickers it skips and why. `quantity` is the slice's new total (the
+// whole custody), never a delta.
+export type LegacyAttributionSkipReason =
+  | "UNCLASSIFIED"
+  | "NO_BUCKET"
+  | "HAS_ATTRIBUTION"
+  | "WRITE_FAILED";
+
+export interface LegacyAttributionAdd {
+  ticker: string;
+  quantity: number;
+  value: number;
+}
+
+export interface LegacyAttributionGroup {
+  asset_class: AssetClass;
+  strategy_id: number;
+  strategy_name: string;
+  adds: LegacyAttributionAdd[];
+}
+
+export interface LegacyAttributionSkip {
+  ticker: string;
+  reason: LegacyAttributionSkipReason;
+  asset_class?: AssetClass | null;
+  message?: string;
+}
+
+export interface LegacyAttributionPreview {
+  groups: LegacyAttributionGroup[];
+  skips: LegacyAttributionSkip[];
+}
+
+export interface LegacyAttributionApplied extends LegacyAttributionAdd {
+  strategy_id: number;
+  strategy_name: string;
+}
+
+// Each Ticker is written independently, so the result reports the ones that landed beside the ones
+// that were skipped — a bad Ticker never aborts the run.
+export interface LegacyAttributionResult {
+  attributed: LegacyAttributionApplied[];
+  skipped: LegacyAttributionSkip[];
+}
+
 export type IndexId = "IPCA" | "CDI" | "SELIC";
 
 // The target bucket a fixed-income product allocates to — derived by the backend from the rate kind

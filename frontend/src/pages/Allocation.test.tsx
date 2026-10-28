@@ -1,19 +1,33 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Allocation as AllocationModel } from "../api/types.ts";
+import type {
+  Allocation as AllocationModel,
+  LegacyAttributionPreview,
+  LegacyAttributionResult,
+} from "../api/types.ts";
 import { Allocation } from "./Allocation.tsx";
 
 const mock = vi.hoisted(() => ({
   allocation: null as AllocationModel | null,
+  settled: null as AllocationModel | null,
+  preview: null as LegacyAttributionPreview | null,
+  result: null as LegacyAttributionResult | null,
+  applied: 0,
 }));
 
 vi.mock("../api/client.ts", () => ({
   api: {
     getCurrentAllocation: () => Promise.resolve(mock.allocation),
+    getLegacyAttributionPreview: () => Promise.resolve(mock.preview),
+    applyLegacyAttribution: () => {
+      mock.applied += 1;
+      if (mock.settled) mock.allocation = mock.settled;
+      return Promise.resolve(mock.result);
+    },
   },
 }));
 
@@ -40,6 +54,10 @@ function rowFor(label: string): HTMLElement {
 afterEach(() => {
   cleanup();
   mock.allocation = null;
+  mock.settled = null;
+  mock.preview = null;
+  mock.result = null;
+  mock.applied = 0;
 });
 
 describe("the Alocação tree", () => {
@@ -93,6 +111,84 @@ describe("the Alocação tree", () => {
 
     expect(await screen.findByText(/fora de qualquer estratégia/)).toBeDefined();
     expect(screen.queryByText(/distribuição por estratégia/)).toBeNull();
+  });
+
+  it("shows the bulk action above the tree and previews the adds and skips before anything changes", async () => {
+    mock.allocation = allocation;
+    mock.preview = preview;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    const open = await screen.findByRole("button", {
+      name: /Atribuir posições fora da estratégia ao legado/,
+    });
+    await user.click(open);
+
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    expect(within(dialog).getByText("ITUB4")).toBeDefined();
+    expect(within(dialog).getByText("Já tem atribuição")).toBeDefined();
+    expect(within(dialog).getByRole("link", { name: /Classificar/ })).toBeDefined();
+    expect(mock.applied).toBe(0);
+  });
+
+  it("applies the bulk attribution and reports the per-ticker result", async () => {
+    mock.allocation = allocation;
+    mock.preview = preview;
+    mock.result = result;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    await user.click(within(dialog).getByRole("button", { name: /Confirmar/ }));
+
+    expect(mock.applied).toBe(1);
+    expect(await screen.findByText(/1 posição atribuída ao legado/)).toBeDefined();
+  });
+
+  it("hides the bulk action when no outside custody remains", async () => {
+    mock.allocation = {
+      ...allocation,
+      classes: allocation.classes.map((cls) => ({
+        ...cls,
+        outside: { actual: 0, tickers: [] },
+      })),
+    };
+    renderAllocation();
+
+    await screen.findByText("Ações");
+    expect(
+      screen.queryByRole("button", { name: /Atribuir posições fora da estratégia ao legado/ }),
+    ).toBeNull();
+  });
+
+  it("keeps the apply result visible when the refetch clears the banner", async () => {
+    mock.allocation = allocation;
+    mock.settled = settledAllocation;
+    mock.preview = preview;
+    mock.result = result;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    await user.click(within(dialog).getByRole("button", { name: /Confirmar/ }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Atribuir posições fora da estratégia ao legado/ }),
+      ).toBeNull(),
+    );
+    expect(screen.getByRole("dialog", { name: /Atribuir ao legado/ })).toBeDefined();
+    expect(screen.getByText(/1 posição atribuída ao legado/)).toBeDefined();
   });
 });
 
@@ -181,4 +277,40 @@ const allocation: AllocationModel = {
       ],
     },
   ],
+};
+
+const settledAllocation: AllocationModel = {
+  ...allocation,
+  classes: allocation.classes.map((cls) => ({
+    ...cls,
+    outside: { actual: 0, tickers: [] },
+  })),
+};
+
+const preview: LegacyAttributionPreview = {
+  groups: [
+    {
+      asset_class: "ACOES",
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+      adds: [{ ticker: "ITUB4", quantity: 50, value: 500 }],
+    },
+  ],
+  skips: [
+    { ticker: "VALE3", reason: "HAS_ATTRIBUTION", asset_class: "ACOES" },
+    { ticker: "ZZZZ9", reason: "UNCLASSIFIED", asset_class: null },
+  ],
+};
+
+const result: LegacyAttributionResult = {
+  attributed: [
+    {
+      ticker: "ITUB4",
+      quantity: 50,
+      value: 500,
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+    },
+  ],
+  skipped: [{ ticker: "VALE3", reason: "HAS_ATTRIBUTION", asset_class: "ACOES" }],
 };
