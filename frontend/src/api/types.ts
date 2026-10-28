@@ -93,6 +93,8 @@ export interface Trade {
   source: TradeSource;
   confirmed_by_b3: boolean;
   ordinal: number;
+  // How much of an OPENING seed the history backfill has already absorbed; zero on a regular trade.
+  absorbed_quantity: number;
 }
 
 export interface TradeCreation {
@@ -831,7 +833,10 @@ export interface CorporateAction {
   process_number?: string;
   raw_type?: string;
   ordinal: number;
+  file_hash?: string;
   status: CorporateActionStatus;
+  // Derived on read from `status`; the API serialises it beside the stored fields.
+  is_applied: boolean;
 }
 
 // The POST /corporate-actions/import response: how many rows each destination absorbed and the
@@ -1104,6 +1109,10 @@ export interface Gap {
   quantity: number;
   unit_price?: number;
   status: GapStatus;
+  // The highest trade/corporate-action id the ledger held when the gap was created: only a newer
+  // record can fill it. Internal bookkeeping, but part of the wire shape.
+  trade_watermark: number;
+  action_watermark: number;
   // A missing sale with no price yet; the backend serializes it only on that variant.
   realized_pending?: boolean;
 }

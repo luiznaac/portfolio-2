@@ -140,6 +140,7 @@ function trade(date: string): Trade {
     source: "B3_IMPORT",
     confirmed_by_b3: true,
     ordinal: 1,
+    absorbed_quantity: 0,
   };
 }
 
