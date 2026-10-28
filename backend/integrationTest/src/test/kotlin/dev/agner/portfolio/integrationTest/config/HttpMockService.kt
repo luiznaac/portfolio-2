@@ -2,13 +2,19 @@ package dev.agner.portfolio.integrationTest.config
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
 import com.github.tomakehurst.wiremock.http.RequestMethod
 import dev.agner.portfolio.usecase.configuration.JsonMapper
 
 object HttpMockService {
 
-    private val server = WireMockServer(3000)
+    // A dynamic port keeps the suite clear of whatever else the machine runs on a fixed one. The app
+    // under test reaches the mocks through this port; DockerComposeExtension publishes it before the
+    // Spring context loads.
+    private val server = WireMockServer(options().dynamicPort())
     private val mapper = JsonMapper.mapper
+
+    val port: Int get() = server.port()
 
     init {
         server.start()
@@ -20,6 +26,9 @@ object HttpMockService {
         var queryParams: Map<String, String> = emptyMap()
         var httpStatus: Int = 200
         var payload: Any = emptyMap<String, String>()
+
+        // A binary body (the COTAHIST daily file is a ZIP) bypasses the JSON serialization above.
+        var body: ByteArray? = null
     }
 
     class ResponseScope {
@@ -41,6 +50,7 @@ object HttpMockService {
                     queryParams = configuration.queryParams,
                     httpStatus = configuration.httpStatus,
                     desiredResponsePayload = configuration.payload,
+                    desiredResponseBody = configuration.body,
                 )
             }
     }
@@ -51,6 +61,7 @@ object HttpMockService {
         queryParams: Map<String, String>,
         httpStatus: Int,
         desiredResponsePayload: Any,
+        desiredResponseBody: ByteArray? = null,
     ) {
         server.stubFor(
             WireMock.request(method.value(), WireMock.urlPathMatching(endpoint))
@@ -61,7 +72,13 @@ object HttpMockService {
                     WireMock.aResponse()
                         .withHeader("Content-Type", "application/json")
                         .withStatus(httpStatus)
-                        .withBody(mapper.writeValueAsBytes(desiredResponsePayload)),
+                        .apply {
+                            if (desiredResponseBody == null) {
+                                withBody(mapper.writeValueAsBytes(desiredResponsePayload))
+                            } else {
+                                withBody(desiredResponseBody)
+                            }
+                        },
                 ),
         )
     }

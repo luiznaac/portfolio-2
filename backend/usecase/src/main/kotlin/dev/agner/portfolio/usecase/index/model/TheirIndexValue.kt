@@ -5,10 +5,10 @@ import java.math.BigDecimal
 
 data class TheirIndexValue(
     val date: LocalDate,
-    val value: BigDecimal,
+    val observation: BigDecimal,
 ) {
     fun toCreation() = IndexValueCreation(
         date = date,
-        value = value,
+        observation = observation,
     )
 }
