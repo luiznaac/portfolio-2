@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.migration
 
+import dev.agner.portfolio.persistence.benchmark.BenchmarkCloseTable
 import dev.agner.portfolio.persistence.bond.BondOrderPositionTable
 import dev.agner.portfolio.persistence.bond.BondOrderStatementTable
 import dev.agner.portfolio.persistence.bond.BondOrderTable
@@ -44,6 +45,7 @@ const val MIGRATIONS_DIRECTORY = "src/main/resources/db/migration"
 val allTables: Array<Table> = arrayOf(
     IndexTable,
     IndexValueTable,
+    BenchmarkCloseTable,
     CheckingAccountTable,
     BondTable,
     BondOrderTable,

@@ -2,14 +2,12 @@ package dev.agner.portfolio.gateway.benchmark
 
 import dev.agner.portfolio.gateway.clientWith
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkIndex
+import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkSource
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
@@ -42,7 +40,14 @@ class BcbSgsGatewayTest : StringSpec({
         series.first().value.compareTo(BigDecimal("0.05")) shouldBe 0
     }
 
-    "reads the IBOV series 7 and the IPCA series 433" {
+    "is the SGS source for CDI and IPCA only" {
+        val gateway = BcbSgsGateway(clientWith { respond("[]", HttpStatusCode.OK, jsonHeaders()) }, HOST)
+
+        gateway.source shouldBe BenchmarkSource.SGS
+        gateway.indexes shouldBe setOf(BenchmarkIndex.CDI, BenchmarkIndex.IPCA)
+    }
+
+    "reads the IPCA series 433" {
         val requested = mutableListOf<String>()
         val gateway = BcbSgsGateway(
             clientWith { request ->
@@ -52,13 +57,9 @@ class BcbSgsGatewayTest : StringSpec({
             HOST,
         )
 
-        gateway.fetchSeries(BenchmarkIndex.IBOV, LocalDate.parse("2026-01-01"), LocalDate.parse("2026-01-31"))
         gateway.fetchSeries(BenchmarkIndex.IPCA, LocalDate.parse("2026-01-01"), LocalDate.parse("2026-01-31"))
 
-        requested shouldBe listOf(
-            "/dados/serie/bcdata.sgs.7/dados",
-            "/dados/serie/bcdata.sgs.433/dados",
-        )
+        requested shouldBe listOf("/dados/serie/bcdata.sgs.433/dados")
     }
 
     "an absent series is an empty list, not a failure" {
@@ -70,5 +71,3 @@ class BcbSgsGatewayTest : StringSpec({
 })
 
 private const val HOST = "https://api.bcb.gov.br"
-
-private fun jsonHeaders() = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())

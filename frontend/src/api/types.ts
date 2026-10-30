@@ -1199,3 +1199,16 @@ export interface BackfillReport {
   gaps_replaced: number;
   positions_reprojected: number;
 }
+
+// One-off benchmark backfill (POST /benchmarks/backfill?from=YYYY-MM-DD), a curl/runbook action with
+// no UI: one row per index and the stored point count the window now holds.
+export interface BenchmarkBackfillReport {
+  indexes: BenchmarkBackfillEntry[];
+}
+
+export interface BenchmarkBackfillEntry {
+  index: BenchmarkIndex;
+  from: string;
+  to: string;
+  points: number;
+}
