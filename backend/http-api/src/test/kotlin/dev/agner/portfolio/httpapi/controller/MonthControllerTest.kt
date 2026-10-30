@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.portfolio.StrategyTargetsExceedClassException
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
+import dev.agner.portfolio.usecase.portfolio.model.MonthPeriodRange
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.SubClassTarget
@@ -31,6 +32,30 @@ import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
 
 class MonthControllerTest : DescribeSpec({
+
+    describe("reading the period window") {
+
+        it("serves the inclusive min, max and default as ISO YearMonth strings") {
+            val service = mockk<MonthService>()
+            coEvery { service.fetchPeriodRange() } returns MonthPeriodRange(
+                min = YearMonth.parse("2020-03"),
+                max = YearMonth.parse("2026-10"),
+                default = YearMonth.parse("2020-12"),
+            )
+
+            testApplication {
+                application { installRoutes(MonthController(service)) }
+
+                val response = client.get("/month/period-range")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("min").asText() shouldBe "2020-03"
+                body.get("max").asText() shouldBe "2026-10"
+                body.get("default").asText() shouldBe "2020-12"
+            }
+        }
+    }
 
     describe("reading the current month") {
 

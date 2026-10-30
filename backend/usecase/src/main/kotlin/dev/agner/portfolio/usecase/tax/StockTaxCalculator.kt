@@ -11,8 +11,11 @@ import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
 import dev.agner.portfolio.usecase.tax.model.RealizedResult
 import dev.agner.portfolio.usecase.tax.model.StockTaxReport
+import dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedStatus
+import dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedTicker
 import dev.agner.portfolio.usecase.tax.model.TickerAveragePrice
 import dev.agner.portfolio.usecase.tax.model.TickerLedger
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.yearMonth
 import java.math.BigDecimal
@@ -36,7 +39,11 @@ object StockTaxCalculator {
     val STOCK_GAIN_RATE: BigDecimal = BigDecimal("15.00")
 
     fun compute(period: YearMonth, ledgers: List<TickerLedger>, carrySeed: CarrySeed): StockTaxReport {
-        val replays = ledgers.map { replay(it) }
+        // The whole book is replayed as of the period's end: a later trade must not change the
+        // average price or the position the period's realized result is measured against.
+        val asOf = ledgers.map { it.asOf(period.lastDay) }
+        val replays = asOf.map { replay(it) }
+        val replaysByTicker = replays.associateBy { it.ticker }
         val months = replays
             .flatMap { it.sales }
             .groupBy { it.month }
@@ -48,7 +55,7 @@ object StockTaxCalculator {
 
         return StockTaxReport(
             period = period,
-            meter = meterOf(current.swing, current.swingExceeded, swingCarry.lossApplied),
+            meter = meterOf(current.swing, current.swingExceeded, swingCarry.lossApplied ?: BigDecimal.ZERO),
             averagePrices = replays
                 .filter { it.position.quantity.signum() > 0 }
                 .map {
@@ -61,11 +68,32 @@ object StockTaxCalculator {
                 .sortedBy { it.ticker },
             realized = current.results,
             carry = carry,
-            dayTrades = ledgers
+            dayTrades = asOf
                 .flatMap { DayTradeCalculator.warnings(it.ticker, it.trades, period) }
                 .sortedWith(compareBy({ it.date }, { it.ticker }, { it.institutionId })),
+            unclassified = unclassifiedOf(asOf, replaysByTicker, period),
         )
     }
+
+    // An uncatalogued ticker's sales are excluded from the meter, never guessed. It is flagged when
+    // the book still holds it at period end or it was sold inside the period.
+    private fun unclassifiedOf(
+        ledgers: List<TickerLedger>,
+        replaysByTicker: Map<String, LedgerReplay>,
+        period: YearMonth,
+    ): List<TaxUnclassifiedTicker> = ledgers
+        .filter { it.assetKind == AssetKind.UNKNOWN }
+        .mapNotNull { ledger ->
+            val held = replaysByTicker.getValue(ledger.ticker).position.quantity.signum() > 0
+            val sold = ledger.trades.any { it is Trade.Sell && it.date.yearMonth == period }
+            when {
+                held && sold -> TaxUnclassifiedTicker(ledger.ticker, TaxUnclassifiedStatus.HELD_AND_SOLD)
+                held -> TaxUnclassifiedTicker(ledger.ticker, TaxUnclassifiedStatus.HELD)
+                sold -> TaxUnclassifiedTicker(ledger.ticker, TaxUnclassifiedStatus.SOLD)
+                else -> null
+            }
+        }
+        .sortedBy { it.ticker }
 
     private fun meterOf(swing: RealizedResult, exceeded: Boolean, carryApplied: BigDecimal): ExemptionMeter {
         val taxableGain = if (exceeded && swing.result.signum() > 0) {
@@ -112,6 +140,11 @@ object StockTaxCalculator {
                 result = gains.subtract(losses).defaultScale(),
             )
         }
+
+    private fun TickerLedger.asOf(lastDay: LocalDate) = copy(
+        trades = trades.filter { it.date <= lastDay },
+        corporateActions = corporateActions.filter { it.exDate <= lastDay },
+    )
 
     private fun replay(ledger: TickerLedger) = LedgerReplay(
         ticker = ledger.ticker,

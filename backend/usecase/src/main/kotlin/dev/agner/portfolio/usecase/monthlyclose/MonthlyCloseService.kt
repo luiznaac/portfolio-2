@@ -67,6 +67,8 @@ class MonthlyCloseService(
     // Null when no month is open — the edge maps that to the 404 the current-month reads promise.
     suspend fun closeCurrent(): Snapshot? {
         val current = months.fetchCurrent() ?: return null
+        // A backdated month is plan-only: refuse before the refresh, which writes.
+        months.requireClosable(current.month)
 
         // The refresh commits on its own: when the inbox still has a pending transfer, the 409 must
         // point at rows the caller can then approve by id.
@@ -84,6 +86,7 @@ class MonthlyCloseService(
         // plan belongs to the month that was open then, so a different month aborts the close.
         val open = months.fetchCurrent() ?: return null
         if (open.month.id != current.month.id) return null
+        months.requireClosable(open.month)
 
         val persisted = orders.fetch() ?: return null
         val pending = persisted.transfers.filter { it.status == TransferStatus.PENDING }

@@ -1,8 +1,10 @@
 import { type FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   useAcceptHarvestPair,
+  useClosedMonths,
+  useCurrentMonth,
   useHarvest,
+  useMonthPeriodRange,
   useSetHarvestOptOut,
   useStockTax,
 } from "../api/queries.ts";
@@ -13,43 +15,72 @@ import type {
   HarvestPair,
   HarvestProposal,
   HarvestReport,
+  MonthPeriodRange,
   StockTaxReport,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { PeriodSelect } from "../components/PeriodSelect.tsx";
 import { type Column, Table } from "../components/Table.tsx";
+import { monthKey, todayIso } from "../lib/dates.ts";
 import { formatCurrency, formatIsoDate, formatNumber } from "../lib/format.ts";
 import { monthPeriodLabel } from "../lib/month.ts";
 import {
   type HarvestPairFormState,
   type RealizedRow,
+  carryAmount,
   darfDeadlineLabel,
+  darfIsOverdue,
   harvestPairForm,
+  hasSales,
   meterLabel,
   meterProgress,
   realizedKindLabel,
   realizedRows,
+  taxPeriodChip,
   toHarvestPairCreation,
+  unclassifiedStatusLabel,
 } from "../lib/taxes.ts";
 
 // Impostos (issue #173): the month's tax ledger — the R$20k stock-sale meter, the realized result
 // per kind, the three carry buckets and the DARF 6015 deadline — plus the harvest pass: loss pairs
 // sold D and rebought D+1, sized to the remaining headroom, with a per-ticker opt-out.
 export function Taxes() {
-  const tax = useStockTax();
-  const harvest = useHarvest();
+  const range = useMonthPeriodRange();
+  const current = useCurrentMonth();
+  const closed = useClosedMonths();
+  const [selected, setSelected] = useState<string | null>(null);
+  const currentPeriod = monthKey(todayIso());
+  const period = selected ?? current.data?.month.period ?? range.data?.default ?? "";
+  const openPeriod = current.data?.month.period ?? null;
+  const closedPeriods = (closed.data ?? []).map((month) => month.period);
+  const chip = taxPeriodChip(period, currentPeriod, openPeriod, closedPeriods);
+  const isOpenMonth = openPeriod !== null && period === openPeriod;
+  const tax = useStockTax(period);
+  const harvest = useHarvest(isOpenMonth);
 
   return (
     <section>
       <div className="mb-4">
         <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Impostos</h1>
         <p className="text-[13px] text-ink-dim">
-          Livro mensal de ganho de capital, ações e FIIs em baldes separados. Planejador de step-up
-          para preencher a isenção.
+          Livro mensal de ganho de capital, ações e FIIs em baldes separados. Leia qualquer mês do
+          histórico importado; o planejador de step-up só existe para o mês aberto.
         </p>
       </div>
+
+      {range.isLoading ? (
+        <p className="text-[13.5px] text-ink-dim">Carregando…</p>
+      ) : range.isError ? (
+        <p className="text-[13.5px] text-tax">{range.error.message}</p>
+      ) : range.data ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <PeriodPicker range={range.data} period={period} onChange={setSelected} />
+          {chip && <Chip tone={chip.tone}>{chip.label}</Chip>}
+        </div>
+      ) : null}
 
       {tax.isLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
@@ -58,30 +89,44 @@ export function Taxes() {
       ) : tax.data ? (
         <TaxLedger
           tax={tax.data}
+          isOpenMonth={isOpenMonth}
+          today={todayIso()}
           harvest={harvest.data ?? null}
           harvestError={harvest.isError ? harvest.error.message : null}
         />
-      ) : (
-        <Panel title="Sem mês aberto">
-          <p className="text-[13.5px] text-ink-dim">
-            Abra um mês em{" "}
-            <Link to="/month" className="text-principal underline">
-              Capital e alvos
-            </Link>{" "}
-            para ver o livro de impostos e o planejador de harvest.
-          </p>
-        </Panel>
-      )}
+      ) : null}
     </section>
+  );
+}
+
+// The same server window the month opener reads, so a period outside it is never offered.
+function PeriodPicker({
+  range,
+  period,
+  onChange,
+}: {
+  range: MonthPeriodRange;
+  period: string;
+  onChange: (period: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-[11.5px] text-ink-dim">
+      <span>Período</span>
+      <PeriodSelect range={range} period={period} onChange={onChange} />
+    </div>
   );
 }
 
 function TaxLedger({
   tax,
+  isOpenMonth,
+  today,
   harvest,
   harvestError,
 }: {
   tax: StockTaxReport;
+  isOpenMonth: boolean;
+  today: string;
   harvest: HarvestReport | null;
   harvestError: string | null;
 }) {
@@ -91,16 +136,56 @@ function TaxLedger({
         <MeterPanel tax={tax} />
       </div>
 
+      {(tax.pending_gaps.length > 0 || tax.unclassified.length > 0) && (
+        <div className="mb-4 grid items-start gap-3 lg:grid-cols-2">
+          {tax.pending_gaps.length > 0 && (
+            <Panel title="Resultado pendente">
+              <p className="text-[13px] text-ink-dim">
+                Venda sem preço declarado: o resultado deste mês fica pendente até a lacuna ser
+                precificada. Ela nunca entra no imposto.
+              </p>
+              <ul className="mt-2 space-y-1 font-mono text-[12px] text-ink">
+                {tax.pending_gaps.map((gap) => (
+                  <li key={gap.id}>
+                    {gap.ticker} · {formatIsoDate(gap.date)} · {formatNumber(gap.quantity)} un
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+          {tax.unclassified.length > 0 && (
+            <Panel title="Sem classe">
+              <p className="text-[13px] text-ink-dim">
+                Tickers sem classe: as vendas ficam fora do imposto até a classificação.
+              </p>
+              <ul className="mt-2 space-y-1 font-mono text-[12px] text-ink">
+                {tax.unclassified.map((ticker) => (
+                  <li key={ticker.ticker}>
+                    {ticker.ticker} · {unclassifiedStatusLabel(ticker.status)}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+        </div>
+      )}
+
       <div className="mb-4 grid items-start gap-3 lg:grid-cols-[1.6fr_1fr]">
         <RealizedPanel tax={tax} />
-        <DarfPanel tax={tax} />
+        <DarfPanel tax={tax} today={today} />
       </div>
 
       <div className="mb-4">
         <CarryPanel carry={tax.carry} />
       </div>
 
-      {harvestError ? (
+      {!isOpenMonth ? (
+        <Panel title="Harvest">
+          <p className="text-[13px] text-ink-dim">
+            O planejador de harvest só existe para o mês aberto; este é um mês histórico.
+          </p>
+        </Panel>
+      ) : harvestError ? (
         <Panel title="Harvest">
           <p className="text-[13px] text-tax">{harvestError}</p>
         </Panel>
@@ -119,7 +204,7 @@ function MeterPanel({ tax }: { tax: StockTaxReport }) {
   const { meter } = tax;
 
   return (
-    <Panel title="Vendas de ações × teto mensal">
+    <Panel title={`Vendas de ações × teto mensal · ${monthPeriodLabel(tax.period)}`}>
       <div className="flex flex-wrap items-baseline gap-3">
         <span className="font-mono text-[22px] text-ink">{formatCurrency(meter.gross_sales)}</span>
         <span className="text-[12.5px] text-ink-dim">
@@ -152,17 +237,26 @@ function RealizedPanel({ tax }: { tax: StockTaxReport }) {
   return (
     <div>
       <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
-        Livro mensal
+        Livro mensal · {monthPeriodLabel(tax.period)}
       </h2>
-      <Table columns={REALIZED_COLUMNS} rows={rows} rowKey={(row) => row.kind} />
+      {hasSales(tax) ? (
+        <Table columns={REALIZED_COLUMNS} rows={rows} rowKey={(row) => row.kind} />
+      ) : (
+        <Panel>
+          <p className="text-[13px] text-ink-dim">Sem vendas neste mês.</p>
+        </Panel>
+      )}
     </div>
   );
 }
 
-function DarfPanel({ tax }: { tax: StockTaxReport }) {
+function DarfPanel({ tax, today }: { tax: StockTaxReport; today: string }) {
   return (
     <Panel title="DARF 6015">
-      <div className="font-mono text-[22px] text-tax">{formatCurrency(tax.meter.tax)}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="font-mono text-[22px] text-tax">{formatCurrency(tax.meter.tax)}</div>
+        {darfIsOverdue(tax, today) && <Chip tone="rose">vencida</Chip>}
+      </div>
       <dl className="mt-2 space-y-1 text-[12.5px]">
         <div className="flex justify-between gap-3">
           <dt className="text-ink-dim">Competência</dt>
@@ -182,12 +276,19 @@ function DarfPanel({ tax }: { tax: StockTaxReport }) {
 }
 
 function CarryPanel({ carry }: { carry: CarryBucket[] }) {
+  const unavailable = carry.some((bucket) => !bucket.available);
+
   return (
     <div>
       <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
         Baldes de prejuízo
       </h2>
       <Table columns={CARRY_COLUMNS} rows={carry} rowKey={(row) => row.kind} />
+      {unavailable && (
+        <p className="mt-2 text-[11.5px] text-ink-faint">
+          Sem base antes da adoção — os baldes sem histórico anterior aparecem como "—".
+        </p>
+      )}
     </div>
   );
 }
@@ -470,27 +571,25 @@ const CARRY_COLUMNS: Column<CarryBucket>[] = [
     key: "opening",
     header: "Saldo inicial",
     align: "right",
-    render: (row) => formatCurrency(row.opening_balance),
+    render: (row) => carryAmount(row.opening_balance),
   },
   {
     key: "banked",
     header: "Prejuízo do mês",
     align: "right",
-    render: (row) => <span className="text-principal">{formatCurrency(row.loss_banked)}</span>,
+    render: (row) => <span className="text-principal">{carryAmount(row.loss_banked)}</span>,
   },
   {
     key: "applied",
     header: "Compensado",
     align: "right",
-    render: (row) => formatCurrency(row.loss_applied),
+    render: (row) => carryAmount(row.loss_applied),
   },
   {
     key: "closing",
     header: "Saldo final",
     align: "right",
-    render: (row) => (
-      <span className="font-mono text-ink">{formatCurrency(row.closing_balance)}</span>
-    ),
+    render: (row) => <span className="font-mono text-ink">{carryAmount(row.closing_balance)}</span>,
   },
 ];
 

@@ -7,6 +7,7 @@ import type {
   FixedIncomeSubClass,
   Month,
   MonthCreation,
+  MonthPeriodRange,
   MonthStatus,
   MonthUpdate,
   Targets,
@@ -101,15 +102,44 @@ export function periodMonth(period: string): string {
   return PERIOD.exec(period)?.[2] ?? "";
 }
 
-// The years around today, so the default month is always pickable; a selected year outside that
-// window is kept rather than dropped from the select.
-export function periodYearOptions(period: string, today: string, span = 2): string[] {
-  const anchor = Number(today.slice(0, 4));
-  const selected = periodYear(period);
-  const years = new Set<string>();
-  for (let offset = -span; offset <= span; offset += 1) years.add(String(anchor + offset));
-  if (selected.length > 0) years.add(selected);
-  return [...years].sort();
+// The years the server window covers — the opener and the tax picker never offer a year outside it.
+export function periodYearOptions(range: MonthPeriodRange): string[] {
+  const min = Number(range.min.slice(0, 4));
+  const max = Number(range.max.slice(0, 4));
+  const years: string[] = [];
+  for (let year = min; year <= max; year += 1) years.push(String(year));
+  return years;
+}
+
+export interface PeriodMonthOption {
+  value: string;
+  label: string;
+  disabled: boolean;
+}
+
+// The twelve months for one year, disabling the out-of-window months in the boundary years.
+export function monthOptionsFor(year: string, range: MonthPeriodRange): PeriodMonthOption[] {
+  return MONTH_OPTIONS.map((month) => ({
+    ...month,
+    disabled: !inPeriodWindow(`${year}-${month.value}`, range),
+  }));
+}
+
+export function inPeriodWindow(period: string, range: MonthPeriodRange): boolean {
+  return period.length > 0 && period >= range.min && period <= range.max;
+}
+
+// A period before the server's calendar month is plan-only: it opens and edits, but it cannot be
+// closed into a Snapshot.
+export function isBackdatedPeriod(period: string, currentPeriod: string): boolean {
+  return period.length > 0 && period < currentPeriod;
+}
+
+// A year change can land on an out-of-window month in a boundary year; clamp it to the nearest
+// window edge so the two selects always describe a period the server accepts.
+export function boundPeriod(period: string, range: MonthPeriodRange): string {
+  if (inPeriodWindow(period, range)) return period;
+  return period < range.min ? range.min : range.max;
 }
 
 export function monthPeriodLabel(period: string): string {

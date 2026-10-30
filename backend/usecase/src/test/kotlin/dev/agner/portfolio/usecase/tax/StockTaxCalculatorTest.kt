@@ -14,6 +14,7 @@ import dev.agner.portfolio.usecase.tax.model.RealizedKind
 import dev.agner.portfolio.usecase.tax.model.TickerLedger
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
@@ -223,6 +224,91 @@ class StockTaxCalculatorTest : StringSpec({
         report.averagePrices.first { it.ticker == "HGLG11" }.quantity.plain() shouldBe "10"
     }
 
+    "replays as of the period's end: a later trade never changes the period's basis" {
+        val report = meter(
+            stock(
+                buy(date = "2026-10-01", quantity = "100", unitPrice = "10"),
+                buy(id = 2, date = "2026-11-01", quantity = "100", unitPrice = "50"),
+                sell(id = 3, date = "2026-10-05", quantity = "50", unitPrice = "20"),
+            ),
+        )
+
+        report.meter.grossSales.plain() shouldBe "1000"
+        report.meter.realizedGain.plain() shouldBe "500"
+        report.averagePrices.single().quantity.plain() shouldBe "50"
+        report.averagePrices.single().averagePrice.plain() shouldBe "10"
+    }
+
+    "a bucket at its adoption boundary is unavailable rather than double counted" {
+        val report = reportOf(
+            stock(
+                buy(date = "2026-10-01", quantity = "2000", unitPrice = "10"),
+                sell(id = 2, date = "2026-10-05", quantity = "2000", unitPrice = "10.5"),
+            ),
+            carrySeed = CarrySeed.adopted(
+                openingBalances = mapOf(RealizedKind.SWING to BigDecimal("500")),
+                through = YearMonth.parse("2026-10"),
+            ),
+        )
+
+        val swing = report.carry.first { it.kind == RealizedKind.SWING }
+
+        swing.available shouldBe false
+        swing.openingBalance.shouldBeNull()
+        swing.lossBanked.shouldBeNull()
+        swing.lossApplied.shouldBeNull()
+        swing.closingBalance.shouldBeNull()
+    }
+
+    "a bucket with no seed is available from zero" {
+        val report = reportOf(
+            stock(
+                buy(date = "2026-10-01", quantity = "100", unitPrice = "10"),
+                sell(id = 2, date = "2026-10-05", quantity = "100", unitPrice = "12"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        val swing = report.carry.first { it.kind == RealizedKind.SWING }
+
+        swing.available shouldBe true
+        swing.openingBalance!!.plain() shouldBe "0"
+        swing.closingBalance!!.plain() shouldBe "0"
+    }
+
+    "an uncatalogued ticker held or sold in the period is reported as unclassified" {
+        val report = meter(
+            TickerLedger(
+                ticker = "MYST3",
+                assetKind = AssetKind.UNKNOWN,
+                trades = listOf(
+                    buy(ticker = "MYST3", quantity = "100", unitPrice = "10"),
+                    sell(id = 2, ticker = "MYST3", quantity = "40", unitPrice = "12"),
+                ),
+            ),
+            TickerLedger(
+                ticker = "MYST4",
+                assetKind = AssetKind.UNKNOWN,
+                trades = listOf(
+                    buy(id = 3, ticker = "MYST4", quantity = "100", unitPrice = "10"),
+                    sell(id = 4, ticker = "MYST4", quantity = "100", unitPrice = "12"),
+                ),
+            ),
+        )
+
+        report.unclassified shouldBe listOf(
+            dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedTicker(
+                ticker = "MYST3",
+                status = dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedStatus.HELD_AND_SOLD,
+            ),
+            dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedTicker(
+                ticker = "MYST4",
+                status = dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedStatus.SOLD,
+            ),
+        )
+        report.meter.grossSales.plain() shouldBe "0"
+    }
+
     "a sale's stored fee does not change the gross basis" {
         val report = meter(
             stock(
@@ -306,20 +392,20 @@ class StockTaxCalculatorTest : StringSpec({
         val carry = report.carry.associateBy { it.kind }
 
         carry.getValue(RealizedKind.SWING).let {
-            it.openingBalance.plain() shouldBe "500"
-            it.lossBanked.plain() shouldBe "0"
-            it.lossApplied.plain() shouldBe "500"
-            it.closingBalance.plain() shouldBe "0"
+            it.openingBalance!!.plain() shouldBe "500"
+            it.lossBanked!!.plain() shouldBe "0"
+            it.lossApplied!!.plain() shouldBe "500"
+            it.closingBalance!!.plain() shouldBe "0"
         }
         carry.getValue(RealizedKind.DAY_TRADE).let {
-            it.openingBalance.plain() shouldBe "300"
-            it.lossApplied.plain() shouldBe "100"
-            it.closingBalance.plain() shouldBe "200"
+            it.openingBalance!!.plain() shouldBe "300"
+            it.lossApplied!!.plain() shouldBe "100"
+            it.closingBalance!!.plain() shouldBe "200"
         }
         carry.getValue(RealizedKind.FII).let {
-            it.openingBalance.plain() shouldBe "1000"
-            it.lossApplied.plain() shouldBe "200"
-            it.closingBalance.plain() shouldBe "800"
+            it.openingBalance!!.plain() shouldBe "1000"
+            it.lossApplied!!.plain() shouldBe "200"
+            it.closingBalance!!.plain() shouldBe "800"
         }
 
         report.meter.grossSales.plain() shouldBe "21000"
@@ -342,9 +428,9 @@ class StockTaxCalculatorTest : StringSpec({
 
         val swing = report.carry.first { it.kind == RealizedKind.SWING }
 
-        swing.openingBalance.plain() shouldBe "500"
-        swing.lossApplied.plain() shouldBe "0"
-        swing.closingBalance.plain() shouldBe "500"
+        swing.openingBalance!!.plain() shouldBe "500"
+        swing.lossApplied!!.plain() shouldBe "0"
+        swing.closingBalance!!.plain() shouldBe "500"
         report.meter.exceeded shouldBe false
         report.meter.taxableGain.plain() shouldBe "0"
         report.meter.tax.plain() shouldBe "0"
@@ -363,10 +449,10 @@ class StockTaxCalculatorTest : StringSpec({
 
         val swing = report.carry.first { it.kind == RealizedKind.SWING }
 
-        swing.openingBalance.plain() shouldBe "400"
-        swing.lossBanked.plain() shouldBe "0"
-        swing.lossApplied.plain() shouldBe "400"
-        swing.closingBalance.plain() shouldBe "0"
+        swing.openingBalance!!.plain() shouldBe "400"
+        swing.lossBanked!!.plain() shouldBe "0"
+        swing.lossApplied!!.plain() shouldBe "400"
+        swing.closingBalance!!.plain() shouldBe "0"
         report.meter.realizedGain.plain() shouldBe "1000"
         report.meter.taxableGain.plain() shouldBe "600"
         report.meter.tax.plain() shouldBe "90"
@@ -386,10 +472,10 @@ class StockTaxCalculatorTest : StringSpec({
 
         val swing = report.carry.first { it.kind == RealizedKind.SWING }
 
-        swing.openingBalance.plain() shouldBe "500"
-        swing.lossBanked.plain() shouldBe "300"
-        swing.lossApplied.plain() shouldBe "0"
-        swing.closingBalance.plain() shouldBe "800"
+        swing.openingBalance!!.plain() shouldBe "500"
+        swing.lossBanked!!.plain() shouldBe "300"
+        swing.lossApplied!!.plain() shouldBe "0"
+        swing.closingBalance!!.plain() shouldBe "800"
         report.meter.taxableGain.plain() shouldBe "0"
     }
 
@@ -411,14 +497,14 @@ class StockTaxCalculatorTest : StringSpec({
         val carry = report.carry.associateBy { it.kind }
 
         carry.getValue(RealizedKind.FII).let {
-            it.openingBalance.plain() shouldBe "200"
-            it.lossApplied.plain() shouldBe "200"
-            it.closingBalance.plain() shouldBe "0"
+            it.openingBalance!!.plain() shouldBe "200"
+            it.lossApplied!!.plain() shouldBe "200"
+            it.closingBalance!!.plain() shouldBe "0"
         }
         carry.getValue(RealizedKind.SWING).let {
-            it.openingBalance.plain() shouldBe "0"
-            it.lossApplied.plain() shouldBe "0"
-            it.closingBalance.plain() shouldBe "0"
+            it.openingBalance!!.plain() shouldBe "0"
+            it.lossApplied!!.plain() shouldBe "0"
+            it.closingBalance!!.plain() shouldBe "0"
         }
         report.meter.realizedGain.plain() shouldBe "200"
     }
@@ -493,9 +579,9 @@ class StockTaxCalculatorTest : StringSpec({
 
         val swing = report.carry.first { it.kind == RealizedKind.SWING }
 
-        swing.openingBalance.plain() shouldBe "500"
-        swing.lossApplied.plain() shouldBe "500"
-        swing.closingBalance.plain() shouldBe "0"
+        swing.openingBalance!!.plain() shouldBe "500"
+        swing.lossApplied!!.plain() shouldBe "500"
+        swing.closingBalance!!.plain() shouldBe "0"
         report.meter.taxableGain.plain() shouldBe "500"
         report.meter.tax.plain() shouldBe "75"
     }
@@ -521,14 +607,14 @@ class StockTaxCalculatorTest : StringSpec({
         val carry = report.carry.associateBy { it.kind }
 
         carry.getValue(RealizedKind.SWING).let {
-            it.openingBalance.plain() shouldBe "500"
-            it.lossApplied.plain() shouldBe "500"
-            it.closingBalance.plain() shouldBe "0"
+            it.openingBalance!!.plain() shouldBe "500"
+            it.lossApplied!!.plain() shouldBe "500"
+            it.closingBalance!!.plain() shouldBe "0"
         }
         carry.getValue(RealizedKind.FII).let {
-            it.openingBalance.plain() shouldBe "1000"
-            it.lossBanked.plain() shouldBe "0"
-            it.closingBalance.plain() shouldBe "1000"
+            it.openingBalance!!.plain() shouldBe "1000"
+            it.lossBanked!!.plain() shouldBe "0"
+            it.closingBalance!!.plain() shouldBe "1000"
         }
     }
 })

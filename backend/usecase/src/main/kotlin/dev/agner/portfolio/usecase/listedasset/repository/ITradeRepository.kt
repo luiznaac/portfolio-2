@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.listedasset.repository
 
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
+import dev.agner.portfolio.usecase.listedasset.model.TradeExecutionRange
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import java.math.BigDecimal
@@ -13,6 +14,10 @@ interface ITradeRepository {
     suspend fun save(creation: TradeCreation, source: TradeSource, ordinal: Int): Trade
 
     suspend fun fetchAll(): List<Trade>
+
+    // The earliest and latest execution dates in the ledger — the month window derives its history
+    // bound and the opener's default from them. Null only when the ledger is empty.
+    suspend fun fetchExecutionDateRange(): TradeExecutionRange?
 
     suspend fun fetchById(id: Int): Trade?
 

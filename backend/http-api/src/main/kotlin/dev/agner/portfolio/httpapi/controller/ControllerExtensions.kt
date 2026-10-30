@@ -8,6 +8,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.utils.io.readRemaining
+import kotlinx.datetime.YearMonth
 import kotlinx.io.readByteArray
 
 // Client-driven path parsing: an absent or non-numeric segment must surface as a domain error
@@ -26,6 +27,14 @@ internal fun ApplicationCall.requiredInt(name: String): Int =
 
 internal fun ApplicationCall.requiredString(name: String): String =
     parameters[name] ?: throw InvalidParameterException(name, null)
+
+// A path period is the ISO `YYYY-MM` the domain speaks; a malformed value is the caller's error,
+// never a 500.
+internal fun ApplicationCall.requiredPeriod(name: String): YearMonth {
+    val raw = parameters[name]
+    return raw?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
+        ?: throw InvalidParameterException(name, raw)
+}
 
 // The current-month reads all share one "absent is a 404" contract; the generic keeps a controller
 // from hand-rolling the same branch per shape.

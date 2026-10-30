@@ -7,11 +7,14 @@ import type {
 } from "../api/types.ts";
 import {
   darfDeadlineLabel,
+  darfIsOverdue,
   harvestPairForm,
+  hasSales,
   meterLabel,
   meterProgress,
   realizedKindLabel,
   realizedRows,
+  taxPeriodChip,
   toHarvestPairCreation,
 } from "./taxes.ts";
 
@@ -30,6 +33,18 @@ const realized: RealizedResult[] = [
   { kind: "DAY_TRADE", gross_sales: 0, gains: 0, losses: 0, result: 0 },
   { kind: "FII", gross_sales: 0, gains: 0, losses: 100, result: -100 },
 ];
+
+const report: StockTaxReport = {
+  period: "2026-10",
+  meter,
+  average_prices: [],
+  realized,
+  carry: [],
+  day_trades: [],
+  pending_gaps: [],
+  unclassified: [],
+  darf_due_date: "2026-11-30",
+};
 
 const proposal: HarvestProposal = {
   ticker: "PETR4",
@@ -74,6 +89,31 @@ describe("tax ledger labels", () => {
   });
 });
 
+describe("tax period labels", () => {
+  it("chips the open month, a closed month and imported history", () => {
+    expect(taxPeriodChip("2026-10", "2026-10", "2026-10", ["2026-09"])).toEqual({
+      label: "mês aberto",
+      tone: "green",
+    });
+    expect(taxPeriodChip("2026-09", "2026-10", "2026-10", ["2026-09"])).toEqual({
+      label: "fechado",
+      tone: "neutral",
+    });
+    expect(taxPeriodChip("2020-12", "2026-10", "2026-10", ["2026-09"])).toEqual({
+      label: "histórico",
+      tone: "amber",
+    });
+    expect(taxPeriodChip("2026-10", "2026-10", null, [])).toBeNull();
+  });
+
+  it("detects a period with no sales and an overdue DARF", () => {
+    expect(hasSales(report)).toBe(true);
+    expect(hasSales({ ...report, realized: [] })).toBe(false);
+    expect(darfIsOverdue(report, "2026-11-30")).toBe(false);
+    expect(darfIsOverdue(report, "2026-12-01")).toBe(true);
+  });
+});
+
 describe("DARF deadline", () => {
   it("labels the report's deadline", () => {
     const report: StockTaxReport = {
@@ -83,6 +123,8 @@ describe("DARF deadline", () => {
       realized,
       carry: [],
       day_trades: [],
+      pending_gaps: [],
+      unclassified: [],
       darf_due_date: "2026-11-30",
     };
 

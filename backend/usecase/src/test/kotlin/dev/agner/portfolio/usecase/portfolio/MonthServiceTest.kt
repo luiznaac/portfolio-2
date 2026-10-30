@@ -1,10 +1,13 @@
 package dev.agner.portfolio.usecase.portfolio
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.listedasset.model.TradeExecutionRange
+import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthCreation
+import dev.agner.portfolio.usecase.portfolio.model.MonthPeriodRange
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.MonthUpdate
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
@@ -12,21 +15,31 @@ import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.portfolio.repository.IMonthRepository
 import dev.agner.portfolio.usecase.portfolio.repository.ITargetRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 class MonthServiceTest : StringSpec({
     val monthRepository = mockk<IMonthRepository>(relaxed = true)
     val targetRepository = mockk<ITargetRepository>(relaxed = true)
-    val service = MonthService(monthRepository, targetRepository)
+    val trades = mockk<ITradeRepository>(relaxed = true)
+    val service = MonthService(monthRepository, targetRepository, trades, fixedClock)
 
-    beforeTest { clearAllMocks() }
+    beforeTest {
+        clearAllMocks()
+        coEvery { monthRepository.fetchAll() } returns emptyList()
+        coEvery { trades.fetchExecutionDateRange() } returns null
+    }
 
     "fetchCurrent returns null when no month is open" {
         coEvery { monthRepository.fetchOpen() } returns null
@@ -45,6 +58,7 @@ class MonthServiceTest : StringSpec({
 
     "open delegates to the repository and returns the new month's view" {
         coEvery { monthRepository.fetchByPeriod(any()) } returns null
+        coEvery { monthRepository.fetchAll() } returns listOf(openMonth)
         coEvery { monthRepository.open(creation) } returns openMonth
         coEvery { targetRepository.fetchByMonth(7) } returns emptyTargets
 
@@ -60,6 +74,65 @@ class MonthServiceTest : StringSpec({
 
         (error is MonthPeriodTakenException) shouldBe true
         coVerify(exactly = 0) { monthRepository.open(any()) }
+    }
+
+    "period range is the current month when there are no trades and no months" {
+        coEvery { monthRepository.fetchAll() } returns emptyList()
+        coEvery { trades.fetchExecutionDateRange() } returns null
+
+        service.fetchPeriodRange() shouldBe MonthPeriodRange(
+            min = YearMonth.parse("2026-10"),
+            max = YearMonth.parse("2026-10"),
+            default = YearMonth.parse("2026-10"),
+        )
+    }
+
+    "period range takes the earlier existing month and the latest trade as default" {
+        coEvery { monthRepository.fetchAll() } returns listOf(monthPeriod("2020-01")) + closedMonths
+        coEvery { trades.fetchExecutionDateRange() } returns
+            TradeExecutionRange(LocalDate.parse("2020-03-10"), LocalDate.parse("2020-12-15"))
+
+        service.fetchPeriodRange() shouldBe MonthPeriodRange(
+            min = YearMonth.parse("2020-01"),
+            max = YearMonth.parse("2026-10"),
+            default = YearMonth.parse("2020-12"),
+        )
+    }
+
+    "period range clamps a future trade default into the window" {
+        coEvery { monthRepository.fetchAll() } returns emptyList()
+        coEvery { trades.fetchExecutionDateRange() } returns
+            TradeExecutionRange(LocalDate.parse("2030-01-10"), LocalDate.parse("2030-05-10"))
+
+        service.fetchPeriodRange() shouldBe MonthPeriodRange(
+            min = YearMonth.parse("2026-10"),
+            max = YearMonth.parse("2026-10"),
+            default = YearMonth.parse("2026-10"),
+        )
+    }
+
+    "open refuses a period outside the window" {
+        coEvery { monthRepository.fetchByPeriod(any()) } returns null
+        coEvery { monthRepository.fetchAll() } returns emptyList()
+        coEvery { trades.fetchExecutionDateRange() } returns
+            TradeExecutionRange(LocalDate.parse("2020-03-10"), LocalDate.parse("2020-12-15"))
+
+        val error = shouldThrow<MonthPeriodOutsideWindowException> {
+            service.open(creation.copy(period = YearMonth.parse("2020-02")))
+        }
+
+        error.period shouldBe YearMonth.parse("2020-02")
+        coVerify(exactly = 0) { monthRepository.open(any()) }
+    }
+
+    "requireClosable refuses a month before the current calendar month" {
+        shouldThrow<MonthCloseNotCurrentException> {
+            service.requireClosable(openMonth.copy(period = YearMonth.parse("2026-09")))
+        }
+    }
+
+    "requireClosable accepts the current calendar month" {
+        service.requireClosable(openMonth.copy(period = YearMonth.parse("2026-10")))
     }
 
     "updateCurrent returns null when no month is open" {
@@ -205,3 +278,17 @@ private val targets = Targets(
 
 private val emptyTargets =
     Targets(classes = emptyList(), strategies = emptyList(), subClasses = emptyList(), tickers = emptyList())
+
+private val fixedClock = Clock.fixed(Instant.parse("2026-10-31T12:00:00Z"), ZoneOffset.UTC)
+
+private fun monthPeriod(period: String) = openMonth.copy(id = 11, period = YearMonth.parse(period))
+
+private val closedMonths = listOf(
+    Month(
+        id = 12,
+        period = YearMonth.parse("2026-09"),
+        capital = BigDecimal("240000.00"),
+        floor = BigDecimal("20000.00"),
+        status = MonthStatus.CLOSED,
+    ),
+)

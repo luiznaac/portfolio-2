@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { Month, Targets } from "../api/types.ts";
+import type { Month, MonthPeriodRange, Targets } from "../api/types.ts";
 import {
   MONTH_OPTIONS,
   type StrategyTargetRow,
   addStrategyRow,
   addTickerRow,
   assetClassLabel,
+  boundPeriod,
   defaultClosedMonthId,
   emptyMonthForm,
   emptyTargetsForm,
+  inPeriodWindow,
+  isBackdatedPeriod,
   monthFormFrom,
+  monthOptionsFor,
   monthPeriodLabel,
   monthStatusLabel,
   overplannedStrategyClasses,
@@ -33,6 +37,8 @@ const month: Month = {
   aportes: 0,
   status: "OPEN",
 };
+
+const range: MonthPeriodRange = { min: "2020-03", max: "2026-10", default: "2020-12" };
 
 const storedTargets: Targets = {
   classes: [{ asset_class: "ACOES", percentage: 50 }],
@@ -113,18 +119,46 @@ describe("month opener period", () => {
     expect(MONTH_OPTIONS[11]).toEqual({ value: "12", label: "dez" });
   });
 
-  it("offers the years around today", () => {
-    expect(periodYearOptions("2026-10", "2026-10-24")).toEqual([
+  it("offers only the years the server window covers", () => {
+    expect(periodYearOptions(range)).toEqual([
+      "2020",
+      "2021",
+      "2022",
+      "2023",
       "2024",
       "2025",
       "2026",
-      "2027",
-      "2028",
     ]);
   });
 
-  it("keeps a selected year outside today's window", () => {
-    expect(periodYearOptions("2032-01", "2026-10-24")).toContain("2032");
+  it("disables months outside the window in the boundary years", () => {
+    const first = monthOptionsFor("2020", range);
+    const last = monthOptionsFor("2026", range);
+
+    expect(first.slice(0, 2).map((option) => option.disabled)).toEqual([true, true]);
+    expect(first[2]).toEqual({ value: "03", label: "mar", disabled: false });
+    expect(last[9].disabled).toBe(false);
+    expect(last[10].disabled).toBe(true);
+    expect(last[11].disabled).toBe(true);
+  });
+
+  it("keeps every month enabled in a year inside the window", () => {
+    expect(monthOptionsFor("2023", range).every((option) => !option.disabled)).toBe(true);
+  });
+
+  it("detects a period inside the window and a backdated month", () => {
+    expect(inPeriodWindow("2020-03", range)).toBe(true);
+    expect(inPeriodWindow("2026-10", range)).toBe(true);
+    expect(inPeriodWindow("2020-02", range)).toBe(false);
+    expect(inPeriodWindow("2026-11", range)).toBe(false);
+    expect(isBackdatedPeriod("2020-12", "2026-10")).toBe(true);
+    expect(isBackdatedPeriod("2026-10", "2026-10")).toBe(false);
+  });
+
+  it("clamps a period built on a boundary year into the window", () => {
+    expect(boundPeriod("2020-02", range)).toBe("2020-03");
+    expect(boundPeriod("2026-12", range)).toBe("2026-10");
+    expect(boundPeriod("2023-05", range)).toBe("2023-05");
   });
 });
 

@@ -244,6 +244,14 @@ export function useCurrentMonth() {
   });
 }
 
+// The same window every month picker reads: the opener, its validation and Impostos' period picker.
+export function useMonthPeriodRange() {
+  return useQuery({
+    queryKey: ["month", "period-range"],
+    queryFn: api.getMonthPeriodRange,
+  });
+}
+
 export function useOpenMonth() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -328,17 +336,21 @@ export function usePerformanceSeries() {
   });
 }
 
-export function useStockTax() {
+export function useStockTax(period: string) {
   return useQuery({
-    queryKey: ["tax", "current"],
-    queryFn: nullOn404(api.getStockTax),
+    queryKey: ["tax", period],
+    queryFn: () => api.getStockTax(period),
+    enabled: period.length > 0,
   });
 }
 
-export function useHarvest() {
+// Harvest is an open-month write-shaped pass: the page disables the read when the selected period is
+// not the open month, so a historical read never pays for it.
+export function useHarvest(enabled = true) {
   return useQuery({
     queryKey: ["tax", "harvest"],
     queryFn: nullOn404(api.getHarvest),
+    enabled,
   });
 }
 
