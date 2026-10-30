@@ -10,7 +10,7 @@ import java.math.BigDecimal
 // The COTAHIST layout is a 245-char fixed-width record. Offsets below are 1-based, matching B3's
 // published layout (SeriesHistoricas_Layout.pdf): TIPREG 1-2, DATPRE 3-10, CODBDI 11-12,
 // CODNEG 13-24, TPMERC 25-27, NOMRES 28-39, ESPECI 40-49, PREULT 109-121 (2 implied decimals),
-// CODISI 225-236.
+// CODISI 231-242.
 class CotahistParserTest : StringSpec({
     val parser = CotahistParser()
 
@@ -23,6 +23,21 @@ class CotahistParserTest : StringSpec({
             date = LocalDate.parse("2026-10-14"),
             closePrice = BigDecimal("48.92"),
         )
+    }
+
+    "reads the ISIN from the official CODISI 231-242 field on a real COTAHIST annual record" {
+        val annualRecord = CotahistParserTest::class.java
+            .getResourceAsStream("/cotahist/annual-petr4-20201230.txt")!!
+            .bufferedReader()
+            .readLine()
+
+        annualRecord.length shouldBe 245
+        parser.parseLine(annualRecord)!!.also {
+            it.ticker shouldBe "PETR4"
+            it.isin shouldBe "BRPETRACNPR6"
+            it.date shouldBe LocalDate.parse("2020-12-30")
+            it.closePrice shouldBe BigDecimal("28.34")
+        }
     }
 
     "classifies a unit from its COTAHIST specification" {
@@ -79,7 +94,7 @@ class CotahistParserTest : StringSpec({
             13 to "PETR4",
             25 to "010",
             109 to "0000000004892",
-            225 to "            ",
+            231 to "            ",
         )
 
         parser.parseLine(line)?.isin shouldBe null

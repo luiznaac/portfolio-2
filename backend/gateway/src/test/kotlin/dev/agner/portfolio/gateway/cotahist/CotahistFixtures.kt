@@ -20,5 +20,5 @@ internal fun petr4Record() = cotahistLine(
     25 to "010",
     28 to "PETROBRAS",
     109 to "0000000004892",
-    225 to "BRPETRACNPR6",
+    231 to "BRPETRACNPR6",
 )

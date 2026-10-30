@@ -3,9 +3,14 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.InvalidCatalogClassException
+import dev.agner.portfolio.usecase.catalog.TickerRefreshService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.model.TickerRefreshFailure
+import dev.agner.portfolio.usecase.catalog.model.TickerRefreshResult
+import dev.agner.portfolio.usecase.catalog.model.UnclassifiedReason
+import dev.agner.portfolio.usecase.catalog.model.UnclassifiedTicker
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
@@ -28,6 +33,7 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 class CatalogControllerTest : DescribeSpec({
+    val refresh = mockk<TickerRefreshService>(relaxed = true)
 
     describe("listing the ticker catalog") {
 
@@ -37,7 +43,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.fetchAll() } returns listOf(petr4)
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.get("/tickers")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -60,7 +66,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.fetchBy("PETR4") } returns petr4
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.get("/tickers/PETR4")
 
@@ -75,7 +81,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.fetchBy("XPTO") } returns null
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 client.get("/tickers/XPTO").status shouldBe HttpStatusCode.NotFound
             }
@@ -90,7 +96,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { quotes.fetchAllBy("PETR4") } returns listOf(petr4Quote)
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.get("/tickers/PETR4/quotes")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -104,14 +110,24 @@ class CatalogControllerTest : DescribeSpec({
 
     describe("refreshing the catalog and EOD quotes") {
 
-        it("returns 200 with the refreshed counts") {
+        it("returns 200 with the counts, asOf, tagged failures and unclassified held tickers") {
             val catalog = mockk<CatalogService>()
             val quotes = mockk<QuoteService>()
-            coEvery { catalog.refresh() } returns 3
-            coEvery { quotes.refreshEod() } returns 5
+            coEvery { refresh.refresh() } returns TickerRefreshResult(
+                catalog = 3,
+                quotes = 5,
+                asOf = LocalDate.parse("2026-10-14"),
+                failed = listOf(
+                    TickerRefreshFailure.Source("cotahist-annual-2020", "annual file missing"),
+                    TickerRefreshFailure.Ticker("XPTO3", "no quote available"),
+                ),
+                unclassified = listOf(
+                    UnclassifiedTicker("XPTO3", UnclassifiedReason.ABSENT_FROM_LATEST_FILE),
+                ),
+            )
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.post("/tickers/refresh")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -119,8 +135,23 @@ class CatalogControllerTest : DescribeSpec({
                 response.status shouldBe HttpStatusCode.OK
                 payload.get("catalog").asInt() shouldBe 3
                 payload.get("quotes").asInt() shouldBe 5
-                coVerify(exactly = 1) { catalog.refresh() }
-                coVerify(exactly = 1) { quotes.refreshEod() }
+                payload.get("as_of").asText() shouldBe "2026-10-14"
+
+                val failed = payload.get("failed")
+                failed.size() shouldBe 2
+                failed.get(0).get("kind").asText() shouldBe "SOURCE"
+                failed.get(0).get("source").asText() shouldBe "cotahist-annual-2020"
+                failed.get(0).get("reason").asText() shouldBe "annual file missing"
+                failed.get(0).has("ticker") shouldBe false
+                failed.get(1).get("kind").asText() shouldBe "TICKER"
+                failed.get(1).get("ticker").asText() shouldBe "XPTO3"
+                failed.get(1).get("reason").asText() shouldBe "no quote available"
+                failed.get(1).has("source") shouldBe false
+
+                payload.get("unclassified").get(0).get("ticker").asText() shouldBe "XPTO3"
+                payload.get("unclassified").get(0).get("reason").asText() shouldBe "ABSENT_FROM_LATEST_FILE"
+                coVerify(exactly = 1) { refresh.refresh() }
+                coVerify(exactly = 0) { catalog.refresh(any()) }
             }
         }
     }
@@ -135,7 +166,7 @@ class CatalogControllerTest : DescribeSpec({
             )
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.put("/tickers/XPTO3/classification") {
                     contentType(ContentType.Application.Json)
@@ -156,7 +187,7 @@ class CatalogControllerTest : DescribeSpec({
                 InvalidCatalogClassException(AssetClass.RENDA_FIXA)
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.put("/tickers/XPTO3/classification") {
                     contentType(ContentType.Application.Json)
@@ -177,7 +208,7 @@ class CatalogControllerTest : DescribeSpec({
             )
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 val response = client.delete("/tickers/XPTO3/classification")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -195,7 +226,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.revertClassification("MISS3") } returns null
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
 
                 client.delete("/tickers/MISS3/classification").status shouldBe HttpStatusCode.NotFound
             }

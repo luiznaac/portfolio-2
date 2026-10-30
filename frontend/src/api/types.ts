@@ -46,9 +46,30 @@ export interface InstitutionCreation {
   name: string;
 }
 
+export type RefreshFailureKind = "SOURCE" | "TICKER";
+
+/** One part of the refresh that did not complete, tagged by source or by ticker. */
+export interface TickerRefreshFailure {
+  kind: RefreshFailureKind;
+  source?: string;
+  ticker?: string;
+  reason: string;
+}
+
+export type UnclassifiedReason = "ABSENT_FROM_LATEST_FILE" | "UNHANDLED_BDI_CODE";
+
+/** A held ticker that is still classless, with why it could not be classified. */
+export interface UnclassifiedTicker {
+  ticker: string;
+  reason: UnclassifiedReason;
+}
+
 export interface TickerRefreshResult {
   catalog: number;
   quotes: number;
+  as_of?: string;
+  failed: TickerRefreshFailure[];
+  unclassified: UnclassifiedTicker[];
 }
 
 export type TradeSide = "BUY" | "SELL";
