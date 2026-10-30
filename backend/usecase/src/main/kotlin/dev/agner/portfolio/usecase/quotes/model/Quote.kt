@@ -15,3 +15,11 @@ data class Quote(
 enum class QuoteSource {
     COTAHIST,
 }
+
+// A close older than this many calendar days is stale: it is still a real price and stays in every
+// priced sum, but it is shown with its date so an old quote never looks like a fresh one. The
+// heuristic ignores exchange holidays deliberately — freshness is about the data, not the calendar.
+const val QUOTE_STALE_DAYS = 5
+
+fun Quote.isStale(today: LocalDate): Boolean =
+    date.toEpochDays() < today.toEpochDays() - QUOTE_STALE_DAYS

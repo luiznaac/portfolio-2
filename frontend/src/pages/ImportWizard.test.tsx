@@ -4,7 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StagedImport } from "../api/client.ts";
-import type { Import, ImportRow, ImportRowSituation } from "../api/types.ts";
+import type {
+  Allocation,
+  Import,
+  ImportRow,
+  ImportRowSituation,
+  Position,
+  TickerRefreshResult,
+} from "../api/types.ts";
 import { ImportWizard } from "./ImportWizard.tsx";
 
 const state = vi.hoisted(() => ({
@@ -12,6 +19,10 @@ const state = vi.hoisted(() => ({
   rows: [] as ImportRow[],
   reviewed: null as Import | null,
   applied: null as Import | null,
+  positions: [] as Position[],
+  allocation: null as Allocation | null,
+  refresh: null as TickerRefreshResult | null,
+  refreshed: 0,
 }));
 
 vi.mock("../api/queries.ts", () => ({
@@ -39,6 +50,16 @@ vi.mock("../api/queries.ts", () => ({
     isPending: false,
     error: null,
     reset: () => {},
+  }),
+  usePositions: () => ({ data: state.positions, isLoading: false }),
+  useCurrentAllocation: () => ({ data: state.allocation, isLoading: false }),
+  useRefreshCatalog: () => ({
+    mutate: () => {
+      state.refreshed += 1;
+    },
+    isPending: false,
+    data: state.refresh,
+    error: null,
   }),
 }));
 
@@ -87,6 +108,10 @@ beforeEach(() => {
   state.rows = [];
   state.reviewed = null;
   state.applied = null;
+  state.positions = [];
+  state.allocation = null;
+  state.refresh = null;
+  state.refreshed = 0;
 });
 
 afterEach(cleanup);
@@ -150,6 +175,9 @@ describe("the B3 import wizard", () => {
     expect(screen.getByText("Este arquivo já foi importado em 14/10/2026 10:00.")).toBeDefined();
     expect(screen.getByText("PETR4")).toBeDefined();
     expect(screen.getByRole("link", { name: "Ver negócios" }).getAttribute("href")).toBe("/trades");
+    expect(screen.getByTestId("import-quality-summary").textContent).toContain(
+      "0 entradas importadas",
+    );
   });
 
   it("shows a failed re-upload as a result with no rows and a select-another-file action", async () => {
@@ -205,5 +233,65 @@ describe("the B3 import wizard", () => {
     expect(screen.getByRole("heading", { name: "Resultado" })).toBeDefined();
     expect(screen.queryByText(/já foi importado em/)).toBeNull();
     expect(screen.getByText("PETR4")).toBeDefined();
+  });
+
+  it("summarises the imported entries and the remaining data quality on the result", async () => {
+    state.staged = { import: importRecord("STAGED"), created: true };
+    state.reviewed = importRecord("REVIEWED");
+    state.applied = importRecord("APPLIED");
+    state.rows = [row(1, "new"), row(2, "duplicate_in_file"), row(3, "error")];
+    state.positions = [
+      { ticker: "PETR4", quantity: 10, average_price: 30 },
+      { ticker: "VALE3", quantity: 5, average_price: 10 },
+      { ticker: "BCFF11", quantity: -10, average_price: 8 },
+    ];
+    state.allocation = {
+      capital: 0,
+      floor: 0,
+      ideal: 0,
+      actual: 0,
+      deficit: 0,
+      drift: 0,
+      unattributed: 0,
+      partial: true,
+      unpriced: [
+        { ticker: "VALE3", quantity: 5 },
+        { ticker: "PETR4", quantity: 10 },
+      ],
+      negative: [{ ticker: "BCFF11", quantity: -10 }],
+      unclassified: {
+        actual: 0,
+        tickers: [{ ticker: "ZZZZ9", actual: undefined, quantity: 1 }],
+      },
+      classes: [],
+    };
+    state.refresh = {
+      catalog: 2,
+      quotes: 3,
+      as_of: "2026-10-13",
+      failed: [],
+      unclassified: [],
+    };
+    const user = userEvent.setup();
+    renderWizard();
+
+    await upload();
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+    await user.click(screen.getByRole("button", { name: "Importar definitivamente" }));
+
+    const summary = await screen.findByTestId("import-quality-summary");
+    expect(summary.textContent).toContain("2 entradas importadas");
+    expect(summary.textContent).toContain("3 posições na carteira");
+    expect(summary.textContent).toContain("1 negativa");
+    expect(summary.textContent).toContain("1 sem classe");
+    expect(summary.textContent).toContain("2 sem cotação");
+    expect(screen.getByRole("link", { name: "negativa" }).getAttribute("href")).toBe("/history");
+
+    await user.click(screen.getByRole("button", { name: "Atualizar catálogo e cotações" }));
+    expect(state.refreshed).toBe(1);
+    expect(screen.getByTestId("catalog-refresh-report").textContent).toContain("Catálogo: 2");
+    expect(screen.getByTestId("catalog-refresh-report").textContent).toContain(
+      "Fechamento: 13/10/2026",
+    );
   });
 });

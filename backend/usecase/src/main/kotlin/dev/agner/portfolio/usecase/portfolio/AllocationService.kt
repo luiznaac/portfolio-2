@@ -6,19 +6,23 @@ import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.commons.mapAsync
+import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.quotes.model.isStale
 import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import kotlinx.coroutines.awaitAll
+import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.time.Clock
 
 // Composes the open month's allocation: the target chain from MonthService, the listed book
 // (Position × current quote) and the RF book (the consolidation engine's latest principal + yield per
@@ -33,6 +37,7 @@ class AllocationService(
     private val bondPositions: BondPositionService,
     private val strategies: IStrategyRepository,
     private val attributions: IAttributionRepository,
+    private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
     // The read is month-free: without an open month it still returns the tree, with `period` absent
@@ -73,14 +78,20 @@ class AllocationService(
         )
     }
 
-    // A position is valued at the current quote; a ticker with no close yet values at zero. Its class
-    // is the catalog's effective class, so a manual classification outranks the BDI-derived one.
-    private suspend fun toListedHolding(position: Position) = ListedHolding(
-        ticker = position.ticker,
-        assetClass = catalog.fetchBy(position.ticker)?.effectiveAssetClass,
-        quantity = position.quantity,
-        price = quotes.latestClose(position.ticker) ?: BigDecimal.ZERO,
-    )
+    // A position is valued at the current quote; a ticker with no close stays unknown (null), never
+    // zero. Its class is the catalog's effective class, so a manual classification outranks the
+    // BDI-derived one. A close older than five calendar days travels with its date and a stale flag.
+    private suspend fun toListedHolding(position: Position): ListedHolding {
+        val quote = quotes.latestQuote(position.ticker)
+        return ListedHolding(
+            ticker = position.ticker,
+            assetClass = catalog.fetchBy(position.ticker)?.effectiveAssetClass,
+            quantity = position.quantity,
+            price = quote?.close,
+            quoteDate = quote?.date,
+            stale = quote?.isStale(LocalDate.today(clock)) ?: false,
+        )
+    }
 
     // A product with no consolidated position yet contributes nothing.
     private suspend fun toFixedIncomeHolding(bond: Bond): FixedIncomeHolding? =

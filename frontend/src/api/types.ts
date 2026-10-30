@@ -354,6 +354,8 @@ export interface ClassAllocation {
   actual: number;
   deficit: number;
   drift: number;
+  // The class's priced Actual excludes at least one held ticker with no close.
+  partial?: boolean;
   unattributed: number;
   strategies: StrategyAllocation[];
   manual?: ManualAllocation;
@@ -368,6 +370,8 @@ export interface StrategyAllocation {
   actual: number;
   deficit: number;
   drift: number;
+  // The strategy's priced Actual excludes at least one attributed unpriced leaf.
+  partial?: boolean;
   tickers: TickerAllocation[];
 }
 
@@ -392,10 +396,16 @@ export interface UnclassifiedAllocation {
   tickers: ActualTickerAllocation[];
 }
 
-// A leaf with only an Actual — a bucket, outside or unclassified ticker.
+// A leaf with only an Actual — a bucket, outside or unclassified ticker. `actual` is absent when the
+// ticker has no stored close: unknown, rendered "—", never R$ 0,00. `quantity` keeps the valuation
+// rule (actual = quantity × price) visible; `stale`/`quote_date` flag an old-but-real close.
 export interface ActualTickerAllocation {
   ticker: string;
-  actual: number;
+  actual?: number;
+  quantity?: number;
+  price?: number;
+  quote_date?: string;
+  stale?: boolean;
 }
 
 export interface SubClassAllocation {
@@ -409,11 +419,22 @@ export interface SubClassAllocation {
 
 export interface TickerAllocation {
   ticker: string;
+  quantity?: number;
   target: number;
   ideal: number;
-  actual: number;
-  deficit: number;
-  drift: number;
+  // Absent when the leaf's ticker has no close: the target is planned, the value is unknown.
+  actual?: number;
+  deficit?: number;
+  drift?: number;
+  price?: number;
+  quote_date?: string;
+  stale?: boolean;
+}
+
+// A held ticker with a data-quality problem: no close at all (`unpriced`) or negative custody.
+export interface HeldTicker {
+  ticker: string;
+  quantity: number;
 }
 
 export interface Allocation {
@@ -427,6 +448,12 @@ export interface Allocation {
   drift: number;
   // Custody inside no Strategy — outside plus unclassified; bucket units are attributed.
   unattributed: number;
+  // True when at least one held ticker has no close, so `actual` covers only the priced book.
+  partial?: boolean;
+  // Held tickers excluded from `actual` because they have no stored close.
+  unpriced?: HeldTicker[];
+  // Held tickers with negative custody, flagged for repair.
+  negative?: HeldTicker[];
   unclassified: UnclassifiedAllocation;
   classes: ClassAllocation[];
 }

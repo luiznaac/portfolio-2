@@ -36,6 +36,7 @@ import type {
   OrderPlan,
   OrderPlanPhase,
   PerformanceSeries,
+  Position,
   PositionDetail,
   Quote,
   Snapshot,
@@ -130,6 +131,10 @@ export const api = {
 
   applyImport(importId: number): Promise<Import> {
     return request(`/imports/${importId}/apply`, { method: "POST" });
+  },
+
+  getPositions(): Promise<Position[]> {
+    return request("/positions");
   },
 
   getTrades(): Promise<Trade[]> {

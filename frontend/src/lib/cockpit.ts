@@ -13,6 +13,7 @@ import type {
   Trade,
 } from "../api/types.ts";
 import { formatPoints } from "./allocation.ts";
+import { dataQualityCounts, dataQualitySummary } from "./dataQuality.ts";
 import { addDays, monthKey } from "./dates.ts";
 import { pendingTransfers } from "./fechamento.ts";
 import { formatCurrency } from "./format.ts";
@@ -35,9 +36,15 @@ export interface CockpitKpis {
 }
 
 export function cockpitKpis(month: Month, allocation: Allocation | null): CockpitKpis {
+  // A partial allocation excludes unpriced custody, so Capital − Actual would overstate cash: the
+  // residual is unknown until every held ticker has a close.
+  const caixa =
+    allocation === null || allocation.partial
+      ? undefined
+      : roundCents(month.capital - allocation.actual);
   return {
     capital: month.capital,
-    caixa: allocation === null ? undefined : roundCents(month.capital - allocation.actual),
+    caixa,
     investable: roundCents(month.capital - month.floor),
     status: month.status,
   };
@@ -228,17 +235,17 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   const items: AttentionItem[] = [];
   const { allocation, plan } = input;
 
-  // An unclassified Ticker is a data-quality state, so it is the critical card and points at the
-  // classify surface. The bucket never appears: its units are attributed, and it has no target to
-  // miss.
-  const unclassified = allocation?.unclassified.tickers.length ?? 0;
-  if (unclassified > 0) {
+  // Every data-quality problem collapses into one card pointing at the "Dados da carteira" panel:
+  // unpriced, unclassified and negative custody share one fix surface, so the Cockpit does not
+  // raise one interruption per problem. The bucket never appears: its units are attributed.
+  const quality = dataQualityCounts(allocation);
+  if (quality.total > 0) {
     items.push({
-      key: "unclassified",
+      key: "data-quality",
       severity: "critical",
-      text: `${unclassified} ${unclassified === 1 ? "ticker" : "tickers"} sem classe — classificar`,
+      text: `Dados da carteira: ${dataQualitySummary(quality)}`,
       to: "/allocation",
-      actionLabel: "Classificar",
+      actionLabel: "Revisar",
     });
   }
 
@@ -291,17 +298,6 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       to: "/allocation",
       actionLabel: "Atribuir",
     });
-  }
-
-  for (const holding of plan?.outside_strategy ?? []) {
-    if (holding.price === undefined) {
-      items.push({
-        key: `outside:${holding.ticker}`,
-        severity: "info",
-        text: `${holding.ticker} fora do plano — sem cotação`,
-        to: "/orders",
-      });
-    }
   }
 
   return items.slice(0, 6);

@@ -3,6 +3,7 @@
 // module, so the flattening and the bar arithmetic are unit-tested without rendering.
 
 import type {
+  ActualTickerAllocation,
   Allocation,
   AssetClass,
   ClassAllocation,
@@ -39,11 +40,19 @@ export interface AllocationRow {
   assetClass?: AssetClass;
   // The ticker a leaf row names — the classify action keys on it.
   ticker?: string;
+  // The units the leaf values; absent on rungs that aggregate other rows.
+  quantity?: number;
   target?: number;
   ideal?: number;
-  actual: number;
+  // Undefined on an unpriced leaf: unknown is rendered "—", never R$ 0,00.
+  actual?: number;
   deficit?: number;
   drift?: number;
+  // An old-but-real close: the value stays, with the date it belongs to.
+  quoteDate?: string;
+  stale?: boolean;
+  // On the Capital root: the total covers only the priced part of the book.
+  partial?: boolean;
   expandable: boolean;
 }
 
@@ -114,6 +123,7 @@ export function allocationRows(
         drift: allocation.drift,
       }),
       actual: allocation.actual,
+      partial: allocation.partial,
       expandable: false,
     },
   ];
@@ -168,7 +178,10 @@ export function allocationRows(
           depth: 2,
           label: ticker.ticker,
           ticker: ticker.ticker,
+          quantity: ticker.quantity,
           actual: ticker.actual,
+          quoteDate: ticker.quote_date,
+          stale: ticker.stale,
           expandable: false,
         });
       }
@@ -191,6 +204,7 @@ function classRow(cls: ClassAllocation, key: string, planned: boolean): Allocati
       drift: cls.drift,
     }),
     actual: cls.actual,
+    partial: cls.partial,
     expandable:
       cls.strategies.length > 0 ||
       cls.sub_classes.length > 0 ||
@@ -212,6 +226,7 @@ function strategyRow(strategy: StrategyAllocation, key: string, planned: boolean
       drift: strategy.drift,
     }),
     actual: strategy.actual,
+    partial: strategy.partial,
     expandable: strategy.tickers.length > 0,
   };
 }
@@ -244,13 +259,16 @@ function tickerRow(
     kind: "ticker",
     depth: 3,
     label: ticker.ticker,
-    ...planning(planned, {
-      target: ticker.target,
-      ideal: ticker.ideal,
-      deficit: ticker.deficit,
-      drift: ticker.drift,
-    }),
+    quantity: ticker.quantity,
+    // Target and Ideal are planned even when the value is unknown; the deviation cells cannot be
+    // derived from an unknown Actual, so they stay blank rather than reading as zero.
+    ...(planned ? { target: ticker.target, ideal: ticker.ideal } : {}),
+    ...(planned && ticker.actual !== undefined
+      ? { deficit: ticker.deficit, drift: ticker.drift }
+      : {}),
     actual: ticker.actual,
+    quoteDate: ticker.quote_date,
+    stale: ticker.stale,
     expandable: false,
   };
 }
@@ -290,7 +308,7 @@ function unclassifiedRow(actual: number): AllocationRow {
 
 function actualTickerRow(
   assetClass: AssetClass,
-  ticker: { ticker: string; actual: number },
+  ticker: ActualTickerAllocation,
   kind: "manual_ticker" | "outside_ticker",
 ): AllocationRow {
   return {
@@ -302,7 +320,10 @@ function actualTickerRow(
     depth: 3,
     label: ticker.ticker,
     assetClass,
+    quantity: ticker.quantity,
     actual: ticker.actual,
+    quoteDate: ticker.quote_date,
+    stale: ticker.stale,
     expandable: false,
   };
 }

@@ -256,7 +256,7 @@ describe("Cockpit", () => {
     expect(screen.getByText("55,0%")).toBeDefined();
   });
 
-  it("renders unclassified tickers as a critical card with a classify action", () => {
+  it("renders one data-quality card linking to the panel", () => {
     mock.outsideCustody = 0;
     mock.unclassified = 2;
     render(
@@ -265,8 +265,10 @@ describe("Cockpit", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/2 tickers sem classe — classificar/)).toBeDefined();
-    expect(screen.getByRole("link", { name: "Classificar" })).toBeDefined();
+    expect(
+      screen.getByText(/Dados da carteira: 0 sem cotação · 2 sem classe · 0 negativas/),
+    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "Revisar" })).toBeDefined();
     expect(screen.queryByText(/Cotas fora da estratégia/)).toBeNull();
   });
 

@@ -22,6 +22,8 @@ import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.quotes.model.Quote
+import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
@@ -33,6 +35,9 @@ import io.mockk.mockk
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 // The orchestration seam: which book reads feed the allocation tree and how each value is resolved —
 // Position × the latest quote for the listed side, the consolidation engine's principal + yield for
@@ -63,7 +68,7 @@ class AllocationServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns null
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-13", "10")
         coEvery { bonds.fetchAll() } returns emptySet()
         coEvery { strategies.fetchAll() } returns listOf(manualStrategy)
         coEvery { attributions.fetchAll() } returns listOf(
@@ -84,7 +89,7 @@ class AllocationServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-13", "10")
         coEvery { bonds.fetchAll() } returns setOf(bond)
         coEvery { bondPositions.getByBondId(1) } returns listOf(bondPosition)
 
@@ -112,7 +117,7 @@ class AllocationServiceTest : StringSpec({
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-13", "12")
         coEvery { bonds.fetchAll() } returns emptySet()
 
         val allocation = service.fetchCurrent()!!
@@ -128,8 +133,8 @@ class AllocationServiceTest : StringSpec({
         )
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
         coEvery { catalog.fetchBy("ITUB4") } returns catalogEntry.copy(ticker = "ITUB4")
-        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
-        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("10")
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-13", "10")
+        coEvery { quotes.latestQuote("ITUB4") } returns quote("2026-10-13", "10")
         coEvery { bonds.fetchAll() } returns emptySet()
         coEvery { strategies.fetchAll() } returns listOf(reportStrategy, manualStrategy)
         coEvery { attributions.fetchAll() } returns listOf(
@@ -154,7 +159,7 @@ class AllocationServiceTest : StringSpec({
             assetClass = AssetClass.FIIS,
             assetClassOverride = AssetClass.ACOES,
         )
-        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("10")
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-13", "10")
         coEvery { bonds.fetchAll() } returns emptySet()
 
         val allocation = service.fetchCurrent()!!
@@ -163,16 +168,52 @@ class AllocationServiceTest : StringSpec({
         allocation.unclassified.actual.plain() shouldBe "0"
     }
 
-    "values a position with no stored quote at zero" {
+    "excludes a position with no stored quote from Actual and carries it as unpriced" {
         coEvery { months.fetchCurrent() } returns currentMonth
         coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
         coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
-        coEvery { quotes.latestClose("VALE3") } returns null
+        coEvery { quotes.latestQuote("VALE3") } returns null
         coEvery { bonds.fetchAll() } returns emptySet()
 
         val allocation = service.fetchCurrent()!!
 
         allocation.classes.single { it.assetClass == AssetClass.ACOES }.actual.plain() shouldBe "0"
+        allocation.actual.plain() shouldBe "0"
+        allocation.partial shouldBe true
+        allocation.unpriced.single().ticker shouldBe "VALE3"
+        allocation.unpriced.single().quantity.plain() shouldBe "100"
+    }
+
+    "marks a close older than five days as stale and keeps its date" {
+        val fixedClock = Clock.fixed(Instant.parse("2026-10-14T10:00:00Z"), ZoneOffset.UTC)
+        val staleService = AllocationService(
+            months,
+            positions,
+            catalog,
+            quotes,
+            bonds,
+            bondPositions,
+            strategies,
+            attributions,
+            fixedClock,
+        )
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("100"), BigDecimal("10")))
+        coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-08", "10")
+        coEvery { bonds.fetchAll() } returns emptySet()
+
+        val allocation = staleService.fetchCurrent()!!
+
+        val leaf = allocation.classes
+            .single { it.assetClass == AssetClass.ACOES }
+            .outside
+            .tickers
+            .single()
+        allocation.actual.plain() shouldBe "1000"
+        allocation.partial shouldBe false
+        leaf.stale shouldBe true
+        leaf.quoteDate shouldBe LocalDate.parse("2026-10-08")
     }
 })
 
@@ -238,4 +279,11 @@ private val secondBondPosition = BondPosition(
     principal = BigDecimal("2500.00"),
     yield = BigDecimal("500.00"),
     taxes = BigDecimal("50.00"),
+)
+
+private fun quote(date: String, close: String) = Quote(
+    ticker = "VALE3",
+    date = LocalDate.parse(date),
+    close = BigDecimal(close),
+    source = QuoteSource.COTAHIST,
 )

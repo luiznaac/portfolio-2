@@ -51,7 +51,13 @@ vi.mock("../api/client.ts", () => ({
     },
     refreshCatalog: () => {
       mock.refreshed += 1;
-      return Promise.resolve({ catalog: 1, quotes: 1 });
+      return Promise.resolve({
+        catalog: 1,
+        quotes: 1,
+        as_of: "2026-10-13",
+        failed: [],
+        unclassified: [],
+      });
     },
   },
 }));
@@ -70,7 +76,8 @@ function renderAllocation() {
 }
 
 function rowFor(label: string): HTMLElement {
-  const cell = screen.getByText(label);
+  const tree = screen.getByTestId("allocation-tree");
+  const cell = within(tree).getByText(label);
   const row = cell.closest("tr");
   if (!row) throw new Error(`no row for ${label}`);
   return row;
@@ -134,7 +141,7 @@ describe("the Alocação tree", () => {
     expect(screen.getByText("ITUB4")).toBeDefined();
 
     await user.click(within(rowFor("Sem classe")).getByRole("button"));
-    expect(screen.getByText("ZZZZ9")).toBeDefined();
+    expect(within(screen.getByTestId("allocation-tree")).getByText("ZZZZ9")).toBeDefined();
   });
 
   it("renders an Actual-only tree and an empty Capital panel without an open month", async () => {
@@ -245,7 +252,9 @@ describe("the Alocação tree", () => {
 
     await screen.findByText("Sem classe");
     await user.click(within(rowFor("Sem classe")).getByRole("button"));
-    await user.click(screen.getByRole("button", { name: "Classificar" }));
+    await user.click(
+      within(screen.getByTestId("allocation-tree")).getByRole("button", { name: "Classificar" }),
+    );
     await user.click(screen.getByRole("button", { name: "FIIs" }));
 
     expect(mock.classified).toEqual([["ZZZZ9", "FIIS"]]);
@@ -258,11 +267,98 @@ describe("the Alocação tree", () => {
 
     await screen.findByText("Sem classe");
     await user.click(within(rowFor("Sem classe")).getByRole("button"));
-    await user.click(screen.getByRole("button", { name: "Classificar" }));
+    await user.click(
+      within(screen.getByTestId("allocation-tree")).getByRole("button", { name: "Classificar" }),
+    );
     await user.click(screen.getByRole("button", { name: "Atualizar catálogo" }));
 
     expect(mock.refreshed).toBe(1);
     expect(mock.classified).toEqual([]);
+  });
+
+  it("renders the Dados da carteira panel with the three counts and their rows", async () => {
+    mock.allocation = {
+      ...allocation,
+      partial: true,
+      unpriced: [{ ticker: "VALE3", quantity: 5 }],
+      negative: [{ ticker: "BCFF11", quantity: -10 }],
+    };
+    renderAllocation();
+
+    const panel = await screen.findByTestId("data-quality-panel");
+    expect(within(panel).getByTestId("data-quality-unpriced-count").textContent).toBe("1");
+    expect(within(panel).getByTestId("data-quality-unclassified-count").textContent).toBe("1");
+    expect(within(panel).getByTestId("data-quality-negative-count").textContent).toBe("1");
+    expect(within(panel).getByText("VALE3")).toBeDefined();
+    expect(within(panel).getByText("BCFF11")).toBeDefined();
+    expect(within(panel).getByRole("link", { name: "Histórico" }).getAttribute("href")).toBe(
+      "/history",
+    );
+    expect(screen.getByTestId("allocation-partial")).toBeDefined();
+  });
+
+  it("refreshes the combined catalog and quotes from the panel header and rows", async () => {
+    mock.allocation = {
+      ...allocation,
+      partial: true,
+      unpriced: [{ ticker: "VALE3", quantity: 5 }],
+    };
+    renderAllocation();
+    const user = userEvent.setup();
+
+    const panel = await screen.findByTestId("data-quality-panel");
+    await user.click(within(panel).getByTestId("refresh-VALE3"));
+    expect(mock.refreshed).toBe(1);
+
+    await user.click(screen.getByTestId("data-quality-refresh"));
+    expect(mock.refreshed).toBe(2);
+  });
+
+  it("marks a stale close with its date and renders an unpriced leaf as an em dash", async () => {
+    mock.allocation = {
+      ...allocation,
+      partial: true,
+      unpriced: [{ ticker: "ZZZZ9", quantity: 5 }],
+      classes: allocation.classes.map((cls) =>
+        cls.asset_class === "ACOES"
+          ? {
+              ...cls,
+              partial: true,
+              strategies: cls.strategies.map((strategy) => ({ ...strategy, partial: true })),
+              outside: {
+                ...cls.outside,
+                tickers: [
+                  ...cls.outside.tickers,
+                  { ticker: "ZZZZ9", quantity: 5, actual: undefined },
+                  {
+                    ticker: "PETR4",
+                    quantity: 1,
+                    actual: 48.92,
+                    price: 48.92,
+                    quote_date: "2026-10-07",
+                    stale: true,
+                  },
+                ],
+              },
+            }
+          : cls,
+      ),
+    };
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Ações");
+    await user.click(within(rowFor("Ações")).getByRole("button"));
+    await user.click(within(rowFor("Fora da estratégia")).getByRole("button"));
+
+    expect(within(rowFor("Ações")).getByTestId("allocation-partial")).toBeDefined();
+    expect(within(rowFor("Top Dividendos")).getByTestId("allocation-partial")).toBeDefined();
+    expect(within(rowFor("PETR4")).getByTestId("allocation-stale").textContent).toContain(
+      "desatualizada · 07/10/2026",
+    );
+    const unpriced = rowFor("ZZZZ9");
+    expect(within(unpriced).getAllByText("—").length).toBeGreaterThan(0);
+    expect(within(unpriced).queryByText("R$ 0,00")).toBeNull();
   });
 });
 

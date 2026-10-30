@@ -26,10 +26,13 @@ class QuoteService(
 
     suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())
 
-    // The "current quote" every valuation reads: the latest stored close, null when the ticker has
-    // none yet. The rule lives here so the allocation tree and the order plan cannot drift.
-    suspend fun latestClose(ticker: String): BigDecimal? =
-        repository.fetchAllBy(ticker.normalizedTicker()).maxByOrNull { it.date }?.close
+    // The "current quote" every valuation reads: the latest stored close with the date it belongs
+    // to, null when the ticker has none yet. The rule lives here so the allocation tree and the
+    // order plan cannot drift; the date lets a caller mark an old-but-real close as stale.
+    suspend fun latestQuote(ticker: String): Quote? =
+        repository.fetchAllBy(ticker.normalizedTicker()).maxByOrNull { it.date }
+
+    suspend fun latestClose(ticker: String): BigDecimal? = latestQuote(ticker)?.close
 
     // Store the COTAHIST EOD closes for the latest published day — the authoritative close once the
     // market has finished.

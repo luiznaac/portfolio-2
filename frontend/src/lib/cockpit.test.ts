@@ -32,6 +32,9 @@ function allocation(overrides: Partial<Allocation> = {}): Allocation {
     deficit: 20_000,
     drift: 0,
     unattributed: 0,
+    partial: false,
+    unpriced: [],
+    negative: [],
     unclassified: { actual: 0, tickers: [] },
     classes: [
       {
@@ -182,6 +185,11 @@ describe("cockpitKpis", () => {
       investable: 80_000,
       status: "OPEN",
     });
+  });
+
+  it("leaves Caixa unknown while the allocation is partial", () => {
+    const result = cockpitKpis(month(), allocation({ partial: true }));
+    expect(result.caixa).toBeUndefined();
   });
 
   it("leaves Caixa undefined until the allocation is readable", () => {
@@ -353,21 +361,23 @@ describe("attentionItems", () => {
     expect(outside?.actionLabel).toBe("Atribuir");
   });
 
-  it("flags unclassified tickers as a critical data-quality card", () => {
+  it("collapses data-quality problems into one critical card that points at the panel", () => {
     const items = attentionItems({
       allocation: allocation({ unclassified: unclassifiedHolding(500), unattributed: 500 }),
       plan: null,
     });
-    const unclassified = items.find((item) => item.key === "unclassified");
-    expect(unclassified?.severity).toBe("critical");
-    expect(unclassified?.text).toBe("1 ticker sem classe — classificar");
-    expect(unclassified?.to).toBe("/allocation");
-    expect(unclassified?.actionLabel).toBe("Classificar");
+    const quality = items.find((item) => item.key === "data-quality");
+    expect(quality?.severity).toBe("critical");
+    expect(quality?.text).toBe("Dados da carteira: 0 sem cotação · 1 sem classe · 0 negativas");
+    expect(quality?.to).toBe("/allocation");
+    expect(quality?.actionLabel).toBe("Revisar");
   });
 
-  it("counts unclassified tickers in the plural", () => {
+  it("counts every data-quality row in the one card", () => {
     const items = attentionItems({
       allocation: allocation({
+        unpriced: [{ ticker: "VALE3", quantity: 5 }],
+        negative: [{ ticker: "BCFF11", quantity: -10 }],
         unclassified: {
           actual: 900,
           tickers: [
@@ -376,15 +386,16 @@ describe("attentionItems", () => {
           ],
         },
         unattributed: 900,
+        partial: true,
       }),
       plan: null,
     });
-    expect(items.find((item) => item.key === "unclassified")?.text).toBe(
-      "2 tickers sem classe — classificar",
+    expect(items.find((item) => item.key === "data-quality")?.text).toBe(
+      "Dados da carteira: 1 sem cotação · 2 sem classe · 1 negativa",
     );
   });
 
-  it("splits outside custody and unclassified holdings into separate cards", () => {
+  it("keeps outside custody and data quality as separate cards", () => {
     const classes = allocation().classes.map((rung) =>
       rung.asset_class === "ACOES"
         ? { ...rung, unattributed: 1_500, outside: outsideRung(1_500) }
@@ -398,10 +409,10 @@ describe("attentionItems", () => {
       }),
       plan: null,
     });
-    const unclassified = items.find((item) => item.key === "unclassified");
+    const quality = items.find((item) => item.key === "data-quality");
     const outside = items.find((item) => item.key === "outside");
-    expect(unclassified?.severity).not.toBe(outside?.severity);
-    expect(unclassified?.actionLabel).not.toBe(outside?.actionLabel);
+    expect(quality?.severity).not.toBe(outside?.severity);
+    expect(quality?.actionLabel).not.toBe(outside?.actionLabel);
   });
 
   it("never raises a card for the manual bucket", () => {
@@ -448,14 +459,18 @@ describe("attentionItems", () => {
     expect(items.find((item) => item.key === "neutro")?.severity).toBe("warning");
   });
 
-  it("notes an outside-strategy holding with no quote", () => {
+  it("folds an unpriced holding into the single data card instead of one card per ticker", () => {
     const items = attentionItems({
-      allocation: allocation(),
+      allocation: allocation({
+        partial: true,
+        unpriced: [{ ticker: "ORVR3", quantity: 10 }],
+      }),
       plan: orderPlan({
         outside_strategy: [{ ticker: "ORVR3", quantity: 10, suggested_exit_quantity: 10 }],
       }),
     });
-    expect(items.find((item) => item.key === "outside:ORVR3")?.text).toContain("ORVR3");
+    expect(items.find((item) => item.key === "data-quality")?.text).toContain("1 sem cotação");
+    expect(items.some((item) => item.key.startsWith("outside:"))).toBe(false);
   });
 });
 
