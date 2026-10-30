@@ -4,6 +4,8 @@ import com.github.tomakehurst.wiremock.http.RequestMethod
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.HttpMockService
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.helpers.cotahistRecord
+import dev.agner.portfolio.integrationTest.helpers.cotahistZip
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
@@ -19,10 +21,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.mockk.every
-import java.io.ByteArrayOutputStream
 import java.time.Instant
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 // A manual classification is a durable owner decision, not a cache of the BDI mapping: it must
 // outlive a COTAHIST refresh that re-derives the class. Only a real MySQL round-trip plus the real
@@ -43,7 +42,7 @@ class CatalogClassificationTest : StringSpec({
             response {
                 method = RequestMethod.GET
                 endpoint = "/InstDados/SerHist/COTAHIST_D13102026.ZIP"
-                body = cotahistZip(bdiType = "12")
+                body = cotahistZip(cotahistRecord("XPTO3", bdiType = "12"))
             }
         }
 
@@ -64,7 +63,7 @@ class CatalogClassificationTest : StringSpec({
             response {
                 method = RequestMethod.GET
                 endpoint = "/InstDados/SerHist/COTAHIST_D13102026.ZIP"
-                body = cotahistZip(bdiType = "12")
+                body = cotahistZip(cotahistRecord("XPTO3", bdiType = "12"))
             }
         }
         refreshCatalog()
@@ -89,30 +88,3 @@ private suspend fun revert(ticker: String) =
     getBean<HttpClient>().delete("http://localhost:8080/tickers/$ticker/classification")
 
 private suspend fun refreshCatalog() = getBean<HttpClient>().post("http://localhost:8080/tickers/refresh")
-
-// A minimal valid COTAHIST daily file: one spot-market record (TPMERC 010) for XPTO3, zipped the
-// way B3 publishes it.
-private fun cotahistZip(bdiType: String): ByteArray {
-    val line = CharArray(245) { ' ' }
-    line.put(0, "01")
-    line.put(2, "20261013")
-    line.put(10, bdiType)
-    line.put(12, "XPTO3")
-    line.put(24, "010")
-    line.put(27, "XPTO FUNDO")
-    line.put(39, "CI")
-    line.put(108, "0000000010000")
-    val content = String(line).toByteArray()
-
-    return ByteArrayOutputStream().also { bytes ->
-        ZipOutputStream(bytes).use { zip ->
-            zip.putNextEntry(ZipEntry("COTAHIST_D13102026.TXT"))
-            zip.write(content)
-            zip.closeEntry()
-        }
-    }.toByteArray()
-}
-
-private fun CharArray.put(start: Int, value: String) {
-    value.forEachIndexed { offset, char -> this[start + offset] = char }
-}

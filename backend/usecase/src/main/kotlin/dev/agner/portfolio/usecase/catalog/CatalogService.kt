@@ -1,9 +1,9 @@
 package dev.agner.portfolio.usecase.catalog
 
-import dev.agner.portfolio.usecase.catalog.gateway.ICotahistSource
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.model.CotahistRow
 import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
@@ -16,7 +16,6 @@ import java.time.Clock
 @Service
 class CatalogService(
     private val repository: ICatalogRepository,
-    private val source: ICotahistSource,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
@@ -31,13 +30,13 @@ class CatalogService(
         return tickers.filter { classByTicker[it] == null }.toSet()
     }
 
-    // Upsert the catalog from the latest published COTAHIST file. Unknown BDI codes still enter
-    // (AssetKind.UNKNOWN) but are logged so the mapping can be extended instead of silently guessed.
-    // A manual classification outlives the refresh: the stored override is carried onto the new
-    // entry, so a re-derived BDI class never overwrites the owner's call.
-    suspend fun refresh(): Int {
+    // Upsert the catalog from the latest published COTAHIST file's rows. Unknown BDI codes still
+    // enter (AssetKind.UNKNOWN) but are logged so the mapping can be extended instead of silently
+    // guessed. A manual classification outlives the refresh: the stored override is carried onto
+    // the new entry, so a re-derived BDI class never overwrites the owner's call.
+    suspend fun refresh(rows: List<CotahistRow>): Int {
         val overrides = repository.fetchAll().associate { it.ticker to it.assetClassOverride }
-        val entries = source.fetchTradingDay().map { row ->
+        val entries = rows.map { row ->
             row.toCatalogEntry().copy(assetClassOverride = overrides[row.ticker])
         }
 

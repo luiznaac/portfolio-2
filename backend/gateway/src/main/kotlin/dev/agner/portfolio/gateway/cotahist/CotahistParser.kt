@@ -41,7 +41,7 @@ class CotahistParser {
     private companion object {
         const val RECORD_TYPE_QUOTE = "01"
         const val SPOT_MARKET = "010"
-        const val MIN_RECORD_LENGTH = 236
+        const val MIN_RECORD_LENGTH = 242
         val TIPREG = 0 until 2
         val DATPRE = 2 until 10
         val CODBDI = 10 until 12
@@ -50,6 +50,6 @@ class CotahistParser {
         val NOMRES = 27 until 39
         val ESPECI = 39 until 49
         val PREULT = 108 until 121
-        val CODISI = 224 until 236
+        val CODISI = 230 until 242
     }
 }

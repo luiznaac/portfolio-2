@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.TickerRefreshService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import io.ktor.http.HttpStatusCode
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component
 class CatalogController(
     private val catalogService: CatalogService,
     private val quoteService: QuoteService,
+    private val tickerRefreshService: TickerRefreshService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -25,11 +27,10 @@ class CatalogController(
                 call.respond(HttpStatusCode.OK, catalogService.fetchAll())
             }
 
+            // One action owns both halves: catalog and quotes from the same daily file, plus the
+            // ledger's historical closes. A partial failure is still a 200 carrying `failed`.
             post("/refresh") {
-                call.respond(
-                    HttpStatusCode.OK,
-                    TickerRefreshResult(catalog = catalogService.refresh(), quotes = quoteService.refreshEod()),
-                )
+                call.respond(HttpStatusCode.OK, tickerRefreshService.refresh())
             }
 
             get("/{ticker}") {
@@ -59,10 +60,4 @@ class CatalogController(
 // Mirrored in frontend/src/api/types.ts (TickerClassification).
 private data class TickerClassification(
     val assetClass: AssetClass,
-)
-
-// Mirrored in frontend/src/api/types.ts (TickerRefreshResult).
-private data class TickerRefreshResult(
-    val catalog: Int,
-    val quotes: Int,
 )

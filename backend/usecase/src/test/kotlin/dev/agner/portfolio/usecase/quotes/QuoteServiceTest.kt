@@ -1,7 +1,6 @@
 package dev.agner.portfolio.usecase.quotes
 
-import dev.agner.portfolio.usecase.catalog.gateway.ICotahistSource
-import dev.agner.portfolio.usecase.catalog.model.CotahistRow
+import dev.agner.portfolio.usecase.cotahistRow
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
@@ -12,13 +11,13 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 class QuoteServiceTest : StringSpec({
     val repository = mockk<IQuoteRepository>(relaxed = true)
-    val cotahistSource = mockk<ICotahistSource>(relaxed = true)
-    val service = QuoteService(repository, cotahistSource)
+    val service = QuoteService(repository)
 
     beforeTest { clearAllMocks() }
 
@@ -30,22 +29,69 @@ class QuoteServiceTest : StringSpec({
         coVerify(exactly = 1) { repository.fetchAllBy("PETR4") }
     }
 
-    "refreshEod should store the COTAHIST closes for the latest published day" {
-        coEvery { cotahistSource.fetchTradingDay() } returns listOf(
-            CotahistRow("PETR4", "PETROBRAS", "02", null, LocalDate.parse("2026-10-14"), BigDecimal("48.92")),
-        )
+    "storeDailyCloses should store every parsed row as a COTAHIST close" {
         val captured = slot<List<Quote>>()
         coEvery { repository.upsertAll(capture(captured)) } returns 1
 
-        service.refreshEod() shouldBe 1
+        service.storeDailyCloses(
+            listOf(
+                cotahistRow(
+                    ticker = "PETR4",
+                    shortName = "PETROBRAS",
+                    date = "2026-10-14",
+                    closePrice = "48.92",
+                ),
+            ),
+        ) shouldBe 1
 
-        coVerify(exactly = 1) { cotahistSource.fetchTradingDay() }
         captured.captured.single() shouldBe Quote(
             ticker = "PETR4",
             date = LocalDate.parse("2026-10-14"),
             close = BigDecimal("48.92"),
             source = QuoteSource.COTAHIST,
         )
+    }
+
+    "storeMonthlyCloses should keep the last close of each month for the ledger tickers only" {
+        val captured = slot<List<Quote>>()
+        coEvery { repository.upsertAll(capture(captured)) } returns 2
+
+        service.storeMonthlyCloses(
+            flowOf(
+                cotahistRow(ticker = "PETR4", date = "2020-01-02", closePrice = "10"),
+                cotahistRow(ticker = "PETR4", date = "2020-01-31", closePrice = "11"),
+                cotahistRow(ticker = "PETR4", date = "2020-02-28", closePrice = "12"),
+                cotahistRow(ticker = "VALE3", date = "2020-01-31", closePrice = "20"),
+            ),
+            setOf("PETR4"),
+        ).let {
+            it.count shouldBe 2
+            it.latestDate shouldBe LocalDate.parse("2020-02-28")
+        }
+
+        captured.captured.map { it.ticker to it.date } shouldBe listOf(
+            "PETR4" to LocalDate.parse("2020-01-31"),
+            "PETR4" to LocalDate.parse("2020-02-28"),
+        )
+        captured.captured.map { it.close } shouldBe listOf(BigDecimal("11"), BigDecimal("12"))
+    }
+
+    "storeMonthlyCloses is idempotent: a re-run stores the same rows" {
+        val stored = mutableListOf<List<Quote>>()
+        coEvery { repository.upsertAll(any()) } answers {
+            stored += firstArg<List<Quote>>()
+            2
+        }
+        val rows = listOf(
+            cotahistRow(ticker = "PETR4", date = "2020-01-30", closePrice = "10"),
+            cotahistRow(ticker = "PETR4", date = "2020-01-31", closePrice = "11"),
+        )
+
+        service.storeMonthlyCloses(flowOf(*rows.toTypedArray()), setOf("PETR4"))
+        service.storeMonthlyCloses(flowOf(*rows.toTypedArray()), setOf("PETR4"))
+
+        stored.size shouldBe 2
+        stored[1] shouldBe stored[0]
     }
 
     "latestClose is null when the ticker has no stored close" {
