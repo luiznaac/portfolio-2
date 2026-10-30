@@ -30,6 +30,7 @@ import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.MonthCreation
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.repository.IMonthRepository
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
@@ -184,18 +185,25 @@ private suspend fun stubBenchmarks() = configureResponses {
     }
 }
 
+// The monthly opener refuses a period outside the window #320 derives from imported history, and
+// this fixture has no ledger — it is about the snapshot reads, not planning. Seed the months at the
+// repository, next to the snapshots it already writes directly, so the close and series math is what
+// these specs exercise.
 private suspend fun seedTwoClosedMonths(): dev.agner.portfolio.usecase.portfolio.model.Month {
+    val monthRepository = getBean<IMonthRepository>()
     val months = getBean<MonthService>()
     val snapshots = getBean<ISnapshotRepository>()
 
-    val january = months.open(MonthCreation(YearMonth.parse("2026-01"), BigDecimal("100000"), BigDecimal.ZERO))
-    months.close(january.month.id)
+    val january = monthRepository.open(
+        MonthCreation(YearMonth.parse("2026-01"), BigDecimal("100000"), BigDecimal.ZERO),
+    )
+    months.close(january.id)
     snapshots.save(
-        january.month.id,
+        january.id,
         closeState(YearMonth.parse("2026-01"), capital = "100000", aportes = "0", quantity = "10000"),
     )
 
-    val february = months.open(
+    val february = monthRepository.open(
         MonthCreation(YearMonth.parse("2026-02"), BigDecimal("103500"), BigDecimal.ZERO, BigDecimal("2000")),
     )
     months.replaceCurrentTargets(
@@ -206,9 +214,9 @@ private suspend fun seedTwoClosedMonths(): dev.agner.portfolio.usecase.portfolio
             tickers = emptyList(),
         ),
     )
-    months.close(february.month.id)
+    months.close(february.id)
     snapshots.save(
-        february.month.id,
+        february.id,
         closeState(YearMonth.parse("2026-02"), capital = "103500", aportes = "2000", quantity = "10350"),
     )
 
@@ -233,7 +241,7 @@ private suspend fun seedTwoClosedMonths(): dev.agner.portfolio.usecase.portfolio
         ),
     )
 
-    return february.month
+    return february
 }
 
 private fun closeState(
