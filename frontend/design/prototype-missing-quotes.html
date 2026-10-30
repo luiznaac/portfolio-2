@@ -1,0 +1,464 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Settles wayfinder ticket #289, question Q4:
+  "where must 'faltam cotações' surface?" Three variants of the same missing-quote
+  treatment across three host surfaces (Cockpit, Alocação, Importar extrato),
+  switchable via ?variant= or the bottom bar. Fixtures only, no app, no network.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTÓTIPO · posições sem cotação</title>
+    <style>
+      :root {
+        --ground: #0b0f14;
+        --surface: #121a21;
+        --surface-2: #19232c;
+        --surface-3: #212f3a;
+        --line: #263440;
+        --line-soft: #1c2833;
+        --ink: #e5ebf1;
+        --ink-dim: #9ba8b4;
+        --ink-faint: #667581;
+        --principal: #38bdf8;
+        --principal-bg: #38bdf81f;
+        --yield: #34d399;
+        --yield-bg: #34d3991f;
+        --tax: #fb7185;
+        --tax-bg: #fb71851f;
+        --accent: #f59e0b;
+        --accent-bg: #f59e0b1f;
+        --accent-ink: #1a1205;
+        --violet: #a78bfa;
+        --violet-bg: #a78bfa1f;
+        --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .app { display: flex; height: 100vh; overflow: hidden; }
+      .sidebar {
+        width: 196px; flex: none; border-right: 1px solid var(--line);
+        background: var(--surface); padding: 14px 10px; display: flex; flex-direction: column; gap: 18px;
+      }
+      .brand { font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700; letter-spacing: .02em; padding: 0 6px; }
+      .nav-group { display: flex; flex-direction: column; gap: 2px; }
+      .nav-group .label {
+        font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--ink-faint); padding: 0 6px 4px;
+      }
+      .nav-item { padding: 5px 6px; border-radius: 5px; color: var(--ink-dim); font-size: 13px; }
+      .nav-item.active { background: var(--surface-3); color: var(--ink); }
+      .main { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+      .topbar {
+        height: 52px; flex: none; display: flex; align-items: center; gap: 14px;
+        border-bottom: 1px solid var(--line); background: var(--surface); padding: 0 16px;
+      }
+      .crumb { color: var(--ink-dim); font-size: 13px; }
+      .crumb b { color: var(--ink); font-weight: 600; }
+      .spacer { flex: 1; }
+      .pill { border: 1px solid var(--line); background: var(--surface-2); border-radius: 7px; padding: 4px 9px; font-size: 12px; color: var(--ink-dim); }
+      .stage { flex: 1; overflow-y: auto; padding: 22px 26px 90px; }
+      .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+      h1 { font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 24px; font-weight: 700; margin: 0; }
+      .sub { margin: 0; color: var(--ink-dim); font-size: 13px; }
+      .caption {
+        font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+        color: var(--ink-faint); margin: 6px 0 -6px;
+      }
+      .panel { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 14px 18px; }
+      .panel h2 {
+        font-family: "IBM Plex Sans Condensed", sans-serif; font-size: 13px; font-weight: 700;
+        letter-spacing: .04em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 10px;
+      }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; }
+      .grid-2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
+      .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+      .kpi { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; }
+      .kpi .k { font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); }
+      .kpi .v { font-family: var(--mono); font-size: 17px; margin-top: 3px; }
+      .kpi .h { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+      .mono { font-family: var(--mono); }
+      .dim { color: var(--ink-dim); }
+      .faint { color: var(--ink-faint); }
+      .tax { color: var(--tax); }
+      .accent { color: var(--accent); }
+      .principal { color: var(--principal); }
+      .yieldtext { color: var(--yield); }
+      .chip {
+        display: inline-flex; align-items: center; gap: 4px; border-radius: 5px; padding: 1px 8px;
+        font-family: var(--mono); font-size: 10.5px; white-space: nowrap; background: var(--surface-3); color: var(--ink-dim);
+      }
+      .chip.tax { background: var(--tax-bg); color: var(--tax); }
+      .chip.accent { background: var(--accent-bg); color: var(--accent); }
+      .chip.principal { background: var(--principal-bg); color: var(--principal); }
+      .chip.green { background: var(--yield-bg); color: var(--yield); }
+      .badge {
+        display: inline-flex; align-items: center; border-radius: 4px; padding: 1px 6px;
+        font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+      }
+      .badge.crit { background: var(--tax-bg); color: var(--tax); }
+      .badge.warn { background: var(--accent-bg); color: var(--accent); }
+      .badge.info { background: var(--principal-bg); color: var(--principal); }
+      .badge.ok { background: var(--yield-bg); color: var(--yield); }
+      .btn {
+        display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; padding: 5px 12px;
+        font-size: 12.5px; font-weight: 500; cursor: default; border: 1px solid var(--line);
+        background: var(--surface-2); color: var(--ink);
+      }
+      .btn.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+      .btn.ghost { border-color: transparent; background: transparent; color: var(--ink); }
+      .btn[aria-disabled="true"] { opacity: .45; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th {
+        font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+        color: var(--ink-faint); text-align: right; padding: 8px 10px; background: var(--surface-2); font-weight: 500;
+      }
+      th:first-child { text-align: left; }
+      td { border-top: 1px solid var(--line-soft); padding: 8px 10px; text-align: right; }
+      td:first-child { text-align: left; }
+      .attention { display: flex; flex-direction: column; gap: 9px; }
+      .card {
+        display: grid; grid-template-columns: auto 1fr; gap: 9px; border-left: 3px solid var(--line);
+        background: var(--surface-2); border-radius: 7px; padding: 8px 11px; font-size: 12.5px;
+      }
+      .card.critical { border-left-color: var(--tax); }
+      .card.critical .mark { color: var(--tax); }
+      .card.warning { border-left-color: var(--accent); }
+      .card.warning .mark { color: var(--accent); }
+      .card.info { border-left-color: var(--principal); }
+      .card.info .mark { color: var(--principal); }
+      .card a, a.link { color: var(--principal); text-decoration: underline; font-weight: 500; }
+      .strip {
+        border: 1px solid var(--tax-bg); border-left: 3px solid var(--tax); background: var(--tax-bg);
+        border-radius: 8px; padding: 9px 13px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;
+      }
+      .dq-row { background: var(--tax-bg); }
+      .dq-row td { color: var(--tax); border-top-color: var(--tax-bg); }
+      .tree-total td { font-weight: 600; background: var(--surface-2); }
+      .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+      .bar > i { display: block; height: 100%; background: var(--principal); }
+      .steps { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+      .step { display: flex; gap: 9px; align-items: baseline; }
+      .step .n {
+        flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line);
+        font-family: var(--mono); font-size: 10px; display: grid; place-items: center; color: var(--ink-dim);
+      }
+      .step.done .n { background: var(--yield-bg); color: var(--yield); border-color: var(--yield); }
+      .step.blocked { color: var(--tax); }
+      .import-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+      .import-summary { margin-top: 10px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+      .switcher {
+        position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 999px;
+        background: #f8fafc; color: #0b0f14; box-shadow: 0 10px 30px #0009; font-family: var(--mono);
+        font-size: 12px; z-index: 10; user-select: none;
+      }
+      .switcher button {
+        all: unset; cursor: pointer; padding: 2px 8px; border-radius: 999px; font-weight: 700;
+      }
+      .switcher button:hover { background: #0b0f1414; }
+      .switcher .who { min-width: 230px; text-align: center; }
+      .proto-tag {
+        font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--accent); border: 1px dashed var(--accent); border-radius: 4px; padding: 1px 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">Carteira Ideal</div>
+        <div class="nav-group">
+          <div class="label">Ritual</div>
+          <div class="nav-item active">Cockpit</div>
+          <div class="nav-item">Ordens</div>
+          <div class="nav-item">Importar extrato</div>
+          <div class="nav-item">Fechamento</div>
+        </div>
+        <div class="nav-group">
+          <div class="label">Carteira</div>
+          <div class="nav-item">Alocação</div>
+          <div class="nav-item">Ativos</div>
+          <div class="nav-item">Estratégias</div>
+        </div>
+      </aside>
+      <div class="main">
+        <header class="topbar">
+          <div class="crumb">Carteira · <b>Cockpit</b></div>
+          <div class="spacer"></div>
+          <span class="proto-tag">protótipo</span>
+          <div class="pill">Out 2026 · aberto</div>
+          <div class="pill">Comandos ⌘K</div>
+        </header>
+        <div class="stage"><div class="wrap" id="stage"></div></div>
+      </div>
+    </div>
+    <div class="switcher">
+      <button id="prev" title="Anterior (←)">◀</button>
+      <span class="who" id="who"></span>
+      <button id="next" title="Próximo (→)">▶</button>
+    </div>
+
+    <script>
+      // Fixtures mirror the evidence baseline: 16 imported positions, most without a close,
+      // one stale close, the rest priced. No network, no app state.
+      const POSITIONS = [
+        { ticker: "VALE3", qty: 100, quote: 61.2, asOf: "29/10" },
+        { ticker: "ITUB4", qty: 200, quote: 33.1, asOf: "29/10" },
+        { ticker: "PETR4", qty: 150, quote: 38.4, asOf: "21/10", stale: true },
+        { ticker: "KNCR11", qty: 12, quote: null },
+        { ticker: "XPML11", qty: 8, quote: null },
+        { ticker: "ALUP11", qty: 5, quote: null },
+        { ticker: "BCFF11", qty: -3, quote: null },
+      ];
+      const HELD = 16;
+      const UNPRICED = 12;
+      const STALE = 1;
+      const CAPITAL = 120000;
+      const brl = (v) =>
+        v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }).replace(/\u00a0/g, " ");
+      const num = (v) => v.toLocaleString("pt-BR");
+
+      const priced = POSITIONS.filter((p) => p.quote !== null && !p.stale);
+      const ownedValue = priced.reduce((sum, p) => sum + p.qty * p.quote, 0);
+      const unpricedRows = POSITIONS.filter((p) => p.quote === null);
+
+      const caption = (text) => `<div class="caption">${text}</div>`;
+      const panel = (title, body) =>
+        `<section class="panel">${title ? `<h2>${title}</h2>` : ""}${body}</section>`;
+
+      const kpis = (opts = {}) => `
+        <div class="kpis">
+          <div class="kpi"><div class="k">Capital</div><div class="v">${brl(CAPITAL)}</div><div class="h">base do mês</div></div>
+          <div class="kpi"><div class="k">Caixa</div><div class="v">${opts.partial ? "—" : brl(CAPITAL - ownedValue)}</div><div class="h">${opts.partial ? "Capital − posições (parcial)" : "residual (Capital − posições)"}</div></div>
+          <div class="kpi"><div class="k">Carteira</div><div class="v ${opts.partial ? "tax" : ""}">${opts.partial ? "—" : brl(ownedValue)}</div><div class="h">${opts.partial ? `${UNPRICED} de ${HELD} posições sem cotação` : "posições a mercado"}</div></div>
+          <div class="kpi"><div class="k">Status</div><div class="v">Aberto</div><div class="h">ritual em andamento</div></div>
+        </div>`;
+
+      const quoteCell = (p, mode) => {
+        if (p.quote === null) {
+          return mode === "dash" ? `<span class="faint">—</span>` : `<span class="chip tax">sem cotação</span>`;
+        }
+        return `<span class="mono">${brl(p.quote)}</span> <span class="faint mono" style="font-size:10.5px">${p.asOf}</span>`;
+      };
+      const valueCell = (p, mode) => {
+        if (p.quote === null) {
+          return mode === "dash" ? `<span class="faint">—</span>` : `<span class="chip tax">sem cotação</span>`;
+        }
+        const staleTag = p.stale ? ` <span class="chip accent">desatualizada</span>` : "";
+        return `<span class="mono">${brl(p.qty * p.quote)}</span>${staleTag}`;
+      };
+
+      const treeTable = (mode) => `
+        <table>
+          <thead><tr><th>Nível</th><th>Alvo</th><th>Ideal</th><th>Atual</th><th>Δ R$</th></tr></thead>
+          <tbody>
+            <tr><td><b>Ações</b></td><td class="mono dim">40,0%</td><td class="mono">${brl(48000)}</td><td class="mono">${brl(27438)}</td><td class="mono principal">+${brl(20562)}</td></tr>
+            <tr><td style="padding-left:26px" class="dim">Estratégia Valor</td><td class="mono dim">40,0%</td><td class="mono">${brl(48000)}</td><td class="mono">${brl(27438)}</td><td class="mono principal">+${brl(20562)}</td></tr>
+            ${POSITIONS.filter((p) => ["VALE3", "ITUB4", "PETR4", "ALUP11"].includes(p.ticker))
+              .map(
+                (p) => `<tr>
+                  <td style="padding-left:48px" class="mono">${p.ticker}</td>
+                  <td class="mono dim">${p.ticker === "VALE3" ? "12,0%" : p.ticker === "ITUB4" ? "10,0%" : "—"}</td>
+                  <td class="mono">${p.ticker === "VALE3" ? brl(14400) : p.ticker === "ITUB4" ? brl(12000) : "—"}</td>
+                  <td class="mono">${p.quote === null ? (mode === "dash" ? "—" : "—") : brl(p.qty * p.quote)}</td>
+                  <td class="mono">${p.quote === null ? `<span class="chip ${mode === "dash" ? "" : "tax"}">${mode === "dash" ? "sem cotação" : "sem cotação"}</span>` : "—"}</td>
+                </tr>`,
+              )
+              .join("")}
+            <tr><td><b>FIIs</b></td><td class="mono dim">20,0%</td><td class="mono">${brl(24000)}</td><td class="mono">—</td><td class="mono principal">+${brl(24000)}</td></tr>
+            <tr><td style="padding-left:26px" class="dim">Fora da estratégia</td><td class="dim">—</td><td class="dim">—</td><td class="mono">—</td><td class="dim">—</td></tr>
+            <tr class="dq-row"><td><b>${mode === "inline" ? "Sem cotação" : "Posições sem cotação"}</b> <span class="chip tax">${UNPRICED}</span></td><td class="dim">—</td><td class="dim">—</td><td class="mono">—</td><td class="dim">—</td></tr>
+            ${mode === "inline"
+              ? unpricedRows.map((p) => `<tr class="dq-row"><td style="padding-left:48px" class="mono">${p.ticker}</td><td class="dim">—</td><td class="dim">—</td><td class="mono">${num(p.qty)} un.</td><td><span class="chip tax">sem cotação</span></td></tr>`).join("")
+              : `<tr class="dq-row"><td colspan="5" class="dim" style="font-size:12px">${unpricedRows.map((p) => p.ticker).join(" · ")} e mais ${UNPRICED - unpricedRows.length}</td></tr>`}
+            <tr class="tree-total"><td>Total</td><td class="dim">—</td><td class="mono">${brl(CAPITAL)}</td><td class="mono">${brl(ownedValue)}${mode === "gate" ? ` <span class="chip accent">parcial</span>` : ""}</td><td class="mono">…</td></tr>
+          </tbody>
+        </table>`;
+
+      const importPanel = (mode) => {
+        const body =
+          mode === "inline"
+            ? `<div class="import-row">Arquivo: negociacao_2020.xlsx <span class="badge ok">aplicado</span></div>
+               <div class="import-summary dim" style="font-size:12.5px">
+                 ${UNPRICED} de ${HELD} posições ainda sem cotação —
+                 <a href="#" class="link">Atualizar cotações</a>
+               </div>`
+            : mode === "panel"
+              ? `<div class="import-row">Arquivo: negociacao_2020.xlsx <span class="badge ok">aplicado</span></div>
+                 <div class="import-summary">
+                   <div class="import-row" style="justify-content:space-between">
+                     <span class="dim" style="font-size:12.5px">Valoração incompleta: ${UNPRICED} de ${HELD} posições sem cotação</span>
+                     <a href="#" class="link" style="font-size:12.5px">Abrir dados da carteira</a>
+                   </div>
+                 </div>`
+              : `<div class="import-row">Arquivo: negociacao_2020.xlsx <span class="badge ok">aplicado</span></div>
+                 <div class="strip" style="margin-top:10px">
+                   <span>◆</span>
+                   <span>Importação aplicada, mas a carteira segue <b>sem valoração</b>: ${UNPRICED} de ${HELD} posições sem cotação. O plano fica bloqueado até atualizar.</span>
+                   <div class="spacer"></div>
+                   <span class="btn primary">Atualizar cotações</span>
+                 </div>`;
+        return panel("Importar extrato · Resultado", body);
+      };
+
+      const V = {};
+
+      // A — inline on Alocação: the tree grows a "Sem cotação" root line (mirrors "Sem classe"),
+      // the refresh action lives in the tree header, Cockpit gets one critical card, the import
+      // result names the gap.
+      V.A = () => `
+        ${caption("Cockpit · Precisa de atenção")}
+        <div class="grid-2">
+          <div class="flex-col">
+            ${kpis()}
+            <div style="height:12px"></div>
+            ${panel(
+              "Precisa de atenção",
+              `<div class="attention">
+                 <div class="card critical"><span class="mark">◆</span><div>${UNPRICED} posições sem cotação — atualizar <a href="#">Atualizar cotações</a></div></div>
+                 <div class="card warning"><span class="mark">▲</span><div>Maior desvio: FIIs −20,00 p.p. <a href="#">Ver</a></div></div>
+               </div>`,
+            )}
+          </div>
+          ${panel("Fechamento de Out 2026", `<div class="steps">
+            <div class="step done"><span class="n">✓</span><span>Importar extrato</span></div>
+            <div class="step"><span class="n">2</span><span>Capital e alvos</span></div>
+            <div class="step"><span class="n">3</span><span>Ordens</span></div>
+          </div>`)}
+        </div>
+        ${caption("Alocação · linha de dados no topo da árvore")}
+        ${panel(
+          "",
+          `<div class="row" style="justify-content:space-between;margin-bottom:10px">
+             <span class="dim" style="font-size:12.5px">Cotações de 29/10 · ${UNPRICED} de ${HELD} posições sem cotação</span>
+             <span class="btn primary">Atualizar cotações</span>
+           </div>${treeTable("inline")}`,
+        )}
+        ${caption("Importar extrato · Resultado")}
+        ${importPanel("inline")}`;
+
+      // B — one stop: a single "Dados da carteira" panel aggregates every data-quality gap;
+      // Cockpit keeps one compact line instead of per-issue cards; the tree stays clean.
+      V.B = () => `
+        ${caption("Cockpit · uma linha de dados, sem cards por problema")}
+        ${kpis()}
+        <div style="height:12px"></div>
+        ${panel(
+          "Precisa de atenção",
+          `<div class="attention">
+             <div class="card info"><span class="mark">●</span><div>3 pendências de dados: ${UNPRICED} sem cotação · ${HELD} sem classe · 4 posições negativas <a href="#">Abrir dados</a></div></div>
+             <div class="card warning"><span class="mark">▲</span><div>Maior desvio: FIIs −20,00 p.p. <a href="#">Ver</a></div></div>
+           </div>`,
+        )}
+        ${caption("Alocação · painel “Dados da carteira” ao lado da árvore")}
+        <div class="grid-2">
+          ${panel("", treeTable("dash"))}
+          ${panel(
+            "Dados da carteira",
+            `<div style="display:flex;flex-direction:column;gap:10px;font-size:12.5px">
+               <div class="row" style="justify-content:space-between"><span>Sem cotação</span><span class="chip tax">${UNPRICED} de ${HELD}</span></div>
+               <div class="row" style="justify-content:space-between"><span>Sem classe</span><span class="chip tax">${HELD}</span></div>
+               <div class="row" style="justify-content:space-between"><span>Posições negativas</span><span class="chip accent">4</span></div>
+               <div style="border-top:1px solid var(--line-soft);padding-top:10px">
+                 <div class="btn primary" style="width:100%;justify-content:center">Atualizar cotações</div>
+                 <div class="faint" style="font-size:11.5px;margin-top:6px">Busca o fechamento mais recente da B3 para todos os tickers.</div>
+               </div>
+               <div><a href="#" class="link">Classificar todos</a></div>
+             </div>`,
+          )}
+        </div>
+        ${caption("Importar extrato · Resultado")}
+        ${importPanel("panel")}`;
+
+      // C — gate: an app-wide strip blocks the ritual; KPIs and the tree say "parcial"; the plan
+      // step is disabled with its reason; the import result is a blocking notice.
+      V.C = () => `
+        <div class="strip">
+          <span>◆</span>
+          <span><b>Valoração incompleta</b> — ${UNPRICED} de ${HELD} posições sem cotação. A carteira e o plano ficam parciais até atualizar.</span>
+          <div class="spacer"></div>
+          <span class="btn primary">Atualizar cotações</span>
+        </div>
+        ${caption("Cockpit · KPIs parciais e passo de ordens bloqueado")}
+        <div class="grid-2">
+          <div>
+            ${kpis({ partial: true })}
+            <div style="height:12px"></div>
+            ${panel(
+              "Fechamento de Out 2026",
+              `<div class="steps">
+                 <div class="step done"><span class="n">✓</span><span>Importar extrato</span></div>
+                 <div class="step blocked"><span class="n">!</span><span>Ordens — bloqueado: ${UNPRICED} posições sem cotação</span></div>
+                 <div class="step"><span class="n">4</span><span>Fechamento</span></div>
+               </div>`,
+            )}
+          </div>
+          ${panel(
+            "Precisa de atenção",
+            `<div class="attention">
+               <div class="card critical"><span class="mark">◆</span><div>${UNPRICED} posições sem cotação — o plano não é gerado <a href="#">Atualizar</a></div></div>
+             </div>`,
+          )}
+        </div>
+        ${caption("Alocação · cada folha sem cotação marcada; total parcial")}
+        ${panel("", treeTable("gate"))}
+        ${caption("Importar extrato · Resultado")}
+        ${importPanel("gate")}`;
+
+      const VARIANTS = {
+        A: { name: "Inline na Alocação", render: V.A },
+        B: { name: "Painel de dados único", render: V.B },
+        C: { name: "Gate bloqueante", render: V.C },
+      };
+      const KEYS = Object.keys(VARIANTS);
+
+      const stage = document.getElementById("stage");
+      const who = document.getElementById("who");
+      const params = new URLSearchParams(location.search);
+      let current = KEYS.includes((params.get("variant") || "").toUpperCase())
+        ? params.get("variant").toUpperCase()
+        : "A";
+
+      function render() {
+        stage.innerHTML = `
+          <div>
+            <h1>Posições sem cotação — onde isso aparece</h1>
+            <p class="sub">Mesma carteira fictícia nas três superfícies. Sinais: ${UNPRICED} de ${HELD} sem cotação, ${STALE} desatualizada, ${HELD} sem classe, 4 posições negativas.</p>
+          </div>
+          ${VARIANTS[current].render()}`;
+        const v = VARIANTS[current];
+        who.textContent = `${current} · ${v.name}`;
+      }
+
+      function go(key) {
+        current = key;
+        const url = new URL(location.href);
+        url.searchParams.set("variant", key);
+        history.replaceState(null, "", url);
+        render();
+      }
+
+      document.getElementById("prev").onclick = () =>
+        go(KEYS[(KEYS.indexOf(current) + KEYS.length - 1) % KEYS.length]);
+      document.getElementById("next").onclick = () =>
+        go(KEYS[(KEYS.indexOf(current) + 1) % KEYS.length]);
+      window.addEventListener("keydown", (event) => {
+        const tag = document.activeElement && document.activeElement.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement.isContentEditable) return;
+        if (event.key === "ArrowLeft") document.getElementById("prev").click();
+        if (event.key === "ArrowRight") document.getElementById("next").click();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
