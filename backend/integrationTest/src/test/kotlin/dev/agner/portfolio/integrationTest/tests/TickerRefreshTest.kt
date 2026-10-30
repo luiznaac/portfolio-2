@@ -51,7 +51,7 @@ class TickerRefreshTest : StringSpec({
                 method = RequestMethod.GET
                 endpoint = "/InstDados/SerHist/COTAHIST_D13102026.ZIP"
                 body = cotahistZip(
-                    cotahistRecord("PETR4", bdiType = "02", close = "0000000048920"),
+                    cotahistRecord("PETR4", bdiType = "02", close = "0000000004892"),
                     cotahistRecord("ABS3", bdiType = "99", close = "0000000010000"),
                 )
             }

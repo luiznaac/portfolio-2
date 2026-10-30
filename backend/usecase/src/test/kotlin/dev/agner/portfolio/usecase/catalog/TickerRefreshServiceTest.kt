@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.catalog.gateway.CotahistFetchException
 import dev.agner.portfolio.usecase.catalog.gateway.ICotahistSource
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
+import dev.agner.portfolio.usecase.catalog.model.CotahistRow
 import dev.agner.portfolio.usecase.catalog.model.RefreshFailureKind
 import dev.agner.portfolio.usecase.catalog.model.TickerRefreshFailure
 import dev.agner.portfolio.usecase.catalog.model.UnclassifiedReason
@@ -81,6 +82,30 @@ class TickerRefreshServiceTest : StringSpec({
         verify(exactly = 1) { source.fetchYear(2020) }
         verify(exactly = 1) { source.fetchYear(2025) }
         verify(exactly = 1) { source.fetchYear(2026) }
+    }
+
+    "a held ticker priced only by the daily file is not reported as unquoted" {
+        val dailyRows = listOf(cotahistRow(ticker = "PETR4", date = "2026-10-21", closePrice = "48"))
+        val storedTickers = mutableSetOf<String>()
+        coEvery { source.fetchTradingDay() } returns dailyRows
+        coEvery { trades.fetchAll() } returns emptyList()
+        coEvery { positions.fetchAll() } returns listOf(position("PETR4", "10"))
+        coEvery { catalogService.refresh(dailyRows) } returns 1
+        coEvery { quoteService.storeDailyCloses(any()) } answers {
+            storedTickers += firstArg<List<CotahistRow>>().map { it.ticker }
+            storedTickers.size
+        }
+        coEvery { quoteService.latestClose(any()) } answers {
+            if (firstArg<String>() in storedTickers) BigDecimal("48") else null
+        }
+        coEvery { catalogService.fetchAll() } returns listOf(
+            catalogEntry(ticker = "PETR4", assetKind = AssetKind.STOCK, assetClass = AssetClass.ACOES),
+        )
+
+        val result = service.refresh()
+
+        result.failed shouldBe emptyList()
+        result.quotes shouldBe 1
     }
 
     "does not fetch historical years when the ledger is empty" {

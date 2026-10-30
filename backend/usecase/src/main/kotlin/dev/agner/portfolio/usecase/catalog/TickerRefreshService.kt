@@ -44,6 +44,10 @@ class TickerRefreshService(
         val daily = fetchDaily()
         val catalogCount = if (daily.rows.isEmpty()) 0 else catalogService.refresh(daily.rows)
         val yearLoads = ledgerYears(ledger).map { loadYear(it, ledgerTickers) }
+        // Persist the daily closes before checking coverage — a held ticker priced by this very file
+        // would otherwise look unquoted on an empty quotes table — but after the annual files, so the
+        // daily close keeps winning a same-date upsert.
+        val dailyQuoteCount = quoteService.storeDailyCloses(daily.rows)
         val tickerFailures = heldTickers.sorted()
             .filter { quoteService.latestClose(it) == null }
             .map { TickerRefreshFailure.Ticker(it, NO_QUOTE_REASON) }
@@ -57,7 +61,7 @@ class TickerRefreshService(
 
         return TickerRefreshResult(
             catalog = catalogCount,
-            quotes = quoteService.storeDailyCloses(daily.rows) + yearLoads.sumOf { it.closes.count },
+            quotes = dailyQuoteCount + yearLoads.sumOf { it.closes.count },
             asOf = daily.rows.maxOfOrNull { it.date } ?: yearLoads.mapNotNull { it.closes.latestDate }.maxOrNull(),
             failed = failed,
             unclassified = unclassified,
