@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Fechamento } from "./Fechamento.tsx";
 
 const mutate = vi.fn();
-const mock = vi.hoisted(() => ({ hasPendingTransfer: true }));
+const mock = vi.hoisted(() => ({ hasPendingTransfer: true, period: "2026-10" }));
 
 vi.mock("../api/queries.ts", () => {
   const pending = {
@@ -29,7 +29,7 @@ vi.mock("../api/queries.ts", () => {
       data: {
         month: {
           id: 10,
-          period: "2026-10",
+          period: mock.period,
           capital: 250000,
           floor: 20000,
           status: "OPEN",
@@ -126,6 +126,7 @@ vi.mock("../api/queries.ts", () => {
 
 beforeEach(() => {
   mock.hasPendingTransfer = true;
+  mock.period = "2026-10";
 });
 
 afterEach(() => {
@@ -149,6 +150,17 @@ describe("Fechamento", () => {
     expect(close.disabled).toBe(true);
     expect(close.textContent).toContain("Bloqueado — 1 transferência pendente");
     expect(screen.getByRole("link", { name: "resolver" }).getAttribute("href")).toBe("/orders");
+  });
+
+  it("disables the close for a backdated plan-only month", () => {
+    mock.hasPendingTransfer = false;
+    mock.period = "2020-12";
+    renderPage();
+
+    const close = screen.getByTestId("close-month") as HTMLButtonElement;
+    expect(close.disabled).toBe(true);
+    expect(close.textContent).toContain("Só o mês atual pode ser fechado");
+    expect(screen.getByText("histórico — sem fechamento")).toBeDefined();
   });
 
   it("shows the selected closed month's frozen summary", () => {

@@ -13,10 +13,10 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.springframework.stereotype.Component
 
-// The open month's tax surface: the R$20k stock-sale meter, the fiscal average price of every held
-// ticker and the DARF 6015 deadline; plus the harvest pass — the suggestions read, the pair
-// acceptance and the per-ticker opt-out. "No open month" is the 404 every current-month read
-// promises.
+// The period's tax surface: the R$20k stock-sale meter, the fiscal average price of every held
+// ticker as of that month's end and the DARF 6015 deadline; plus the harvest pass — the open
+// month's suggestions read, the pair acceptance and the per-ticker opt-out. The period read never
+// 404s inside the window; harvest's current-month read still 404s when no month is open.
 @Component
 class TaxController(
     private val service: StockTaxService,
@@ -24,17 +24,6 @@ class TaxController(
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
-        route("/month/current") {
-            get("/tax") {
-                val report = service.fetchCurrent()
-                if (report == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                } else {
-                    call.respond(HttpStatusCode.OK, report)
-                }
-            }
-        }
-
         route("/tax/harvest") {
             get {
                 call.respondOr404(harvest.fetch())
@@ -53,6 +42,12 @@ class TaxController(
             put("/{ticker}/opt-out") {
                 val payload = call.receive<HarvestOptOutUpdate>()
                 call.respondOr404(harvest.setOptOut(call.requiredString("ticker"), payload.optedOut))
+            }
+        }
+
+        route("/tax") {
+            get("/{period}") {
+                call.respond(HttpStatusCode.OK, service.fetch(call.requiredPeriod("period")))
             }
         }
     }

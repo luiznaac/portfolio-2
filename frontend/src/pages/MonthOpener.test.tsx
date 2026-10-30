@@ -12,6 +12,11 @@ vi.mock("../api/queries.ts", () => {
 
   return {
     useCurrentMonth: () => ({ isLoading: false, isError: false, data: null }),
+    useMonthPeriodRange: () => ({
+      isLoading: false,
+      isError: false,
+      data: { min: "2020-03", max: "2026-10", default: "2020-12" },
+    }),
     useOpenMonth: mutation,
     useUpdateCurrentMonth: mutation,
     useReplaceTargets: mutation,
@@ -39,17 +44,30 @@ describe("month opener period", () => {
     expect(document.querySelector('input[type="month"]')).toBeNull();
   });
 
+  it("bounds the years to the server window and names the history floor", () => {
+    render(<Month />);
+
+    const years = [...(screen.getByLabelText("Ano") as HTMLSelectElement).options].map(
+      (option) => option.value,
+    );
+    expect(years).toEqual(["2020", "2021", "2022", "2023", "2024", "2025", "2026"]);
+    expect(screen.getByText("Histórico desde mar/2020")).toBeDefined();
+    expect((screen.getByLabelText("Mês") as HTMLSelectElement).options[0].disabled).toBe(true);
+    expect((screen.getByLabelText("Mês") as HTMLSelectElement).options[2].disabled).toBe(false);
+  });
+
   it("opens the month built from the two selects", async () => {
     const user = userEvent.setup();
     render(<Month />);
 
-    const yearSelect = screen.getByLabelText("Ano") as HTMLSelectElement;
-    const year = yearSelect.options[0].value;
-    await user.selectOptions(yearSelect, year);
-    await user.selectOptions(screen.getByLabelText("Mês"), "02");
+    await user.selectOptions(screen.getByLabelText("Ano"), "2020");
+    await user.selectOptions(screen.getByLabelText("Mês"), "03");
     await user.type(screen.getByLabelText("Capital (R$)"), "1000");
     await user.click(screen.getByRole("button", { name: "Abrir mês" }));
 
-    expect(mutate).toHaveBeenCalledWith({ period: `${year}-02`, capital: 1000, floor: 0 });
+    expect(mutate).toHaveBeenCalledWith(
+      { period: "2020-03", capital: 1000, floor: 0 },
+      expect.anything(),
+    );
   });
 });

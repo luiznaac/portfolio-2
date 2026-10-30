@@ -14,6 +14,7 @@ import { Kpi } from "../components/Kpi.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { useClosedMonthSelection } from "../hooks/useClosedMonthSelection.ts";
+import { monthKey, todayIso } from "../lib/dates.ts";
 import {
   type ClosedMonthSummary,
   closeButtonLabel,
@@ -21,7 +22,7 @@ import {
   pendingTransfers,
 } from "../lib/fechamento.ts";
 import { formatCurrency, formatNumber } from "../lib/format.ts";
-import { monthPeriodLabel } from "../lib/month.ts";
+import { isBackdatedPeriod, monthPeriodLabel } from "../lib/month.ts";
 
 // Fechamento (issue #176): the month's last ritual. The close is gated by the transfer inbox — a
 // pending Attribution Transfer blocks it — and the frozen snapshot of every closed month is the
@@ -40,7 +41,12 @@ export function Fechamento() {
   // click from racing the pending-transfer check.
   const gateReady = !orders.isLoading && !orders.isError;
   const hasOpenMonth = current.data !== null && current.data !== undefined;
-  const canClose = hasOpenMonth && gateReady && pending.length === 0 && !close.isPending;
+  const backdated =
+    current.data !== null &&
+    current.data !== undefined &&
+    isBackdatedPeriod(current.data.month.period, monthKey(todayIso()));
+  const canClose =
+    hasOpenMonth && !backdated && gateReady && pending.length === 0 && !close.isPending;
 
   function handleClose() {
     close.mutate(undefined, {
@@ -77,6 +83,7 @@ export function Fechamento() {
           ) : (
             <CloseGate
               month={current.data.month}
+              backdated={backdated}
               pendingCount={pending.length}
               gateReady={gateReady}
               canClose={canClose}
@@ -119,6 +126,7 @@ export function Fechamento() {
 
 function CloseGate({
   month,
+  backdated,
   pendingCount,
   gateReady,
   canClose,
@@ -127,6 +135,7 @@ function CloseGate({
   onClose,
 }: {
   month: Month;
+  backdated: boolean;
   pendingCount: number;
   gateReady: boolean;
   canClose: boolean;
@@ -141,6 +150,7 @@ function CloseGate({
           {monthPeriodLabel(month.period)}
         </span>
         <Chip tone="blue">Aberto</Chip>
+        {backdated && <Chip tone="amber">histórico — sem fechamento</Chip>}
       </div>
 
       <dl className="mb-4 space-y-1.5 text-[12.5px]">
@@ -175,12 +185,17 @@ function CloseGate({
         disabled={!canClose}
         onClick={onClose}
       >
-        {isClosing ? "Fechando…" : closeButtonLabel(pendingCount)}
+        {isClosing
+          ? "Fechando…"
+          : backdated
+            ? "Só o mês atual pode ser fechado"
+            : closeButtonLabel(pendingCount)}
       </Button>
 
       <p className="mt-2 text-[11.5px] text-ink-faint">
-        Fechar recalcula o plano de ordens e congela posições, proventos, impostos e o plano no
-        retrato do mês.
+        {backdated
+          ? "Um mês histórico é apenas de planejamento: o fechamento congela o mês atual, nunca o passado importado."
+          : "Fechar recalcula o plano de ordens e congela posições, proventos, impostos e o plano no retrato do mês."}
       </p>
 
       {error && <p className="mt-2 text-[12.5px] text-tax">{error}</p>}

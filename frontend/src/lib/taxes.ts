@@ -9,8 +9,10 @@ import type {
   RealizedKind,
   RealizedResult,
   StockTaxReport,
+  TaxUnclassifiedStatus,
 } from "../api/types.ts";
-import { formatIsoDate, isWeekend } from "./format.ts";
+import { formatCurrency, formatIsoDate, isWeekend } from "./format.ts";
+import { isBackdatedPeriod } from "./month.ts";
 
 const REALIZED_KIND_LABELS: Record<RealizedKind, string> = {
   SWING: "Swing",
@@ -47,6 +49,54 @@ export function realizedRows(realized: RealizedResult[]): RealizedRow[] {
 // The DARF 6015 deadline the month's tax is due by (the last business day of the following month).
 export function darfDeadlineLabel(tax: StockTaxReport): string {
   return formatIsoDate(tax.darf_due_date);
+}
+
+export function darfIsOverdue(tax: StockTaxReport, today: string): boolean {
+  return tax.darf_due_date < today;
+}
+
+export type TaxChipTone = "neutral" | "green" | "amber";
+
+export interface TaxPeriodChip {
+  label: string;
+  tone: TaxChipTone;
+}
+
+// Which kind of month the tax read is showing: the open month, a closed month, or imported history
+// that was never planned. A current month with nothing open carries no chip rather than claiming to
+// be closed.
+export function taxPeriodChip(
+  period: string,
+  currentPeriod: string,
+  openPeriod: string | null,
+  closedPeriods: readonly string[],
+): TaxPeriodChip | null {
+  if (openPeriod === period) return { label: "mês aberto", tone: "green" };
+  if (closedPeriods.includes(period)) return { label: "fechado", tone: "neutral" };
+  if (isBackdatedPeriod(period, currentPeriod)) return { label: "histórico", tone: "amber" };
+  return null;
+}
+
+// The empty state is about sales, not about the realized rows: the backend always returns the three
+// kinds, even when every amount is zero.
+export function hasSales(tax: StockTaxReport): boolean {
+  return tax.realized.some((row) => row.gross_sales > 0);
+}
+
+const UNCLASSIFIED_STATUS_LABELS: Record<TaxUnclassifiedStatus, string> = {
+  HELD: "em custódia",
+  SOLD: "vendido",
+  HELD_AND_SOLD: "vendido · em custódia",
+};
+
+export function unclassifiedStatusLabel(status: TaxUnclassifiedStatus): string {
+  return UNCLASSIFIED_STATUS_LABELS[status];
+}
+
+// A carry number is only meaningful after the bucket's adoption boundary; before it the report
+// says so and the UI renders a dash instead of a fabricated zero.
+export function carryAmount(value: number | null | undefined): string {
+  return value === null || value === undefined ? "—" : formatCurrency(value);
 }
 
 // The meter's fill, capped at 100%: a month over the R$20k cliff is already lost, not "overfull".

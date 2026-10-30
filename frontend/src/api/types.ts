@@ -313,6 +313,15 @@ export interface CurrentMonth {
   targets: Targets;
 }
 
+// The inclusive window a month may be planned in (GET /month/period-range). `min` reaches back to
+// the imported history, `max` never falls before the server's calendar month, and `default` is the
+// latest imported trade month clamped into the window.
+export interface MonthPeriodRange {
+  min: string;
+  max: string;
+  default: string;
+}
+
 export interface MonthCreation {
   period: string;
   capital: number;
@@ -415,7 +424,7 @@ export interface Allocation {
   classes: ClassAllocation[];
 }
 
-// The open month's stock-sale tax read (GET /month/current/tax). The meter tracks the month's gross
+// A period's stock-sale tax read (GET /tax/{period}). The meter tracks the month's gross
 // STOCK sales against the R$20k exemption; crossing it taxes the whole month's net gain at 15%.
 // Average prices are the fiscal mean unit cost of every held ticker.
 export interface ExemptionMeter {
@@ -449,13 +458,33 @@ export interface RealizedResult {
 }
 
 // One carry bucket's movement in the month: opening balance, loss banked this month, carry consumed
-// by this month's taxable gains, and the balance carried into the next month.
+// by this month's taxable gains, and the balance carried into the next month. Before a seeded
+// bucket's adoption boundary the numbers are unknown (`available: false`) and render as "—".
 export interface CarryBucket {
   kind: RealizedKind;
-  opening_balance: number;
-  loss_banked: number;
-  loss_applied: number;
-  closing_balance: number;
+  available: boolean;
+  opening_balance: number | null;
+  loss_banked: number | null;
+  loss_applied: number | null;
+  closing_balance: number | null;
+}
+
+// An open missing-sale GAP dated in the period: its proceeds are unknown, so the month's result is
+// pending. It never enters the tax arithmetic.
+export interface TaxPendingGap {
+  id: number;
+  ticker: string;
+  date: string;
+  quantity: number;
+}
+
+// A ticker the catalog could not classify, held at period end, sold inside it, or both. Its sales
+// are excluded from the meter rather than guessed.
+export type TaxUnclassifiedStatus = "HELD" | "SOLD" | "HELD_AND_SOLD";
+
+export interface TaxUnclassifiedTicker {
+  ticker: string;
+  status: TaxUnclassifiedStatus;
 }
 
 // The same-day both-sides guard: a warning only, never a day-trade tax computation.
@@ -473,6 +502,8 @@ export interface StockTaxReport {
   realized: RealizedResult[];
   carry: CarryBucket[];
   day_trades: DayTradeWarning[];
+  pending_gaps: TaxPendingGap[];
+  unclassified: TaxUnclassifiedTicker[];
   /** The DARF 6015 deadline: the last business day of the following month. */
   darf_due_date: string;
 }

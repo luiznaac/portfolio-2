@@ -34,6 +34,7 @@ import dev.agner.portfolio.usecase.order.model.TransferStatus
 import dev.agner.portfolio.usecase.order.model.UnplannedTrade
 import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.AllocationService
+import dev.agner.portfolio.usecase.portfolio.MonthCloseNotCurrentException
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
@@ -123,6 +124,17 @@ class MonthlyCloseServiceTest : StringSpec({
         service.closeCurrent() shouldBe null
 
         coVerify(exactly = 0) { orders.refresh() }
+        coVerify(exactly = 0) { snapshots.save(any(), any()) }
+    }
+
+    "refuses a backdated month before the refresh writes" {
+        coEvery { months.requireClosable(any()) } throws
+            MonthCloseNotCurrentException(YearMonth.parse("2026-09"))
+
+        shouldThrow<MonthCloseNotCurrentException> { service.closeCurrent() }
+
+        coVerify(exactly = 0) { orders.refresh() }
+        coVerify(exactly = 0) { months.close(any()) }
         coVerify(exactly = 0) { snapshots.save(any(), any()) }
     }
 
@@ -384,6 +396,7 @@ private val taxReport = StockTaxReport(
     carry = listOf(
         CarryBucket(
             kind = RealizedKind.SWING,
+            available = true,
             openingBalance = BigDecimal("100.00"),
             lossBanked = BigDecimal("50.00"),
             lossApplied = BigDecimal.ZERO,

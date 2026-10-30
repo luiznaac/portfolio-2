@@ -28,6 +28,7 @@ import type {
   Month,
   MonthCreation,
   MonthPerformance,
+  MonthPeriodRange,
   MonthUpdate,
   MovementsImportResult,
   OrderList,
@@ -211,6 +212,10 @@ export const api = {
     return request("/month/current");
   },
 
+  getMonthPeriodRange(): Promise<MonthPeriodRange> {
+    return request("/month/period-range");
+  },
+
   openMonth(creation: MonthCreation): Promise<CurrentMonth> {
     return request("/month", { method: "POST", body: JSON.stringify(creation) });
   },
@@ -247,8 +252,8 @@ export const api = {
     return request("/performance/series");
   },
 
-  getStockTax(): Promise<StockTaxReport> {
-    return request("/month/current/tax");
+  getStockTax(period: string): Promise<StockTaxReport> {
+    return request(`/tax/${encodeURIComponent(period)}`);
   },
 
   getHarvest(): Promise<HarvestReport> {

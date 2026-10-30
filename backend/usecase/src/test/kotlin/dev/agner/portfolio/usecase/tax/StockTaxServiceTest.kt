@@ -9,18 +9,24 @@ import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.corporateAction
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
+import dev.agner.portfolio.usecase.listedasset.model.Gap
+import dev.agner.portfolio.usecase.listedasset.model.GapStatus
 import dev.agner.portfolio.usecase.listedasset.model.Trade
+import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
+import dev.agner.portfolio.usecase.portfolio.model.MonthPeriodRange
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.sell
 import dev.agner.portfolio.usecase.tax.model.CarryBucketOpening
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
+import dev.agner.portfolio.usecase.tax.model.TaxPendingGap
 import dev.agner.portfolio.usecase.tax.repository.ICarryBucketRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -39,6 +45,7 @@ class StockTaxServiceTest : StringSpec({
             corporateActions = mockk(),
             catalog = catalog(),
             carryBuckets = carryBuckets(),
+            gaps = gaps(),
         )
 
         service.fetchCurrent().shouldBeNull()
@@ -54,6 +61,7 @@ class StockTaxServiceTest : StringSpec({
             corporateActions = actions(),
             catalog = catalog("PETR4" to AssetKind.STOCK),
             carryBuckets = carryBuckets(),
+            gaps = gaps(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -77,6 +85,7 @@ class StockTaxServiceTest : StringSpec({
             corporateActions = actions(),
             catalog = catalog("HGLG11" to AssetKind.FII),
             carryBuckets = carryBuckets(),
+            gaps = gaps(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -97,6 +106,7 @@ class StockTaxServiceTest : StringSpec({
             ),
             catalog = catalog("PETR4" to AssetKind.STOCK),
             carryBuckets = carryBuckets(),
+            gaps = gaps(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -115,21 +125,105 @@ class StockTaxServiceTest : StringSpec({
             corporateActions = actions(),
             catalog = catalog("PETR4" to AssetKind.STOCK),
             carryBuckets = carryBuckets(RealizedKind.SWING to "500"),
+            gaps = gaps(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
         val swing = report.carry.first { it.kind == RealizedKind.SWING }
 
-        swing.openingBalance.plain() shouldBe "500"
-        swing.lossApplied.plain() shouldBe "500"
-        swing.closingBalance.plain() shouldBe "0"
+        swing.openingBalance!!.plain() shouldBe "500"
+        swing.lossApplied!!.plain() shouldBe "500"
+        swing.closingBalance!!.plain() shouldBe "0"
         report.meter.taxableGain.plain() shouldBe "500"
         report.meter.tax.plain() shouldBe "75"
     }
+
+    "fetch(period) refuses a period outside the month window" {
+        val service = StockTaxService(
+            months = months(
+                range = MonthPeriodRange(
+                    min = YearMonth.parse("2020-03"),
+                    max = YearMonth.parse("2026-10"),
+                    default = YearMonth.parse("2020-12"),
+                ),
+            ),
+            trades = trades(),
+            corporateActions = actions(),
+            catalog = catalog(),
+            carryBuckets = carryBuckets(),
+            gaps = gaps(),
+        )
+
+        val error = shouldThrow<TaxPeriodOutsideWindowException> {
+            service.fetch(YearMonth.parse("2020-02"))
+        }
+
+        error.period shouldBe YearMonth.parse("2020-02")
+        error.range.min shouldBe YearMonth.parse("2020-03")
+    }
+
+    "fetch(period) flags only open unpriced missing-sale gaps dated in that period" {
+        val service = StockTaxService(
+            months = months(
+                range = MonthPeriodRange(
+                    min = YearMonth.parse("2020-03"),
+                    max = YearMonth.parse("2026-10"),
+                    default = YearMonth.parse("2020-12"),
+                ),
+            ),
+            trades = trades(),
+            corporateActions = actions(),
+            catalog = catalog(),
+            carryBuckets = carryBuckets(),
+            gaps = gaps(
+                Gap.Sell(
+                    id = 4,
+                    ticker = "PETR4",
+                    date = LocalDate.parse("2020-12-10"),
+                    quantity = java.math.BigDecimal("100"),
+                    unitPrice = null,
+                    status = GapStatus.OPEN,
+                ),
+                Gap.Sell(
+                    id = 5,
+                    ticker = "VALE3",
+                    date = LocalDate.parse("2020-12-11"),
+                    quantity = java.math.BigDecimal("50"),
+                    unitPrice = java.math.BigDecimal("10"),
+                    status = GapStatus.OPEN,
+                ),
+                Gap.Sell(
+                    id = 6,
+                    ticker = "ITUB4",
+                    date = LocalDate.parse("2020-11-11"),
+                    quantity = java.math.BigDecimal("50"),
+                    unitPrice = null,
+                    status = GapStatus.OPEN,
+                ),
+            ),
+        )
+
+        service.fetch(YearMonth.parse("2020-12")).pendingGaps shouldBe listOf(
+            TaxPendingGap(
+                id = 4,
+                ticker = "PETR4",
+                date = LocalDate.parse("2020-12-10"),
+                quantity = java.math.BigDecimal("100"),
+            ),
+        )
+    }
 })
 
-private fun months(current: CurrentMonth? = currentMonth): MonthService = mockk {
+private fun months(
+    current: CurrentMonth? = currentMonth,
+    range: MonthPeriodRange = MonthPeriodRange(
+        min = YearMonth.parse("2026-01"),
+        max = YearMonth.parse("2026-12"),
+        default = YearMonth.parse("2026-10"),
+    ),
+): MonthService = mockk {
     coEvery { fetchCurrent() } returns current
+    coEvery { fetchPeriodRange() } returns range
 }
 
 private fun trades(vararg ledgers: Trade): ITradeRepository = mockk {
@@ -149,6 +243,10 @@ private fun carryBuckets(vararg openings: Pair<RealizedKind, String>): ICarryBuc
             asOfPeriod = YearMonth.parse("2026-09"),
         )
     }
+}
+
+private fun gaps(vararg gaps: Gap): IGapRepository = mockk {
+    coEvery { fetchAll() } returns gaps.toList()
 }
 
 private fun catalog(vararg kinds: Pair<String, AssetKind>): CatalogService = mockk {

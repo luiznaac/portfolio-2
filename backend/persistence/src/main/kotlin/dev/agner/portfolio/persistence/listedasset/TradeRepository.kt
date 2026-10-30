@@ -4,6 +4,7 @@ import dev.agner.portfolio.persistence.institution.InstitutionEntity
 import dev.agner.portfolio.usecase.commons.now
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
+import dev.agner.portfolio.usecase.listedasset.model.TradeExecutionRange
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
@@ -43,6 +44,11 @@ class TradeRepository(
         TradeEntity.all()
             .orderBy(TradeTable.id to SortOrder.ASC)
             .map { it.toModel() }
+    }
+
+    override suspend fun fetchExecutionDateRange(): TradeExecutionRange? = transaction {
+        val dates = TradeEntity.all().map { it.date }
+        if (dates.isEmpty()) null else TradeExecutionRange(dates.min(), dates.max())
     }
 
     override suspend fun fetchById(id: Int): Trade? = transaction {

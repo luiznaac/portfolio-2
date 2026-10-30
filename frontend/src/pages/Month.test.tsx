@@ -11,6 +11,7 @@ import { Month } from "./Month.tsx";
 const mock = vi.hoisted(() => ({
   targets: undefined as unknown as Targets,
   strategies: [] as Strategy[],
+  period: "2026-10",
 }));
 
 vi.mock("../api/queries.ts", () => {
@@ -26,9 +27,21 @@ vi.mock("../api/queries.ts", () => {
       isLoading: false,
       isError: false,
       data: {
-        month: { id: 1, period: "2026-10", capital: 100_000, floor: 0, status: "OPEN", aportes: 0 },
+        month: {
+          id: 1,
+          period: mock.period,
+          capital: 100_000,
+          floor: 0,
+          status: "OPEN",
+          aportes: 0,
+        },
         targets: mock.targets,
       },
+    }),
+    useMonthPeriodRange: () => ({
+      isLoading: false,
+      isError: false,
+      data: { min: "2020-03", max: "2026-10", default: "2020-12" },
     }),
     useOpenMonth: mutation,
     useUpdateCurrentMonth: mutation,
@@ -49,9 +62,27 @@ function defaultTargets(): Targets {
 beforeEach(() => {
   mock.targets = defaultTargets();
   mock.strategies = [];
+  mock.period = "2026-10";
 });
 
 afterEach(cleanup);
+
+describe("Month window states", () => {
+  it("chips a backdated month and reopens the opener at the default", async () => {
+    const user = userEvent.setup();
+    mock.period = "2020-12";
+
+    render(<Month />);
+
+    expect(screen.getByText("histórico — sem fechamento")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Trocar mês" }));
+
+    expect(screen.getByTestId("month-opener")).toBeDefined();
+    expect((screen.getByLabelText("Ano") as HTMLSelectElement).value).toBe("2020");
+    expect((screen.getByLabelText("Mês") as HTMLSelectElement).value).toBe("12");
+  });
+});
 
 describe("Month target rows keep focus while typing", () => {
   it("keeps focus on the strategy rung's Estratégia field", async () => {

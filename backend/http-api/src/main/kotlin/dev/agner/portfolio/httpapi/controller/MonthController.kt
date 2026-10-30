@@ -23,6 +23,10 @@ class MonthController(
 
     override fun routes(): RouteDefinition = {
         route("/month") {
+            get("/period-range") {
+                call.respond(HttpStatusCode.OK, service.fetchPeriodRange())
+            }
+
             post {
                 val payload = call.receive<MonthCreation>()
                 call.respond(HttpStatusCode.Created, service.open(payload))

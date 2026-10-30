@@ -1,34 +1,39 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import {
   useCurrentMonth,
+  useMonthPeriodRange,
   useOpenMonth,
   useReplaceTargets,
   useStrategies,
   useUpdateCurrentMonth,
 } from "../api/queries.ts";
-import type { AssetClass, CurrentMonth, Month as MonthModel, Targets } from "../api/types.ts";
+import type {
+  AssetClass,
+  CurrentMonth,
+  Month as MonthModel,
+  MonthPeriodRange,
+  Targets,
+} from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { PeriodSelect } from "../components/PeriodSelect.tsx";
 import { monthKey, todayIso } from "../lib/dates.ts";
 import { subClassLabel } from "../lib/fixedIncome.ts";
 import { formatCurrency, formatNumber } from "../lib/format.ts";
 import {
   ASSET_CLASSES,
-  MONTH_OPTIONS,
   type MonthFormState,
   type TargetsFormState,
   addStrategyRow,
   addTickerRow,
   assetClassLabel,
   emptyMonthForm,
+  isBackdatedPeriod,
   monthFormFrom,
   monthPeriodLabel,
   monthStatusLabel,
   overplannedStrategyClasses,
-  periodMonth,
-  periodYear,
-  periodYearOptions,
   remainingLegacyShares,
   removeStrategyRow,
   removeTickerRow,
@@ -45,36 +50,57 @@ const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px
 // (Alocação, Ordens) hang off the same open month.
 export function Month() {
   const current = useCurrentMonth();
+  const range = useMonthPeriodRange();
+  const [switching, setSwitching] = useState(false);
+  const currentPeriod = monthKey(todayIso());
 
   return (
     <section>
       <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Mês</h1>
 
-      {current.isLoading ? (
+      {current.isLoading || (switching && range.isLoading) ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : current.isError ? (
         <p className="text-[13.5px] text-tax">{current.error.message}</p>
-      ) : current.data ? (
-        <MonthDetails key={current.data.month.id} current={current.data} />
-      ) : (
-        <MonthOpener />
-      )}
+      ) : current.data && !switching ? (
+        <MonthDetails
+          key={current.data.month.id}
+          current={current.data}
+          currentPeriod={currentPeriod}
+          onSwitch={() => setSwitching(true)}
+        />
+      ) : range.isError ? (
+        <p className="text-[13.5px] text-tax">{range.error.message}</p>
+      ) : range.data ? (
+        <MonthOpener
+          range={range.data}
+          onOpened={() => setSwitching(false)}
+          onCancel={current.data ? () => setSwitching(false) : undefined}
+        />
+      ) : null}
     </section>
   );
 }
 
 // Opening a month closes any month still open (the backend owns that invariant), so the copy warns
-// before the button.
-function MonthOpener() {
-  const today = monthKey(todayIso());
-  const [form, setForm] = useState<MonthFormState>(() => emptyMonthForm(today));
+// before the button. The period selects are bounded by the server's window, never a ±2-year guess.
+function MonthOpener({
+  range,
+  onOpened,
+  onCancel,
+}: {
+  range: MonthPeriodRange;
+  onOpened: () => void;
+  onCancel?: () => void;
+}) {
+  const [form, setForm] = useState<MonthFormState>(() => emptyMonthForm(range.default));
   const open = useOpenMonth();
   const creation = toMonthCreation(form);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!creation) return;
-    open.mutate(creation);
+    open.mutate(creation, { onSuccess: onOpened });
   }
 
   return (
@@ -84,42 +110,14 @@ function MonthOpener() {
           {/* Two selects rather than a native month input: Firefox/Safari have no month picker. */}
           <div className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
             <span>Período</span>
-            <div className="flex gap-2">
-              <select
-                aria-label="Mês"
-                value={periodMonth(form.period)}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    period: `${periodYear(current.period)}-${event.target.value}`,
-                  }))
-                }
-                className={FIELD}
-              >
-                {MONTH_OPTIONS.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Ano"
-                value={periodYear(form.period)}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    period: `${event.target.value}-${periodMonth(current.period)}`,
-                  }))
-                }
-                className={FIELD}
-              >
-                {periodYearOptions(form.period, today).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <PeriodSelect
+              range={range}
+              period={form.period}
+              onChange={(period) => setForm((current) => ({ ...current, period }))}
+            />
+            <span className="text-[11.5px] text-ink-faint">
+              Histórico desde {monthPeriodLabel(range.min)}
+            </span>
           </div>
           <NumberField
             label="Capital (R$)"
@@ -135,22 +133,40 @@ function MonthOpener() {
 
         {open.error && <p className="text-[12.5px] text-tax">{open.error.message}</p>}
 
-        <Button type="submit" variant="primary" disabled={!creation || open.isPending}>
-          {open.isPending ? "Abrindo…" : "Abrir mês"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="primary" disabled={!creation || open.isPending}>
+            {open.isPending ? "Abrindo…" : "Abrir mês"}
+          </Button>
+          {onCancel && (
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancelar
+            </Button>
+          )}
+        </div>
         <p className="text-[11.5px] text-ink-faint">Abrir um mês fecha o mês aberto atual.</p>
       </form>
     </Panel>
   );
 }
 
-function MonthDetails({ current }: { current: CurrentMonth }) {
+function MonthDetails({
+  current,
+  currentPeriod,
+  onSwitch,
+}: {
+  current: CurrentMonth;
+  currentPeriod: string;
+  onSwitch: () => void;
+}) {
+  const backdated = isBackdatedPeriod(current.month.period, currentPeriod);
+
   return (
     <div data-testid="month-details">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Chip tone={current.month.status === "OPEN" ? "green" : "neutral"}>
           {monthStatusLabel(current.month.status)}
         </Chip>
+        {backdated && <Chip tone="amber">histórico — sem fechamento</Chip>}
         <span className="font-cond text-[15px] font-semibold">
           {monthPeriodLabel(current.month.period)}
         </span>
@@ -158,6 +174,9 @@ function MonthDetails({ current }: { current: CurrentMonth }) {
           Capital {formatCurrency(current.month.capital)} · Reserva{" "}
           {formatCurrency(current.month.floor)}
         </span>
+        <Button variant="ghost" className="ml-auto" onClick={onSwitch}>
+          Trocar mês
+        </Button>
       </div>
 
       <div className="mb-4">

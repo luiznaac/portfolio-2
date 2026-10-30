@@ -13,9 +13,14 @@ interface IMonthRepository {
     // Looked up by the natural key; null when no month has that period.
     suspend fun fetchByPeriod(period: YearMonth): Month?
 
-    // Opens a month and closes any month still OPEN first, so the one-open-month invariant holds
-    // without a caller having to remember it. Both writes share one transaction. A month closed this
-    // way carries no Snapshot — only the explicit monthly close freezes one.
+    // Every month, open or closed — the period window derives its bounds from the earliest and
+    // latest existing periods.
+    suspend fun fetchAll(): List<Month>
+
+    // Opens a month and replaces any month still OPEN, so the one-open-month invariant holds without
+    // a caller having to remember it. A current open month is auto-closed without a Snapshot; a
+    // backdated plan-only month is discarded with its targets. Both writes share one transaction.
+    // Only the explicit monthly close ever freezes a Snapshot.
     suspend fun open(creation: MonthCreation): Month
 
     // Updates the open month's Capital and Floor; null when no month is open.

@@ -3,8 +3,10 @@ package dev.agner.portfolio.httpapi.controller
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.harvestLeg
+import dev.agner.portfolio.usecase.portfolio.model.MonthPeriodRange
 import dev.agner.portfolio.usecase.tax.HarvestService
 import dev.agner.portfolio.usecase.tax.StockTaxService
+import dev.agner.portfolio.usecase.tax.TaxPeriodOutsideWindowException
 import dev.agner.portfolio.usecase.tax.model.CarryBucket
 import dev.agner.portfolio.usecase.tax.model.DayTradeWarning
 import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
@@ -16,6 +18,9 @@ import dev.agner.portfolio.usecase.tax.model.HarvestReport
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
 import dev.agner.portfolio.usecase.tax.model.RealizedResult
 import dev.agner.portfolio.usecase.tax.model.StockTaxReport
+import dev.agner.portfolio.usecase.tax.model.TaxPendingGap
+import dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedStatus
+import dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedTicker
 import dev.agner.portfolio.usecase.tax.model.TickerAveragePrice
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -37,16 +42,16 @@ import java.math.BigDecimal
 
 class TaxControllerTest : DescribeSpec({
 
-    describe("reading the current month's tax") {
+    describe("reading a period's tax") {
 
         it("serves the meter, average prices, realized result, carry state and DARF deadline") {
             val service = mockk<StockTaxService>()
-            coEvery { service.fetchCurrent() } returns taxReport
+            coEvery { service.fetch(YearMonth.parse("2026-10")) } returns taxReport
 
             testApplication {
                 application { installRoutes(TaxController(service, mockk())) }
 
-                val response = client.get("/month/current/tax")
+                val response = client.get("/tax/2026-10")
 
                 response.status shouldBe HttpStatusCode.OK
                 val body = ObjectMapper().readTree(response.bodyAsText())
@@ -65,23 +70,81 @@ class TaxControllerTest : DescribeSpec({
                 body.get("realized").get(0).get("gross_sales").decimal() shouldBe "20010"
                 body.get("realized").get(0).get("result").decimal() shouldBe "4002"
                 body.get("carry").get(0).get("kind").asText() shouldBe "SWING"
+                body.get("carry").get(0).get("available").asBoolean() shouldBe true
                 body.get("carry").get(0).get("opening_balance").decimal() shouldBe "500"
                 body.get("carry").get(0).get("loss_applied").decimal() shouldBe "500"
                 body.get("carry").get(0).get("closing_balance").decimal() shouldBe "0"
                 body.get("day_trades").get(0).get("ticker").asText() shouldBe "PETR4"
                 body.get("day_trades").get(0).get("institution_id").asInt() shouldBe 3
                 body.get("day_trades").get(0).get("date").asText() shouldBe "2026-10-05"
+                body.get("pending_gaps").get(0).get("ticker").asText() shouldBe "VALE3"
+                body.get("unclassified").get(0).get("ticker").asText() shouldBe "MYST3"
+                body.get("unclassified").get(0).get("status").asText() shouldBe "HELD_AND_SOLD"
             }
         }
 
-        it("404s when no month is open") {
+        it("serializes an unavailable carry bucket with explicit nulls") {
             val service = mockk<StockTaxService>()
-            coEvery { service.fetchCurrent() } returns null
+            coEvery { service.fetch(any()) } returns taxReport.copy(
+                carry = listOf(
+                    CarryBucket(
+                        kind = RealizedKind.SWING,
+                        available = false,
+                        openingBalance = null,
+                        lossBanked = null,
+                        lossApplied = null,
+                        closingBalance = null,
+                    ),
+                ),
+            )
 
             testApplication {
                 application { installRoutes(TaxController(service, mockk())) }
 
-                client.get("/month/current/tax").status shouldBe HttpStatusCode.NotFound
+                val body = ObjectMapper().readTree(client.get("/tax/2020-12").bodyAsText())
+                val bucket = body.get("carry").get(0)
+
+                bucket.get("available").asBoolean() shouldBe false
+                bucket.has("opening_balance") shouldBe true
+                bucket.get("opening_balance").isNull shouldBe true
+                bucket.has("closing_balance") shouldBe true
+            }
+        }
+
+        it("maps a malformed period to invalid-parameter without calling the service") {
+            val service = mockk<StockTaxService>()
+
+            testApplication {
+                application { installRoutes(TaxController(service, mockk())) }
+
+                val response = client.get("/tax/not-a-month")
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "invalid-parameter"
+                coVerify(exactly = 0) { service.fetch(any()) }
+            }
+        }
+
+        it("rejects a period outside the window") {
+            val service = mockk<StockTaxService>()
+            coEvery { service.fetch(any()) } throws TaxPeriodOutsideWindowException(
+                period = YearMonth.parse("2020-02"),
+                range = MonthPeriodRange(
+                    min = YearMonth.parse("2020-03"),
+                    max = YearMonth.parse("2026-10"),
+                    default = YearMonth.parse("2020-12"),
+                ),
+            )
+
+            testApplication {
+                application { installRoutes(TaxController(service, mockk())) }
+
+                val response = client.get("/tax/2020-02")
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "tax-period-outside-window"
             }
         }
     }
@@ -256,6 +319,7 @@ private val taxReport = StockTaxReport(
     carry = listOf(
         CarryBucket(
             kind = RealizedKind.SWING,
+            available = true,
             openingBalance = BigDecimal("500"),
             lossBanked = BigDecimal("0"),
             lossApplied = BigDecimal("500"),
@@ -269,6 +333,17 @@ private val taxReport = StockTaxReport(
             date = LocalDate.parse("2026-10-05"),
             quantity = BigDecimal("100"),
         ),
+    ),
+    pendingGaps = listOf(
+        TaxPendingGap(
+            id = 4,
+            ticker = "VALE3",
+            date = LocalDate.parse("2026-10-12"),
+            quantity = BigDecimal("50"),
+        ),
+    ),
+    unclassified = listOf(
+        TaxUnclassifiedTicker(ticker = "MYST3", status = TaxUnclassifiedStatus.HELD_AND_SOLD),
     ),
 )
 

@@ -32,10 +32,24 @@ internal object CarryRoller {
         }
 
         return current.results.map { result ->
+            val boundary = boundaries[result.kind]
+            if (boundary != null && current.period <= boundary) {
+                // The seed's balance already represents this month's results: showing a movement on
+                // top of it would double count the boundary month.
+                return@map CarryBucket(
+                    kind = result.kind,
+                    available = false,
+                    openingBalance = null,
+                    lossBanked = null,
+                    lossApplied = null,
+                    closingBalance = null,
+                )
+            }
             val opening = carried[result.kind] ?: BigDecimal.ZERO
             val movement = movement(opening, result, current.swingExceeded)
             CarryBucket(
                 kind = result.kind,
+                available = true,
                 openingBalance = opening.defaultScale(),
                 lossBanked = movement.banked.defaultScale(),
                 lossApplied = movement.applied.defaultScale(),
