@@ -10,6 +10,11 @@ mysql:
 gateways:
   sgs:
     host: 'https://api.bcb.gov.br'
+  brapi:
+    host: 'https://brapi.dev'
+    token: ${BRAPI_TOKEN:}
+  yahoo:
+    host: 'https://query1.finance.yahoo.com'
   bacen:
     host: 'https://api.bcb.gov.br'
   chameidor:

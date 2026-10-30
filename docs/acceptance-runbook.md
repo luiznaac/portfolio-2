@@ -362,7 +362,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
   The expected read is two active suggestions in loss-descending order — ITSA4 first (100 units, R$1,200 loss, no slice) and PETR4 second (500 units, R$1,000 loss, NEUTRO, slice Dividendos) — VALE3 in the ignored list, and the HGLG11 FII row at 20%.
 
-- **Performance + Fechamento seed**: the performance reads replay the immutable snapshots, not the live ledger, so this scenario seeds two closed months (January and February 2026) with their snapshot JSON, the target chain and one listed holding — plus an open March month (9003) with one pending Attribution Transfer, which is what the Fechamento screen's blocked close reads. January opens at R$100k; February closes at R$103.5k after a R$2k aporte and no income, so the decomposition is `(103500 − 100000 − 2000) ÷ 100000 = 1.5%`. Ações is 0% and Renda Fixa 100% (Pós-fixado), so the blended benchmark is the live CDI return: IBOV series 7 is currently absent from SGS, and the blend keeps the policy denominator rather than silently renormalising around the missing leg (a targeted class with no benchmark would make the total unknown). The February snapshot carries a R$45k caixa and two executed orders so the closed-month summary has data. Run it independently of the order/tax/harvest seeds.
+- **Performance + Fechamento seed**: the performance reads replay the immutable snapshots, not the live ledger, so this scenario seeds two closed months (January and February 2026) with their snapshot JSON, the target chain and one listed holding — plus an open March month (9003) with one pending Attribution Transfer, which is what the Fechamento screen's blocked close reads. January opens at R$100k; February closes at R$103.5k after a R$2k aporte and no income, so the decomposition is `(103500 − 100000 − 2000) ÷ 100000 = 1.5%`. Ações is 0% and Renda Fixa 100% (Pós-fixado), so the blended benchmark is the stored CDI return. The series is read from the `benchmark_close` table (IBOV comes from brapi/Yahoo, CDI and IPCA from BCB SGS); a target leg with no stored data makes the total absent rather than renormalising around it. Run the benchmark backfill below first if this database has never fetched the series. The February snapshot carries a R$45k caixa and two executed orders so the closed-month summary has data. Run it independently of the order/tax/harvest seeds.
 
   ```
   docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
@@ -416,6 +416,20 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   curl -s -X POST http://localhost:8080/gaps/9003/price -H 'Content-Type: application/json' -d '{"unit_price":18}'
   curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
+
+- **Benchmark store backfill (one-off)**: the benchmark series lives in the `benchmark_close`
+  table, so a fresh database has no history and every blend reads absent. After the app is healthy,
+  seed it once (there is no scheduler; freshness is lazy gap-fill plus this call):
+
+  ```
+  curl -s -X POST 'http://localhost:8080/benchmarks/backfill?from=2018-01-01'
+  ```
+
+  The response is one row per index — `{"indexes":[{"index":"IBOV","from":"2018-01-01","to":"…","points":…}]}`
+  — where `points` is the stored count for the window. IBOV is filled from brapi first (its free
+  plan clamps to three months, so `BRAPI_TOKEN` is optional and only lifts the clamp) and then Yahoo
+  `^BVSP` for the rest; CDI and IPCA from BCB SGS. Re-running is safe: existing points are upserted,
+  never duplicated, and an empty provider response leaves the stored rows untouched.
 
 - **Cockpit seed**: run the Performance + Fechamento seed first — its open month (9003) and pending transfer are the Cockpit's close reminder, blocked close and transfer attention. This seed moves 9003's period to the previous calendar month (so the close reminder is due), then adds the agenda/proventos/edition rows its panels read. Dates are relative to `CURDATE()` so the maturity stays inside the seven-day lead and the payment inside the thirty-day window whenever acceptance runs:
 
