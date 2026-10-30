@@ -105,4 +105,4 @@ Either way the Ações/FII benchmark is wrong or absent after 2019-09. The value
 - Node line-scan of every annual file produced the table above (`probe.mjs`: TIPREG `01`, TPMERC `010`, numeric PREULT).
 - `curl 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.7/dados?formato=json&dataInicial=01/01/2018&dataFinal=30/10/2026'` -> 200, 432 rows, last 2019-09-30; the same call with a range starting 2020-01-01 -> 404.
 - Real 2026 PETR4 spot line: `line[230:242]` = `BRPETRACNPR6` (official CODISI), `line[224:236]` = `000000BRPETR` (what the parser stores).
-- Official layout: [SeriesHistoricas_Layout.pdf](https://www.b3.com.br/data/files/33/67/B9/50/D84057102C784E47AC094EA8/SeriesHistoricas_Layout.pdf) (rev 2.0, 2020-10-05), 245-byte records, CODISI 231-242, TPMERC 010 vISTA / 020 fracionario / 070-080 opcoes.
+- Official layout: [SeriesHistoricas_Layout.pdf](https://www.b3.com.br/data/files/33/67/B9/50/D84057102C784E47AC094EA8/SeriesHistoricas_Layout.pdf) (rev 2.0, 2020-10-05), 245-byte records, CODISI 231-242, TPMERC 010 VISTA / 020 fracionario / 070-080 opcoes.
