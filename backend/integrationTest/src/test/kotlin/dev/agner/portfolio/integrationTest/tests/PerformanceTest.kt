@@ -188,6 +188,22 @@ private suspend fun seedTwoClosedMonths(): dev.agner.portfolio.usecase.portfolio
     val months = getBean<MonthService>()
     val snapshots = getBean<ISnapshotRepository>()
 
+    // The month window is the ledger's span, so a backdated January needs imported history to open.
+    val institution = getBean<InstitutionService>().create(InstitutionCreation("XP INVESTIMENTOS"))
+    getBean<ITradeRepository>().save(
+        TradeCreation(
+            ticker = "PETR4",
+            side = TradeSide.BUY,
+            date = LocalDate.parse("2026-01-10"),
+            venue = "VISTA",
+            quantity = BigDecimal("1"),
+            unitPrice = BigDecimal("10"),
+            institutionId = institution.id,
+        ),
+        TradeSource.B3_IMPORT,
+        ordinal = 1,
+    )
+
     val january = months.open(MonthCreation(YearMonth.parse("2026-01"), BigDecimal("100000"), BigDecimal.ZERO))
     months.close(january.month.id)
     snapshots.save(
