@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.getBean
+import dev.agner.portfolio.usecase.import.ImportService
+import dev.agner.portfolio.usecase.import.model.ImportRowPayload
+import dev.agner.portfolio.usecase.import.model.ImportSource
+import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -19,8 +23,9 @@ import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.mockk.every
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
-import java.io.ByteArrayOutputStream
+import kotlinx.datetime.LocalDate
+import java.io.File
+import java.math.BigDecimal
 import java.time.Instant
 
 // Re-uploading a file is an identity check, not a second import: the hash decides whether the
@@ -36,8 +41,8 @@ class ImportResumeTest : StringSpec({
 
     "an identical re-upload answers 200 with the same untouched import at every status" {
         // The same bytes twice: a hash comparison is only meaningful when the file is the same file.
-        val file = negotiation(listOf(petr4))
-        val first = upload("neg.xlsx", file)
+        val file = b3NegociacaoFixture()
+        val first = upload("b3-negociacao.xlsx", file)
         first.status shouldBe HttpStatusCode.Created
         val id = json(first).get("id").asInt()
 
@@ -48,16 +53,28 @@ class ImportResumeTest : StringSpec({
         // The request source is ignored on a hash match: the file identity wins.
         reupload(file, id, status = "APPLIED", source = "B3_POSITION")
 
-        rows(id).map { it.get("situation").asText() } shouldBe listOf("duplicate_in_ledger")
+        rows(id).map { it.get("situation").asText() } shouldBe
+            listOf("duplicate_in_ledger", "duplicate_in_ledger")
     }
 
     "the rows carry the four server situations and apply writes the new suffix" {
-        val seeded = upload("neg.xlsx", negotiation(listOf(petr4)))
-        reviewAndApply(json(seeded).get("id").asInt())
+        val imports = getBean<ImportService>()
+        val seeded = imports.stage(
+            ImportSource.B3_TRADES,
+            "seed.xlsx",
+            "seed-hash",
+            listOf(petr4()),
+        )
+        imports.review(seeded.record.id)
+        imports.apply(seeded.record.id)
 
-        val second = upload("neg.xlsx", negotiation(listOf(petr4, vale3, vale3, missingDate)))
-        second.status shouldBe HttpStatusCode.Created
-        val secondId = json(second).get("id").asInt()
+        val second = imports.stage(
+            ImportSource.B3_TRADES,
+            "neg.xlsx",
+            "second-hash",
+            listOf(petr4(), vale3(), vale3(), missingDate()),
+        )
+        val secondId = second.record.id
 
         rows(secondId).map { it.get("situation").asText() } shouldBe
             listOf("duplicate_in_ledger", "new", "duplicate_in_file", "error")
@@ -72,37 +89,36 @@ class ImportResumeTest : StringSpec({
     }
 })
 
-private suspend fun reupload(
-    file: ByteArray,
-    id: Int,
-    status: String,
-    source: String = "B3_TRADES",
-) {
-    val again = upload("neg.xlsx", file, source)
-    again.status shouldBe HttpStatusCode.OK
-    json(again).also {
-        it.get("id").asInt() shouldBe id
-        it.get("status").asText() shouldBe status
-        it.get("source").asText() shouldBe "B3_TRADES"
-    }
-}
-
 private const val INSTITUTION = "XP INVESTIMENTOS"
 
-private val petr4 = listOf("2026-10-14", "C", "VISTA", "PETR4", 100, 48.92, 4892.00, INSTITUTION)
-private val vale3 = listOf("2026-10-15", "C", "VISTA", "VALE3", 10, 60.00, 600.00, INSTITUTION)
-private val missingDate = listOf("", "C", "VISTA", "ITUB4", 5, 30.00, 150.00, INSTITUTION)
+private fun petr4() = row("PETR4", quantity = 100, unitPrice = "48.92")
+private fun vale3() = row("VALE3", quantity = 10, unitPrice = "60.00")
+private fun missingDate() = row("ITUB4", quantity = 5, unitPrice = "30.00", date = null, error = "Missing date")
 
-private val HEADERS = listOf(
-    "Data",
-    "Tipo de Movimentação",
-    "Mercado",
-    "Ticker",
-    "Quantidade",
-    "Preço Unitário",
-    "Valor Bruto",
-    "Instituição",
+private fun row(
+    ticker: String,
+    quantity: Int,
+    unitPrice: String,
+    date: LocalDate? = LocalDate.parse("2026-10-14"),
+    error: String? = null,
+) = ImportRowPayload(
+    date = date,
+    side = TradeSide.BUY,
+    venue = "VISTA",
+    ticker = ticker,
+    quantity = BigDecimal(quantity),
+    unitPrice = BigDecimal(unitPrice),
+    institutionName = INSTITUTION,
+    error = error,
 )
+
+// The committed two-row B3 Negociação fixture the parser tests pin. Gradle runs this module's tests
+// from `backend/integrationTest`, so the sibling test resource resolves one directory up.
+private fun b3NegociacaoFixture(): ByteArray {
+    val fixture = File("../http-api/src/test/resources/b3-negociacao.xlsx")
+    check(fixture.isFile) { "B3 fixture not found at ${fixture.absolutePath}" }
+    return fixture.readBytes()
+}
 
 private suspend fun upload(
     fileName: String,
@@ -121,6 +137,21 @@ private suspend fun upload(
             },
         ),
     )
+}
+
+private suspend fun reupload(
+    file: ByteArray,
+    id: Int,
+    status: String,
+    source: String = "B3_TRADES",
+) {
+    val again = upload("b3-negociacao.xlsx", file, source)
+    again.status shouldBe HttpStatusCode.OK
+    json(again).also {
+        it.get("id").asInt() shouldBe id
+        it.get("status").asText() shouldBe status
+        it.get("source").asText() shouldBe "B3_TRADES"
+    }
 }
 
 private suspend fun review(importId: Int) {
@@ -142,28 +173,3 @@ private suspend fun rows(importId: Int) =
     json(getBean<HttpClient>().get("http://localhost:8080/imports/$importId/rows"))
 
 private suspend fun json(response: HttpResponse) = ObjectMapper().readTree(response.bodyAsText())
-
-// A minimal B3 Negociação workbook: the header set the parser claims plus the rows under test.
-private fun negotiation(rows: List<List<Any?>>): ByteArray {
-    XSSFWorkbook().use { workbook ->
-        val sheet = workbook.createSheet("Sheet1")
-        val header = sheet.createRow(0)
-        HEADERS.forEachIndexed { index, name -> header.createCell(index).setCellValue(name) }
-        rows.forEachIndexed { rowIndex, values ->
-            val row = sheet.createRow(rowIndex + 1)
-            values.forEachIndexed { column, value ->
-                when (value) {
-                    null -> Unit
-                    is String -> row.createCell(column).setCellValue(value)
-                    is Int -> row.createCell(column).setCellValue(value.toDouble())
-                    is Double -> row.createCell(column).setCellValue(value)
-                    else -> error("Unsupported fixture cell: $value")
-                }
-            }
-        }
-        return ByteArrayOutputStream().use { out ->
-            workbook.write(out)
-            out.toByteArray()
-        }
-    }
-}
