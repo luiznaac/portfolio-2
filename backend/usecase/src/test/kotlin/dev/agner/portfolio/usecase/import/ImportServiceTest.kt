@@ -6,8 +6,10 @@ import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportCreation
 import dev.agner.portfolio.usecase.import.model.ImportRow
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
+import dev.agner.portfolio.usecase.import.model.ImportRowSituation
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
+import dev.agner.portfolio.usecase.import.model.StagingResult
 import dev.agner.portfolio.usecase.import.repository.IImportRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.Institution
@@ -45,20 +47,22 @@ class ImportServiceTest : StringSpec({
         transaction.count = 0
     }
 
-    "stage should be a no-op when the file hash was already imported" {
-        coEvery { repository.fetchByHash(HASH) } returns stagedImport
+    "stage should return the existing import untouched and report it was not created" {
+        coEvery { repository.fetchByHash(HASH) } returns appliedImport
 
-        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload)) shouldBe stagedImport
+        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload)) shouldBe
+            StagingResult(appliedImport, created = false)
 
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
-    "stage should persist a new staged import with its rows" {
+    "stage should persist a new staged import with its rows and report it was created" {
         coEvery { repository.fetchByHash(HASH) } returns null
         val captured = slot<ImportCreation>()
         coEvery { repository.save(capture(captured)) } returns stagedImport
 
-        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload))
+        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload)) shouldBe
+            StagingResult(stagedImport, created = true)
 
         captured.captured shouldBe ImportCreation(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload))
     }
@@ -169,6 +173,58 @@ class ImportServiceTest : StringSpec({
         service.apply(1)
 
         transaction.count shouldBe 1
+    }
+
+    "fetchRows should annotate new rows, in-file repeats and errors" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns
+            listOf(row, row.copy(id = 12), errorRow, row.copy(id = 13, ticker = "VALE3"))
+        coEvery { institutionService.fetchByName("XP INVESTIMENTOS") } returns institution
+        coEvery { tradeService.countByKey(any()) } returns 0
+
+        service.fetchRows(1)!!.map { it.situation } shouldBe
+            listOf(
+                ImportRowSituation.NEW,
+                ImportRowSituation.DUPLICATE_IN_FILE,
+                ImportRowSituation.ERROR,
+                ImportRowSituation.NEW,
+            )
+    }
+
+    "fetchRows should mark the occurrences the ledger already holds, then the new ones" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns
+            listOf(row, row.copy(id = 12), row.copy(id = 13))
+        coEvery { institutionService.fetchByName("XP INVESTIMENTOS") } returns institution
+        coEvery { tradeService.countByKey(any()) } returns 0
+        coEvery { tradeService.countByKey(match { it.ticker == "PETR4" }) } returns 1
+
+        service.fetchRows(1)!!.map { it.situation } shouldBe
+            listOf(
+                ImportRowSituation.DUPLICATE_IN_LEDGER,
+                ImportRowSituation.NEW,
+                ImportRowSituation.DUPLICATE_IN_FILE,
+            )
+    }
+
+    "fetchRows should never create the institution it resolves a row against" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns listOf(row.copy(institutionName = "CORRETORA NOVA"))
+        coEvery { institutionService.fetchByName("CORRETORA NOVA") } returns null
+
+        service.fetchRows(1)!!.single().situation shouldBe ImportRowSituation.NEW
+
+        coVerify(exactly = 0) { institutionService.create(any()) }
+        coVerify(exactly = 0) { tradeService.countByKey(any()) }
+    }
+
+    "fetchRows should normalize the institution name before matching the ledger" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns listOf(row.copy(institutionName = "xp  investimentos"))
+        coEvery { institutionService.fetchByName("XP INVESTIMENTOS") } returns institution
+        coEvery { tradeService.countByKey(any()) } returns 1
+
+        service.fetchRows(1)!!.single().situation shouldBe ImportRowSituation.DUPLICATE_IN_LEDGER
     }
 
     "fetchRows should return null when the import does not exist" {

@@ -86,6 +86,12 @@ export interface Import {
   created_at: string;
 }
 
+// The server's own review verdict for a staged row, computed with the occurrence walk apply uses.
+// `new` is the first occurrence past what the ledger holds; `duplicate_in_ledger` is an occurrence
+// the ledger already holds; `duplicate_in_file` repeats a row that is itself new in this file;
+// `error` is a row the parser flagged. The frontend renders and counts this value — never infers it.
+export type ImportRowSituation = "new" | "duplicate_in_file" | "duplicate_in_ledger" | "error";
+
 export interface ImportRow {
   id: number;
   import_id: number;
@@ -97,6 +103,7 @@ export interface ImportRow {
   unit_price: number;
   institution_name: string;
   error?: string;
+  situation: ImportRowSituation;
 }
 
 export type TradeSource = "MANUAL" | "B3_IMPORT";
@@ -861,11 +868,15 @@ export interface CorporateAction {
 }
 
 // The POST /corporate-actions/import response: how many rows each destination absorbed and the
-// corporate-action rows the log now holds.
+// corporate-action rows the log now holds. `trade_import` is the import the file's trade rows
+// staged or matched (absent when the file carried no trades), and `reuploaded` says its hash was
+// already known — enough to explain an all-zero repeat instead of showing a silent zero summary.
 export interface MovementsImportResult {
   trades: number;
   incomes: number;
   corporate_actions: CorporateAction[];
+  trade_import?: Import;
+  reuploaded: boolean;
 }
 
 // Ordens: the persisted month plan. A suggested order's lifecycle is the server's match against the

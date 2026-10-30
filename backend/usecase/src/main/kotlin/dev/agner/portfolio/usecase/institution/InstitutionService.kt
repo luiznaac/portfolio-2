@@ -13,6 +13,11 @@ class InstitutionService(
 
     suspend fun fetchAll() = repository.fetchAll()
 
+    // The read-only lookup: the import review matches a staged row's institution against the ledger
+    // without creating one on a GET. A name no institution holds resolves to null.
+    suspend fun fetchByName(name: String): Institution? =
+        repository.fetchByName(name.normalizedInstitutionName())
+
     // Loose normalization + merge-on-collision: a name that normalizes to an existing institution
     // returns that row instead of forking a duplicate (the auto-create-on-import path).
     suspend fun create(creation: InstitutionCreation): Institution {

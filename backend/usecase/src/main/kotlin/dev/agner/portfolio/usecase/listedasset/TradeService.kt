@@ -58,6 +58,10 @@ class TradeService(
         }
     }
 
+    // The ledger's occurrence count for a natural tuple — the import review reads the same key
+    // apply reconciles against, without writing.
+    suspend fun countByKey(key: TradeKey): Int = repository.fetchByKey(key).size
+
     suspend fun fetchAll() = repository.fetchAll()
 
     suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())

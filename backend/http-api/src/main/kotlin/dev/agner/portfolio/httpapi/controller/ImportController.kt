@@ -4,6 +4,7 @@ import dev.agner.portfolio.httpapi.import.ImportParserResolver
 import dev.agner.portfolio.usecase.import.ImportService
 import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportSource
+import dev.agner.portfolio.usecase.import.model.StagingResult
 import dev.agner.portfolio.usecase.import.model.sha256Hex
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -26,7 +27,8 @@ class ImportController(
             }
 
             post {
-                call.respond(HttpStatusCode.Created, call.stageFile())
+                val staged = call.stageFile()
+                call.respond(if (staged.created) HttpStatusCode.Created else HttpStatusCode.OK, staged.record)
             }
 
             get("/{import_id}") {
@@ -53,10 +55,11 @@ class ImportController(
 
     // Reads the uploaded file and its source, then hands the pipeline the parsed rows. The hash is
     // computed here so the service can recognise a re-import without ever touching the bytes.
-    private suspend fun ApplicationCall.stageFile(): Import {
+    private suspend fun ApplicationCall.stageFile(): StagingResult {
         val upload = receiveUpload()
-        val source = upload.formItems["source"]?.let { ImportSource.valueOf(it) }
-            ?: throw InvalidParameterException("source", null)
+        val source = upload.formItems["source"]
+            ?.let { value -> runCatching { ImportSource.valueOf(value) }.getOrNull() }
+            ?: throw InvalidParameterException("source", upload.formItems["source"])
         return service.stage(
             source,
             upload.fileName,

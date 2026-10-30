@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.model.MovementsRouting
+import dev.agner.portfolio.usecase.import.model.StagingResult
 import dev.agner.portfolio.usecase.income.IncomeService
 import dev.agner.portfolio.usecase.income.model.IncomeCreation
 import dev.agner.portfolio.usecase.income.model.IncomeType
@@ -33,7 +34,7 @@ class MovementsImportServiceTest : StringSpec({
     beforeTest {
         clearAllMocks()
         coEvery { imports.stage(any(), any(), any(), any()) } returns
-            import(ImportStatus.STAGED)
+            StagingResult(import(ImportStatus.STAGED), created = true)
         coEvery { imports.review(any()) } returns import(ImportStatus.REVIEWED)
         coEvery { imports.apply(any()) } returns import(ImportStatus.APPLIED)
         coEvery { incomeService.reconcile(any()) } returns emptyList()
@@ -53,19 +54,36 @@ class MovementsImportServiceTest : StringSpec({
         coVerify { corporateActions.importEvents(match { list -> list.single().fileHash == "hash" }) }
     }
 
-    "a file already applied skips the trade pipeline" {
-        coEvery { imports.stage(any(), any(), any(), any()) } returns import(ImportStatus.APPLIED)
+    "a file already applied skips the trade pipeline and reports the import it matched" {
+        val applied = import(ImportStatus.APPLIED)
+        coEvery { imports.stage(any(), any(), any(), any()) } returns
+            StagingResult(applied, created = false)
 
         val result = service.import("movimentacao.xlsx", "hash", routing)
 
         result.trades shouldBe 0
+        result.tradeImport shouldBe applied
+        result.reuploaded shouldBe true
         coVerify(exactly = 0) { imports.review(any()) }
         coVerify(exactly = 0) { imports.apply(any()) }
     }
 
-    "a file with no trade rows never stages an empty import" {
-        service.import("movimentacao.xlsx", "hash", routing.copy(trades = emptyList()))
+    "a fresh import reports its trade import without the re-upload flag" {
+        val staged = import(ImportStatus.STAGED)
+        coEvery { imports.stage(any(), any(), any(), any()) } returns
+            StagingResult(staged, created = true)
 
+        val result = service.import("movimentacao.xlsx", "hash", routing)
+
+        result.tradeImport shouldBe staged
+        result.reuploaded shouldBe false
+    }
+
+    "a file with no trade rows never stages an empty import" {
+        val result = service.import("movimentacao.xlsx", "hash", routing.copy(trades = emptyList()))
+
+        result.tradeImport shouldBe null
+        result.reuploaded shouldBe false
         coVerify(exactly = 0) { imports.stage(any(), any(), any(), any()) }
     }
 })

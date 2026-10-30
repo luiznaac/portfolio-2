@@ -9,6 +9,7 @@ import {
   corporateActionRows,
   reviewQueue,
 } from "../lib/corporateActions.ts";
+import { movementsImportSummary } from "../lib/movements.ts";
 
 // The engine's decision maps to the reference palette: applied is settled (green), a queued row
 // needs attention (amber).
@@ -86,8 +87,7 @@ export function CorporateActions() {
           )}
           {importMovements.isSuccess && (
             <p className="mt-2 text-[12.5px] text-yield">
-              {importMovements.data.trades} negócio(s), {importMovements.data.incomes} provento(s) e{" "}
-              {importMovements.data.corporate_actions.length} evento(s) processado(s).
+              {movementsImportSummary(importMovements.data)}
             </p>
           )}
           {importMovements.error && (
