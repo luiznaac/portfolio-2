@@ -43,7 +43,7 @@ import java.math.RoundingMode
 
 // Composes the performance reads from the immutable snapshots: a closed month's decomposition and
 // its since-inception XIRR, the same math per class and per ticker, and the target-weighted
-// benchmark the BCB SGS series price. The snapshots are the stored truth; nothing here re-derives
+// benchmark the stored series price. The snapshots are the stored truth; nothing here re-derives
 // the book from the live ledger.
 @Service
 class PerformanceService(
@@ -104,7 +104,8 @@ class PerformanceService(
     }
 
     // Every closed month, oldest first. The benchmark series is fetched once for the whole span and
-    // each month is sliced out of it, so the series read does not multiply SGS calls by month count.
+    // each month is sliced out of it, so the series read does not multiply provider calls by month
+    // count.
     suspend fun fetchSeries(): PerformanceSeries {
         val all = orderedSnapshots()
         if (all.isEmpty()) return PerformanceSeries(emptyList(), null)
@@ -389,7 +390,7 @@ class PerformanceService(
         }
     }
 
-    // Each policy index's own return for the period, sliced out of the one span-wide SGS fetch.
+    // Each policy index's own return for the period, sliced out of the one span-wide series fetch.
     private fun returnsFor(
         observations: Map<BenchmarkIndex, List<BenchmarkObservation>>,
         period: YearMonth,

@@ -3,7 +3,8 @@ package dev.agner.portfolio.gateway.benchmark
 import dev.agner.portfolio.usecase.commons.brazilianLocalDateFormat
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkIndex
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkObservation
-import dev.agner.portfolio.usecase.performance.gateway.IBenchmarkGateway
+import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkSource
+import dev.agner.portfolio.usecase.performance.gateway.IBenchmarkSeriesSource
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -16,14 +17,18 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
-// BCB SGS: the official, free, key-less benchmark source. `/dados/serie/bcdata.sgs.<code>/dados`
-// returns `[{data, valor}]` for the requested interval. The index's own code (CDI 12, IPCA 433, IBOV
-// 7) comes from the domain enum so the URL is the only place the number appears.
+// BCB SGS: the official, free, key-less source for the rate indexes. `/dados/serie/bcdata.sgs.<code>/dados`
+// returns `[{data, valor}]` for the requested interval. The index's own code (CDI 12, IPCA 433) comes
+// from the domain enum so the URL is the only place the number appears. IBOV is not an SGS series.
 @Service
 class BcbSgsGateway(
     private val client: HttpClient,
     @param:Value("\${gateways.sgs.host}") private val host: String,
-) : IBenchmarkGateway {
+) : IBenchmarkSeriesSource {
+
+    override val source = BenchmarkSource.SGS
+    override val order = 10
+    override val indexes = setOf(BenchmarkIndex.CDI, BenchmarkIndex.IPCA)
 
     override suspend fun fetchSeries(
         index: BenchmarkIndex,

@@ -5,9 +5,9 @@ import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-// Turns a benchmark's raw SGS observations into a period return. Rates compound over the period
+// Turns a benchmark's stored observations into a period return. Rates compound over the period
 // (the daily CDI and the monthly IPCA are both percent variations); an index level is measured
-// against its last close before the period.
+// against its last close before the period. A series without enough coverage has no return at all.
 object BenchmarkCalculator {
 
     fun returnFor(
@@ -15,9 +15,13 @@ object BenchmarkCalculator {
         observations: List<BenchmarkObservation>,
         from: LocalDate,
         to: LocalDate,
-    ): BigDecimal? = when (index.kind) {
-        BenchmarkKind.DAILY_RATE, BenchmarkKind.MONTHLY_VARIATION -> compound(observations, from, to)
-        BenchmarkKind.INDEX_LEVEL -> levelReturn(observations, from, to)
+    ): BigDecimal? = if (!BenchmarkCoverage.covers(index, observations, from, to)) {
+        null
+    } else {
+        when (index.kind) {
+            BenchmarkKind.DAILY_RATE, BenchmarkKind.MONTHLY_VARIATION -> compound(observations, from, to)
+            BenchmarkKind.INDEX_LEVEL -> levelReturn(observations, from, to)
+        }
     }
 
     private fun compound(observations: List<BenchmarkObservation>, from: LocalDate, to: LocalDate): BigDecimal? {

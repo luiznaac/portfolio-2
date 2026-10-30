@@ -26,6 +26,10 @@ import dev.agner.portfolio.usecase.monthlyclose.model.IncomeTotals
 import dev.agner.portfolio.usecase.monthlyclose.model.OrdersSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.TaxCloseSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.repository.ISnapshotRepository
+import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkClose
+import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkIndex
+import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkSource
+import dev.agner.portfolio.usecase.performance.repository.IBenchmarkCloseRepository
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.MonthCreation
@@ -51,9 +55,9 @@ import java.math.BigDecimal
 import java.time.Instant
 
 // The performance read composes the snapshot JSON, the month's target chain, the quote/catalog
-// tables and the BCB SGS gateway; a real MySQL round-trip is the only way to prove the snapshot's
-// aportes survive the close and that the series orders and replays the stored rows. The backfill is
-// asserted on the real trade table too — its absorb deletes a row.
+// tables and the stored benchmark series; a real MySQL round-trip is the only way to prove the
+// snapshot's aportes survive the close and that the series orders and replays the stored rows. The
+// history backfill is asserted on the real trade table too — its absorb deletes a row.
 @IntegrationTest
 class PerformanceTest : StringSpec({
 
@@ -143,6 +147,46 @@ class PerformanceTest : StringSpec({
         getBean<IPositionRepository>().fetchBy("PETR4")!!.quantity.compareTo(BigDecimal("100")) shouldBe 0
     }
 
+    "backfills the stored benchmark series from the requested start" {
+        every { ClockMock.clock.instant() } returns Instant.parse("2026-03-01T12:00:00Z")
+        stubBenchmarks()
+
+        val client = getBean<HttpClient>()
+        val response = client.post("http://localhost:8080/benchmarks/backfill?from=2026-01-01")
+
+        response.status shouldBe HttpStatusCode.OK
+        val body = ObjectMapper().readTree(response.bodyAsText())
+        body.get("indexes").size() shouldBe 3
+        val ibov = body.get("indexes").first { it.get("index").asText() == "IBOV" }
+        ibov.get("from").asText() shouldBe "2026-01-01"
+        ibov.get("to").asText() shouldBe "2026-03-01"
+        ibov.get("points").asInt() shouldBe 2
+        body.get("indexes").first { it.get("index").asText() == "CDI" }.get("points").asInt() shouldBe 0
+    }
+
+    "upserts a refetched benchmark point instead of duplicating it" {
+        val repository = getBean<IBenchmarkCloseRepository>()
+        val date = LocalDate.parse("2026-01-30")
+        repository.upsertAll(
+            listOf(BenchmarkClose(BenchmarkIndex.IBOV, date, BigDecimal("100"), BenchmarkSource.SGS)),
+        )
+        repository.upsertAll(
+            listOf(BenchmarkClose(BenchmarkIndex.IBOV, date, BigDecimal("111"), BenchmarkSource.BRAPI)),
+        )
+
+        val points = repository.fetch(BenchmarkIndex.IBOV, date, date)
+
+        points.size shouldBe 1
+        points.single().level.compareTo(BigDecimal("111")) shouldBe 0
+        points.single().source shouldBe BenchmarkSource.BRAPI
+    }
+
+    "rejects a malformed backfill start" {
+        val response = getBean<HttpClient>().post("http://localhost:8080/benchmarks/backfill?from=yesterday")
+
+        response.status shouldBe HttpStatusCode.BadRequest
+    }
+
     "round-trips a GAP record" {
         val gap = getBean<IGapRepository>().save(
             GapCreation.MissingSale(
@@ -165,11 +209,18 @@ class PerformanceTest : StringSpec({
 private suspend fun stubBenchmarks() = configureResponses {
     response {
         method = RequestMethod.GET
-        endpoint = "/dados/serie/bcdata.sgs.7/dados"
-        payload = listOf(
-            mapOf("data" to "30/12/2025", "valor" to "100000"),
-            mapOf("data" to "30/01/2026", "valor" to "101000"),
-            mapOf("data" to "27/02/2026", "valor" to "103000"),
+        endpoint = "/api/quote/.*"
+        payload = mapOf(
+            "results" to listOf(
+                mapOf(
+                    "symbol" to "^BVSP",
+                    "historicalDataPrice" to listOf(
+                        mapOf("date" to 1767052800, "close" to 100000),
+                        mapOf("date" to 1769731200, "close" to 101000),
+                        mapOf("date" to 1772150400, "close" to 103000),
+                    ),
+                ),
+            ),
         )
     }
     response {
@@ -187,6 +238,23 @@ private suspend fun stubBenchmarks() = configureResponses {
 private suspend fun seedTwoClosedMonths(): dev.agner.portfolio.usecase.portfolio.model.Month {
     val months = getBean<MonthService>()
     val snapshots = getBean<ISnapshotRepository>()
+    // The period window's minimum comes from the ledger when no month exists yet, so a trade in
+    // January is what lets the two months below be opened. The performance read itself replays the
+    // snapshots, not this trade.
+    val institution = getBean<InstitutionService>().create(InstitutionCreation("PERFORMANCE"))
+    getBean<ITradeRepository>().save(
+        TradeCreation(
+            ticker = "PETR4",
+            side = TradeSide.BUY,
+            date = LocalDate.parse("2026-01-05"),
+            venue = "VISTA",
+            quantity = BigDecimal("100"),
+            unitPrice = BigDecimal("10"),
+            institutionId = institution.id,
+        ),
+        TradeSource.B3_IMPORT,
+        ordinal = 1,
+    )
 
     val january = months.open(MonthCreation(YearMonth.parse("2026-01"), BigDecimal("100000"), BigDecimal.ZERO))
     months.close(january.month.id)

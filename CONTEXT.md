@@ -157,9 +157,14 @@ _UI:_ "Retorno anualizado"
 _Avoid_: CAGR (that is time-weighted), monthly return
 
 **Benchmark Blend**:
-The comparison line the Portfolio is measured against: each class's benchmark weighted by the month's Target chain — Ações and FIIs against IBOV, RF Pós/Pré against CDI, RF Inflação against IPCA, from the BCB SGS series — never the actual allocation.
+The comparison line the Portfolio is measured against: each class's benchmark weighted by the month's Target chain — Ações and FIIs against IBOV, RF Pós/Pré against CDI, RF Inflação against IPCA. It is defined by its indexes, never by the provider that supplies them, and a targeted leg without data makes the whole blend absent rather than renormalising the rest.
 _UI:_ "Benchmark"
 _Avoid_: Index (the series itself), target
+
+**Benchmark Series**:
+The stored history behind each Benchmark Blend leg: one level per index and date, served from the database and refilled only where a window is missing. IBOV is filled from brapi and then Yahoo `^BVSP`; CDI and IPCA from BCB SGS. A stored series that is truncated, thin or short of the period's bounds has no return — it never reads as 0,00%.
+_UI:_ none (the blend and its index lines surface it)
+_Avoid_: Source (a provider is one link in the chain, not the series)
 
 ### Listed assets
 

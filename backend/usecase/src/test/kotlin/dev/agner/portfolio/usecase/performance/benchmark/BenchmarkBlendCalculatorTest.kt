@@ -66,6 +66,8 @@ class BenchmarkBlendCalculatorTest : StringSpec({
 
         blend.returnPercentage shouldBe null
         blend.contributions.single { it.label == "RENDA_FIXA.FIXED_RATE" }.returnPercentage shouldBe null
+        blend.contributions.filter { it.target.signum() > 0 && it.returnPercentage == null }.map { it.label } shouldBe
+            listOf("RENDA_FIXA.FIXED_RATE")
     }
 
     "a zero-target class with no benchmark does not block the total" {

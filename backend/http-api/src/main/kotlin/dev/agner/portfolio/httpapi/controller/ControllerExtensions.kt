@@ -8,6 +8,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.utils.io.readRemaining
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.io.readByteArray
 
@@ -33,6 +34,13 @@ internal fun ApplicationCall.requiredString(name: String): String =
 internal fun ApplicationCall.requiredPeriod(name: String): YearMonth {
     val raw = parameters[name]
     return raw?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
+        ?: throw InvalidParameterException(name, raw)
+}
+
+// A query date is the ISO `YYYY-MM-DD` the domain speaks; a malformed value is the caller's error.
+internal fun ApplicationCall.requiredDate(name: String): LocalDate {
+    val raw = parameters[name]
+    return raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         ?: throw InvalidParameterException(name, raw)
 }
 

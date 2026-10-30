@@ -15,8 +15,9 @@ data class BenchmarkContribution(
 )
 
 // The total benchmark the portfolio is compared against: each class benchmark weighted by the
-// month's target chain (the policy allocation, never the actual one). A return the SGS series could
-// not price drops out and the remaining weights are renormalised, so a data gap never reads as zero.
+// month's target chain (the policy allocation, never the actual one). A targeted leg with no
+// benchmark makes the total null instead of renormalising the remaining weights — the blocking leg
+// stays visible in `contributions`, named by its label, so a data gap never reads as zero.
 data class BenchmarkBlend(
     val returnPercentage: BigDecimal?,
     val contributions: List<BenchmarkContribution>,

@@ -9,6 +9,11 @@ mysql:
 gateways:
   sgs:
     host: 'http://localhost:${wiremock.port}'
+  brapi:
+    host: 'http://localhost:${wiremock.port}'
+    token: ''
+  yahoo:
+    host: 'http://localhost:${wiremock.port}'
   bacen:
     host: 'http://localhost:${wiremock.port}'
   chameidor:
