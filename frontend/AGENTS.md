@@ -40,6 +40,16 @@ npm run check         # typecheck + lint + test — run before considering a cha
 npm run build         # tsc -b && vite build
 ```
 
+### Fresh worktree setup (sandbox)
+
+A fresh worktree has no `node_modules`, so the first `npm test` fails with `vitest: not found`. From the monorepo root (this lane's parent), install the lane's dependencies inside the salgadinhos sandbox:
+
+```bash
+node <salgadinhos>/adapters/sandbox/run.mjs --stack node --workspace <repo-root> -- npm --prefix frontend ci
+```
+
+`--stack node` is required because the monorepo root's `package.json` is a dependency-less scripts shim, so the runner's marker detection intentionally does not detect it (its error suggests pointing at `frontend/`). The command mirrors the frontend install in `npm run setup`, but the install runs in the sandbox, never on the host — the rule and setup live in `salgadinhos` at `global/AGENTS.md` → "Sandbox for third-party installs" and `docs/salgadinhos/sandbox-bootstrap.md`.
+
 ## Coding standards
 
 - [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
