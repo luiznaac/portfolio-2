@@ -85,6 +85,8 @@ npm run be:integration             # integration lane — :integrationTest; need
 
 The unit lane is the `unitTest` task — the same one the `test (backend, unit)` pre-commit hook runs — so committing never needs Docker; the integration lane stays in CI (`./gradlew clean build`, Docker present). `:integrationTest:dockerPreflight` probes the daemon before any spec starts and fails in seconds with a message that says how to proceed, instead of leaving an opaque Testcontainers error to be found in the HTML report.
 
+The integration lane pins docker-java's `api.version` to `1.44` on the `:integrationTest` test task (`integrationTest/build.gradle.kts`), so it needs **Docker 25 or newer** and no host env var beyond a reachable daemon. Testcontainers 1.21.3 / docker-java 3.4.2 negotiate a 1.32 default that Docker 29 rejects — 29.9 reports a 1.40 minimum, 29.0–29.2 a 1.44 one — failing before any spec with `Could not find a valid Docker environment`. 1.44 is the highest API every Docker 25+ daemon and every Docker 29.x accept; if a future daemon raises its minimum above 1.44, bump it there and rerun the lane.
+
 Run check commands with `--no-daemon` — the `npm` scripts already do. A Gradle daemon left behind by a failed build inherits the shell's output pipe and keeps the command from returning: that is how a Docker-less `test` appeared to hang for over an hour after its output file already held the failure.
 
 ## Database migrations
