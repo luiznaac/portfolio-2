@@ -11,7 +11,7 @@ import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
-import { Performance } from "./pages/Performance.tsx";
+import { PerformanceRoute } from "./pages/PerformancePrototype.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { Taxes } from "./pages/Taxes.tsx";
 import { Trades } from "./pages/Trades.tsx";
@@ -39,7 +39,7 @@ export const routes: RouteObject[] = [
       { path: "income", element: <Income /> },
       { path: "taxes", element: <Taxes /> },
       { path: "fechamento", element: <Fechamento /> },
-      { path: "performance", element: <Performance /> },
+      { path: "performance", element: <PerformanceRoute /> },
     ],
   },
 ];
