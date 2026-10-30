@@ -15,6 +15,7 @@ dependencies {
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.testcontainers)
     testImplementation(libs.wiremock)
+    testImplementation(libs.apache.poi)
     implementation(libs.jackson.kotlin)
 
     // persistence declares these as `implementation`, so they don't come along transitively;

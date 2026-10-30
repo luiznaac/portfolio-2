@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.import.model.ImportRow
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
+import dev.agner.portfolio.usecase.import.model.StagingResult
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -59,7 +60,7 @@ class ImportControllerTest : DescribeSpec({
             val captured = slot<List<ImportRowPayload>>()
             coEvery {
                 service.stage(ImportSource.B3_TRADES, "neg.xlsx", ABC_HASH, capture(captured))
-            } returns stagedImport
+            } returns StagingResult(stagedImport, created = true)
             coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
             coEvery { parser.parse("neg.xlsx", any()) } returns emptyList()
 
@@ -86,6 +87,39 @@ class ImportControllerTest : DescribeSpec({
                 response.status shouldBe HttpStatusCode.Created
                 ObjectMapper().readTree(response.bodyAsText()).get("status").asText() shouldBe "STAGED"
                 captured.captured shouldBe emptyList()
+            }
+        }
+
+        it("returns 200 with the existing import untouched when the hash is already known") {
+            val service = mockk<ImportService>()
+            val parser = mockk<IImportParser>()
+            coEvery { service.stage(any(), any(), any(), any()) } returns
+                StagingResult(appliedImport, created = false)
+            coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
+            coEvery { parser.parse("neg.xlsx", any()) } returns emptyList()
+
+            testApplication {
+                application { installRoutes(ImportController(service, ImportParserResolver(listOf(parser)))) }
+
+                val response = client.post("/imports") {
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append("source", "B3_TRADES")
+                                append(
+                                    "file",
+                                    "abc".toByteArray(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentDisposition, "filename=\"neg.xlsx\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+                response.status shouldBe HttpStatusCode.OK
+                ObjectMapper().readTree(response.bodyAsText()).get("status").asText() shouldBe "APPLIED"
             }
         }
 
@@ -124,7 +158,8 @@ class ImportControllerTest : DescribeSpec({
             val parser = mockk<dev.agner.portfolio.httpapi.import.IImportParser>()
             coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
             coEvery { parser.parse("neg.xlsx", any()) } returns listOf(payload)
-            coEvery { service.stage(any(), any(), any(), any()) } returns stagedImport
+            coEvery { service.stage(any(), any(), any(), any()) } returns
+                StagingResult(stagedImport, created = true)
 
             testApplication {
                 application { installRoutes(ImportController(service, ImportParserResolver(listOf(parser)))) }

@@ -87,8 +87,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Multipart uploads must not set Content-Type: the browser writes the multipart boundary itself.
+// The status travels beside the body for the one upload whose 201/200 distinction is part of its
+// answer (the import wizard's resume check).
+async function postForm<T>(path: string, form: FormData): Promise<{ body: T; status: number }> {
+  const response = await fetch(`${BASE}${path}`, { method: "POST", body: form });
+  return { body: await unwrap<T>(response), status: response.status };
+}
+
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  return unwrap<T>(await fetch(`${BASE}${path}`, { method: "POST", body: form }));
+  return (await postForm<T>(path, form)).body;
+}
+
+// One staged upload: `created` is the 201 the server answers for a new file, absent (false) when
+// the hash already named an import and the server answered 200 with that import. The wizard needs
+// the distinction to put a resume banner on an existing file and none on a fresh one.
+export interface StagedImport {
+  import: Import;
+  created: boolean;
 }
 
 export const api = {
@@ -96,11 +111,12 @@ export const api = {
     return request("/health");
   },
 
-  stageImport(source: ImportSource, file: File): Promise<Import> {
+  async stageImport(source: ImportSource, file: File): Promise<StagedImport> {
     const form = new FormData();
     form.append("source", source);
     form.append("file", file);
-    return upload("/imports", form);
+    const { body, status } = await postForm<Import>("/imports", form);
+    return { import: body, created: status === 201 };
   },
 
   getImportRows(importId: number): Promise<ImportRow[]> {

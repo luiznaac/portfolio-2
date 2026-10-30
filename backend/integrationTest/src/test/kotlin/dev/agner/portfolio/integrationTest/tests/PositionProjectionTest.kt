@@ -73,7 +73,7 @@ private suspend fun apply(
     hash: String,
     rows: List<ImportRowPayload>,
 ) {
-    val import = service.stage(ImportSource.B3_TRADES, fileName, hash, rows)
+    val import = service.stage(ImportSource.B3_TRADES, fileName, hash, rows).record
     service.review(import.id)
     service.apply(import.id)
 }
