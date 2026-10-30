@@ -75,4 +75,9 @@ val dockerPreflight by tasks.registering {
 
 tasks.test {
     dependsOn(dockerPreflight)
+    // docker-java (3.4.2, pulled in by Testcontainers 1.21.3) negotiates an API version below the
+    // Docker 29 daemon's 1.40 minimum, failing before any spec runs with an opaque
+    // DockerClientProviderStrategy "Could not find a valid Docker environment". Pinning 1.44 names
+    // the floor this lane works against without an ad-hoc JAVA_TOOL_OPTIONS on every host.
+    systemProperty("api.version", "1.44")
 }
