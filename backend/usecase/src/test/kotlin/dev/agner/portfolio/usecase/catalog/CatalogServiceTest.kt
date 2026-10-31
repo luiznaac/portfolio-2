@@ -158,6 +158,57 @@ class CatalogServiceTest : StringSpec({
         coVerify(exactly = 0) { repository.setAssetClassOverride(any(), any()) }
     }
 
+    "classifyAll sets the override for only the chosen tickers and returns the updated rows" {
+        coEvery { repository.fetchBy("XPTO3") } returns catalogEntry(
+            ticker = "XPTO3",
+            isin = null,
+            assetKind = AssetKind.UNKNOWN,
+            assetClass = null,
+        )
+        coEvery { repository.fetchBy("NOVA3") } returns catalogEntry(
+            ticker = "NOVA3",
+            isin = null,
+            assetKind = AssetKind.UNKNOWN,
+            assetClass = null,
+        )
+        val captured = slot<Map<String, AssetClass>>()
+        coEvery { repository.setAssetClassOverrides(capture(captured)) } returns listOf(
+            catalogEntry(ticker = "NOVA3", assetClass = null, assetClassOverride = AssetClass.FIIS),
+            catalogEntry(ticker = "XPTO3", assetClass = null, assetClassOverride = AssetClass.ACOES),
+        )
+
+        val updated = service.classifyAll(mapOf("xpto3" to AssetClass.ACOES, "NOVA3" to AssetClass.FIIS))
+
+        captured.captured shouldBe mapOf("XPTO3" to AssetClass.ACOES, "NOVA3" to AssetClass.FIIS)
+        updated.map { it.ticker } shouldBe listOf("NOVA3", "XPTO3")
+    }
+
+    "classifyAll rejects a class a listed ticker cannot hold before writing anything" {
+        shouldThrow<InvalidCatalogClassException> {
+            service.classifyAll(mapOf("XPTO3" to AssetClass.ACOES, "BOND1" to AssetClass.RENDA_FIXA))
+        }
+
+        coVerify(exactly = 0) { repository.setAssetClassOverrides(any()) }
+    }
+
+    "classifyAll auto-enters a ticker the catalog has never seen" {
+        coEvery { repository.fetchBy("NOVA3") } returns null
+        coEvery { repository.setAssetClassOverrides(any()) } returns listOf(
+            catalogEntry(ticker = "NOVA3", assetClass = null, assetClassOverride = AssetClass.FIIS),
+        )
+
+        service.classifyAll(mapOf("NOVA3" to AssetClass.FIIS))
+
+        coVerify(exactly = 1) { repository.upsertAll(any()) }
+        coVerify(exactly = 1) { repository.setAssetClassOverrides(mapOf("NOVA3" to AssetClass.FIIS)) }
+    }
+
+    "classifyAll writes nothing for an empty selection" {
+        service.classifyAll(emptyMap())
+
+        coVerify(exactly = 0) { repository.setAssetClassOverrides(any()) }
+    }
+
     "revert clears the override, leaving the BDI-derived class in charge" {
         coEvery { repository.setAssetClassOverride("XPTO3", null) } returns catalogEntry(
             ticker = "XPTO3",

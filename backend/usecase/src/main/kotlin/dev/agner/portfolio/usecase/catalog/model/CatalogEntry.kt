@@ -2,6 +2,11 @@ package dev.agner.portfolio.usecase.catalog.model
 
 import kotlinx.datetime.LocalDate
 
+// The BDI stand-in for a ticker auto-entered outside a COTAHIST refresh — an import's first sighting
+// of a code the catalog has never seen. It is not a derived mapping; a held ticker still carrying it
+// is one no refresh file has classified.
+const val UNCATALOGED_BDI_TYPE = "??"
+
 // One row of the ticker catalog. first_seen/last_seen are the upsert bookkeeping that lets a
 // delisted ticker stay resolvable for historical positions: sync never deletes, it only moves
 // last_seen forward.

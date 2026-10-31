@@ -212,6 +212,11 @@ The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`, plu
 _UI:_ "Tipo"
 _Avoid_: Asset class (different concept), mercado
 
+**Effective Class**:
+The class every planning and attribution read uses for a Ticker: the owner's manual classification when one exists, otherwise the BDI-derived class. A catalog refresh never clears the manual call; reverting hands the ticker back to the BDI class.
+_UI:_ "Classe" (the asset badge, the "Sem classe" line)
+_Avoid_: Override (the stored column, not the read), derived class
+
 **Position**:
 The custody state of a listed asset — quantity and average price — regardless of how many strategies it is attributed to.
 _UI:_ "Posição"
