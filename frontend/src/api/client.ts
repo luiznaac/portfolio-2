@@ -8,6 +8,7 @@ import type {
   CatalogEntry,
   CheckingAccount,
   CheckingAccountCreation,
+  ClassificationQueueItem,
   CorporateAction,
   CurrentMonth,
   Edition,
@@ -46,6 +47,7 @@ import type {
   StrategyHoldings,
   SuggestedOrder,
   Targets,
+  TickerBatchClassification,
   TickerClassification,
   TickerRefreshResult,
   Trade,
@@ -194,6 +196,19 @@ export const api = {
 
   revertTickerClassification(ticker: string): Promise<CatalogEntry> {
     return request(`/tickers/${encodeURIComponent(ticker)}/classification`, { method: "DELETE" });
+  },
+
+  // The held-unclassified queue the bulk modal lists.
+  getClassificationQueue(): Promise<ClassificationQueueItem[]> {
+    return request("/tickers/unclassified");
+  },
+
+  // The batch write: only the chosen rows travel, and the response is every updated catalog row.
+  classifyTickers(classifications: Record<string, AssetClass>): Promise<CatalogEntry[]> {
+    return request("/tickers/classification", {
+      method: "PUT",
+      body: JSON.stringify({ classifications } satisfies TickerBatchClassification),
+    });
   },
 
   refreshCatalog(): Promise<TickerRefreshResult> {

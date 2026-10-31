@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
+import dev.agner.portfolio.usecase.catalogEntry
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSlice
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSummary
@@ -75,6 +76,26 @@ class LegacyAttributionServiceTest : StringSpec({
             "VALE3" to LegacyAttributionSkipReason.HAS_ATTRIBUTION,
             "ZZZZ3" to LegacyAttributionSkipReason.UNCLASSIFIED,
         )
+    }
+
+    "previews an override-only ticker under its manual class" {
+        coEvery { positions.fetchAll() } returns listOf(position("XPTO3", "10"))
+        coEvery { catalog.fetchAll() } returns listOf(
+            catalogEntry(
+                ticker = "XPTO3",
+                bdiType = "99",
+                assetKind = AssetKind.UNKNOWN,
+                assetClass = null,
+                assetClassOverride = AssetClass.ACOES,
+            ),
+        )
+        coEvery { strategies.fetchAll() } returns listOf(acoesBucket)
+        coEvery { quotes.latestClose("XPTO3") } returns BigDecimal("10")
+
+        val preview = service.preview()
+
+        preview.groups.single().adds.single().ticker shouldBe "XPTO3"
+        preview.skips.shouldBeEmpty()
     }
 
     "apply writes each add through the attribution write path" {

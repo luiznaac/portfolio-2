@@ -16,4 +16,9 @@ interface ICatalogRepository {
     // Set or clear the manual class override on an existing row, leaving every other column alone.
     // Null when the ticker is not in the catalog.
     suspend fun setAssetClassOverride(ticker: String, assetClass: AssetClass?): CatalogEntry?
+
+    // The bulk form of the same write: every classified ticker gets its override in one transaction,
+    // and the returned entries are the rows actually written. An unknown ticker is skipped (the
+    // caller auto-enters it first); a failure rolls the whole batch back, so no row is half-saved.
+    suspend fun setAssetClassOverrides(classifications: Map<String, AssetClass>): List<CatalogEntry>
 }

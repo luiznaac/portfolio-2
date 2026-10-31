@@ -26,8 +26,10 @@ import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategyTarget
 import dev.agner.portfolio.usecase.tickerTarget
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -88,10 +90,54 @@ class OrderPlanServiceTest : StringSpec({
         coEvery { quotes.latestClose("VALE3") } returns null
         coEvery { quotes.latestClose("ITUB4") } returns null
 
-        service.computePlan(OrderPlanPhase.IDEALS)
+        val plan = service.computePlan(OrderPlanPhase.IDEALS)
 
+        // A target-only ticker with no position and no close is not a held position: the plan still
+        // computes, it just cannot price the new entry.
+        plan shouldNotBe null
         coVerify { quotes.latestClose("VALE3") }
         coVerify { quotes.latestClose("ITUB4") }
+    }
+
+    "refuses while a held ticker has no close, naming only the held tickers" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("VALE3", BigDecimal("10"), BigDecimal("8")))
+        coEvery { quotes.latestClose("VALE3") } returns null
+        coEvery { quotes.latestClose("ITUB4") } returns null
+
+        val error = shouldThrow<UnpricedPositionsException> {
+            service.computePlan(OrderPlanPhase.IDEALS)
+        }
+
+        error.tickers shouldBe listOf("VALE3")
+    }
+
+    "refuses while a held ticker is unclassified, naming it" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("ZZZZ3", BigDecimal("10"), BigDecimal("9")))
+        coEvery { quotes.latestClose("ZZZZ3") } returns BigDecimal("10")
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { catalog.fetchUnclassified(any()) } returns setOf("ZZZZ3")
+
+        val error = shouldThrow<UnclassifiedPositionsException> {
+            service.computePlan(OrderPlanPhase.IDEALS)
+        }
+
+        error.tickers shouldBe listOf("ZZZZ3")
+    }
+
+    "reports the unpriced gate before the unclassified one when both apply" {
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { positions.fetchAll() } returns listOf(Position("ZZZZ3", BigDecimal("10"), BigDecimal("9")))
+        coEvery { quotes.latestClose("ZZZZ3") } returns null
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+        coEvery { catalog.fetchUnclassified(any()) } returns setOf("ZZZZ3")
+
+        shouldThrow<UnpricedPositionsException> {
+            service.computePlan(OrderPlanPhase.IDEALS)
+        }
     }
 
     "feeds the funding pass the whole-book cash, the NEUTRO slices and the attribution ledger" {
@@ -204,20 +250,6 @@ class OrderPlanServiceTest : StringSpec({
             it.toStrategy shouldBe "Top"
             it.quantity.plain() shouldBe "100"
         }
-    }
-
-    "reports a ticker the catalog has not classified separately from the outside holdings" {
-        coEvery { months.fetchCurrent() } returns currentMonth
-        coEvery { positions.fetchAll() } returns listOf(Position("ZZZZ3", BigDecimal("10"), BigDecimal("9")))
-        coEvery { quotes.latestClose("ZZZZ3") } returns BigDecimal("10")
-        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
-        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
-        coEvery { catalog.fetchUnclassified(any()) } returns setOf("ZZZZ3")
-
-        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
-
-        plan.outsideStrategy shouldBe emptyList()
-        plan.unclassified.single().ticker shouldBe "ZZZZ3"
     }
 
     "keeps a ticker named only by a Strategy the chain does not carry outside" {

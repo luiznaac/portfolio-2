@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.listedasset
 
+import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
@@ -38,7 +39,7 @@ class LegacyAttributionService(
 
     suspend fun preview(): LegacyAttributionPreview {
         val held = positions.fetchAll()
-        val classByTicker = catalog.fetchAll().associate { it.ticker to it.assetClass }
+        val classByTicker = catalog.fetchAll().effectiveClassByTicker()
         val strategyList = strategies.fetchAll()
         val manualByClass = strategyList
             .filter { it.kind == StrategyKind.MANUAL }

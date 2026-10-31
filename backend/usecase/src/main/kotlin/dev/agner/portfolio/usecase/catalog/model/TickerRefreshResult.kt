@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.catalog.model
 
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 // The one combined catalog-and-quotes refresh result. `catalog` and `quotes` are the rows written,
 // `asOf` the date of the daily close that was used, and the two lists explain what did not complete:
@@ -48,3 +49,13 @@ enum class UnclassifiedReason {
     ABSENT_FROM_LATEST_FILE,
     UNHANDLED_BDI_CODE,
 }
+
+// One row of the held-unclassified classification queue: the bulk modal's list, names and units, so
+// the owner can classify the residue in one pass. The reason distinguishes a ticker the last file no
+// longer lists from a listed paper whose BDI code the catalog does not map yet.
+data class ClassificationQueueItem(
+    val ticker: String,
+    val shortName: String,
+    val quantity: BigDecimal,
+    val reason: UnclassifiedReason,
+)

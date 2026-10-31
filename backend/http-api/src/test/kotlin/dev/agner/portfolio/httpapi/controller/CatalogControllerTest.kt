@@ -2,11 +2,13 @@ package dev.agner.portfolio.httpapi.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.ClassificationQueueService
 import dev.agner.portfolio.usecase.catalog.InvalidCatalogClassException
 import dev.agner.portfolio.usecase.catalog.TickerRefreshService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.catalog.model.ClassificationQueueItem
 import dev.agner.portfolio.usecase.catalog.model.TickerRefreshFailure
 import dev.agner.portfolio.usecase.catalog.model.TickerRefreshResult
 import dev.agner.portfolio.usecase.catalog.model.UnclassifiedReason
@@ -34,6 +36,7 @@ import java.math.BigDecimal
 
 class CatalogControllerTest : DescribeSpec({
     val refresh = mockk<TickerRefreshService>(relaxed = true)
+    val queue = mockk<ClassificationQueueService>(relaxed = true)
 
     describe("listing the ticker catalog") {
 
@@ -43,7 +46,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.fetchAll() } returns listOf(petr4)
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.get("/tickers")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -66,7 +69,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.fetchBy("PETR4") } returns petr4
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.get("/tickers/PETR4")
 
@@ -81,7 +84,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.fetchBy("XPTO") } returns null
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 client.get("/tickers/XPTO").status shouldBe HttpStatusCode.NotFound
             }
@@ -96,7 +99,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { quotes.fetchAllBy("PETR4") } returns listOf(petr4Quote)
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.get("/tickers/PETR4/quotes")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -127,7 +130,7 @@ class CatalogControllerTest : DescribeSpec({
             )
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.post("/tickers/refresh")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -156,6 +159,61 @@ class CatalogControllerTest : DescribeSpec({
         }
     }
 
+    describe("listing the held-unclassified classification queue") {
+
+        it("returns 200 with ticker, short name, quantity and reason") {
+            val catalog = mockk<CatalogService>()
+            val quotes = mockk<QuoteService>()
+            coEvery { queue.fetchQueue() } returns listOf(
+                ClassificationQueueItem(
+                    ticker = "XPTO3",
+                    shortName = "XPTO",
+                    quantity = BigDecimal("10"),
+                    reason = UnclassifiedReason.UNHANDLED_BDI_CODE,
+                ),
+            )
+
+            testApplication {
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
+
+                val response = client.get("/tickers/unclassified")
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.OK
+                payload.get(0).get("ticker").asText() shouldBe "XPTO3"
+                payload.get(0).get("short_name").asText() shouldBe "XPTO"
+                payload.get(0).get("quantity").decimalValue().compareTo(BigDecimal("10")) shouldBe 0
+                payload.get(0).get("reason").asText() shouldBe "UNHANDLED_BDI_CODE"
+            }
+        }
+    }
+
+    describe("classifying tickers in bulk") {
+
+        it("writes only the submitted rows and returns the updated entries") {
+            val catalog = mockk<CatalogService>()
+            val quotes = mockk<QuoteService>()
+            coEvery { catalog.classifyAll(mapOf("XPTO3" to AssetClass.ACOES)) } returns listOf(
+                xpto3.copy(assetClassOverride = AssetClass.ACOES),
+            )
+
+            testApplication {
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
+
+                val response = client.put("/tickers/classification") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"classifications":{"XPTO3":"ACOES"}}""")
+                }
+                val payload = ObjectMapper().readTree(response.bodyAsText())
+
+                response.status shouldBe HttpStatusCode.OK
+                payload.get(0).get("ticker").asText() shouldBe "XPTO3"
+                payload.get(0).get("asset_class_override").asText() shouldBe "ACOES"
+                coVerify(exactly = 1) { catalog.classifyAll(mapOf("XPTO3" to AssetClass.ACOES)) }
+            }
+        }
+    }
+
     describe("classifying a ticker") {
 
         it("sets the manual class override and returns the updated entry") {
@@ -166,7 +224,7 @@ class CatalogControllerTest : DescribeSpec({
             )
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.put("/tickers/XPTO3/classification") {
                     contentType(ContentType.Application.Json)
@@ -187,7 +245,7 @@ class CatalogControllerTest : DescribeSpec({
                 InvalidCatalogClassException(AssetClass.RENDA_FIXA)
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.put("/tickers/XPTO3/classification") {
                     contentType(ContentType.Application.Json)
@@ -208,7 +266,7 @@ class CatalogControllerTest : DescribeSpec({
             )
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 val response = client.delete("/tickers/XPTO3/classification")
                 val payload = ObjectMapper().readTree(response.bodyAsText())
@@ -226,7 +284,7 @@ class CatalogControllerTest : DescribeSpec({
             coEvery { catalog.revertClassification("MISS3") } returns null
 
             testApplication {
-                application { installRoutes(CatalogController(catalog, quotes, refresh)) }
+                application { installRoutes(CatalogController(catalog, quotes, refresh, queue)) }
 
                 client.delete("/tickers/MISS3/classification").status shouldBe HttpStatusCode.NotFound
             }

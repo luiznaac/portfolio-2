@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.controller
 
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.ClassificationQueueService
 import dev.agner.portfolio.usecase.catalog.TickerRefreshService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.quotes.QuoteService
@@ -19,6 +20,7 @@ class CatalogController(
     private val catalogService: CatalogService,
     private val quoteService: QuoteService,
     private val tickerRefreshService: TickerRefreshService,
+    private val classificationQueueService: ClassificationQueueService,
 ) : ControllerTemplate {
 
     override fun routes(): RouteDefinition = {
@@ -33,8 +35,22 @@ class CatalogController(
                 call.respond(HttpStatusCode.OK, tickerRefreshService.refresh())
             }
 
+            // The held-unclassified classification queue the bulk modal lists: ticker, short name,
+            // quantity and the named reason it is still classless.
+            get("/unclassified") {
+                call.respond(HttpStatusCode.OK, classificationQueueService.fetchQueue())
+            }
+
             get("/{ticker}") {
                 call.respondOr404(catalogService.fetchBy(call.requiredString("ticker")))
+            }
+
+            // The bulk classification the held-unclassified modal submits: only the chosen rows
+            // travel, the whole batch is one atomic write, and the response carries every updated
+            // catalog row.
+            put("/classification") {
+                val payload = call.receive<TickerBatchClassification>()
+                call.respond(HttpStatusCode.OK, catalogService.classifyAll(payload.classifications))
             }
 
             // The owner's manual classification, outranking the BDI-derived class. PUT sets it,
@@ -60,4 +76,10 @@ class CatalogController(
 // Mirrored in frontend/src/api/types.ts (TickerClassification).
 private data class TickerClassification(
     val assetClass: AssetClass,
+)
+
+// Mirrored in frontend/src/api/types.ts (TickerBatchClassification): ticker → chosen class, so only
+// the rows the owner picked in the bulk modal travel.
+private data class TickerBatchClassification(
+    val classifications: Map<String, AssetClass>,
 )
