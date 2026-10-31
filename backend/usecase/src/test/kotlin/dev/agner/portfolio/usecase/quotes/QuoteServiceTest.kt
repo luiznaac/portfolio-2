@@ -3,6 +3,7 @@ package dev.agner.portfolio.usecase.quotes
 import dev.agner.portfolio.usecase.cotahistRow
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
+import dev.agner.portfolio.usecase.quotes.model.isStale
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -109,6 +110,22 @@ class QuoteServiceTest : StringSpec({
 
         service.latestClose("vale3") shouldBe BigDecimal("12")
         coVerify(exactly = 1) { repository.fetchAllBy("VALE3") }
+    }
+
+    "latestQuote carries the newest close's date, not only its price" {
+        coEvery { repository.fetchAllBy("VALE3") } returns listOf(
+            quote("2026-10-08", "9"),
+            quote("2026-10-12", "12"),
+        )
+
+        service.latestQuote("vale3") shouldBe quote("2026-10-12", "12")
+    }
+
+    "a close is stale only once it is more than five calendar days old" {
+        val today = LocalDate.parse("2026-10-14")
+
+        quote("2026-10-09", "10").isStale(today) shouldBe false
+        quote("2026-10-08", "10").isStale(today) shouldBe true
     }
 })
 

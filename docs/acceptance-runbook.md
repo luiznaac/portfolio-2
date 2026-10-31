@@ -523,3 +523,35 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   The reads are then deterministic: `GET /orders` (after the refresh) carries one transfer with `from_strategy: "Legado"`, `to_strategy: "Top Dividendos"`, `quantity: 10`, `amount: 100`, `auto_approved: false`, `status: "PENDING"`; the Ordens page renders its caption as `move R$ 100,00 do legado`.
+
+- **Valuation and data-quality seed**: the honest-valuation read and the "Dados da carteira" panel need one book with a priced stale close, an unpriced holding, a negative position and an unclassified holding. This seed resets the allocation tables and seeds an open current month (id 9300, 2026-10) with Ações 100 and Fundos imob. 0; one report Strategy (Top Dividendos, id 9001) targeting VALE3 100; PETR4 10 units at a 2026-10-07 close (stale), VALE3 5 units with no close (attributed to Top Dividendos, so its leaf is `—`), BCFF11 −10 units at a 2026-10-29 close, and ZZZZ9 3 units priced but with no catalog row (unclassified). The read is then: root Actual 424,20 marked parcial, Ações Actual 489,20 marked parcial (Top Dividendos leaf unknown, outside PETR4 489,20 marked `desatualizada · 07/10/2026`), Fundos imob. Actual −80,00, unclassified 15,00; `unpriced` holds VALE3 5, `negative` holds BCFF11 −10. The panel reads Sem cotação 1, Tickers sem classe 1, Posições negativas 1, and the Cockpit shows one data card with the same three counts.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9300, '2026-10', 100000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9300,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9300,'CLASS','FIIS',NULL,NULL,NULL,0,NOW()), \
+          (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+          (9300,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES \
+          ('PETR4',10,30), ('VALE3',5,60), ('BCFF11',-10,8), ('ZZZZ9',3,5); \
+        INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('VALE3',9001,5); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('PETR4','2026-10-07',48.92,'COTAHIST',NOW()), \
+          ('BCFF11','2026-10-29',8.00,'COTAHIST',NOW()), \
+          ('ZZZZ9','2026-10-29',5.00,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2026-01-01','2026-10-30',NOW()), \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2026-01-01','2026-10-30',NOW()), \
+          ('BCFF11','BCFF','12',NULL,'FII','FIIS','2026-01-01','2026-10-30',NOW());"
+  ```
+
+  Run it independently of the other seeds, after the app has migrated and is healthy. The panel's refresh button is visible in its header and beside the unpriced VALE3 row; the import result carries the same refresh action and the negative deep-link once the browser can upload a file (see #311).

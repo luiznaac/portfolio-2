@@ -78,6 +78,15 @@ export function useTrades() {
   });
 }
 
+// The stored custody projection — the import result counts how many positions the book holds and
+// how many are negative, which trades alone cannot answer.
+export function usePositions() {
+  return useQuery({
+    queryKey: ["positions"],
+    queryFn: api.getPositions,
+  });
+}
+
 export function usePosition(ticker: string) {
   return useQuery({
     queryKey: ["positions", ticker],

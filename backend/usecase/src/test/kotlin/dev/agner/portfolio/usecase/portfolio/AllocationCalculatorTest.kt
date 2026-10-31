@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
+import dev.agner.portfolio.usecase.portfolio.model.HeldTicker
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
@@ -82,7 +83,7 @@ class AllocationCalculatorTest : StringSpec({
         val strategy = acoes.strategies.single()
 
         strategy.actual.plain() shouldBe "0"
-        strategy.tickers.single().actual.plain() shouldBe "0"
+        strategy.tickers.single().actual!!.plain() shouldBe "0"
         acoes.actual.plain() shouldBe "1000"
         acoes.unattributed.plain() shouldBe "1000"
         allocation.unattributed.plain() shouldBe "1000"
@@ -183,7 +184,7 @@ class AllocationCalculatorTest : StringSpec({
 
         strategy.actual.plain() shouldBe "600"
         strategy.deficit.plain() shouldBe "49400"
-        strategy.tickers.single().actual.plain() shouldBe "600"
+        strategy.tickers.single().actual!!.plain() shouldBe "600"
     }
 
     "renders the bucket after the report strategies with no target, ideal, deficit or drift" {
@@ -209,7 +210,7 @@ class AllocationCalculatorTest : StringSpec({
         manual.strategy shouldBe "Legado Ações"
         manual.actual.plain() shouldBe "500"
         manual.tickers.map { it.ticker } shouldBe listOf("ITUB4", "VALE3")
-        manual.tickers.associate { it.ticker to it.actual.plain() } shouldBe
+        manual.tickers.associate { it.ticker to it.actual!!.plain() } shouldBe
             mapOf("ITUB4" to "300", "VALE3" to "200")
     }
 
@@ -235,7 +236,7 @@ class AllocationCalculatorTest : StringSpec({
 
         acoes.actual.plain() shouldBe "1500"
         outside.actual.plain() shouldBe "400"
-        outside.tickers.associate { it.ticker to it.actual.plain() } shouldBe
+        outside.tickers.associate { it.ticker to it.actual!!.plain() } shouldBe
             mapOf("ITUB4" to "200", "VALE3" to "200")
         (acoes.strategies.sumOf { it.actual } + (acoes.manual?.actual ?: BigDecimal.ZERO) + outside.actual)
             .plain() shouldBe "1500"
@@ -324,6 +325,98 @@ class AllocationCalculatorTest : StringSpec({
         allocation.actual.plain() shouldBe "0"
         allocation.drift.plain() shouldBe "0"
     }
+
+    "a held ticker with no close is excluded from Actual, carried as unpriced and makes the read partial" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = listOf(
+                listed("VALE3", AssetClass.ACOES, "100", "10"),
+                listed("ZZZZ9", AssetClass.ACOES, "5", null),
+            ),
+            fixedIncome = emptyList(),
+        )
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+        val outside = acoes.outside
+
+        allocation.actual.plain() shouldBe "1000"
+        allocation.partial shouldBe true
+        acoes.partial shouldBe true
+        allocation.unpriced shouldBe listOf(HeldTicker("ZZZZ9", BigDecimal("5")))
+        outside.actual.plain() shouldBe "1000"
+        outside.tickers.first { it.ticker == "ZZZZ9" }.actual shouldBe null
+        outside.tickers.first { it.ticker == "VALE3" }.actual!!.plain() shouldBe "1000"
+    }
+
+    "a close older than five days is still valued and carries its date and stale flag" {
+        val quotedOn = kotlinx.datetime.LocalDate.parse("2026-10-07")
+        val allocation = compute(
+            capital = "100000",
+            targets = emptyTargets(),
+            listed = listOf(
+                listed(
+                    "VALE3",
+                    AssetClass.ACOES,
+                    "100",
+                    "10",
+                    quoteDate = quotedOn,
+                    stale = true,
+                ),
+            ),
+            fixedIncome = emptyList(),
+        )
+
+        val leaf = allocation.classes
+            .single { it.assetClass == AssetClass.ACOES }
+            .outside
+            .tickers
+            .single()
+
+        allocation.partial shouldBe false
+        allocation.actual.plain() shouldBe "1000"
+        leaf.actual!!.plain() shouldBe "1000"
+        leaf.quoteDate shouldBe quotedOn
+        leaf.stale shouldBe true
+    }
+
+    "an attributed slice of an unpriced ticker leaves the leaf unknown instead of zero" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "ZZZZ9", "100")),
+            listed = listOf(listed("ZZZZ9", AssetClass.ACOES, "10", null)),
+            fixedIncome = emptyList(),
+            attributions = mapOf(attributed("Top Dividendos", "ZZZZ9", "10")),
+        )
+
+        val ticker = allocation.classes
+            .single { it.assetClass == AssetClass.ACOES }
+            .strategies
+            .single()
+            .tickers
+            .single()
+
+        ticker.actual shouldBe null
+        ticker.deficit shouldBe null
+        ticker.drift shouldBe null
+        allocation.classes.single { it.assetClass == AssetClass.ACOES }
+            .strategies.single().partial shouldBe true
+        allocation.classes.single { it.assetClass == AssetClass.ACOES }.partial shouldBe true
+        allocation.unpriced shouldBe listOf(HeldTicker("ZZZZ9", BigDecimal("10")))
+    }
+
+    "negative custody is valued and carried as its own data-quality row" {
+        val allocation = compute(
+            capital = "100000",
+            targets = emptyTargets(),
+            listed = listOf(listed("BCFF11", AssetClass.FIIS, "-10", "8")),
+            fixedIncome = emptyList(),
+        )
+
+        allocation.actual.plain() shouldBe "-80"
+        allocation.negative shouldBe listOf(HeldTicker("BCFF11", BigDecimal("-10")))
+        allocation.partial shouldBe false
+    }
 })
 
 private fun chainWithStrategy(vararg tickers: TickerTarget) = Targets(
@@ -362,8 +455,21 @@ private fun manualStrategy(name: String, assetClass: AssetClass) = ManualStrateg
 private fun targets(vararg classes: ClassTarget) =
     Targets(classes.toList(), emptyList(), emptyList(), emptyList())
 
-private fun listed(ticker: String, assetClass: AssetClass?, quantity: String, price: String) =
-    ListedHolding(ticker, assetClass, BigDecimal(quantity), BigDecimal(price))
+private fun listed(
+    ticker: String,
+    assetClass: AssetClass?,
+    quantity: String,
+    price: String?,
+    quoteDate: kotlinx.datetime.LocalDate? = null,
+    stale: Boolean = false,
+) = ListedHolding(
+    ticker = ticker,
+    assetClass = assetClass,
+    quantity = BigDecimal(quantity),
+    price = price?.let(::BigDecimal),
+    quoteDate = quoteDate,
+    stale = stale,
+)
 
 private fun fixedIncome(subClass: FixedIncomeSubClass, value: String) =
     FixedIncomeHolding(subClass, BigDecimal(value))

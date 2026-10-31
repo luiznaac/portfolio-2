@@ -3,13 +3,13 @@ package dev.agner.portfolio.usecase.portfolio
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.deficitAgainst
-import dev.agner.portfolio.usecase.commons.valueAt
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.portfolio.model.ActualTickerAllocation
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassAllocation
 import dev.agner.portfolio.usecase.portfolio.model.EquitiesChain
 import dev.agner.portfolio.usecase.portfolio.model.FixedIncomeChain
+import dev.agner.portfolio.usecase.portfolio.model.HeldTicker
 import dev.agner.portfolio.usecase.portfolio.model.ManualAllocation
 import dev.agner.portfolio.usecase.portfolio.model.OutsideAllocation
 import dev.agner.portfolio.usecase.portfolio.model.StrategyAllocation
@@ -19,20 +19,44 @@ import dev.agner.portfolio.usecase.portfolio.model.TickerAllocation
 import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
 import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-// One valued listed holding crossing into the calculator: the ticker, the class the catalog gives it
-// (null when the catalog has not classified it) and the units × the current quote.
+// One listed holding crossing into the calculator: the ticker, the class the catalog gives it (null
+// when the catalog has not classified it), the units, and the newest close when the ticker has one.
+// `price = null` is an unknown valuation, never zero; `stale` marks an old-but-real close.
 data class ListedHolding(
     val ticker: String,
     val assetClass: AssetClass?,
     val quantity: BigDecimal,
-    val price: BigDecimal,
+    val price: BigDecimal?,
+    val quoteDate: LocalDate? = null,
+    val stale: Boolean = false,
 ) {
-    val value: BigDecimal get() = (quantity * price).defaultScale()
+    // Null means unknown (no close and a non-zero quantity); zero units are worth zero regardless.
+    val value: BigDecimal? get() = valueOf(quantity, price)
 }
+
+// The one valuation rule every leaf shares: quantity × price, with a missing price unknown unless the
+// quantity is itself zero. Keeps a zero-unit target leaf at 0 instead of an eternal "—".
+private fun valueOf(quantity: BigDecimal, price: BigDecimal?): BigDecimal? = when {
+    quantity.signum() == 0 -> BigDecimal.ZERO.defaultScale()
+    price == null -> null
+    else -> (quantity * price).defaultScale()
+}
+
+// The flagged held tickers, one row per ticker with its custody summed — the same aggregation the
+// tree uses, so a repeated holding never shows a partial quantity.
+private fun heldTickers(
+    listed: List<ListedHolding>,
+    predicate: (ListedHolding) -> Boolean,
+): List<HeldTicker> = listed
+    .filter(predicate)
+    .groupBy { it.ticker }
+    .map { (ticker, rows) -> HeldTicker(ticker, rows.sumOf { it.quantity }) }
+    .sortedBy { it.ticker }
 
 // A Manual Strategy (the legacy bucket) crossing into the calculator: one per class, identified by its
 // own name so its attribution slices can be joined.
@@ -97,6 +121,9 @@ object AllocationCalculator {
             }
         }
 
+        val unpriced = heldTickers(listed) { it.value == null }
+        val negative = heldTickers(listed) { it.quantity.signum() < 0 }
+
         val actual = (classes.sumOf { it.actual } + unclassified.actual).defaultScale()
         val ideal = capital.defaultScale()
 
@@ -109,6 +136,9 @@ object AllocationCalculator {
             deficit = ideal.deficitAgainst(actual),
             drift = drift(actual = actual, ideal = ideal, capital = capital),
             unattributed = (classes.sumOf { it.unattributed } + unclassified.actual).defaultScale(),
+            partial = unpriced.isNotEmpty(),
+            unpriced = unpriced,
+            negative = negative,
             unclassified = unclassified,
             classes = classes,
         )
@@ -124,26 +154,31 @@ object AllocationCalculator {
         manualStrategies: List<ManualStrategyHolding>,
         capital: BigDecimal,
     ): ClassAllocation {
-        val priceByTicker = holdings.associate { it.ticker to it.price }
+        val holdingByTicker = holdings.distinctBy { it.ticker }.associateBy { it.ticker }
         val custodyByTicker = holdings.groupBy { it.ticker }.mapValues { (_, rows) ->
             rows.sumOf { it.quantity }
         }
-        val classActual = holdings.sumOf { it.value }.defaultScale()
+        val classActual = holdings.mapNotNull { it.value }.sumOf { it }.defaultScale()
 
         val strategies = chain.strategies.map { strategy ->
             val tickers = strategy.tickers.map { ticker ->
                 val attributed = attributions[StrategyTicker(strategy.strategy, ticker.ticker)] ?: BigDecimal.ZERO
-                val actual = attributed.valueAt(price = priceByTicker[ticker.ticker])
+                val holding = holdingByTicker[ticker.ticker]
+                val actual = valueOf(attributed, holding?.price)
                 TickerAllocation(
                     ticker = ticker.ticker,
+                    quantity = attributed,
                     target = ticker.target,
                     ideal = ticker.ideal,
                     actual = actual,
-                    deficit = ticker.ideal.deficitAgainst(actual),
-                    drift = drift(actual = actual, ideal = ticker.ideal, capital = capital),
+                    deficit = actual?.let { ticker.ideal.deficitAgainst(it) },
+                    drift = actual?.let { drift(actual = it, ideal = ticker.ideal, capital = capital) },
+                    price = holding?.price,
+                    quoteDate = holding?.quoteDate,
+                    stale = holding?.stale ?: false,
                 )
             }
-            val actual = tickers.sumOf { it.actual }.defaultScale()
+            val actual = tickers.mapNotNull { it.actual }.sumOf { it }.defaultScale()
             StrategyAllocation(
                 strategy = strategy.strategy,
                 target = strategy.target,
@@ -151,23 +186,23 @@ object AllocationCalculator {
                 actual = actual,
                 deficit = strategy.ideal.deficitAgainst(actual),
                 drift = drift(actual = actual, ideal = strategy.ideal, capital = capital),
+                partial = tickers.any { it.actual == null },
                 tickers = tickers,
             )
         }
 
         val manualStrategy = manualStrategies.firstOrNull { it.assetClass == chain.assetClass }
         val manualSlices = manualStrategy?.let { manual ->
-            attributions.filterKeys { key -> key.strategy == manual.name && priceByTicker.containsKey(key.ticker) }
+            attributions.filterKeys { key -> key.strategy == manual.name && holdingByTicker.containsKey(key.ticker) }
         }.orEmpty()
         val manualTickers = manualSlices
-            .map { (key, quantity) ->
-                ActualTickerAllocation(key.ticker, quantity.valueAt(price = priceByTicker[key.ticker]))
-            }
+            .map { (key, quantity) -> actualTicker(key.ticker, quantity, holdingByTicker[key.ticker]) }
             .sortedBy { it.ticker }
         val manual = manualStrategy?.let {
             ManualAllocation(
                 strategy = it.name,
-                actual = manualTickers.sumOf { ticker -> ticker.actual }.defaultScale(),
+                actual = manualTickers.mapNotNull { ticker -> ticker.actual }.sumOf { value -> value }
+                    .defaultScale(),
                 tickers = manualTickers,
             )
         }
@@ -190,7 +225,7 @@ object AllocationCalculator {
             if (remainder.signum() <= 0) {
                 null
             } else {
-                ActualTickerAllocation(ticker, remainder.valueAt(price = priceByTicker[ticker]))
+                actualTicker(ticker, remainder, holdingByTicker[ticker])
             }
         }.sortedBy { it.ticker }
         val outsideActual = (
@@ -206,6 +241,7 @@ object AllocationCalculator {
             actual = classActual,
             deficit = chain.ideal.deficitAgainst(classActual),
             drift = drift(actual = classActual, ideal = chain.ideal, capital = capital),
+            partial = holdings.any { it.value == null } || strategies.any { it.partial },
             unattributed = outsideActual,
             strategies = strategies,
             manual = manual,
@@ -252,16 +288,45 @@ object AllocationCalculator {
 
     private fun unclassifiedAllocation(holdings: List<ListedHolding>): UnclassifiedAllocation {
         val tickers = holdings
+            .filter { it.quantity.signum() != 0 }
             .groupBy { it.ticker }
             .map { (ticker, rows) ->
-                ActualTickerAllocation(ticker, rows.sumOf { it.value }.defaultScale())
+                val priced = rows.firstOrNull { it.price != null }
+                val actual = if (rows.any { it.value == null }) {
+                    null
+                } else {
+                    rows.sumOf { it.value!! }.defaultScale()
+                }
+                ActualTickerAllocation(
+                    ticker = ticker,
+                    quantity = rows.sumOf { it.quantity },
+                    actual = actual,
+                    price = priced?.price,
+                    quoteDate = priced?.quoteDate,
+                    stale = priced?.stale ?: false,
+                )
             }
             .sortedBy { it.ticker }
         return UnclassifiedAllocation(
-            actual = tickers.sumOf { it.actual }.defaultScale(),
+            actual = tickers.mapNotNull { it.actual }.sumOf { it }.defaultScale(),
             tickers = tickers,
         )
     }
+
+    // One Actual-only leaf. Its price/date/staleness come from the held custody, so an attributed
+    // slice of an unpriced ticker is unknown rather than a zero.
+    private fun actualTicker(
+        ticker: String,
+        quantity: BigDecimal,
+        holding: ListedHolding?,
+    ) = ActualTickerAllocation(
+        ticker = ticker,
+        quantity = quantity,
+        actual = valueOf(quantity, holding?.price),
+        price = holding?.price,
+        quoteDate = holding?.quoteDate,
+        stale = holding?.stale ?: false,
+    )
 
     private fun drift(actual: BigDecimal, ideal: BigDecimal, capital: BigDecimal): BigDecimal =
         if (capital.signum() == 0) {

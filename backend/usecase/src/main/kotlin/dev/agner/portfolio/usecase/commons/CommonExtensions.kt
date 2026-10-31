@@ -100,8 +100,9 @@ fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
 
-// A quantity valued at a price, treating a missing quote as zero — the rule the allocation tree and
-// the manual Strategy holdings read share.
+// A quantity valued at a price, treating a missing quote as zero. Only informational surfaces (the
+// legacy attribution preview) may use this; valuation never does — an unpriced holding stays
+// unknown, so it can never read as R$ 0,00.
 fun BigDecimal.valueAt(price: BigDecimal?): BigDecimal =
     if (price == null) BigDecimal.ZERO else (this * price).defaultScale()
 

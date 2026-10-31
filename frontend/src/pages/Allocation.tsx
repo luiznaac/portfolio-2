@@ -20,6 +20,7 @@ import type {
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { ClassifyTickerModal } from "../components/ClassifyTickerModal.tsx";
+import { DataQualityPanel } from "../components/DataQualityPanel.tsx";
 import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import {
@@ -38,7 +39,7 @@ import {
   transferDestinations,
 } from "../lib/attribution.ts";
 import { cn } from "../lib/cn.ts";
-import { formatCurrency, formatNumber } from "../lib/format.ts";
+import { formatCurrency, formatIsoDate, formatNumber } from "../lib/format.ts";
 import {
   noBucketSkips,
   outsideCustody,
@@ -153,7 +154,10 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
           <Reconciliation allocation={allocation} />
         </div>
 
-        <CapitalPanel allocation={allocation} />
+        <div className="flex flex-col gap-4">
+          <DataQualityPanel allocation={allocation} onClassify={setClassifying} />
+          <CapitalPanel allocation={allocation} />
+        </div>
       </div>
 
       {transfer && (
@@ -217,6 +221,23 @@ function AllocationTableRow({
           >
             {row.label}
           </span>
+          {row.partial && (
+            <span
+              data-testid="allocation-partial"
+              className="rounded-sm border border-accent px-1.5 py-0.5 font-mono text-[9.5px] tracking-[.04em] text-accent uppercase"
+            >
+              parcial
+            </span>
+          )}
+          {row.stale && row.quoteDate !== undefined && (
+            <span
+              data-testid="allocation-stale"
+              className="font-mono text-[10px] text-accent"
+              title="Cotação desatualizada"
+            >
+              desatualizada · {formatIsoDate(row.quoteDate)}
+            </span>
+          )}
           {row.kind === "manual_ticker" && (
             <button
               type="button"
@@ -242,7 +263,13 @@ function AllocationTableRow({
       <td className={cn(CELL, "text-right font-mono")}>
         {row.ideal === undefined ? "—" : formatCurrency(row.ideal)}
       </td>
-      <td className={cn(CELL, "text-right font-mono")}>{formatCurrency(row.actual)}</td>
+      <td className={cn(CELL, "text-right font-mono")}>
+        {row.actual === undefined ? (
+          <span className="text-ink-dim">—</span>
+        ) : (
+          formatCurrency(row.actual)
+        )}
+      </td>
       <td className={cn(CELL, "text-center")}>
         {row.deficit === undefined ? (
           <span className="font-mono text-ink-dim">—</span>
@@ -517,7 +544,14 @@ function CapitalPanel({ allocation }: { allocation: AllocationModel }) {
         <Kv label="Período" value={monthPeriodLabel(allocation.period)} />
         <Kv label="Capital" value={formatCurrency(allocation.capital)} />
         <Kv label="Reserva (piso)" value={formatCurrency(allocation.floor)} />
-        <Kv label="Atual" value={formatCurrency(allocation.actual)} />
+        <Kv
+          label="Atual"
+          value={
+            allocation.partial
+              ? `${formatCurrency(allocation.actual)} · parcial`
+              : formatCurrency(allocation.actual)
+          }
+        />
         <Kv label="Drift total" value={formatPoints(allocation.drift)} />
       </dl>
     </Panel>

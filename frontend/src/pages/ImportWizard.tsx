@@ -1,15 +1,25 @@
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import type { StagedImport } from "../api/client.ts";
-import { useApplyImport, useImportRows, useReviewImport, useStageImport } from "../api/queries.ts";
+import {
+  useApplyImport,
+  useCurrentAllocation,
+  useImportRows,
+  usePositions,
+  useRefreshCatalog,
+  useReviewImport,
+  useStageImport,
+} from "../api/queries.ts";
 import type { Import, ImportRow, ImportSource } from "../api/types.ts";
 import { Badge } from "../components/Badge.tsx";
 import { Button } from "../components/Button.tsx";
+import { CatalogRefreshButton, CatalogRefreshReport } from "../components/CatalogRefresh.tsx";
 import { ImportStatusChip } from "../components/ImportStatusChip.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { SituationChip } from "../components/SituationChip.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { WizardStepper } from "../components/WizardStepper.tsx";
+import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatLocalDateTime, formatNumber, formatTradeSide } from "../lib/format.ts";
 import { summarizeSituations } from "../lib/importSituations.ts";
 
@@ -25,6 +35,9 @@ const STEPS = ["Selecionar arquivo", "Revisar", "Confirmar", "Resultado"] as con
 interface UploadState {
   import: Import;
   resumed: boolean;
+  // Rows apply writes: `new` plus the in-file repeats it keeps as separate executions. Captured at
+  // apply time because the server recomputes every row's situation after the ledger changes.
+  importedEntries?: number;
 }
 
 type WizardState =
@@ -105,6 +118,9 @@ export function ImportWizard() {
   const stageImport = useStageImport();
   const reviewImport = useReviewImport();
   const applyImport = useApplyImport();
+  const positions = usePositions();
+  const allocation = useCurrentAllocation();
+  const refresh = useRefreshCatalog();
 
   // Rows are only meaningful from the review step on; a failed import has none at all, so reading
   // them would be a wasted fetch.
@@ -117,6 +133,14 @@ export function ImportWizard() {
   const counts = summarizeSituations(rowItems);
 
   const mutationError = stageImport.error ?? reviewImport.error ?? applyImport.error;
+
+  // The result's data-quality summary: what apply wrote, what the book holds now and what still
+  // blocks a usable portfolio. The allocation read owns the unpriced/unclassified truth; positions
+  // own the custody count and the negative rows the Histórico screen adopts.
+  const importedEntries = state.step === "result" ? (state.upload.importedEntries ?? 0) : 0;
+  const heldPositions = (positions.data ?? []).filter((position) => position.quantity !== 0);
+  const negativePositions = heldPositions.filter((position) => position.quantity < 0).length;
+  const quality = dataQualityCounts(allocation.data ?? null);
 
   function handleStage(event: FormEvent) {
     event.preventDefault();
@@ -141,8 +165,10 @@ export function ImportWizard() {
   function handleApply() {
     if (state.step !== "confirm") return;
     const upload = state.upload;
+    const importedEntries = counts.new + counts.duplicate_in_file;
     applyImport.mutate(upload.import.id, {
-      onSuccess: (applied) => setState({ step: "result", upload: { ...upload, import: applied } }),
+      onSuccess: (applied) =>
+        setState({ step: "result", upload: { ...upload, import: applied, importedEntries } }),
     });
   }
 
@@ -277,7 +303,28 @@ export function ImportWizard() {
             </span>
           </div>
 
-          {state.upload.import.status === "APPLIED" && <div className="mt-4">{rowTable()}</div>}
+          {state.upload.import.status === "APPLIED" && (
+            <div className="mt-4 space-y-4">
+              <div
+                data-testid="import-quality-summary"
+                className="rounded-sm border border-line bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink"
+              >
+                <p>
+                  {importedEntries} entradas importadas · {heldPositions.length} posições na
+                  carteira · {negativePositions}{" "}
+                  <Link to="/history" className="text-principal hover:underline">
+                    {negativePositions === 1 ? "negativa" : "negativas"}
+                  </Link>{" "}
+                  · {quality.unclassified} sem classe · {quality.unpriced} sem cotação
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <CatalogRefreshButton refresh={refresh} />
+                  <CatalogRefreshReport refresh={refresh} />
+                </div>
+              </div>
+              {rowTable()}
+            </div>
+          )}
 
           <div className="mt-4 flex items-center gap-4">
             <Button variant="primary" onClick={reset}>

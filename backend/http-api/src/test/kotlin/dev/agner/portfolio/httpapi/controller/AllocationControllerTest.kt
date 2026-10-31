@@ -6,7 +6,9 @@ import dev.agner.portfolio.usecase.portfolio.AllocationCalculator
 import dev.agner.portfolio.usecase.portfolio.AllocationService
 import dev.agner.portfolio.usecase.portfolio.ListedHolding
 import dev.agner.portfolio.usecase.portfolio.ManualStrategyHolding
+import dev.agner.portfolio.usecase.portfolio.model.ActualTickerAllocation
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
+import dev.agner.portfolio.usecase.portfolio.model.HeldTicker
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
@@ -46,12 +48,52 @@ class AllocationControllerTest : DescribeSpec({
                 acoes.get("target").isNumber shouldBe true
                 acoes.get("strategies").get(0).get("strategy").asText() shouldBe "Top Dividendos"
                 acoes.get("strategies").get(0).get("tickers").get(0).get("ticker").asText() shouldBe "VALE3"
+                acoes.get("strategies").get(0).get("tickers").get(0).get("quantity").decimalValue()
+                    .compareTo(BigDecimal("60")) shouldBe 0
+                body.get("partial").asBoolean() shouldBe false
+                body.get("unpriced").size() shouldBe 0
+                body.get("negative").size() shouldBe 0
                 acoes.get("manual").get("strategy").asText() shouldBe "Legado Ações"
                 acoes.get("manual").has("target") shouldBe false
                 acoes.get("outside").get("actual").decimalValue()
                     .compareTo(BigDecimal("400.00")) shouldBe 0
                 body.get("unclassified").get("actual").decimalValue()
                     .compareTo(BigDecimal.ZERO) shouldBe 0
+            }
+        }
+
+        it("omits an unpriced leaf's actual, lists it as unpriced and marks the read partial") {
+            val service = mockk<AllocationService>()
+            val unpriced = allocation.copy(
+                partial = true,
+                unpriced = listOf(HeldTicker("ZZZZ9", BigDecimal("5"))),
+                classes = allocation.classes.map { rung ->
+                    rung.copy(
+                        outside = rung.outside.copy(
+                            tickers = rung.outside.tickers + ActualTickerAllocation(
+                                ticker = "ZZZZ9",
+                                actual = null,
+                                quantity = BigDecimal("5"),
+                            ),
+                        ),
+                    )
+                },
+            )
+            coEvery { service.fetchCurrent() } returns unpriced
+
+            testApplication {
+                application { installRoutes(AllocationController(service)) }
+
+                val body = ObjectMapper().readTree(client.get("/month/current/allocation").bodyAsText())
+
+                body.get("partial").asBoolean() shouldBe true
+                body.get("unpriced").get(0).get("ticker").asText() shouldBe "ZZZZ9"
+                body.get("unpriced").get(0).get("quantity").decimalValue()
+                    .compareTo(BigDecimal("5")) shouldBe 0
+                val leaf = body.get("classes").get(0).get("outside").get("tickers")
+                    .first { it.get("ticker").asText() == "ZZZZ9" }
+                leaf.has("actual") shouldBe false
+                leaf.get("quantity").decimalValue().compareTo(BigDecimal("5")) shouldBe 0
             }
         }
 

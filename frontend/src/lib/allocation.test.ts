@@ -220,6 +220,47 @@ describe("allocationRows", () => {
     expect(rows.find((row) => row.label === "Fundos imob.")?.expandable).toBe(false);
     expect(rows.find((row) => row.label === "Sem classe")?.expandable).toBe(true);
   });
+
+  it("leaves an unpriced leaf's Actual undefined and carries the stale date", () => {
+    const withValuation = {
+      ...allocation,
+      partial: true,
+      unpriced: [{ ticker: "ZZZZ9", quantity: 5 }],
+      classes: allocation.classes.map((cls) =>
+        cls.asset_class === "ACOES"
+          ? {
+              ...cls,
+              outside: {
+                ...cls.outside,
+                tickers: [
+                  ...cls.outside.tickers,
+                  { ticker: "ZZZZ9", quantity: 5, actual: undefined },
+                  {
+                    ticker: "PETR4",
+                    quantity: 1,
+                    actual: 10,
+                    price: 10,
+                    quote_date: "2026-10-07",
+                    stale: true,
+                  },
+                ],
+              },
+            }
+          : cls,
+      ),
+    };
+
+    const rows = allocationRows(withValuation, new Set(["class:ACOES", "outside:ACOES"]));
+
+    const unpriced = rows.find((row) => row.label === "ZZZZ9");
+    expect(unpriced?.actual).toBeUndefined();
+    expect(unpriced?.quantity).toBe(5);
+
+    const stale = rows.find((row) => row.label === "PETR4");
+    expect(stale?.actual).toBe(10);
+    expect(stale?.stale).toBe(true);
+    expect(stale?.quoteDate).toBe("2026-10-07");
+  });
 });
 
 describe("bars", () => {
