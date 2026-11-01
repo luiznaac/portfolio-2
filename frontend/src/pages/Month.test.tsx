@@ -5,6 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Strategy, Targets } from "../api/types.ts";
 import { Month } from "./Month.tsx";
 
+// Pin "today" so the month's backdated chip is deterministic: the page compares the open month's
+// period with the wall clock's month, which would mark it historical on the first of a month.
+vi.mock("../lib/dates.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/dates.ts")>();
+  return { ...actual, todayIso: () => "2026-10-15" };
+});
+
 // The targets form renders variable rows (strategies, tickers) whose inputs are controlled by the
 // form state. A row must keep its React identity while its fields are edited: a key derived from the
 // edited value remounts the input on the first keystroke and the browser drops focus.

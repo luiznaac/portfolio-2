@@ -5,6 +5,13 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Fechamento } from "./Fechamento.tsx";
 
+// Pin "today" so the month gates are deterministic: the page judges the open month backdated by
+// comparing it with the wall clock's month, which would turn these specs red on the first of a month.
+vi.mock("../lib/dates.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/dates.ts")>();
+  return { ...actual, todayIso: () => "2026-10-15" };
+});
+
 const mutate = vi.fn();
 const mock = vi.hoisted(() => ({ hasPendingTransfer: true, period: "2026-10" }));
 
