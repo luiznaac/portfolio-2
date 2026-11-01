@@ -11,6 +11,13 @@ import type {
 } from "../api/types.ts";
 import { Taxes } from "./Taxes.tsx";
 
+// Pin "today" so the period chip is deterministic: the page judges a read month historical by
+// comparing it with the wall clock's month, which would change the chip on the first of a month.
+vi.mock("../lib/dates.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/dates.ts")>();
+  return { ...actual, todayIso: () => "2026-10-15" };
+});
+
 const mock = vi.hoisted(() => ({
   current: null as CurrentMonth | null,
   range: { min: "2020-03", max: "2026-10", default: "2020-12" } as MonthPeriodRange,

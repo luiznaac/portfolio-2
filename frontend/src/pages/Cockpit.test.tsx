@@ -5,6 +5,13 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Cockpit } from "./Cockpit.tsx";
 
+// Pin "today" so the agenda is deterministic: the close reminder appears only once the open month's
+// period is behind the wall clock's month, which would add a second item on the first of a month.
+vi.mock("../lib/dates.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/dates.ts")>();
+  return { ...actual, todayIso: () => "2026-10-15" };
+});
+
 const mock = vi.hoisted(() => ({
   openMonth: true,
   manualBucket: false,
