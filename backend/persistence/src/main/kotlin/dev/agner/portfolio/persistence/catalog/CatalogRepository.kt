@@ -57,4 +57,16 @@ class CatalogRepository(
         entity.assetClassOverride = assetClass
         entity.toModel()
     }
+
+    // One transaction for the whole batch: the entity updates flush together at commit, so a failure
+    // mid-batch rolls every override back. Rows the caller did not name are never touched, and a
+    // missing ticker is skipped rather than invented here.
+    override suspend fun setAssetClassOverrides(classifications: Map<String, AssetClass>): List<CatalogEntry> =
+        transaction {
+            classifications
+                .mapNotNull { (ticker, selectedClass) ->
+                    CatalogEntity.findById(ticker)?.apply { assetClassOverride = selectedClass }?.toModel()
+                }
+                .sortedBy { it.ticker }
+        }
 }

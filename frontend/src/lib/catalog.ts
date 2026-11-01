@@ -2,7 +2,7 @@
 // Alocação and Ativos screens need live here so the override-vs-BDI rule and its copy are
 // unit-tested without rendering.
 
-import type { AssetClass, CatalogEntry } from "../api/types.ts";
+import type { AssetClass, CatalogEntry, UnclassifiedReason } from "../api/types.ts";
 
 // A listed ticker is classified as one of the two class rungs; Renda Fixa is the consolidation
 // engine's domain and is never a manual classification.
@@ -25,6 +25,17 @@ const NOUN_LABELS: Record<AssetClass, string> = {
 
 export function classifyLabel(assetClass: ClassifiableAssetClass): string {
   return PICKER_LABELS[assetClass];
+}
+
+// The classification queue's named reason, so the bulk modal distinguishes a paper the last file no
+// longer lists from a listed BDI code the catalog does not map yet.
+const REASON_LABELS: Record<UnclassifiedReason, string> = {
+  ABSENT_FROM_LATEST_FILE: "Ausente do arquivo mais recente",
+  UNHANDLED_BDI_CODE: "Código BDI não mapeado",
+};
+
+export function queueReasonLabel(reason: UnclassifiedReason): string {
+  return REASON_LABELS[reason];
 }
 
 // The class every screen plans and attributes with: the owner's manual classification outranks

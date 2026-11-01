@@ -49,12 +49,13 @@ class OrderPlanService(
         // The report-membership half comes from the chain leaves, exactly as the order calculator
         // reads it, so a Target the chain does not carry cannot make a ticker inside.
         val investableCapital = (current.month.capital - current.month.floor).defaultScale()
+        val unclassifiedTickers = catalog.fetchUnclassified(positionByTicker.keys)
         val placement = PlacementCalculator.compute(
             positions = positionByTicker,
             targetedTickers = TargetChainCalculator.compute(investableCapital, targets).targetedTickers(),
             ledger = ledger,
             manualStrategies = manualNames,
-            unclassifiedTickers = catalog.fetchUnclassified(positionByTicker.keys),
+            unclassifiedTickers = unclassifiedTickers,
         )
 
         // A targeted ticker with no position still needs a price: it is exactly where a NEW_ENTRY
@@ -65,6 +66,16 @@ class OrderPlanService(
             .awaitAll()
             .mapNotNull { (ticker, price) -> if (price == null) null else ticker to price }
             .toMap()
+
+        // The plan refuses off an incomplete book: an unpriced or unclassified held ticker would let
+        // the sizing run against a number or a class the book does not actually know. The unpriced
+        // gate reports first because a missing price is the more fundamental unknown. A target-only
+        // ticker is not held, so its missing close never blocks.
+        val heldTickers = positionByTicker.filterValues { it.signum() > 0 }.keys
+        val unpriced = heldTickers.filter { it !in prices }.sorted()
+        if (unpriced.isNotEmpty()) throw UnpricedPositionsException(unpriced)
+        val unclassifiedHeld = heldTickers.filter { it in unclassifiedTickers }.sorted()
+        if (unclassifiedHeld.isNotEmpty()) throw UnclassifiedPositionsException(unclassifiedHeld)
 
         // The funding pass and the full phase need the whole book's Actual: its listed part prices the
         // Uninvested Balance and its RF part sizes the sub-class orders.

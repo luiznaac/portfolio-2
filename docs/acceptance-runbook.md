@@ -555,3 +555,35 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   Run it independently of the other seeds, after the app has migrated and is healthy. The panel's refresh button is visible in its header and beside the unpriced VALE3 row; the import result carries the same refresh action and the negative deep-link once the browser can upload a file (see #311).
+
+- **Classification authority and plan-gate seed** (issue #306): the bulk classification modal, the legacy preview's effective class and the plan's refusal (surfaced as the Cockpit's plan error) read this scenario. It resets the plan, allocation and catalog tables and seeds an open 2027-06 month with an Ações class and a Top Dividendos strategy/ticker target, a manual Legado Ações bucket, and four held tickers at a R$10 close except one left unpriced: **OVR9** (10 un) has a placeholder BDI row with a manual `ACOES` override (the override-only ticker), **UNCL1** (5 un) has a placeholder BDI row with no class (queue reason `ABSENT_FROM_LATEST_FILE`), **UNCL2** (3 un) has an unmapped BDI `99` with no class (queue reason `UNHANDLED_BDI_CODE`), and **NOPR1** (4 un) is a classified Ações ticker with no close (the unpriced gate). **NOPOS3** is named only by a ticker target — no position, no close. The book then reads: the queue is UNCL1 + UNCL2 with their reasons; the preview groups OVR9 (override Ações) and NOPR1 under Ações and skips UNCL1/UNCL2 (`UNCLASSIFIED`); the plan refuses with `unpriced-positions` naming NOPR1.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+        INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+          (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+          (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9200, '2027-06', 1000, 0, 'OPEN', NOW()); \
+        INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+          (9200,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()), \
+          (9200,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+          (9200,'TICKER','ACOES','Top Dividendos',NULL,'NOPOS3',100,NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES \
+          ('OVR9',10,8), ('UNCL1',5,8), ('UNCL2',3,8), ('NOPR1',4,8); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('OVR9','2027-06-30',10,'COTAHIST',NOW()), \
+          ('UNCL1','2027-06-30',10,'COTAHIST',NOW()), \
+          ('UNCL2','2027-06-30',10,'COTAHIST',NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, asset_class_override, first_seen, last_seen, created_at) VALUES \
+          ('OVR9','OVERRIDE','??',NULL,'UNKNOWN',NULL,'ACOES','2027-01-01','2027-06-30',NOW()), \
+          ('UNCL1','UNCL1','??',NULL,'UNKNOWN',NULL,NULL,'2027-01-01','2027-06-30',NOW()), \
+          ('UNCL2','UNCL2','99',NULL,'UNKNOWN',NULL,NULL,'2027-01-01','2027-06-30',NOW()), \
+          ('NOPR1','NOPR','02',NULL,'STOCK','ACOES',NULL,'2027-01-01','2027-06-30',NOW());"
+  ```
+
+  Run it independently of the other seeds, after the app has migrated and is healthy. The browser reads `/allocation` (Dados da carteira panel: Sem classe **2**, Sem cotação **1**; "Classificar pendentes" opens the bulk modal listing UNCL1 and UNCL2 with their reasons), the legacy banner (the preview lists OVR9 under Ações with Confirmar enabled), `/trades/OVR9` (the "classe manual: Ações" line with Reverter), and `/` (the Cockpit's "Não foi possível ler a alocação e o plano." attention error, the plan refusing on the unpriced NOPR1).

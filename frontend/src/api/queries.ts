@@ -213,6 +213,26 @@ export function useRefreshCatalog() {
   });
 }
 
+// The held-unclassified classification queue the bulk modal lists. The modal mounts only while it
+// is open, so the read starts on demand and the page never pays for it otherwise.
+export function useClassificationQueue() {
+  return useQuery({
+    queryKey: ["tickers", "classification-queue"],
+    queryFn: api.getClassificationQueue,
+  });
+}
+
+// The bulk classification write: one atomic request for the chosen rows, then the same class-keyed
+// reads the single classify invalidates, so the tree, panel and plan all refresh together.
+export function useClassifyTickers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (classifications: Record<string, AssetClass>) =>
+      api.classifyTickers(classifications),
+    onSuccess: () => invalidateClassReads(queryClient),
+  });
+}
+
 export function useBonds() {
   return useQuery({
     queryKey: ["fixed-income", "bonds"],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogEntry } from "../api/types.ts";
-import { classificationNote, effectiveAssetClass } from "./catalog.ts";
+import { classificationNote, effectiveAssetClass, queueReasonLabel } from "./catalog.ts";
 
 function entry(
   assetClass?: CatalogEntry["asset_class"],
@@ -47,5 +47,12 @@ describe("classificationNote", () => {
 
   it("stays silent when there is no override", () => {
     expect(classificationNote(entry("ACOES", undefined))).toBeNull();
+  });
+});
+
+describe("queueReasonLabel", () => {
+  it("names the two reasons a ticker stays classless", () => {
+    expect(queueReasonLabel("UNHANDLED_BDI_CODE")).toBe("Código BDI não mapeado");
+    expect(queueReasonLabel("ABSENT_FROM_LATEST_FILE")).toBe("Ausente do arquivo mais recente");
   });
 });

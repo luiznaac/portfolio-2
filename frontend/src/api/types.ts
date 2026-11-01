@@ -28,6 +28,19 @@ export interface TickerClassification {
   asset_class: AssetClass;
 }
 
+/** The bulk classification request (PUT /tickers/classification): only the chosen rows travel. */
+export interface TickerBatchClassification {
+  classifications: Record<string, AssetClass>;
+}
+
+/** One held-unclassified ticker the bulk modal lists (GET /tickers/unclassified). */
+export interface ClassificationQueueItem {
+  ticker: string;
+  short_name: string;
+  quantity: number;
+  reason: UnclassifiedReason;
+}
+
 export type QuoteSource = "COTAHIST";
 
 export interface Quote {
