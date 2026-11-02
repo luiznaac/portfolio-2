@@ -10,6 +10,7 @@ import type {
   AssetClass,
   AttributionSliceCreation,
   AttributionTransferCreation,
+  BackfillReport,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -17,13 +18,17 @@ import type {
   EditionActivation,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  Gap,
   HarvestPairCreation,
   HarvestReport,
   ImportSource,
   LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
+  OpeningSeedCreation,
   OrderList,
+  PositionReconciliation,
+  Quote,
   Snapshot,
   Strategy,
   StrategyCreation,
@@ -164,6 +169,18 @@ export function useTickerQuotes(ticker: string) {
     queryKey: ["tickers", ticker, "quotes"],
     queryFn: () => api.getTickerQuotes(ticker),
     enabled: ticker.length > 0,
+  });
+}
+
+// The Histórico adoption rows need every draft ticker's latest close at once: one read per ticker,
+// sharing the single-ticker cache key, so the default price is in place before the form is saved.
+export function useTickerQuotesList(tickers: string[]) {
+  return useQueries({
+    queries: tickers.map((ticker) => ({
+      queryKey: ["tickers", ticker, "quotes"],
+      queryFn: (): Promise<Quote[]> => api.getTickerQuotes(ticker),
+      enabled: ticker.length > 0,
+    })),
   });
 }
 
@@ -592,6 +609,55 @@ export function useCorporateActions() {
   return useQuery({
     queryKey: ["corporate-actions"],
     queryFn: api.getCorporateActions,
+  });
+}
+
+// The open and replaced GAP records. The panel, the sidebar badge and the Cockpit card all read
+// this list, so one cache entry keeps their counts in step.
+export function useGaps() {
+  return useQuery({
+    queryKey: ["gaps"],
+    queryFn: api.getGaps,
+  });
+}
+
+// Every history write replays positions from the ledger: the GAP list, the trades, the custody
+// projection and the month-scoped reads they feed are stale in one step.
+function invalidateHistoryReads(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["gaps"] });
+  queryClient.invalidateQueries({ queryKey: ["positions"] });
+  queryClient.invalidateQueries({ queryKey: ["trades"] });
+  queryClient.invalidateQueries({ queryKey: ["month"] });
+}
+
+export function usePriceGap() {
+  const queryClient = useQueryClient();
+  return useMutation<Gap, Error, { id: number; unitPrice: number }>({
+    mutationFn: ({ id, unitPrice }) => api.priceGap(id, unitPrice),
+    onSuccess: () => invalidateHistoryReads(queryClient),
+  });
+}
+
+export function useSeedOpenings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (seeds: OpeningSeedCreation[]) => api.seedOpenings(seeds),
+    onSuccess: () => invalidateHistoryReads(queryClient),
+  });
+}
+
+export function useBackfill() {
+  const queryClient = useQueryClient();
+  return useMutation<BackfillReport, Error, File | undefined>({
+    mutationFn: (file) => api.backfill(file),
+    onSuccess: () => invalidateHistoryReads(queryClient),
+  });
+}
+
+// Read-only: a custody cross-check never edits the ledger, so nothing is invalidated.
+export function useReconcileCustody() {
+  return useMutation<PositionReconciliation[], Error, File>({
+    mutationFn: (file) => api.reconcileCustody(file),
   });
 }
 

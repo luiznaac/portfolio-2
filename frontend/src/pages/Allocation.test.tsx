@@ -9,6 +9,7 @@ import type {
   Allocation as AllocationModel,
   Attribution,
   Edition,
+  Gap,
   LegacyAttributionPreview,
   LegacyAttributionResult,
   OrderPlan,
@@ -31,6 +32,7 @@ const mock = vi.hoisted(() => ({
   queue: [] as Array<{ ticker: string; short_name: string; quantity: number; reason: string }>,
   batch: [] as Array<Record<string, string>>,
   batchError: false,
+  gaps: [] as Gap[],
 }));
 
 vi.mock("../api/client.ts", () => ({
@@ -63,6 +65,7 @@ vi.mock("../api/client.ts", () => ({
       });
     },
     getClassificationQueue: () => Promise.resolve(mock.queue),
+    getGaps: () => Promise.resolve(mock.gaps),
     classifyTickers: (classifications: Record<string, string>) => {
       mock.batch.push(classifications);
       if (mock.batchError) return Promise.reject(new Error("save failed"));
@@ -109,6 +112,7 @@ afterEach(() => {
   mock.queue = [];
   mock.batch = [];
   mock.batchError = false;
+  mock.gaps = [];
 });
 
 describe("the Alocação tree", () => {
@@ -353,6 +357,50 @@ describe("the Alocação tree", () => {
       "/history",
     );
     expect(screen.getByTestId("allocation-partial")).toBeDefined();
+  });
+
+  it("lists the open lacunas beside the negative positions and flags pending proceeds", async () => {
+    mock.allocation = allocation;
+    mock.gaps = [
+      {
+        id: 1,
+        ticker: "VALE3",
+        date: "2026-01-10",
+        quantity: 5,
+        status: "OPEN",
+        trade_watermark: 0,
+        action_watermark: 0,
+      },
+      {
+        id: 2,
+        ticker: "ITUB4",
+        date: "2026-01-10",
+        quantity: 8,
+        status: "OPEN",
+        realized_pending: true,
+        trade_watermark: 0,
+        action_watermark: 0,
+      },
+      {
+        id: 3,
+        ticker: "PETR4",
+        date: "2026-01-10",
+        quantity: 3,
+        status: "REPLACED",
+        realized_pending: false,
+        trade_watermark: 0,
+        action_watermark: 0,
+      },
+    ];
+    renderAllocation();
+
+    const panel = await screen.findByTestId("data-quality-panel");
+    await waitFor(() =>
+      expect(within(panel).getByTestId("data-quality-lacunas-count").textContent).toBe("2"),
+    );
+    expect(within(panel).getByTestId("data-quality-lacunas").textContent).toContain(
+      "1 com proventos pendentes",
+    );
   });
 
   it("refreshes the combined catalog and quotes from the panel header and rows", async () => {

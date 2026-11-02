@@ -119,7 +119,7 @@ export interface ImportRow {
   situation: ImportRowSituation;
 }
 
-export type TradeSource = "MANUAL" | "B3_IMPORT";
+export type TradeSource = "MANUAL" | "B3_IMPORT" | "OPENING";
 
 export interface Trade {
   id: number;

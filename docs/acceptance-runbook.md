@@ -556,6 +556,37 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
   Run it independently of the other seeds, after the app has migrated and is healthy. The panel's refresh button is visible in its header and beside the unpriced VALE3 row; the import result carries the same refresh action and the negative deep-link once the browser can upload a file (see #311).
 
+- **Histórico seed** (issue #307): adoption, replay, gaps and custody read this scenario. It resets the ledger tables and seeds four negative held positions (the mid-history export's unexplained custody), one imported trade that sets the default adoption date, a latest close per ticker, and two open GAPs — a missing sale whose proceeds are pending and a missing buy entered at a market placeholder. The browser reads `/history`: Adoção lists PETR4 10, VALE3 5, ITUB4 3 and BCFF11 4 with the default date 09/01/2020 and their latest closes; saving creates one opening trade per row and raises every stored position to non-negative custody; Reconciliar histórico unlocks only after the save or an explicit skip; Lacunas shows VALE3 as approximate and PETR4 as "proventos pendentes"; Conferir custódia stays read-only and takes a Posição upload.
+
+  ```bash
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+    -e "DELETE FROM gap; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+        DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+        DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+        DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+        INSERT INTO institution (id, name, created_at) VALUES (9001, 'XP', NOW()); \
+        INSERT INTO \`month\` (id, period, capital, \`floor\`, aportes, status, created_at) VALUES (9400, '2026-11', 100000, 0, 0, 'OPEN', NOW()); \
+        INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+          ('PETR4', '2020-01-10', 'VISTA', 10, 28.50, 9001, NULL, 'B3_IMPORT', FALSE, 1, NOW()); \
+        REPLACE INTO position (ticker, quantity, average_price) VALUES \
+          ('PETR4', -10, 0), ('VALE3', -5, 0), ('ITUB4', -3, 0), ('BCFF11', -4, 0); \
+        REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+          ('PETR4', '2020-12-30', 28.50, 'COTAHIST', NOW()), \
+          ('VALE3', '2020-12-30', 60.00, 'COTAHIST', NOW()), \
+          ('ITUB4', '2020-12-30', 30.00, 'COTAHIST', NOW()), \
+          ('BCFF11', '2020-12-30', 8.00, 'COTAHIST', NOW()); \
+        REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+          ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2020-01-01','2020-12-30',NOW()), \
+          ('VALE3','VALE','02',NULL,'STOCK','ACOES','2020-01-01','2020-12-30',NOW()), \
+          ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2020-01-01','2020-12-30',NOW()), \
+          ('BCFF11','BCFF','12',NULL,'FII','FIIS','2020-01-01','2020-12-30',NOW()); \
+        INSERT INTO gap (id, ticker, date, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES \
+          (9401, 'VALE3', '2020-12-30', 'BUY', 2, 60.00, 'OPEN', 0, 0, NOW()), \
+          (9402, 'PETR4', '2020-12-30', 'SELL', 3, NULL, 'OPEN', 0, 0, NOW());"
+  ```
+
+  Run it independently of the other seeds. After the adoption is saved, the replay's `positions_reprojected` is 4 — every ledger ticker, not only the ones the run touched. Skipping the adoption leaves one imported ticker in the ledger, so the same replay reports 1; either way the count is greater than zero.
+
 - **Classification authority and plan-gate seed** (issue #306): the bulk classification modal, the legacy preview's effective class and the plan's refusal (surfaced as the Cockpit's plan error) read this scenario. It resets the plan, allocation and catalog tables and seeds an open 2027-06 month with an Ações class and a Top Dividendos strategy/ticker target, a manual Legado Ações bucket, and four held tickers at a R$10 close except one left unpriced: **OVR9** (10 un) has a placeholder BDI row with a manual `ACOES` override (the override-only ticker), **UNCL1** (5 un) has a placeholder BDI row with no class (queue reason `ABSENT_FROM_LATEST_FILE`), **UNCL2** (3 un) has an unmapped BDI `99` with no class (queue reason `UNHANDLED_BDI_CODE`), and **NOPR1** (4 un) is a classified Ações ticker with no close (the unpriced gate). **NOPOS3** is named only by a ticker target — no position, no close. The book then reads: the queue is UNCL1 + UNCL2 with their reasons; the preview groups OVR9 (override Ações) and NOPR1 under Ações and skips UNCL1/UNCL2 (`UNCLASSIFIED`); the plan refuses with `unpriced-positions` naming NOPR1.
 
   ```bash

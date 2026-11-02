@@ -1,18 +1,19 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useRefreshCatalog } from "../api/queries.ts";
+import { useGaps, useRefreshCatalog } from "../api/queries.ts";
 import type { Allocation, HeldTicker } from "../api/types.ts";
 import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatNumber } from "../lib/format.ts";
+import { pendingProceedsGaps } from "../lib/history.ts";
 import { BulkClassifyModal } from "./BulkClassifyModal.tsx";
 import { CatalogRefreshButton, CatalogRefreshReport } from "./CatalogRefresh.tsx";
 import { Panel } from "./Panel.tsx";
 
 // The single place to see and fix what makes the book wrong: unpriced positions, held tickers with
-// no class, and negative custody. Its header carries the one combined catalog-and-quotes refresh;
-// the unpriced rows repeat that action, the unclassified rows open the classify dialog and the
-// negative rows deep-link to the Histórico screen that adopts them.
+// no class, negative custody and open GAPs. Its header carries the one combined catalog-and-quotes
+// refresh; the unpriced rows repeat that action, the unclassified rows open the classify dialog and
+// the negative/lacuna rows deep-link to the Histórico screen that adopts and prices them.
 export function DataQualityPanel({
   allocation,
   onClassify,
@@ -21,8 +22,10 @@ export function DataQualityPanel({
   onClassify: (ticker: string) => void;
 }) {
   const refresh = useRefreshCatalog();
+  const gaps = useGaps();
   const [bulkOpen, setBulkOpen] = useState(false);
-  const counts = dataQualityCounts(allocation);
+  const counts = dataQualityCounts(allocation, gaps.data ?? []);
+  const pendingProceeds = pendingProceedsGaps(gaps.data ?? []).length;
   const unpriced = allocation.unpriced ?? [];
   const unclassified = allocation.unclassified.tickers.map((ticker) => ({
     ticker: ticker.ticker,
@@ -94,11 +97,41 @@ export function DataQualityPanel({
             count={counts.negative}
             rows={negative}
             renderAction={() => (
-              <Link to="/history" className="font-mono text-[10px] text-principal hover:underline">
+              <Link
+                to="/history"
+                data-testid="negative-history-link"
+                className="font-mono text-[10px] text-principal hover:underline"
+              >
                 Histórico
               </Link>
             )}
           />
+
+          <div data-testid="data-quality-lacunas">
+            <div className="flex items-center justify-between border-b border-line-soft pb-1.5">
+              <span className="font-mono text-[11px] tracking-[.06em] text-ink-faint uppercase">
+                Lacunas
+              </span>
+              <span className="flex items-center gap-3">
+                {counts.lacunas > 0 && (
+                  <Link
+                    to="/history"
+                    className="font-mono text-[10px] text-principal hover:underline"
+                  >
+                    Revisar
+                  </Link>
+                )}
+                <span data-testid="data-quality-lacunas-count" className="font-mono text-[12.5px]">
+                  {counts.lacunas}
+                </span>
+              </span>
+            </div>
+            {pendingProceeds > 0 && (
+              <p className="py-1.5 text-[12.5px] text-ink-dim">
+                {pendingProceeds} com proventos pendentes
+              </p>
+            )}
+          </div>
 
           {counts.total === 0 && (
             <p className="text-[12.5px] text-yield">Nenhum dado pendente na carteira.</p>

@@ -7,6 +7,7 @@ import { CorporateActions } from "./pages/CorporateActions.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
+import { History } from "./pages/History.tsx";
 import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
@@ -34,6 +35,7 @@ export const routes: RouteObject[] = [
       // directory, which would shadow a sibling SPA route of that name on a deep link.
       { path: "trades", element: <Trades /> },
       { path: "trades/:ticker", element: <AssetDetail /> },
+      { path: "history", element: <History /> },
       { path: "fixed-income", element: <FixedIncome /> },
       { path: "corporate-actions", element: <CorporateActions /> },
       { path: "income", element: <Income /> },
