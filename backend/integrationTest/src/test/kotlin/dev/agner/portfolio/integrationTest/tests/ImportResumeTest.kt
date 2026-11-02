@@ -3,6 +3,7 @@ package dev.agner.portfolio.integrationTest.tests
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.helpers.b3NegociacaoFixture
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.import.ImportService
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
@@ -24,7 +25,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import kotlinx.datetime.LocalDate
-import java.io.File
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -111,14 +111,6 @@ private fun row(
     institutionName = INSTITUTION,
     error = error,
 )
-
-// The committed two-row B3 Negociação fixture the parser tests pin. Gradle runs this module's tests
-// from `backend/integrationTest`, so the sibling test resource resolves one directory up.
-private fun b3NegociacaoFixture(): ByteArray {
-    val fixture = File("../http-api/src/test/resources/b3-negociacao.xlsx")
-    check(fixture.isFile) { "B3 fixture not found at ${fixture.absolutePath}" }
-    return fixture.readBytes()
-}
 
 private suspend fun upload(
     fileName: String,

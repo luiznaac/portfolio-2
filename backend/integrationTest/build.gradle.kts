@@ -25,6 +25,32 @@ dependencies {
     testImplementation(libs.exposed.migration.jdbc)
 }
 
+// Why this guard exists: backend/AGENTS.md §Testing ("Import tests have two patterns").
+val noApachePoi by tasks.registering {
+    group = "verification"
+    description = "Fails when Apache POI enters :integrationTest's compile classpath."
+
+    val compileClasspath = configurations.named("testCompileClasspath")
+
+    doLast {
+        val poiArtifacts = compileClasspath.get().resolvedConfiguration.resolvedArtifacts
+            .filter { it.moduleVersion.id.group == "org.apache.poi" }
+        if (poiArtifacts.isNotEmpty()) {
+            throw GradleException(
+                ":integrationTest must not compile Apache POI, found " +
+                    poiArtifacts.joinToString { it.moduleVersion.id.toString() } +
+                    ". See backend/AGENTS.md §Testing for the fixture and staging patterns to use instead.",
+            )
+        }
+    }
+}
+
+// Wired before the compile itself, not as a sibling of `test`: the compile is what runs out of
+// memory, so a guard that ran after it would never report.
+tasks.named("compileTestKotlin") {
+    dependsOn(noApachePoi)
+}
+
 // Testcontainers only discovers an unreachable daemon once a spec's first container starts, which
 // surfaces as an opaque DockerClientProviderStrategy error buried in the HTML report. Probe the
 // daemon first so the whole integration lane fails in seconds with a message that says what to do.
