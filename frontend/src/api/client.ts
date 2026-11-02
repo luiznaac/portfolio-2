@@ -5,6 +5,7 @@ import type {
   AttributionSliceCreation,
   AttributionTransferCreation,
   BackfillReport,
+  BenchmarkStatusReport,
   Bond,
   CatalogEntry,
   CheckingAccount,
@@ -291,6 +292,14 @@ export const api = {
 
   getPerformanceSeries(): Promise<PerformanceSeries> {
     return request("/performance/series");
+  },
+
+  getBenchmarkStatus(): Promise<BenchmarkStatusReport> {
+    return request("/benchmarks");
+  },
+
+  refreshBenchmarks(): Promise<BenchmarkStatusReport> {
+    return request("/benchmarks/refresh", { method: "POST" });
   },
 
   getStockTax(period: string): Promise<StockTaxReport> {

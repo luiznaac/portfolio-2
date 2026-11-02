@@ -28,10 +28,14 @@ import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
 import {
   type StrategyRow,
   benchmarkRows,
+  blockingLegs,
   decompositionResult,
+  eraState,
   returnFillClass,
   returnTextClass,
   strategyRows,
+  valueKpi,
+  xirrKpis,
 } from "../lib/performance.ts";
 
 // Performance (issue #176): the closed months replayed from their immutable snapshots — the monthly
@@ -58,14 +62,25 @@ export function Performance() {
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : series.isError ? (
         <p className="text-[13.5px] text-tax">{series.error.message}</p>
-      ) : !series.data || series.data.months.length === 0 ? (
+      ) : !series.data ? null : series.data.months.length === 0 && series.data.ledger_empty ? (
         <Panel title="Sem meses fechados">
           <p className="text-[13.5px] text-ink-dim">
-            A performance nasce dos retratos dos meses fechados.{" "}
+            A performance nasce dos retratos dos meses fechados e do histórico importado.{" "}
+            <Link to="/imports" className="text-principal underline">
+              Importe um extrato
+            </Link>{" "}
+            ou{" "}
             <Link to="/fechamento" className="text-principal underline">
-              Feche um mês
+              feche um mês
             </Link>{" "}
             para começar a série.
+          </p>
+        </Panel>
+      ) : series.data.months.length === 0 ? (
+        <Panel title="Histórico sem mês completo">
+          <p className="text-[13.5px] text-ink-dim">
+            O mês corrente ainda não é um ponto da série. O histórico calculado começa no mês
+            seguinte ao primeiro lançamento completo.
           </p>
         </Panel>
       ) : (
@@ -101,20 +116,45 @@ function PerformanceView({
   detailError: string | null;
 }) {
   const last = series.months.at(-1);
+  const eras = eraState(series.months);
+  const computedLast = last?.source === "computed";
+  const value = valueKpi(series.months);
+  const returnOfMonth = computedLast
+    ? last?.decomposition.return_percentage
+    : detail?.decomposition.return_percentage;
+  const valueHint = [value.hint, last?.partial ? "parcial" : undefined]
+    .filter((part): part is string => part !== undefined)
+    .join(" · ");
 
   return (
     <div>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi testId="xirr" label="XIRR desde o início" value={formatPercent(series.xirr)} />
-        <Kpi label="Patrimônio" value={last ? formatCurrency(last.decomposition.value_end) : "—"} />
+        {xirrKpis(series).map((kpi) => (
+          <Kpi
+            key={kpi.testId}
+            testId={kpi.testId}
+            label={kpi.label}
+            value={formatPercent(kpi.value)}
+          />
+        ))}
+        <Kpi
+          testId="value-kpi"
+          label={value.label}
+          hint={valueHint.length > 0 ? valueHint : undefined}
+          value={last ? formatCurrency(last.decomposition.value_end) : "—"}
+        />
         <Kpi
           label="Retorno do mês"
-          value={formatSignedPercent(detail?.decomposition.return_percentage)}
-          tone={toneOf(detail?.decomposition.return_percentage)}
+          hint={computedLast ? "histórico" : undefined}
+          value={formatSignedPercent(returnOfMonth)}
+          tone={toneOf(returnOfMonth)}
         />
         <Kpi
           label="Benchmark do mês"
-          value={formatSignedPercent(detail?.benchmark.return_percentage)}
+          hint={computedLast ? "sem benchmark antes do fechamento" : undefined}
+          value={
+            computedLast ? undefined : formatSignedPercent(detail?.benchmark.return_percentage)
+          }
           tone="muted"
         />
       </div>
@@ -147,13 +187,7 @@ function PerformanceView({
         <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
           Decomposição mensal
         </h2>
-        <div data-testid="decomposition-table">
-          <Table
-            columns={DECOMPOSITION_COLUMNS}
-            rows={series.months}
-            rowKey={(month) => month.period}
-          />
-        </div>
+        <DecompositionTable months={series.months} />
       </div>
 
       <div className="mb-4">
@@ -169,7 +203,14 @@ function PerformanceView({
         <ClosedMonthSelect months={months} monthId={monthId} onSelect={onSelect} />
       </div>
 
-      {detailLoading ? (
+      {!eras.hasSnapshot ? (
+        <Panel>
+          <p data-testid="detail-snapshot-only" className="text-[13px] text-ink-dim">
+            O detalhe por benchmark, classe e ticker existe só para meses fechados. A era histórica
+            mostra apenas os valores e o retorno calculados.
+          </p>
+        </Panel>
+      ) : detailLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : detailError ? (
         <p className="text-[13.5px] text-tax">{detailError}</p>
@@ -182,6 +223,43 @@ function PerformanceView({
           </p>
         </Panel>
       )}
+    </div>
+  );
+}
+
+// The decomposition table splits at the basis change: the computed history first, then the closed
+// months, with the divider between them. The divider stays visible even when no month was closed
+// yet — the historical era's end is still a boundary the reader must see.
+function DecompositionTable({ months }: { months: PeriodPerformance[] }) {
+  const computed = months.filter((month) => month.source === "computed");
+  const snapshots = months.filter((month) => month.source === "snapshot");
+
+  return (
+    <div data-testid="decomposition-table" className="space-y-2">
+      {computed.length > 0 && (
+        <>
+          <Table columns={DECOMPOSITION_COLUMNS} rows={computed} rowKey={(month) => month.period} />
+          <EraDivider hasSnapshot={snapshots.length > 0} />
+        </>
+      )}
+      {snapshots.length > 0 && (
+        <Table columns={DECOMPOSITION_COLUMNS} rows={snapshots} rowKey={(month) => month.period} />
+      )}
+    </div>
+  );
+}
+
+function EraDivider({ hasSnapshot }: { hasSnapshot: boolean }) {
+  return (
+    <div
+      data-testid="era-divider"
+      className="flex items-center gap-3 py-1 font-mono text-[10px] tracking-[.06em] text-ink-faint uppercase"
+    >
+      <span className="h-px flex-1 bg-line" />
+      <span>histórico · valor investido</span>
+      <span className="h-px w-6 bg-line" />
+      <span>{hasSnapshot ? "fechamentos · base Capital" : "sem fechamentos ainda"}</span>
+      <span className="h-px flex-1 bg-line" />
     </div>
   );
 }
@@ -235,40 +313,60 @@ function MonthDetail({ detail }: { detail: MonthPerformance }) {
 
 function BenchmarkRows({ detail }: { detail: MonthPerformance }) {
   const rows = benchmarkRows(detail.benchmark);
+  const blocking = blockingLegs(detail.benchmark);
   const maxAbs = rows.reduce((max, row) => Math.max(max, Math.abs(row.returnPercentage ?? 0)), 0);
-
-  if (maxAbs === 0) {
-    return <p className="text-[13px] text-ink-dim">Sem benchmark precificado neste mês.</p>;
-  }
 
   return (
     <div className="space-y-2">
-      {rows.map((row) => (
-        <div key={row.key} className="grid grid-cols-[52px_48px_1fr_64px] items-center gap-2">
-          <span
-            className={cn(
-              "font-mono text-[11.5px]",
-              row.key === "blend" ? "text-accent" : "text-ink-dim",
-            )}
-          >
-            {row.label}
-          </span>
-          <span className="font-mono text-[10.5px] text-ink-faint">
-            {formatPercent(row.target, 0)}
-          </span>
-          <div className="h-1.5 rounded-full bg-surface-3">
-            <div
-              className={cn("h-full rounded-full", returnFillClass(row.returnPercentage))}
-              style={{
-                width: `${(Math.abs(row.returnPercentage ?? 0) / maxAbs) * 100}%`,
-              }}
-            />
+      {rows.map((row) => {
+        const absent = row.targeted && row.returnPercentage === undefined;
+        return (
+          <div key={row.key} className="grid grid-cols-[52px_48px_1fr_128px] items-center gap-2">
+            <span
+              className={cn(
+                "font-mono text-[11.5px]",
+                row.key === "blend" ? "text-accent" : "text-ink-dim",
+              )}
+            >
+              {row.label}
+            </span>
+            <span className="font-mono text-[10.5px] text-ink-faint">
+              {formatPercent(row.target, 0)}
+            </span>
+            <div className="h-1.5 rounded-full bg-surface-3">
+              <div
+                className={cn("h-full rounded-full", returnFillClass(row.returnPercentage))}
+                style={{
+                  width:
+                    maxAbs === 0
+                      ? "0%"
+                      : `${(Math.abs(row.returnPercentage ?? 0) / maxAbs) * 100}%`,
+                }}
+              />
+            </div>
+            <span
+              data-testid={`benchmark-row-${row.key}`}
+              className={cn(
+                "text-right font-mono text-[11.5px]",
+                absent ? "text-ink-faint" : "text-ink",
+              )}
+            >
+              {absent ? "sem dados" : formatSignedPercent(row.returnPercentage)}
+            </span>
           </div>
-          <span className="text-right font-mono text-[11.5px]">
-            {formatSignedPercent(row.returnPercentage)}
-          </span>
-        </div>
-      ))}
+        );
+      })}
+      {blocking.length > 0 && (
+        <p data-testid="blocking-legs" className="pt-1 text-[11.5px] text-tax">
+          Sem blend: falta dado para{" "}
+          {blocking
+            .map((leg) =>
+              leg.benchmark === undefined ? leg.label : `${leg.label} (${leg.benchmark})`,
+            )
+            .join(", ")}
+          . Nenhum peso é renormalizado.
+        </p>
+      )}
       <p className="pt-1 text-[11.5px] text-ink-faint">
         O blend é a soma dos retornos de cada índice ponderada pelo alvo da classe. Antes do alvo a
         coluna mostra o peso que a política dá ao índice.
@@ -383,7 +481,22 @@ const DECOMPOSITION_COLUMNS: Column<PeriodPerformance>[] = [
     key: "period",
     header: "Mês",
     render: (month) => (
-      <span className="font-mono text-[12px] text-ink">{monthPeriodLabel(month.period)}</span>
+      <span className="flex items-center gap-2">
+        <span className="font-mono text-[12px] text-ink">{monthPeriodLabel(month.period)}</span>
+        {month.source === "computed" && (
+          <span className="font-mono text-[9px] tracking-[.06em] text-ink-faint uppercase">
+            histórico
+          </span>
+        )}
+        {month.partial && (
+          <span
+            data-testid={`month-partial-${month.period}`}
+            className="font-mono text-[9px] tracking-[.06em] text-tax uppercase"
+          >
+            parcial
+          </span>
+        )}
+      </span>
     ),
   },
   ...decompositionColumns<PeriodPerformance>((month) => month.decomposition, {

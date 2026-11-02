@@ -6,6 +6,7 @@ import type { Allocation, HeldTicker } from "../api/types.ts";
 import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatNumber } from "../lib/format.ts";
 import { pendingProceedsGaps } from "../lib/history.ts";
+import { BenchmarkRefresh } from "./BenchmarkRefresh.tsx";
 import { BulkClassifyModal } from "./BulkClassifyModal.tsx";
 import { CatalogRefreshButton, CatalogRefreshReport } from "./CatalogRefresh.tsx";
 import { Panel } from "./Panel.tsx";
@@ -132,6 +133,8 @@ export function DataQualityPanel({
               </p>
             )}
           </div>
+
+          <BenchmarkRefresh />
 
           {counts.total === 0 && (
             <p className="text-[12.5px] text-yield">Nenhum dado pendente na carteira.</p>

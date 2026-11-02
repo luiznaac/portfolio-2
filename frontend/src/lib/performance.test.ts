@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { BenchmarkBlend, ClassPerformance, PeriodPerformance } from "../api/types.ts";
+import type {
+  BenchmarkBlend,
+  ClassPerformance,
+  PerformanceSeries,
+  PerformanceSource,
+  PeriodPerformance,
+} from "../api/types.ts";
 import {
   aportesPerformanceRows,
+  benchmarkCoverage,
   benchmarkRows,
+  blockingLegs,
   classValueSeries,
+  contiguousSegments,
   cumulativeReturns,
   decompositionResult,
+  eraState,
   plotArea,
   projectX,
   projectY,
@@ -14,15 +24,19 @@ import {
   strategyRows,
   strategyValueSeries,
   valueExtent,
+  valueKpi,
+  xirrKpis,
 } from "./performance.ts";
 
 function point(
   period: string,
   returnPercentage: number | undefined,
   benchmarkReturn: number | undefined = undefined,
+  source: PerformanceSource = "snapshot",
 ): PeriodPerformance {
   return {
     period,
+    source,
     decomposition: {
       value_start: returnPercentage === undefined ? undefined : 100_000,
       value_end: 101_000,
@@ -32,6 +46,10 @@ function point(
     },
     benchmark_return: benchmarkReturn,
   };
+}
+
+function computed(period: string, returnPercentage: number | undefined): PeriodPerformance {
+  return point(period, returnPercentage, undefined, "computed");
 }
 
 describe("decompositionResult", () => {
@@ -209,14 +227,14 @@ describe("cumulativeReturns", () => {
     expect(rows[2].benchmark).toBeCloseTo(103.02);
   });
 
-  it("carries the previous index forward when a month has no benchmark", () => {
+  it("breaks the benchmark line instead of carrying it forward when a month has no return", () => {
     const rows = cumulativeReturns([point("2026-01", undefined), point("2026-02", 1, undefined)]);
 
     expect(rows[1].portfolio).toBeCloseTo(101);
-    expect(rows[1].benchmark).toBe(100);
+    expect(rows[1].benchmark).toBeUndefined();
   });
 
-  it("tracks each policy index on its own cumulative line", () => {
+  it("tracks each policy index on its own cumulative line and breaks a missing point", () => {
     const rows = cumulativeReturns([
       point("2026-01", undefined),
       {
@@ -231,8 +249,8 @@ describe("cumulativeReturns", () => {
 
     expect(rows[1].indexes.CDI).toBeCloseTo(101);
     expect(rows[1].indexes.IPCA).toBeCloseTo(100.5);
-    expect(rows[1].indexes.IBOV).toBe(100);
-    expect(rows[2].indexes.IPCA).toBeCloseTo(100.5);
+    expect(rows[1].indexes.IBOV).toBeUndefined();
+    expect(rows[2].indexes.IPCA).toBeUndefined();
   });
 
   it("anchors every line at 100 on the first snapshot, even when a benchmark priced that month", () => {
@@ -242,6 +260,112 @@ describe("cumulativeReturns", () => {
     expect(rows[0].benchmark).toBe(100);
     expect(rows[0].indexes.CDI).toBe(100);
     expect(rows[1].benchmark).toBeCloseTo(101);
+  });
+
+  it("has no blend point before the first snapshot and lets a raw index line start where priced", () => {
+    const rows = cumulativeReturns([
+      computed("2025-12", undefined),
+      {
+        ...computed("2026-01", 1),
+        benchmarks: [{ index: "IBOV", return_percentage: 2 }],
+      },
+      point("2026-02", 1, 0.9),
+    ]);
+
+    expect(rows[0].benchmark).toBeUndefined();
+    expect(rows[0].indexes.IBOV).toBeUndefined();
+    expect(rows[1].benchmark).toBeUndefined();
+    expect(rows[1].indexes.IBOV).toBeCloseTo(102);
+    // The first snapshot anchors the blend at 100; the index line it already carries is not reset.
+    expect(rows[2].benchmark).toBe(100);
+    expect(rows[2].indexes.IBOV).toBeCloseTo(102);
+  });
+
+  it("groups a defined value's points into contiguous segments for a broken line", () => {
+    expect(contiguousSegments([100, 101, undefined, undefined, 103, 104])).toEqual([
+      [0, 1],
+      [4, 5],
+    ]);
+    expect(contiguousSegments([undefined, 100])).toEqual([[1]]);
+    expect(contiguousSegments([undefined])).toEqual([]);
+  });
+});
+
+describe("benchmarkCoverage", () => {
+  it("counts the months each policy index could not price", () => {
+    const coverage = benchmarkCoverage([
+      { ...computed("2026-01", 1), benchmarks: [{ index: "IBOV", return_percentage: 1 }] },
+      {
+        ...point("2026-02", 1, 0.9),
+        benchmarks: [{ index: "IBOV" }, { index: "CDI", return_percentage: 1 }],
+      },
+      {
+        ...point("2026-03", 1, 0.9),
+        benchmarks: [{ index: "IBOV", return_percentage: 1 }, { index: "CDI" }],
+      },
+    ]);
+
+    expect(coverage.find((row) => row.index === "IBOV")?.missing).toBe(1);
+    expect(coverage.find((row) => row.index === "IPCA")?.missing).toBe(3);
+    expect(coverage.find((row) => row.index === "CDI")?.missing).toBe(2);
+  });
+});
+
+describe("blockingLegs", () => {
+  it("names each targeted leg a missing return makes the blend unknown", () => {
+    const blend: BenchmarkBlend = {
+      contributions: [
+        { label: "ACOES", target: 60, benchmark: "IBOV" },
+        { label: "RENDA_FIXA.FLOATING_RATE", target: 20, benchmark: "CDI", return_percentage: 0.9 },
+        { label: "FIIS", target: 20, benchmark: "IBOV" },
+      ],
+    };
+
+    expect(blockingLegs(blend).map((leg) => leg.label)).toEqual(["ACOES", "FIIS"]);
+  });
+
+  it("has no blocking leg when every targeted leg is priced", () => {
+    expect(
+      blockingLegs({
+        return_percentage: 1.8,
+        contributions: [
+          { label: "ACOES", target: 60, benchmark: "IBOV", return_percentage: 2.5 },
+          { label: "RENDA_FIXA", target: 40, benchmark: "CDI", return_percentage: 0.9 },
+        ],
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("era labels", () => {
+  it("reads the last point's era and switches the value KPI to Valor investido", () => {
+    expect(eraState([computed("2026-01", undefined), point("2026-02", 1)])).toEqual({
+      hasComputed: true,
+      hasSnapshot: true,
+    });
+    expect(valueKpi([computed("2026-01", undefined)]).label).toBe("Valor investido");
+    expect(valueKpi([computed("2026-01", undefined)]).hint).toBe(
+      "histórico · sem caixa registrado",
+    );
+    expect(valueKpi([point("2026-02", 1)]).label).toBe("Patrimônio");
+  });
+
+  it("labels one XIRR per era that exists", () => {
+    const series: PerformanceSeries = {
+      months: [computed("2026-01", undefined), point("2026-02", 1)],
+      xirr: 12,
+      computed_xirr: 8,
+    };
+
+    expect(xirrKpis(series).map((kpi) => kpi.label)).toEqual([
+      "XIRR do histórico",
+      "XIRR dos fechamentos",
+    ]);
+    expect(
+      xirrKpis({ months: [computed("2026-01", undefined)], xirr: undefined }).map(
+        (kpi) => kpi.label,
+      ),
+    ).toEqual(["XIRR do histórico"]);
   });
 });
 
