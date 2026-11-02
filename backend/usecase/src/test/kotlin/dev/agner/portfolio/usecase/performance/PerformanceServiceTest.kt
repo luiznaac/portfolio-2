@@ -1,9 +1,17 @@
 package dev.agner.portfolio.usecase.performance
 
+import dev.agner.portfolio.usecase.buy
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
+import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
+import dev.agner.portfolio.usecase.income.model.Income
+import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
+import dev.agner.portfolio.usecase.listedasset.model.Trade
+import dev.agner.portfolio.usecase.listedasset.model.TradeExecutionRange
+import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
+import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.monthlyclose.model.AttributionSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.ClassTotalSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.CloseState
@@ -18,6 +26,7 @@ import dev.agner.portfolio.usecase.monthlyclose.repository.ISnapshotRepository
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkIndex
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkObservation
 import dev.agner.portfolio.usecase.performance.gateway.IBenchmarkGateway
+import dev.agner.portfolio.usecase.performance.model.PerformanceSource
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
@@ -26,6 +35,7 @@ import dev.agner.portfolio.usecase.portfolio.repository.ITargetRepository
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
+import dev.agner.portfolio.usecase.sell
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
@@ -39,6 +49,9 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 class PerformanceServiceTest : StringSpec({
 
@@ -229,6 +242,109 @@ class PerformanceServiceTest : StringSpec({
         strategies.getValue(2).valueEnd.compareTo(BigDecimal("6600.00")) shouldBe 0
         strategies.getValue(2).flow.compareTo(BigDecimal.ZERO) shouldBe 0
     }
+
+    "computes the pre-planning months from the ledger and appends the closed months" {
+        val series = service(
+            snapshots = listOf(january, february),
+            targets = targets(),
+            quotes = ledgerQuotes,
+            trades = listOf(
+                buy(id = 1, date = "2025-11-10", quantity = "100", unitPrice = "5"),
+                buy(id = 2, date = "2025-12-12", quantity = "100", unitPrice = "6"),
+            ),
+        ).fetchSeries()
+
+        series.months.map { it.period } shouldBe listOf("2025-11", "2025-12", "2026-01", "2026-02")
+            .map { YearMonth.parse(it) }
+        series.months.map { it.source } shouldBe listOf(
+            PerformanceSource.COMPUTED,
+            PerformanceSource.COMPUTED,
+            PerformanceSource.SNAPSHOT,
+            PerformanceSource.SNAPSHOT,
+        )
+
+        val november = series.months[0]
+        november.decomposition.valueStart shouldBe null
+        november.decomposition.valueEnd.compareTo(BigDecimal("500")) shouldBe 0
+        november.decomposition.returnPercentage shouldBe null
+        november.benchmarkReturn shouldBe null
+        november.strategies shouldBe emptyList()
+
+        val december = series.months[1]
+        december.decomposition.valueStart?.compareTo(BigDecimal("500")) shouldBe 0
+        december.decomposition.valueEnd.compareTo(BigDecimal("1200")) shouldBe 0
+        december.decomposition.netAportes.compareTo(BigDecimal("600")) shouldBe 0
+        december.decomposition.returnPercentage?.compareTo(BigDecimal("20.0000")) shouldBe 0
+        december.classes.single().assetClass shouldBe AssetClass.ACOES
+        december.classes.single().valueEnd.compareTo(BigDecimal("1200")) shouldBe 0
+        december.benchmarkReturn shouldBe null
+    }
+
+    "runs the computed era to the last completed month while no month was closed" {
+        val series = service(
+            snapshots = emptyList(),
+            targets = targets(),
+            quotes = petr4Quotes,
+            trades = listOf(
+                buy(id = 1, date = "2026-01-10", quantity = "100", unitPrice = "10"),
+                buy(id = 2, date = "2026-02-10", quantity = "100", unitPrice = "10"),
+            ),
+        ).fetchSeries()
+
+        series.months.map { it.period } shouldBe listOf("2026-01", "2026-02").map { YearMonth.parse(it) }
+        series.months.map { it.source } shouldBe
+            listOf(PerformanceSource.COMPUTED, PerformanceSource.COMPUTED)
+        series.months.first().decomposition.returnPercentage shouldBe null
+        series.xirr shouldBe null
+        series.computedXirr shouldNotBe null
+        series.ledgerEmpty shouldBe false
+    }
+
+    "marks a computed month partial when a held ticker has no close" {
+        val series = service(
+            snapshots = emptyList(),
+            targets = targets(),
+            quotes = petr4Quotes,
+            trades = listOf(
+                buy(id = 1, date = "2026-01-10", ticker = "PETR4", quantity = "100", unitPrice = "10"),
+                buy(id = 2, date = "2026-01-11", ticker = "VALE3", quantity = "50", unitPrice = "8"),
+            ),
+        ).fetchSeries()
+
+        val january = series.months.first()
+        january.partial shouldBe true
+        january.decomposition.valueEnd.compareTo(BigDecimal("1000")) shouldBe 0
+        january.classes.single().valueEnd.compareTo(BigDecimal("1000")) shouldBe 0
+    }
+
+    "reads a sell-only computed month as a negative aporte" {
+        val series = service(
+            snapshots = emptyList(),
+            targets = targets(),
+            quotes = ledgerQuotes,
+            trades = listOf(
+                buy(id = 1, date = "2026-01-10", quantity = "100", unitPrice = "10"),
+                sell(id = 2, date = "2026-02-10", quantity = "100", unitPrice = "12"),
+            ),
+        ).fetchSeries()
+
+        val february = series.months.single { it.period == YearMonth.parse("2026-02") }
+        february.decomposition.netAportes.compareTo(BigDecimal("-1200")) shouldBe 0
+        february.decomposition.valueEnd.compareTo(BigDecimal.ZERO) shouldBe 0
+    }
+
+    "reports an empty ledger instead of an invented computed era" {
+        val series = service(
+            snapshots = emptyList(),
+            targets = targets(),
+            quotes = emptyList(),
+            trades = emptyList(),
+        ).fetchSeries()
+
+        series.months shouldBe emptyList()
+        series.ledgerEmpty shouldBe true
+        series.computedXirr shouldBe null
+    }
 })
 
 private fun service(
@@ -237,6 +353,9 @@ private fun service(
     quotes: List<Quote>,
     catalogEntries: List<CatalogEntry> = listOf(petr4CatalogEntry),
     strategies: List<Strategy> = strategyCatalog,
+    trades: List<Trade> = emptyList(),
+    incomes: List<Income> = emptyList(),
+    clock: Clock = Clock.fixed(Instant.parse("2026-03-01T12:00:00Z"), ZoneOffset.UTC),
 ): PerformanceService {
     val snapshotRepository = mockk<ISnapshotRepository>(relaxed = true)
     coEvery { snapshotRepository.fetchAll() } returns snapshots
@@ -252,6 +371,17 @@ private fun service(
     coEvery { strategyRepository.fetchAll() } returns strategies
     val gateway = mockk<IBenchmarkGateway>(relaxed = true)
     coEvery { gateway.fetchSeries(any(), any(), any()) } answers { observationsFor(firstArg()) }
+    val tradeRepository = mockk<ITradeRepository>(relaxed = true)
+    coEvery { tradeRepository.fetchAll() } returns trades
+    coEvery { tradeRepository.fetchExecutionDateRange() } returns trades
+        .minOfOrNull { it.date }
+        ?.let { first -> TradeExecutionRange(first, trades.maxOf { it.date }) }
+    val incomeRepository = mockk<IIncomeRepository>(relaxed = true)
+    coEvery { incomeRepository.fetchAll() } returns incomes
+    val corporateActionRepository = mockk<ICorporateActionRepository>(relaxed = true)
+    coEvery { corporateActionRepository.fetchApplied() } returns emptyList()
+    val gapRepository = mockk<IGapRepository>(relaxed = true)
+    coEvery { gapRepository.fetchAll() } returns emptyList()
 
     return PerformanceService(
         snapshots = snapshotRepository,
@@ -260,6 +390,11 @@ private fun service(
         targets = targetRepository,
         strategies = strategyRepository,
         benchmarks = gateway,
+        trades = tradeRepository,
+        incomes = incomeRepository,
+        corporateActions = corporateActionRepository,
+        gaps = gapRepository,
+        clock = clock,
     )
 }
 
@@ -508,6 +643,14 @@ private fun snapshot(
 private val petr4Quotes = listOf(
     Quote("PETR4", LocalDate.parse("2026-01-30"), BigDecimal("10"), QuoteSource.COTAHIST),
     Quote("PETR4", LocalDate.parse("2026-02-27"), BigDecimal("10"), QuoteSource.COTAHIST),
+)
+
+// A close at each month end the computed-era specs read.
+private val ledgerQuotes = listOf(
+    Quote("PETR4", LocalDate.parse("2025-11-28"), BigDecimal("5"), QuoteSource.COTAHIST),
+    Quote("PETR4", LocalDate.parse("2025-12-30"), BigDecimal("6"), QuoteSource.COTAHIST),
+    Quote("PETR4", LocalDate.parse("2026-01-30"), BigDecimal("10"), QuoteSource.COTAHIST),
+    Quote("PETR4", LocalDate.parse("2026-02-27"), BigDecimal("12"), QuoteSource.COTAHIST),
 )
 
 private val petr4CatalogEntry = CatalogEntry(

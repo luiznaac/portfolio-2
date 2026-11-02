@@ -5,6 +5,17 @@ import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.logger
+import dev.agner.portfolio.usecase.commons.today
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
+import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
+import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
+import dev.agner.portfolio.usecase.listedasset.PositionCalculator
+import dev.agner.portfolio.usecase.listedasset.model.Gap
+import dev.agner.portfolio.usecase.listedasset.model.GapStatus
+import dev.agner.portfolio.usecase.listedasset.model.Position
+import dev.agner.portfolio.usecase.listedasset.model.Trade
+import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
+import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.monthlyclose.model.CloseState
 import dev.agner.portfolio.usecase.monthlyclose.model.HoldingSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.Snapshot
@@ -20,6 +31,7 @@ import dev.agner.portfolio.usecase.performance.model.ClassPerformance
 import dev.agner.portfolio.usecase.performance.model.MonthPerformance
 import dev.agner.portfolio.usecase.performance.model.PerformanceDecomposition
 import dev.agner.portfolio.usecase.performance.model.PerformanceSeries
+import dev.agner.portfolio.usecase.performance.model.PerformanceSource
 import dev.agner.portfolio.usecase.performance.model.PeriodBenchmark
 import dev.agner.portfolio.usecase.performance.model.PeriodClass
 import dev.agner.portfolio.usecase.performance.model.PeriodPerformance
@@ -28,6 +40,7 @@ import dev.agner.portfolio.usecase.performance.model.StrategyPerformance
 import dev.agner.portfolio.usecase.performance.model.TickerPerformance
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.repository.ITargetRepository
+import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
@@ -37,14 +50,18 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.yearMonth
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.time.Clock
 
-// Composes the performance reads from the immutable snapshots: a closed month's decomposition and
-// its since-inception XIRR, the same math per class and per ticker, and the target-weighted
-// benchmark the stored series price. The snapshots are the stored truth; nothing here re-derives
-// the book from the live ledger.
+// Composes the performance reads from two eras: the pre-planning months the live ledger supports
+// (Positions only — no Month, close or Snapshot is ever written) and the immutable snapshots. The
+// snapshots stay the stored truth for the closed months; nothing here re-derives a closed book from
+// the ledger.
+private typealias BenchmarkObservations = Map<BenchmarkIndex, List<BenchmarkObservation>>
+
 @Service
 class PerformanceService(
     private val snapshots: ISnapshotRepository,
@@ -53,6 +70,11 @@ class PerformanceService(
     private val targets: ITargetRepository,
     private val strategies: IStrategyRepository,
     private val benchmarks: IBenchmarkGateway,
+    private val trades: ITradeRepository,
+    private val incomes: IIncomeRepository,
+    private val corporateActions: ICorporateActionRepository,
+    private val gaps: IGapRepository,
+    private val clock: Clock,
 ) {
 
     private val log = logger()
@@ -78,7 +100,7 @@ class PerformanceService(
             monthId = monthId,
             period = period,
             decomposition = decompose(previous?.state, current.state),
-            xirr = xirr(all.take(index + 1)),
+            xirr = xirr(all.take(index + 1).map { it.periodPoint() }),
             benchmark = blend,
             classes = classPerformances(
                 ClassPerformanceContext(
@@ -103,24 +125,51 @@ class PerformanceService(
         )
     }
 
-    // Every closed month, oldest first. The benchmark series is fetched once for the whole span and
-    // each month is sliced out of it, so the series read does not multiply provider calls by month
-    // count.
+    // One ordered list: the computed pre-planning months first, then the closed months. The
+    // benchmark series is fetched once for the whole span and each month is sliced out of it, so the
+    // series read does not multiply provider calls by month count.
     suspend fun fetchSeries(): PerformanceSeries {
         val all = orderedSnapshots()
-        if (all.isEmpty()) return PerformanceSeries(emptyList(), null)
+        val ledgerRange = trades.fetchExecutionDateRange()
+        val computedPeriods = ComputedPerformanceCalculator.window(
+            earliestLedgerMonth = ledgerRange?.first?.yearMonth,
+            firstSnapshotMonth = all.firstOrNull()?.state?.period,
+            lastCompletedMonth = lastCompletedMonth(),
+        )
+        val observations = benchmarkSpan(computedPeriods, all)
+        val computed = computedPoints(computedPeriods, observations)
 
-        val observations = benchmarkObservations(all.first().state.period, all.last().state.period)
+        return PerformanceSeries(
+            months = computed + snapshotPoints(all, observations),
+            xirr = xirr(all.map { it.periodPoint() }),
+            computedXirr = xirr(computed.map { it.toPeriodPoint() }),
+            ledgerEmpty = ledgerRange == null,
+        )
+    }
 
-        val months = all.mapIndexed { index, snapshot ->
+    private suspend fun benchmarkSpan(
+        computedPeriods: List<YearMonth>,
+        snapshots: List<Snapshot>,
+    ): BenchmarkObservations {
+        val from = computedPeriods.firstOrNull() ?: snapshots.firstOrNull()?.state?.period ?: return emptyMap()
+        val to = snapshots.lastOrNull()?.state?.period ?: computedPeriods.last()
+        return benchmarkObservations(from, to)
+    }
+
+    private suspend fun snapshotPoints(
+        all: List<Snapshot>,
+        observations: BenchmarkObservations,
+    ): List<PeriodPerformance> =
+        all.mapIndexed { index, snapshot ->
             val period = snapshot.state.period
             val previous = all.getOrNull(index - 1)
             val chain = targets.fetchByMonth(snapshot.monthId)
             val returns = returnsFor(observations, period)
             PeriodPerformance(
                 period = period,
+                source = PerformanceSource.SNAPSHOT,
                 decomposition = decompose(previous?.state, snapshot.state),
-                xirr = xirr(all.take(index + 1)),
+                xirr = xirr(all.take(index + 1).map { it.periodPoint() }),
                 benchmarkReturn = BenchmarkBlendCalculator.compute(chain, returns).returnPercentage,
                 benchmarks = returns.map { (benchmark, returnPercentage) ->
                     PeriodBenchmark(benchmark, returnPercentage)
@@ -143,7 +192,91 @@ class PerformanceService(
             )
         }
 
-        return PerformanceSeries(months, xirr(all))
+    // The pre-planning era: every month of the window is a point, priced from the as-of Position
+    // replay at its month end. The first point has no prior value, so it carries no return; every
+    // later point decomposes against the previous computed value.
+    private suspend fun computedPoints(
+        periods: List<YearMonth>,
+        observations: BenchmarkObservations,
+    ): List<PeriodPerformance> {
+        if (periods.isEmpty()) return emptyList()
+
+        val ledger = trades.fetchAll()
+        val incomeRows = incomes.fetchAll()
+        val actions = corporateActions.fetchApplied()
+        val openGaps = gaps.fetchAll().filter { it.status == GapStatus.OPEN }
+        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
+        val quoteSeries = (ledger.map { it.ticker } + actions.map { it.ticker } + openGaps.map { it.ticker })
+            .toSet()
+            .associateWith { quotes.fetchAllBy(it) }
+
+        val raw: List<PeriodPerformance> = periods
+            .runningFold(emptyList<PeriodPerformance>()) { points, period ->
+                val asOf = period.endDate()
+                val positions = positionsAt(ledger, actions, openGaps, asOf)
+                val closes = positions.mapNotNull { position ->
+                    lastClose(quoteSeries[position.ticker].orEmpty(), asOf)?.let { position.ticker to it }
+                }.toMap()
+                val monthValue = ComputedPerformanceCalculator.valueAt(positions, closes, assetClasses)
+                val netAportes = ComputedPerformanceCalculator.netAportes(ledger, incomeRows, period)
+                val benchmarks = returnsFor(observations, period).map { (benchmark, returnPercentage) ->
+                    PeriodBenchmark(benchmark, returnPercentage)
+                }
+                points + PeriodPerformance(
+                    period = period,
+                    source = PerformanceSource.COMPUTED,
+                    decomposition = PerformanceCalculator.decompose(
+                        valueStart = points.lastOrNull()?.decomposition?.valueEnd,
+                        valueEnd = monthValue.value,
+                        netAportes = netAportes,
+                        netIncome = ComputedPerformanceCalculator.netIncome(incomeRows, period),
+                    ),
+                    xirr = null,
+                    // No benchmark blend exists before the first close: the Target chain it would
+                    // weight is a planning object the history never had.
+                    benchmarkReturn = null,
+                    benchmarks = benchmarks,
+                    classes = monthValue.classes,
+                    partial = monthValue.partial,
+                )
+            }
+            .drop(1)
+            .map { it.last() }
+
+        return raw.mapIndexed { index, point ->
+            point.copy(xirr = xirr(raw.take(index + 1).map { it.toPeriodPoint() }))
+        }
+    }
+
+    // The as-of replay of every ticker's ledger up to a date: trades, the applied corporate actions
+    // and the open GAPs, exactly the input the stored Position is replayed from.
+    private fun positionsAt(
+        ledger: List<Trade>,
+        actions: List<CorporateAction>,
+        openGaps: List<Gap>,
+        asOf: LocalDate,
+    ): List<Position> {
+        val tradesByTicker = ledger.filter { it.date <= asOf }.groupBy { it.ticker }
+        val actionsByTicker = actions.filter { it.exDate <= asOf }.groupBy { it.ticker }
+        val gapsByTicker = openGaps.filter { it.date <= asOf }.groupBy { it.ticker }
+        val tickers = tradesByTicker.keys + actionsByTicker.keys + gapsByTicker.keys
+
+        return tickers.map { ticker ->
+            PositionCalculator.replay(
+                ticker = ticker,
+                trades = tradesByTicker[ticker].orEmpty(),
+                corporateActions = actionsByTicker[ticker].orEmpty(),
+                gaps = gapsByTicker[ticker].orEmpty(),
+            )
+        }
+    }
+
+    private fun lastClose(quotes: List<Quote>, asOf: LocalDate): BigDecimal? =
+        quotes.filter { it.date <= asOf }.maxByOrNull { it.date }?.close
+
+    private fun lastCompletedMonth(): YearMonth {
+        val today = LocalDate.today(clock)
+        return LocalDate(today.year, today.month, 1).minus(1, DateTimeUnit.MONTH).yearMonth
     }
 
     private suspend fun orderedSnapshots() = snapshots.fetchAll().sortedBy { it.state.period }
@@ -156,22 +289,22 @@ class PerformanceService(
             netIncome = current.income.net,
         )
 
-    // XIRR since inception over the dated snapshot values: the first snapshot is the opening value
-    // (an outflow), each later month's net Aportes is an outflow dated month-end, and the last
-    // snapshot is the current value (an inflow). The first month's own Aportes are already inside
-    // its opening value, so they are not counted twice.
-    private fun xirr(snapshots: List<Snapshot>): BigDecimal? {
-        if (snapshots.size < 2) return null
+    // XIRR over the dated era values: the first point is the opening value (an outflow), each later
+    // month's net Aportes is an outflow dated month-end, and the last point is the current value (an
+    // inflow). The first month's own Aportes are already inside its opening value, so they are not
+    // counted twice. Each era is measured on its own, never across the basis change.
+    private fun xirr(points: List<PeriodPoint>): BigDecimal? {
+        if (points.size < 2) return null
 
         val flows = mutableListOf(
-            XirrFlow(snapshots.first().state.period.endDate(), snapshots.first().state.capital.negate()),
+            XirrFlow(points.first().date, points.first().value.negate()),
         )
-        for (snapshot in snapshots.drop(1)) {
-            if (snapshot.state.aportes.signum() != 0) {
-                flows += XirrFlow(snapshot.state.period.endDate(), snapshot.state.aportes.negate())
+        for (point in points.drop(1)) {
+            if (point.aportes.signum() != 0) {
+                flows += XirrFlow(point.date, point.aportes.negate())
             }
         }
-        flows += XirrFlow(snapshots.last().state.period.endDate(), snapshots.last().state.capital)
+        flows += XirrFlow(points.last().date, points.last().value)
 
         return XirrCalculator.calculate(flows)
     }
@@ -368,10 +501,7 @@ class PerformanceService(
         }
 
     private suspend fun valueAt(holding: HoldingSnapshot, date: LocalDate): BigDecimal {
-        val close = quotes.fetchAllBy(holding.ticker)
-            .lastOrNull { it.date <= date }
-            ?.close
-            ?: holding.averagePrice
+        val close = lastClose(quotes.fetchAllBy(holding.ticker), date) ?: holding.averagePrice
         return (holding.quantity * close).defaultScale()
     }
 
@@ -380,7 +510,7 @@ class PerformanceService(
     private suspend fun benchmarkObservations(
         from: YearMonth,
         to: YearMonth,
-    ): Map<BenchmarkIndex, List<BenchmarkObservation>> {
+    ): BenchmarkObservations {
         val start = from.firstDay().minus(LOOKBACK_DAYS, DateTimeUnit.DAY)
         val end = to.endDate()
         return BenchmarkIndex.entries.associateWith { index ->
@@ -392,7 +522,7 @@ class PerformanceService(
 
     // Each policy index's own return for the period, sliced out of the one span-wide series fetch.
     private fun returnsFor(
-        observations: Map<BenchmarkIndex, List<BenchmarkObservation>>,
+        observations: BenchmarkObservations,
         period: YearMonth,
     ): Map<BenchmarkIndex, BigDecimal?> {
         val from = period.firstDay()
@@ -404,13 +534,31 @@ class PerformanceService(
 
     private fun YearMonth.firstDay(): LocalDate = LocalDate(year, month, 1)
 
-    private fun YearMonth.endDate(): LocalDate =
-        firstDay().plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+    private fun YearMonth.endDate(): LocalDate = endOfMonth()
+
+    private fun Snapshot.periodPoint() = PeriodPoint(
+        date = state.period.endDate(),
+        value = state.capital,
+        aportes = state.aportes,
+    )
 
     private companion object {
         const val LOOKBACK_DAYS = 10
     }
 }
+
+private fun YearMonth.endOfMonth(): LocalDate =
+    LocalDate(year, month, 1).plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+
+private fun PeriodPerformance.toPeriodPoint() =
+    PeriodPoint(period.endOfMonth(), decomposition.valueEnd, decomposition.netAportes)
+
+// One era's dated point for the XIRR walk.
+private data class PeriodPoint(
+    val date: LocalDate,
+    val value: BigDecimal,
+    val aportes: BigDecimal,
+)
 
 private data class ClassPerformanceContext(
     val previous: CloseState?,

@@ -1161,18 +1161,25 @@ export interface MonthPerformance {
   tickers: TickerPerformance[];
 }
 
+// Which era a series point belongs to: the pre-planning months computed from the live ledger
+// (`computed`), or the months replayed from their immutable Snapshot (`snapshot`).
+export type PerformanceSource = "computed" | "snapshot";
+
 export interface PeriodPerformance {
   period: string;
+  source: PerformanceSource;
   decomposition: PerformanceDecomposition;
   xirr?: number;
   benchmark_return?: number;
   // Each policy index's own return for the period, so the history can overlay CDI/IPCA/IBOV beside
-  // the blended benchmark. Null returns are omitted by the backend.
+  // the blended benchmark. Absent returns are omitted by the backend.
   benchmarks?: PeriodBenchmark[];
   // Each class's frozen value at the close, plus the previous close when the series has one.
   classes?: PeriodClass[];
-  // Each Strategy's frozen slice at the close, the bucket included.
+  // Each Strategy's frozen slice at the close, the bucket included. Computed months carry none.
   strategies?: PeriodStrategy[];
+  // A computed month excludes at least one held ticker with no close.
+  partial?: boolean;
 }
 
 // One policy index's return in a period; absent when the SGS series could not price it.
@@ -1197,7 +1204,23 @@ export interface PeriodStrategy {
 
 export interface PerformanceSeries {
   months: PeriodPerformance[];
+  // The Snapshot era's annualized return; absent before the first close.
   xirr?: number;
+  // The computed pre-planning era's annualized return, never blended with `xirr`.
+  computed_xirr?: number;
+  // True only when the trade ledger itself has no row.
+  ledger_empty?: boolean;
+}
+
+// The stored benchmark series' freshness (GET /benchmarks) and the data panel's manual re-check
+// (POST /benchmarks/refresh). `last_fetched_at` is absent when the index was never fetched.
+export interface BenchmarkStatusReport {
+  indexes: BenchmarkStatus[];
+}
+
+export interface BenchmarkStatus {
+  index: BenchmarkIndex;
+  last_fetched_at?: string;
 }
 
 // History backfill (POST /history/backfill) and its GAP records (GET /gaps). A GAP is an unexplained

@@ -417,6 +417,62 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
 
+- **Computed performance era seed (#308)**: run this seed alone, immediately before the
+  computed-era intents; it resets the ledger and leaves **no Snapshot and no Month**, so the
+  performance series is the pre-planning computed era only. Dates are relative to `CURDATE()` so the
+  window always ends at the last completed month. Five monthly points: buys in the first two months,
+  an unpriced held ticker from the third, and a sell-only month before the last (negative aporte).
+  `PETR4` is priced at every month end, `DELIST3` only in its first month (so it keeps that last
+  close), and `ZZZZ9` never (so every month from its buy is `parcial`). One dividend lands in the
+  second month. IBOV has closes for the first three month-ends only: the last two computed months
+  have no priced IBOV, so the line breaks and the coverage strip names them; CDI/IPCA stay absent.
+  The data panel's IBOV row shows the seeded `fetched_at`; the other indexes read "sem busca".
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+  DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+  DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+  DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+  DELETE FROM benchmark_close;
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  SET @m5 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01');
+  SET @m4 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 4 MONTH), '%Y-%m-01');
+  SET @m3 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01');
+  SET @m2 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-01');
+  SET @m1 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01');
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('PETR4', 'PETROBRAS', '02', NULL, 'STOCK', 'ACOES', @m5, @m1, NOW()),
+    ('DELIST3', 'DELISTED', '02', NULL, 'STOCK', 'ACOES', @m5, @m5, NOW());
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('PETR4', @m5, 'VISTA', 100, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('DELIST3', @m5, 'VISTA', 10, 5, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('PETR4', @m4, 'VISTA', 100, 12, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('ZZZZ9', @m3, 'VISTA', 5, 4, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('PETR4', @m2, 'VISTA', -50, 15, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());
+  INSERT INTO quote (ticker, date, close, source, created_at) VALUES
+    ('PETR4', LAST_DAY(@m5), 10, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m4), 12, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m3), 13, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m2), 15, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m1), 16, 'COTAHIST', NOW()),
+    ('DELIST3', LAST_DAY(@m5), 5, 'COTAHIST', NOW());
+  INSERT INTO cash_movement (ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES
+    ('PETR4', LAST_DAY(@m4), 50, 0, 50, 'INCOME', 'B3', 'RECEIVED', 'DIVIDEND', NOW());
+  INSERT INTO benchmark_close (`index`, `date`, level, source, fetched_at) VALUES
+    ('IBOV', LAST_DAY(@m5), 100000, 'SGS', NOW()),
+    ('IBOV', LAST_DAY(@m4), 102000, 'SGS', NOW()),
+    ('IBOV', LAST_DAY(@m3), 104000, 'SGS', NOW());
+  SQL
+  ```
+
+  The series read is then `GET /performance/series`: five computed points (the first with a null
+  return and null `value_start`, the sell-only month with a negative `net_aportes`), no snapshot
+  point, `computed_xirr` present and `xirr` absent. The Performance screen shows "Valor investido",
+  the era divider, `parcial` on the months that hold `ZZZZ9`, and the IBOV coverage strip; the
+  "Detalhe do mês" panel explains it is Snapshot-only.
+
 - **Benchmark store backfill (one-off)**: the benchmark series lives in the `benchmark_close`
   table, so a fresh database has no history and every blend reads absent. After the app is healthy,
   seed it once (there is no scheduler; freshness is lazy gap-fill plus this call):

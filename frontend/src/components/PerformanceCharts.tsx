@@ -4,9 +4,10 @@ import { formatCurrency, formatNumber, formatPercent, formatSignedPercent } from
 import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
 import {
   BENCHMARK_INDEXES,
-  type CumulativePoint,
   aportesPerformanceRows,
+  benchmarkCoverage,
   classValueSeries,
+  contiguousSegments,
   cumulativeReturns,
   decompositionResult,
   plotArea,
@@ -143,13 +144,13 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
   const height = 200;
   const pad = { top: 14, right: 14, bottom: 32, left: 44 };
   const area = plotArea(width, height, pad);
-  const values = points.flatMap((point) => [
-    point.portfolio,
-    point.benchmark,
-    point.indexes.CDI,
-    point.indexes.IPCA,
-    point.indexes.IBOV,
-  ]);
+  const values = points
+    .flatMap((point) => [
+      point.portfolio,
+      point.benchmark,
+      ...BENCHMARK_INDEXES.map((index) => point.indexes[index]),
+    ])
+    .filter((value): value is number => value !== undefined);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const padding = (max - min) * 0.12 || 1;
@@ -157,9 +158,15 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
   const high = max + padding;
   const x = (index: number) => projectX(index, points.length, area);
   const y = (value: number) => projectY(value, low, high, area);
-  const line = (selector: (point: CumulativePoint) => number) =>
-    points.map((point, index) => `${x(index)},${y(selector(point))}`).join(" ");
+  // A gap splits the line into one polyline per contiguous run, so an absent month is a break and
+  // never a flat segment reading 0,00%.
+  const lines = (lineValues: (number | undefined)[]) =>
+    contiguousSegments(lineValues).map((segment) => ({
+      start: points[segment[0]]?.period ?? "",
+      points: segment.map((index) => `${x(index)},${y(lineValues[index] ?? low)}`).join(" "),
+    }));
   const lastPoint = points.at(-1);
+  const coverage = benchmarkCoverage(months);
 
   return (
     <div data-testid="cumulative-chart">
@@ -186,27 +193,35 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
           </g>
         ))}
 
-        {BENCHMARK_LINES.map((benchmark) => (
+        {BENCHMARK_LINES.map((benchmark) =>
+          lines(points.map((point) => point.indexes[benchmark.index])).map((segment) => (
+            <polyline
+              key={`${benchmark.key}-${segment.start}`}
+              points={segment.points}
+              fill="none"
+              className={benchmark.stroke}
+              strokeWidth={1.2}
+            />
+          )),
+        )}
+        {lines(points.map((point) => point.benchmark)).map((segment) => (
           <polyline
-            key={benchmark.key}
-            points={line((point) => point.indexes[benchmark.index])}
+            key={`blend-${segment.start}`}
+            points={segment.points}
             fill="none"
-            className={benchmark.stroke}
-            strokeWidth={1.2}
+            className="stroke-blend"
+            strokeWidth={1.5}
           />
         ))}
-        <polyline
-          points={line((point) => point.benchmark)}
-          fill="none"
-          className="stroke-blend"
-          strokeWidth={1.5}
-        />
-        <polyline
-          points={line((point) => point.portfolio)}
-          fill="none"
-          className="stroke-ink"
-          strokeWidth={1.9}
-        />
+        {lines(points.map((point) => point.portfolio)).map((segment) => (
+          <polyline
+            key={`portfolio-${segment.start}`}
+            points={segment.points}
+            fill="none"
+            className="stroke-ink"
+            strokeWidth={1.9}
+          />
+        ))}
 
         {lastPoint && (
           <>
@@ -242,6 +257,18 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
           })),
         ]}
       />
+      {coverage.length > 0 && (
+        <div
+          data-testid="benchmark-coverage"
+          className="mt-2 flex flex-wrap gap-3 font-mono text-[10.5px] text-ink-faint"
+        >
+          {coverage.map((row) => (
+            <span key={row.index} data-testid={`benchmark-coverage-${row.index}`}>
+              {row.index} · {row.missing} {row.missing === 1 ? "mês sem dado" : "meses sem dado"}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

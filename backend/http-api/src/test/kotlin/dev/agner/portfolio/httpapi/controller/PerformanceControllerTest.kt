@@ -10,6 +10,7 @@ import dev.agner.portfolio.usecase.performance.model.ClassPerformance
 import dev.agner.portfolio.usecase.performance.model.MonthPerformance
 import dev.agner.portfolio.usecase.performance.model.PerformanceDecomposition
 import dev.agner.portfolio.usecase.performance.model.PerformanceSeries
+import dev.agner.portfolio.usecase.performance.model.PerformanceSource
 import dev.agner.portfolio.usecase.performance.model.PeriodBenchmark
 import dev.agner.portfolio.usecase.performance.model.PeriodClass
 import dev.agner.portfolio.usecase.performance.model.PeriodPerformance
@@ -78,6 +79,7 @@ class PerformanceControllerTest : DescribeSpec({
                 val body = ObjectMapper().readTree(response.bodyAsText())
                 body.get("months").size() shouldBe 1
                 body.get("months").get(0).get("period").asText() shouldBe "2026-10"
+                body.get("months").get(0).get("source").asText() shouldBe "snapshot"
                 body.get("months").get(0).get("benchmarks").get(0).get("index").asText() shouldBe "CDI"
                 body.get("months").get(0).get("benchmarks").get(0).get("return_percentage")
                     .decimalValue().compareTo(BigDecimal("0.9000")) shouldBe 0
@@ -139,6 +141,7 @@ private fun series() = PerformanceSeries(
     months = listOf(
         PeriodPerformance(
             period = YearMonth.parse("2026-10"),
+            source = PerformanceSource.SNAPSHOT,
             decomposition = PerformanceDecomposition(
                 valueStart = BigDecimal("100000"),
                 valueEnd = BigDecimal("101000"),

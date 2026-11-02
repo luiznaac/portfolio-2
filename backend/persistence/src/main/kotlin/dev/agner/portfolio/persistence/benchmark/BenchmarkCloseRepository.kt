@@ -49,4 +49,14 @@ class BenchmarkCloseRepository(
             .orderBy(BenchmarkCloseTable.date to SortOrder.ASC)
             .map { it.toModel() }
     }
+
+    override suspend fun fetchEarliest(index: BenchmarkIndex): LocalDate? = transaction {
+        BenchmarkCloseEntity.find { BenchmarkCloseTable.indexName eq index }
+            .minOfOrNull { it.date }
+    }
+
+    override suspend fun fetchLastFetchedAt(index: BenchmarkIndex): LocalDateTime? = transaction {
+        BenchmarkCloseEntity.find { BenchmarkCloseTable.indexName eq index }
+            .maxOfOrNull { it.fetchedAt }
+    }
 }

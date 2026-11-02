@@ -7,7 +7,9 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import java.math.BigDecimal
 import java.time.Clock
 import java.time.Instant
@@ -257,6 +259,61 @@ class BenchmarkSeriesStoreTest : StringSpec({
             entry.points shouldBe 1
         }
     }
+
+    "reports the last successful fetch per index" {
+        val repository = FakeCloseRepository(
+            ibovSeries("2026-01-02", "2026-01-07"),
+            fetchedAt = mapOf(BenchmarkIndex.IBOV to LocalDateTime.parse("2026-03-01T10:30:00")),
+        )
+
+        val status = store(repository, FakeSource()).status()
+
+        status.indexes.map { it.index } shouldBe BenchmarkIndex.entries.toList()
+        status.indexes.first { it.index == BenchmarkIndex.IBOV }.lastFetchedAt shouldBe
+            LocalDateTime.parse("2026-03-01T10:30:00")
+        status.indexes.first { it.index == BenchmarkIndex.CDI }.lastFetchedAt shouldBe null
+    }
+
+    "forces a provider re-check even when the stored range is complete" {
+        val repository = FakeCloseRepository(
+            ibovSeries(
+                "2026-01-02",
+                "2026-01-07",
+                "2026-01-12",
+                "2026-01-17",
+                "2026-01-22",
+                "2026-01-27",
+                "2026-02-02",
+                "2026-02-07",
+                "2026-02-12",
+                "2026-02-17",
+                "2026-02-22",
+                "2026-02-27",
+            ),
+        )
+        val source = FakeSource(
+            points = listOf(BenchmarkObservation(LocalDate.parse("2026-02-27"), BigDecimal("111"))),
+        )
+
+        store(repository, source).refresh()
+
+        source.calls.isNotEmpty() shouldBe true
+        repository.all().first { it.date == LocalDate.parse("2026-02-27") }.level
+            .compareTo(BigDecimal("111")) shouldBe 0
+    }
+
+    "refreshes each index over its stored span and reports the new fetch" {
+        val repository = FakeCloseRepository(ibovSeries("2026-01-02", "2026-01-07", "2026-01-12"))
+        val source = FakeSource(
+            indexes = BenchmarkIndex.entries.toSet(),
+            points = listOf(BenchmarkObservation(LocalDate.parse("2026-02-27"), BigDecimal("1"))),
+        )
+
+        val status = store(repository, source).refresh()
+
+        source.calls.isNotEmpty() shouldBe true
+        status.indexes.first { it.index == BenchmarkIndex.IBOV }.lastFetchedAt shouldNotBe null
+    }
 })
 
 private val januaryStart = LocalDate.parse("2026-01-01")
@@ -295,9 +352,13 @@ private fun ibovSeries(vararg dates: String) = dates.mapIndexed { index, date ->
 
 private fun range(from: String, to: String) = LocalDate.parse(from)..LocalDate.parse(to)
 
-private class FakeCloseRepository(initial: List<BenchmarkClose>) : IBenchmarkCloseRepository {
+private class FakeCloseRepository(
+    initial: List<BenchmarkClose>,
+    fetchedAt: Map<BenchmarkIndex, LocalDateTime> = emptyMap(),
+) : IBenchmarkCloseRepository {
 
     private val rows = initial.toMutableList()
+    private val fetched = fetchedAt.toMutableMap()
 
     override suspend fun fetch(index: BenchmarkIndex, from: LocalDate, to: LocalDate) = rows
         .filter { it.index == index && it.date >= from && it.date <= to }
@@ -306,7 +367,15 @@ private class FakeCloseRepository(initial: List<BenchmarkClose>) : IBenchmarkClo
     override suspend fun upsertAll(closes: List<BenchmarkClose>) {
         rows.removeAll { row -> closes.any { it.index == row.index && it.date == row.date } }
         rows += closes
+        closes.groupBy { it.index }.keys.forEach { index ->
+            fetched[index] = LocalDateTime.parse("2026-03-01T12:00:00")
+        }
     }
+
+    override suspend fun fetchEarliest(index: BenchmarkIndex): LocalDate? =
+        rows.filter { it.index == index }.minOfOrNull { it.date }
+
+    override suspend fun fetchLastFetchedAt(index: BenchmarkIndex): LocalDateTime? = fetched[index]
 
     fun all() = rows.toList()
 }

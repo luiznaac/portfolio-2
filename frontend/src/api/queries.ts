@@ -10,6 +10,7 @@ import type {
   AssetClass,
   AttributionSliceCreation,
   AttributionTransferCreation,
+  BenchmarkStatusReport,
   Bond,
   CheckingAccount,
   CheckingAccountCreation,
@@ -362,6 +363,26 @@ export function usePerformanceSeries() {
   return useQuery({
     queryKey: ["performance", "series"],
     queryFn: api.getPerformanceSeries,
+  });
+}
+
+// The stored benchmark series' freshness, read by the "Dados da carteira" panel. The manual re-check
+// returns the new freshness in the same round trip and invalidates the performance reads it feeds.
+export function useBenchmarkStatus() {
+  return useQuery({
+    queryKey: ["benchmarks", "status"],
+    queryFn: api.getBenchmarkStatus,
+  });
+}
+
+export function useRefreshBenchmarks() {
+  const queryClient = useQueryClient();
+  return useMutation<BenchmarkStatusReport, Error, void>({
+    mutationFn: api.refreshBenchmarks,
+    onSuccess: (report) => {
+      queryClient.setQueryData(["benchmarks", "status"], report);
+      queryClient.invalidateQueries({ queryKey: ["performance"] });
+    },
   });
 }
 

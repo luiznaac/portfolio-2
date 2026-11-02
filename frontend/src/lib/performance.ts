@@ -5,9 +5,11 @@
 import type {
   AssetClass,
   BenchmarkBlend,
+  BenchmarkContribution,
   BenchmarkIndex,
   ClassPerformance,
   PerformanceDecomposition,
+  PerformanceSeries,
   PeriodPerformance,
   StrategyKind,
 } from "../api/types.ts";
@@ -74,39 +76,159 @@ export function projectX(index: number, count: number, area: PlotArea): number {
 export interface CumulativePoint {
   period: string;
   portfolio: number;
-  benchmark: number;
-  indexes: Record<BenchmarkIndex, number>;
+  // The blend has no point before the first Snapshot, and a month with no priced return breaks the
+  // line instead of reading as flat 0,00%.
+  benchmark?: number;
+  // Each policy index's cumulative line; a missing point is a gap, never a carried-forward value.
+  indexes: Partial<Record<BenchmarkIndex, number>>;
 }
 
 // Both the portfolio and the blend start at 100 and compound each month's percentage return, and
 // each policy index carries its own line from the same base. The first snapshot is the anchor: it
 // has no portfolio return, so it does not compound any line — otherwise a benchmark priced for that
-// month would start ahead of the portfolio. A month without a benchmark carries the previous index
-// forward.
+// month would start ahead of the portfolio. A month without a priced return leaves a gap on the
+// line (the running value is kept for the next priced month), so a data hole never reads as 0,00%.
 export function cumulativeReturns(months: PeriodPerformance[]): CumulativePoint[] {
   let portfolio = 100;
-  let benchmark = 100;
-  const indexes = Object.fromEntries(BENCHMARK_INDEXES.map((index) => [index, 100])) as Record<
-    BenchmarkIndex,
-    number
-  >;
+  let benchmarkRunning: number | undefined;
+  const indexRunning: Partial<Record<BenchmarkIndex, number>> = {};
+  const firstSnapshotIndex = months.findIndex((month) => month.source === "snapshot");
 
   return months.map((month, index) => {
-    if (index > 0) {
-      if (month.decomposition.return_percentage !== undefined) {
-        portfolio *= 1 + month.decomposition.return_percentage / 100;
+    if (index > 0 && month.decomposition.return_percentage !== undefined) {
+      portfolio *= 1 + month.decomposition.return_percentage / 100;
+    }
+
+    let benchmarkPoint: number | undefined;
+    const indexPoints: Partial<Record<BenchmarkIndex, number>> = {};
+
+    if (index === firstSnapshotIndex) {
+      benchmarkRunning ??= 100;
+      benchmarkPoint = benchmarkRunning;
+      for (const benchmarkIndex of BENCHMARK_INDEXES) {
+        indexRunning[benchmarkIndex] ??= 100;
+        indexPoints[benchmarkIndex] = indexRunning[benchmarkIndex];
       }
+    } else if (index > 0) {
       if (month.benchmark_return !== undefined) {
-        benchmark *= 1 + month.benchmark_return / 100;
+        benchmarkRunning = (benchmarkRunning ?? 100) * (1 + month.benchmark_return / 100);
+        benchmarkPoint = benchmarkRunning;
       }
+
+      const seen = new Set<BenchmarkIndex>();
       for (const row of month.benchmarks ?? []) {
-        if (row.return_percentage !== undefined) {
-          indexes[row.index] *= 1 + row.return_percentage / 100;
+        seen.add(row.index);
+        if (row.return_percentage === undefined) {
+          indexPoints[row.index] = undefined;
+        } else {
+          indexRunning[row.index] =
+            (indexRunning[row.index] ?? 100) * (1 + row.return_percentage / 100);
+          indexPoints[row.index] = indexRunning[row.index];
         }
       }
+      for (const benchmarkIndex of BENCHMARK_INDEXES) {
+        if (!seen.has(benchmarkIndex)) indexPoints[benchmarkIndex] = undefined;
+      }
     }
-    return { period: month.period, portfolio, benchmark, indexes: { ...indexes } };
+
+    return { period: month.period, portfolio, benchmark: benchmarkPoint, indexes: indexPoints };
   });
+}
+
+// The contiguous runs of defined points a chart draws as one polyline, so a gap splits the line
+// instead of joining two points across a month with no data.
+export function contiguousSegments(values: (number | undefined)[]): number[][] {
+  const segments: number[][] = [];
+  let current: number[] = [];
+
+  values.forEach((value, index) => {
+    if (value === undefined) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      return;
+    }
+    current.push(index);
+  });
+  if (current.length > 0) segments.push(current);
+
+  return segments;
+}
+
+// The eras a series actually holds. A page labels the value and the XIRR from these, never from a
+// guessed default.
+export interface EraState {
+  hasComputed: boolean;
+  hasSnapshot: boolean;
+}
+
+export function eraState(months: PeriodPerformance[]): EraState {
+  return {
+    hasComputed: months.some((month) => month.source === "computed"),
+    hasSnapshot: months.some((month) => month.source === "snapshot"),
+  };
+}
+
+// The value KPI reads "Valor investido" while the last point is the computed history, because the
+// computed era is Positions only and has no recorded cash basis.
+export function valueKpi(months: PeriodPerformance[]): { label: string; hint?: string } {
+  const last = months.at(-1);
+  if (last?.source === "computed") {
+    return { label: "Valor investido", hint: "histórico · sem caixa registrado" };
+  }
+  return { label: "Patrimônio" };
+}
+
+export interface XirrKpi {
+  testId: string;
+  label: string;
+  value?: number;
+}
+
+// One XIRR per era that exists: the computed history and the Snapshot era are never blended.
+export function xirrKpis(series: PerformanceSeries): XirrKpi[] {
+  const eras = eraState(series.months);
+  const kpis: XirrKpi[] = [];
+  if (eras.hasComputed) {
+    kpis.push({
+      testId: "computed-xirr",
+      label: "XIRR do histórico",
+      value: series.computed_xirr,
+    });
+  }
+  if (eras.hasSnapshot) {
+    kpis.push({
+      testId: "xirr",
+      label: eras.hasComputed ? "XIRR dos fechamentos" : "XIRR desde o início",
+      value: series.xirr,
+    });
+  }
+  return kpis;
+}
+
+export interface BenchmarkCoverageRow {
+  index: BenchmarkIndex;
+  missing: number;
+}
+
+// How many months of the series each policy index could not price — the coverage strip's count.
+export function benchmarkCoverage(months: PeriodPerformance[]): BenchmarkCoverageRow[] {
+  return BENCHMARK_INDEXES.map((index) => ({
+    index,
+    missing: months.filter((month) => {
+      const row = (month.benchmarks ?? []).find((entry) => entry.index === index);
+      return row?.return_percentage === undefined;
+    }).length,
+  })).filter((row) => row.missing > 0);
+}
+
+// The targeted legs whose missing return leaves the blend unknown, so the panel can name what blocks
+// it rather than showing a renormalised number.
+export function blockingLegs(blend: BenchmarkBlend): BenchmarkContribution[] {
+  return blend.contributions.filter(
+    (contribution) => contribution.target > 0 && contribution.return_percentage === undefined,
+  );
 }
 
 export interface ClassSeriesPoint {
@@ -218,6 +340,9 @@ export interface BenchmarkRow {
   index?: BenchmarkIndex;
   target?: number;
   returnPercentage?: number;
+  // Whether the policy gives the index a positive weight; only a targeted index reads "sem dados"
+  // when its return is absent.
+  targeted: boolean;
 }
 
 // The policy indexes the benchmark overlay plots, in their display order. One list feeds the blend
@@ -230,12 +355,15 @@ export const BENCHMARK_INDEXES: BenchmarkIndex[] = ["CDI", "IPCA", "IBOV"];
 export function benchmarkRows(blend: BenchmarkBlend): BenchmarkRow[] {
   const indexRows = BENCHMARK_INDEXES.map((index) => {
     const contributions = blend.contributions.filter((row) => row.benchmark === index);
-    if (contributions.length === 0) return { key: index, label: index, index };
+    if (contributions.length === 0) {
+      return { key: index, label: index, index, targeted: false };
+    }
 
     return {
       key: index,
       label: index,
       index,
+      targeted: contributions.some((row) => row.target > 0),
       target: contributions.reduce((total, row) => total + row.target, 0),
       returnPercentage: contributions.find((row) => row.return_percentage !== undefined)
         ?.return_percentage,
@@ -244,7 +372,12 @@ export function benchmarkRows(blend: BenchmarkBlend): BenchmarkRow[] {
 
   return [
     ...indexRows,
-    { key: "blend", label: "Blend alvo", returnPercentage: blend.return_percentage },
+    {
+      key: "blend",
+      label: "Blend alvo",
+      returnPercentage: blend.return_percentage,
+      targeted: true,
+    },
   ];
 }
 
