@@ -220,6 +220,64 @@ describe("the Alocação tree", () => {
     expect(await screen.findByText(/1 posição atribuída ao legado/)).toBeDefined();
   });
 
+  it("renders an unpriced add as — and keeps it out of the preview total", async () => {
+    mock.allocation = allocation;
+    mock.preview = unpricedPreview;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+
+    const unpriced = within(dialog).getByText("VALE3").closest("tr");
+    if (!unpriced) throw new Error("no row for VALE3");
+    expect(within(unpriced).getByText("—")).toBeDefined();
+    expect(within(unpriced).queryByText(/R\$ 0,00/)).toBeNull();
+    expect(within(dialog).getByText(/2 posições · R\$ 500,00 · 1 sem cotação/)).toBeDefined();
+  });
+
+  it("shows — instead of R$ 0,00 when every add is unpriced", async () => {
+    mock.allocation = allocation;
+    mock.preview = allUnpricedPreview;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+
+    expect(within(dialog).getByText(/1 posição · — · 1 sem cotação/)).toBeDefined();
+    expect(within(dialog).queryByText(/R\$ 0,00/)).toBeNull();
+  });
+
+  it("keeps the unknown value in the apply result", async () => {
+    mock.allocation = allocation;
+    mock.preview = allUnpricedPreview;
+    mock.result = unpricedResult;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Atribuir posições fora da estratégia ao legado/,
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: /Atribuir ao legado/ });
+    await user.click(within(dialog).getByRole("button", { name: /Confirmar/ }));
+
+    expect(await screen.findByText(/1 posição atribuída ao legado/)).toBeDefined();
+    const applied = screen.getByText("VALE3").closest("li");
+    if (!applied) throw new Error("no row for VALE3");
+    expect(within(applied).getByText("10 un · —")).toBeDefined();
+  });
+
   it("hides the bulk action when no outside custody remains", async () => {
     mock.allocation = {
       ...allocation,
@@ -745,6 +803,45 @@ const preview: LegacyAttributionPreview = {
     { ticker: "VALE3", reason: "HAS_ATTRIBUTION", asset_class: "ACOES" },
     { ticker: "ZZZZ9", reason: "UNCLASSIFIED", asset_class: null },
   ],
+};
+
+const unpricedPreview: LegacyAttributionPreview = {
+  groups: [
+    {
+      asset_class: "ACOES",
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+      adds: [
+        { ticker: "ITUB4", quantity: 50, value: 500 },
+        { ticker: "VALE3", quantity: 10 },
+      ],
+    },
+  ],
+  skips: [],
+};
+
+const allUnpricedPreview: LegacyAttributionPreview = {
+  groups: [
+    {
+      asset_class: "ACOES",
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+      adds: [{ ticker: "VALE3", quantity: 10 }],
+    },
+  ],
+  skips: [],
+};
+
+const unpricedResult: LegacyAttributionResult = {
+  attributed: [
+    {
+      ticker: "VALE3",
+      quantity: 10,
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+    },
+  ],
+  skipped: [],
 };
 
 const result: LegacyAttributionResult = {

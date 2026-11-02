@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Allocation, LegacyAttributionPreview } from "../api/types.ts";
 import {
+  attributionValueLabel,
   noBucketSkips,
   outsideCustody,
   previewAddCount,
   previewTotalValue,
+  previewUnpricedCount,
   shouldShowBanner,
   skipAction,
   skipReasonLabel,
@@ -61,6 +63,25 @@ describe("the preview totals", () => {
 
   it("sums the add values across the per-class groups", () => {
     expect(previewTotalValue(preview)).toBe(1800);
+  });
+
+  it("sums only the priced adds and counts the unpriced ones", () => {
+    expect(previewTotalValue(unpricedPreview)).toBe(600);
+    expect(previewUnpricedCount(unpricedPreview)).toBe(2);
+  });
+
+  it("reports no unpriced adds when every add is priced", () => {
+    expect(previewUnpricedCount(preview)).toBe(0);
+  });
+});
+
+describe("attributionValueLabel", () => {
+  it("formats a priced value with the currency formatter", () => {
+    expect(attributionValueLabel(500)).toBe("R$ 500,00");
+  });
+
+  it("renders an unpriced value as —, never R$ 0,00", () => {
+    expect(attributionValueLabel(undefined)).toBe("—");
   });
 });
 
@@ -174,4 +195,25 @@ const preview: LegacyAttributionPreview = {
     },
   ],
   skips: [{ ticker: "ZZZZ3", reason: "UNCLASSIFIED", asset_class: null }],
+};
+
+const unpricedPreview: LegacyAttributionPreview = {
+  groups: [
+    {
+      asset_class: "ACOES",
+      strategy_id: 9,
+      strategy_name: "Legado Ações",
+      adds: [
+        { ticker: "ITUB4", quantity: 50, value: 600 },
+        { ticker: "VALE3", quantity: 10 },
+      ],
+    },
+    {
+      asset_class: "FIIS",
+      strategy_id: 10,
+      strategy_name: "Legado FIIs",
+      adds: [{ ticker: "HGLG11", quantity: 12 }],
+    },
+  ],
+  skips: [],
 };

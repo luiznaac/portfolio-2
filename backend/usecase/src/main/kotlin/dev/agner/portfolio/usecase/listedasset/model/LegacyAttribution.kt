@@ -19,10 +19,12 @@ data class LegacyAttributionGroup(
     val adds: List<LegacyAttributionAdd>,
 )
 
+// `value` is null when the ticker has no stored close: the preview shows "—" and the total covers
+// only the priced adds, so an unpriced holding never reads as R$ 0,00.
 data class LegacyAttributionAdd(
     val ticker: String,
     val quantity: BigDecimal,
-    val value: BigDecimal,
+    val value: BigDecimal?,
 )
 
 // Why a held Ticker stayed out of the bulk attribution. `message` carries the write path's reason
@@ -51,7 +53,7 @@ data class LegacyAttributionResult(
 data class LegacyAttributionApplied(
     val ticker: String,
     val quantity: BigDecimal,
-    val value: BigDecimal,
+    val value: BigDecimal?,
     val strategyId: Int,
     val strategyName: String,
 )
