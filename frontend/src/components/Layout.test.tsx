@@ -21,6 +21,38 @@ vi.mock("../api/queries.ts", () => ({
       targets: { classes: [], strategies: [], sub_classes: [], tickers: [] },
     },
   }),
+  useCurrentAllocation: () => ({
+    isLoading: false,
+    isError: false,
+    data: {
+      capital: 0,
+      floor: 0,
+      ideal: 0,
+      actual: 0,
+      deficit: 0,
+      drift: 0,
+      unattributed: 0,
+      negative: [{ ticker: "BCFF11", quantity: -10 }],
+      unpriced: [],
+      unclassified: { actual: 0, tickers: [] },
+      classes: [],
+    },
+  }),
+  useGaps: () => ({
+    isLoading: false,
+    isError: false,
+    data: [
+      {
+        id: 1,
+        ticker: "PETR4",
+        date: "2026-01-10",
+        quantity: 5,
+        status: "OPEN",
+        trade_watermark: 0,
+        action_watermark: 0,
+      },
+    ],
+  }),
   useOrders: () => ({
     isLoading: false,
     isError: false,
@@ -77,6 +109,12 @@ describe("Layout shell", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Comandos" })).toBeNull();
+  });
+
+  it("sums negative custody and open lacunas into the Histórico nav badge", () => {
+    renderShell();
+
+    expect(screen.getByTestId("nav-history-badge").textContent).toBe("2");
   });
 
   it("opens the command palette from the topbar button", async () => {

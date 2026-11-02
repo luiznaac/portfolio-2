@@ -99,6 +99,7 @@ vi.mock("../api/queries.ts", () => {
           classRung("RENDA_FIXA", 5_000, -15, 20),
         ],
       }),
+    useGaps: () => query([]),
     useOrders: () =>
       query({
         period: "2026-10",

@@ -2,7 +2,7 @@
 
 React 19 + Vite + TypeScript + Tailwind v4 + TanStack Query + React Router SPA for the investment portfolio tracker. The stack and conventions are shared across all of luiznaac's frontends (see salgadinhos' `react-spa-screen` skill for the shared parts); this file only covers what's specific to portfolio-2.
 
-The product frontend is built out: the Cockpit at `/` is the monthly ritual's home, and the other screens hang off it (month, orders, import, close; allocation, strategies, assets, fixed income, corporate actions; income, taxes, performance). The scaffold's `GET /health` health-check dashboard stays reachable at `/health` as the end-to-end read example.
+The product frontend is built out: the Cockpit at `/` is the monthly ritual's home, and the other screens hang off it (month, orders, import, close; allocation, strategies, assets, history, fixed income, corporate actions; income, taxes, performance). The scaffold's `GET /health` health-check dashboard stays reachable at `/health` as the end-to-end read example.
 
 ## Code map
 

@@ -4,6 +4,7 @@ import type {
   Attribution,
   AttributionSliceCreation,
   AttributionTransferCreation,
+  BackfillReport,
   Bond,
   CatalogEntry,
   CheckingAccount,
@@ -16,6 +17,8 @@ import type {
   EditionImport,
   FixedRateBondCreation,
   FloatingRateBondCreation,
+  Gap,
+  GapPriceUpdate,
   HarvestOptOutUpdate,
   HarvestPairCreation,
   HarvestReport,
@@ -32,6 +35,7 @@ import type {
   MonthPeriodRange,
   MonthUpdate,
   MovementsImportResult,
+  OpeningSeedCreation,
   OrderList,
   OrderMatchUpdate,
   OrderPlan,
@@ -39,6 +43,7 @@ import type {
   PerformanceSeries,
   Position,
   PositionDetail,
+  PositionReconciliation,
   Quote,
   Snapshot,
   StockTaxReport,
@@ -385,5 +390,35 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return upload("/corporate-actions/import", form);
+  },
+
+  // Histórico: the backend operations the screen owns. The backfill body is optional — no file
+  // means "absorb the seeds only", a Posição export rides along as the custody cross-check.
+  getGaps(): Promise<Gap[]> {
+    return request("/gaps");
+  },
+
+  priceGap(id: number, unitPrice: number): Promise<Gap> {
+    const update: GapPriceUpdate = { unit_price: unitPrice };
+    return request(`/gaps/${id}/price`, { method: "POST", body: JSON.stringify(update) });
+  },
+
+  seedOpenings(seeds: OpeningSeedCreation[]): Promise<Trade[]> {
+    return request("/history/openings", { method: "POST", body: JSON.stringify(seeds) });
+  },
+
+  backfill(file?: File): Promise<BackfillReport> {
+    if (file === undefined) return request("/history/backfill", { method: "POST" });
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/history/backfill", form);
+  },
+
+  // The read-only custody cross-check: the server compares the upload against the replayed ledger
+  // and persists nothing.
+  reconcileCustody(file: File): Promise<PositionReconciliation[]> {
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/positions/reconcile", form);
   },
 };

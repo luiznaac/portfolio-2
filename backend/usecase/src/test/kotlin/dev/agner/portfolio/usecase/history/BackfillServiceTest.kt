@@ -99,6 +99,24 @@ class BackfillServiceTest : StringSpec({
         coVerify(exactly = 0) { repository.delete(any()) }
     }
 
+    "replays every ledger ticker, not only the ones the run touched" {
+        val seed = openingSeed(quantity = "100")
+        val vale = buy(id = 5, date = "2026-01-10", quantity = "10", ticker = "VALE3")
+        val repository = mockk<ITradeRepository>()
+        coEvery { repository.fetchAllBySource(TradeSource.OPENING) } returns listOf(seed)
+        coEvery { repository.fetchAllBy("PETR4") } returns listOf(seed)
+        coEvery { repository.fetchAllBy("VALE3") } returns listOf(vale)
+        coEvery { repository.fetchAll() } returns listOf(seed, vale)
+        val positions = mockk<PositionService>(relaxed = true)
+        val service = service(repository, positions)
+
+        val report = service.backfill(emptyList())
+
+        report.positionsReprojected shouldBe 2
+        coVerify { positions.reproject("PETR4") }
+        coVerify { positions.reproject("VALE3") }
+    }
+
     "reports the backfill outcome" {
         val repository = repositoryWith(seed = openingSeed(quantity = "100"), imported = emptyList())
         val service = service(repository)
@@ -108,15 +126,17 @@ class BackfillServiceTest : StringSpec({
             adjustedSeeds = 0,
             gapsCreated = 0,
             gapsReplaced = 0,
-            positionsReprojected = 0,
+            positionsReprojected = 1,
         )
     }
 })
 
-private fun service(repository: ITradeRepository): BackfillService {
+private fun service(
+    repository: ITradeRepository,
+    positions: PositionService = mockk(relaxed = true),
+): BackfillService {
     val transaction = mockk<ITransactionTemplate>()
     coEvery { transaction.execute<Any?>(any()) } coAnswers { firstArg<suspend () -> Any?>().invoke() }
-    val positions = mockk<PositionService>(relaxed = true)
     val gaps = mockk<IGapRepository>(relaxed = true)
     val quotes = mockk<QuoteService>(relaxed = true)
     return BackfillService(
@@ -167,9 +187,10 @@ private fun buy(
     date: String,
     quantity: String,
     source: TradeSource = TradeSource.B3_IMPORT,
+    ticker: String = "PETR4",
 ) = Trade.Buy(
     id = id,
-    ticker = "PETR4",
+    ticker = ticker,
     date = LocalDate.parse(date),
     venue = "VISTA",
     quantity = BigDecimal(quantity),

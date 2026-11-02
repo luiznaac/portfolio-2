@@ -6,6 +6,7 @@ export type NavIcon =
   | "grid"
   | "upload"
   | "assets"
+  | "history"
   | "bank"
   | "calendar"
   | "target"
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/allocation", label: "Alocação", icon: "target" },
       { to: "/strategies", label: "Estratégias", icon: "layers" },
       { to: "/trades", label: "Ativos", icon: "assets" },
+      { to: "/history", label: "Histórico", icon: "history" },
       { to: "/corporate-actions", label: "Eventos corporativos", icon: "event" },
       { to: "/fixed-income", label: "Renda fixa", icon: "bank" },
     ],

@@ -10,6 +10,10 @@ describe("navCrumb", () => {
     expect(navCrumb("/trades")).toEqual({ group: "Carteira", title: "Ativos" });
   });
 
+  it("resolves Histórico under Carteira", () => {
+    expect(navCrumb("/history")).toEqual({ group: "Carteira", title: "Histórico" });
+  });
+
   it("resolves the Ordens route under Mês", () => {
     expect(navCrumb("/orders")).toEqual({ group: "Mês", title: "Ordens" });
   });
