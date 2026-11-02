@@ -101,6 +101,44 @@ class PerformanceTest : StringSpec({
         body.get("xirr").isNull shouldBe false
     }
 
+    "orders the computed pre-planning months before the closed months" {
+        stubBenchmarks()
+        seedTwoClosedMonths()
+
+        val institution = getBean<InstitutionService>().create(InstitutionCreation("HISTORY"))
+        getBean<ITradeRepository>().save(
+            TradeCreation(
+                ticker = "PETR4",
+                side = TradeSide.BUY,
+                date = LocalDate.parse("2025-12-10"),
+                venue = "VISTA",
+                quantity = BigDecimal("100"),
+                unitPrice = BigDecimal("5"),
+                institutionId = institution.id,
+            ),
+            TradeSource.B3_IMPORT,
+            ordinal = 1,
+        )
+        getBean<IQuoteRepository>().upsertAll(
+            listOf(Quote("PETR4", LocalDate.parse("2025-12-31"), BigDecimal("5"), QuoteSource.COTAHIST)),
+        )
+
+        val response = getBean<HttpClient>().get("http://localhost:8080/performance/series")
+
+        response.status shouldBe HttpStatusCode.OK
+        val body = ObjectMapper().readTree(response.bodyAsText())
+        body.get("months").size() shouldBe 3
+        body.get("months").get(0).get("period").asText() shouldBe "2025-12"
+        body.get("months").get(0).get("source").asText() shouldBe "computed"
+        body.get("months").get(0).get("decomposition").get("value_end")
+            .decimalValue().compareTo(BigDecimal("500.00")) shouldBe 0
+        val computedReturn = body.get("months").get(0).get("decomposition").get("return_percentage")
+        (computedReturn == null || computedReturn.isNull) shouldBe true
+        body.get("months").get(1).get("period").asText() shouldBe "2026-01"
+        body.get("months").get(1).get("source").asText() shouldBe "snapshot"
+        (body.get("computed_xirr") == null) shouldBe true
+    }
+
     "backfills: an OPENING seed covered by imported history is retired" {
         val client = getBean<HttpClient>()
         client.post("http://localhost:8080/history/openings") {
@@ -180,6 +218,18 @@ class PerformanceTest : StringSpec({
         points.size shouldBe 1
         points.single().level.compareTo(BigDecimal("111")) shouldBe 0
         points.single().source shouldBe BenchmarkSource.BRAPI
+    }
+
+    "reports the benchmark freshness after a manual re-check" {
+        stubBenchmarks()
+
+        val response = getBean<HttpClient>().post("http://localhost:8080/benchmarks/refresh")
+
+        response.status shouldBe HttpStatusCode.OK
+        val body = ObjectMapper().readTree(response.bodyAsText())
+        body.get("indexes").size() shouldBe 3
+        val ibov = body.get("indexes").first { it.get("index").asText() == "IBOV" }
+        (ibov.get("last_fetched_at") == null) shouldBe false
     }
 
     "rejects a malformed backfill start" {

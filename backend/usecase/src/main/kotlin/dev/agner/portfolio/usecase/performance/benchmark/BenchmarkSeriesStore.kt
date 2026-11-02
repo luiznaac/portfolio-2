@@ -7,9 +7,13 @@ import dev.agner.portfolio.usecase.performance.gateway.IBenchmarkGateway
 import dev.agner.portfolio.usecase.performance.gateway.IBenchmarkSeriesSource
 import dev.agner.portfolio.usecase.performance.model.BenchmarkBackfillEntry
 import dev.agner.portfolio.usecase.performance.model.BenchmarkBackfillReport
+import dev.agner.portfolio.usecase.performance.model.BenchmarkStatus
+import dev.agner.portfolio.usecase.performance.model.BenchmarkStatusReport
 import dev.agner.portfolio.usecase.performance.repository.IBenchmarkCloseRepository
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.daysUntil
+import kotlinx.datetime.minus
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.time.Clock
@@ -35,9 +39,7 @@ class BenchmarkSeriesStore(
         if (from > to) return emptyList()
 
         val stored = repository.fetch(index, from, to).associate { it.date to it.level }
-        val points = orderedSources
-            .filter { index in it.indexes }
-            .fold(stored) { known, source -> fill(index, known, from, to, source) }
+        val points = fillFromChain(index, from, to, stored)
 
         return points.entries.sortedBy { it.key }.map { BenchmarkObservation(it.key, it.value) }
     }
@@ -53,6 +55,48 @@ class BenchmarkSeriesStore(
             },
         )
     }
+
+    // The data panel's freshness read: one row per index and the moment it last stored a provider
+    // point. Null when the index has never been fetched.
+    suspend fun status(): BenchmarkStatusReport = BenchmarkStatusReport(
+        indexes = BenchmarkIndex.entries.map { index ->
+            BenchmarkStatus(index = index, lastFetchedAt = repository.fetchLastFetchedAt(index))
+        },
+    )
+
+    // The manual "Atualizar benchmarks" action: fill the stored span's holes, then ask every
+    // index's chain again for the trailing window even when the stored series already covers it —
+    // a re-check must contact a provider, not just replay the cache. It never reaches back past what
+    // the series already holds; the one-off backfill seeds that.
+    suspend fun refresh(): BenchmarkStatusReport {
+        val to = LocalDate.today(clock)
+        for (index in BenchmarkIndex.entries) {
+            repository.fetchEarliest(index)?.let { earliest -> fetchSeries(index, earliest, to) }
+            refetch(
+                index = index,
+                from = to.minus(BenchmarkCadence.LEVEL_BASE_LOOKBACK_DAYS, DateTimeUnit.DAY),
+                to = to,
+            )
+        }
+        return status()
+    }
+
+    // The forced pass: the chain is asked for the whole window with no stored points to short-circuit
+    // it, and each source fills only what the previous one left missing (the ordered chain's rule).
+    private suspend fun refetch(index: BenchmarkIndex, from: LocalDate, to: LocalDate) {
+        if (from > to) return
+        fillFromChain(index, from, to, emptyMap())
+    }
+
+    // The ordered chain's one walk: each source fills the windows the previous ones left missing.
+    private suspend fun fillFromChain(
+        index: BenchmarkIndex,
+        from: LocalDate,
+        to: LocalDate,
+        stored: Map<LocalDate, BigDecimal>,
+    ): Map<LocalDate, BigDecimal> = orderedSources
+        .filter { index in it.indexes }
+        .fold(stored) { known, source -> fill(index, known, from, to, source) }
 
     private suspend fun fill(
         index: BenchmarkIndex,

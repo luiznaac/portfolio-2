@@ -417,6 +417,62 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
 
+- **Computed performance era seed (#308)**: run this seed alone, immediately before the
+  computed-era intents; it resets the ledger and leaves **no Snapshot and no Month**, so the
+  performance series is the pre-planning computed era only. Dates are relative to `CURDATE()` so the
+  window always ends at the last completed month. Five monthly points: buys in the first two months,
+  an unpriced held ticker from the third, and a sell-only month before the last (negative aporte).
+  `PETR4` is priced at every month end, `DELIST3` only in its first month (so it keeps that last
+  close), and `ZZZZ9` never (so every month from its buy is `parcial`). One dividend lands in the
+  second month. IBOV has closes for the first three month-ends only: the last two computed months
+  have no priced IBOV, so the line breaks and the coverage strip names them; CDI/IPCA stay absent.
+  The data panel's IBOV row shows the seeded `fetched_at`; the other indexes read "sem busca".
+
+  ```
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+  DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+  DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+  DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+  DELETE FROM benchmark_close;
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  SET @m5 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01');
+  SET @m4 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 4 MONTH), '%Y-%m-01');
+  SET @m3 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01');
+  SET @m2 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-01');
+  SET @m1 := DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01');
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('PETR4', 'PETROBRAS', '02', NULL, 'STOCK', 'ACOES', @m5, @m1, NOW()),
+    ('DELIST3', 'DELISTED', '02', NULL, 'STOCK', 'ACOES', @m5, @m5, NOW());
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('PETR4', @m5, 'VISTA', 100, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('DELIST3', @m5, 'VISTA', 10, 5, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('PETR4', @m4, 'VISTA', 100, 12, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('ZZZZ9', @m3, 'VISTA', 5, 4, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('PETR4', @m2, 'VISTA', -50, 15, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW());
+  INSERT INTO quote (ticker, date, close, source, created_at) VALUES
+    ('PETR4', LAST_DAY(@m5), 10, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m4), 12, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m3), 13, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m2), 15, 'COTAHIST', NOW()),
+    ('PETR4', LAST_DAY(@m1), 16, 'COTAHIST', NOW()),
+    ('DELIST3', LAST_DAY(@m5), 5, 'COTAHIST', NOW());
+  INSERT INTO cash_movement (ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES
+    ('PETR4', LAST_DAY(@m4), 50, 0, 50, 'INCOME', 'B3', 'RECEIVED', 'DIVIDEND', NOW());
+  INSERT INTO benchmark_close (`index`, `date`, level, source, fetched_at) VALUES
+    ('IBOV', LAST_DAY(@m5), 100000, 'SGS', NOW()),
+    ('IBOV', LAST_DAY(@m4), 102000, 'SGS', NOW()),
+    ('IBOV', LAST_DAY(@m3), 104000, 'SGS', NOW());
+  SQL
+  ```
+
+  The series read is then `GET /performance/series`: five computed points (the first with a null
+  return and null `value_start`, the sell-only month with a negative `net_aportes`), no snapshot
+  point, `computed_xirr` present and `xirr` absent. The Performance screen shows "Valor investido",
+  the era divider, `parcial` on the months that hold `ZZZZ9`, and the IBOV coverage strip; the
+  "Detalhe do mês" panel explains it is Snapshot-only.
+
 - **Benchmark store backfill (one-off)**: the benchmark series lives in the `benchmark_close`
   table, so a fresh database has no history and every blend reads absent. After the app is healthy,
   seed it once (there is no scheduler; freshness is lazy gap-fill plus this call):
@@ -618,6 +674,10 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   Run it independently of the other seeds, after the app has migrated and is healthy. The browser reads `/allocation` (Dados da carteira panel: Sem classe **2**, Sem cotação **1**; "Classificar pendentes" opens the bulk modal listing UNCL1 and UNCL2 with their reasons), the legacy banner (the preview lists OVR9 under Ações with Confirmar enabled), `/trades/OVR9` (the "classe manual: Ações" line with Reverter), and `/` (the Cockpit's "Não foi possível ler a alocação e o plano." attention error, the plan refusing on the unpriced NOPR1).
+
+## Acceptance scenario — imported 2020 export (issue #309)
+
+**Scenario**: [`acceptance/fixtures/b3-negociacao-2020.xlsx`](acceptance/fixtures/b3-negociacao-2020.xlsx) is the curated 11-row, 6-ticker B3 Negociação export (institution `XP INVESTIMENTOS`, venue `VISTA`, dates `2020-03-10` → `2020-12-01`) the acceptance run uploads into a stack booted from `docker compose down -v` with **no seed section applied**; in order it imports the file (`POST /imports` → 201 `STAGED`; apply → 6 positions with the four mid-history negatives HGLG11/KNCR11/VISC11/XPML11 at −10, every row `new` with no error), runs the one combined **Atualizar catálogo e cotações** refresh (all six held tickers priced at `asOf` and classified — ALUP11 Ações/UNIT, PETR4 Ações, the four FIIs — no R$ 0,00 Actual, and the panel at Sem cotação 0 / Sem classe 0 / Posições negativas 4), adopts the four negatives at `2020-03-09` with opening custody HGLG11 60 / KNCR11 40 / VISC11 25 / XPML11 20 (every position non-negative, and the badge and panel drop to zero), backfills with no file (`absorbed_seeds`/`adjusted_seeds`/`gaps_created`/`gaps_replaced` all 0, `positions_reprojected > 0`, `GET /gaps` empty), creates `Legado Ações` and `Legado FIIs`, proves the effective-class rule on HGLG11 (an override to Ações moves it into the Ações group, the revert puts it back) and runs the bulk legacy attribution before opening the month (two groups, six adds, `skipped: []`), reads `GET /month/period-range` (`min 2020-03`, `default 2020-12`) and opens the backdated `2020-12` month at Capital = 2 × the month-free Actual rounded up to the next R$ 1.000,00 with targets Ações 60 / FIIs 40 and one report Strategy Dividendos at ALUP11 50 / PETR4 50 (the header shows `histórico — sem fechamento`; the full plan answers 200 with BUY candidates, not `unpriced-positions` or `unclassified-positions`), gets `POST /month/current/close` refused with `400 month-close-not-current` (`GET /months` `[]`, no Snapshot), and re-uploads the same file (200, the same APPLIED id, the read-only Resultado with the import date and `Ver negócios`, every row `duplicate_in_ledger`). The fixture's net positions are ALUP11 150, PETR4 200 and the four FIIs at −10 before adoption. Any held ticker still unclassified or unpriced after the refresh, any R$ 0,00 Actual, any negative position after adoption, a non-empty GAP list, a plan gate after the month opens, or a Snapshot/closed month after the refused close is an automatic red; the evidence names the first failing step.
 
 ## Acceptance scenario — import resume states and movements re-upload (issue [#311](https://github.com/luiznaac/portfolio-2/issues/311))
 

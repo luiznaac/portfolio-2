@@ -29,6 +29,7 @@ const mock = vi.hoisted(() => ({
   applied: 0,
   classified: [] as Array<[string, string]>,
   refreshed: 0,
+  benchmarksRefreshed: 0,
   queue: [] as Array<{ ticker: string; short_name: string; quantity: number; reason: string }>,
   batch: [] as Array<Record<string, string>>,
   batchError: false,
@@ -62,6 +63,24 @@ vi.mock("../api/client.ts", () => ({
         as_of: "2026-10-13",
         failed: [],
         unclassified: [],
+      });
+    },
+    getBenchmarkStatus: () =>
+      Promise.resolve({
+        indexes: [
+          { index: "CDI", last_fetched_at: "2026-10-13T09:30" },
+          { index: "IPCA" },
+          { index: "IBOV" },
+        ],
+      }),
+    refreshBenchmarks: () => {
+      mock.benchmarksRefreshed += 1;
+      return Promise.resolve({
+        indexes: [
+          { index: "CDI", last_fetched_at: "2026-10-14T09:30" },
+          { index: "IPCA" },
+          { index: "IBOV", last_fetched_at: "2026-10-14T09:30" },
+        ],
       });
     },
     getClassificationQueue: () => Promise.resolve(mock.queue),
@@ -418,6 +437,22 @@ describe("the Alocação tree", () => {
 
     await user.click(screen.getByTestId("data-quality-refresh"));
     expect(mock.refreshed).toBe(2);
+  });
+
+  it("shows the benchmark freshness row and forces a re-check from the panel", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    const panel = await screen.findByTestId("data-quality-panel");
+    const cdi = await within(panel).findByTestId("benchmark-status-CDI");
+    expect(cdi.textContent).toContain("última busca · 13/10/2026 09:30");
+    expect(within(panel).getByTestId("benchmark-status-IPCA").textContent).toContain("sem busca");
+
+    await user.click(within(panel).getByTestId("benchmark-refresh-button"));
+
+    expect(mock.benchmarksRefreshed).toBe(1);
+    expect((await within(panel).findAllByText(/14\/10\/2026 09:30/)).length).toBe(2);
   });
 
   it("marks a stale close with its date and renders an unpriced leaf as an em dash", async () => {
