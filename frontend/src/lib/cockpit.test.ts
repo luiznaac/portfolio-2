@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Allocation, Income, Month, OrderList, OrderPlan, Trade } from "../api/types.ts";
+import type { Allocation, Gap, Income, Month, OrderList, OrderPlan, Trade } from "../api/types.ts";
 import {
   type RitualInput,
   allocationStrip,
@@ -368,7 +368,9 @@ describe("attentionItems", () => {
     });
     const quality = items.find((item) => item.key === "data-quality");
     expect(quality?.severity).toBe("critical");
-    expect(quality?.text).toBe("Dados da carteira: 0 sem cotação · 1 sem classe · 0 negativas");
+    expect(quality?.text).toBe(
+      "Dados da carteira: 0 sem cotação · 1 sem classe · 0 negativas · 0 lacunas",
+    );
     expect(quality?.to).toBe("/allocation");
     expect(quality?.actionLabel).toBe("Revisar");
   });
@@ -391,7 +393,36 @@ describe("attentionItems", () => {
       plan: null,
     });
     expect(items.find((item) => item.key === "data-quality")?.text).toBe(
-      "Dados da carteira: 1 sem cotação · 2 sem classe · 1 negativa",
+      "Dados da carteira: 1 sem cotação · 2 sem classe · 1 negativa · 0 lacunas",
+    );
+  });
+
+  it("counts open GAPs in the one data-quality card", () => {
+    const gaps: Gap[] = [
+      {
+        id: 1,
+        ticker: "PETR4",
+        date: "2026-01-10",
+        quantity: 10,
+        status: "OPEN",
+        trade_watermark: 0,
+        action_watermark: 0,
+      },
+      {
+        id: 2,
+        ticker: "VALE3",
+        date: "2026-01-10",
+        quantity: 5,
+        status: "OPEN",
+        realized_pending: true,
+        trade_watermark: 0,
+        action_watermark: 0,
+      },
+    ];
+    const items = attentionItems({ allocation: allocation(), plan: null, gaps });
+
+    expect(items.find((item) => item.key === "data-quality")?.text).toBe(
+      "Dados da carteira: 0 sem cotação · 0 sem classe · 0 negativas · 2 lacunas",
     );
   });
 

@@ -58,8 +58,13 @@ class BackfillService(
         // replay happens before detection rather than after it.
         absorbed.tickers.forEach { positions.reproject(it) }
 
-        val created = detectGaps(custody)
-        val touched = absorbed.tickers + created.map { it.ticker }
+        // Every ledger ticker is replayed, not only the ones this run touched: the report's
+        // `positionsReprojected` is the evidence that the whole book was rebuilt, and a run that
+        // absorbed nothing would otherwise read as a no-op.
+        val ledgerTrades = trades.fetchAll()
+        val ledgerTickers = ledgerTrades.map { it.ticker }.toSet()
+        val created = detectGaps(custody, ledgerTrades)
+        val touched = absorbed.tickers.toSet() + ledgerTickers + created.map { it.ticker }
         touched.forEach { positions.reproject(it) }
 
         BackfillReport(
@@ -67,7 +72,7 @@ class BackfillService(
             adjustedSeeds = absorbed.adjusted,
             gapsCreated = created.size,
             gapsReplaced = replaced,
-            positionsReprojected = touched.toSet().size,
+            positionsReprojected = touched.size,
         )
     }
 
@@ -138,11 +143,14 @@ class BackfillService(
     // Custody minus ledger, per ticker: what the ledger holds but no record explains becomes a GAP.
     // An upward delta is a missing buy, priced at the current market close; a downward delta is a
     // missing sale whose proceeds are unknown, so it stays unpriced and its realized result pending.
-    private suspend fun detectGaps(custody: List<CustodyPosition>): List<Gap> {
+    private suspend fun detectGaps(
+        custody: List<CustodyPosition>,
+        ledgerTrades: List<Trade>,
+    ): List<Gap> {
         if (custody.isEmpty()) return emptyList()
 
         val ledger = positions.fetchAll().associateBy { it.ticker }
-        val tradeWatermark = trades.fetchAll().maxOfOrNull { it.id } ?: 0
+        val tradeWatermark = ledgerTrades.maxOfOrNull { it.id } ?: 0
         val actionWatermark = corporateActions.fetchAll().maxOfOrNull { it.id } ?: 0
         val custodyByTicker = custody
             .groupBy { it.ticker.normalizedTicker() }

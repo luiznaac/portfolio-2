@@ -5,6 +5,7 @@
 import type {
   Allocation,
   AssetClass,
+  Gap,
   Income,
   Month,
   MonthStatus,
@@ -224,6 +225,7 @@ export interface AttentionItem {
 export interface AttentionInput {
   allocation: Allocation | null;
   plan: OrderPlan | null;
+  gaps?: Gap[];
 }
 
 // Drift is in percentage points; a full point away from target is worth surfacing.
@@ -233,12 +235,13 @@ const DRIFT_THRESHOLD = 1;
 // ordered by how badly they hurt (critical → warning → info).
 export function attentionItems(input: AttentionInput): AttentionItem[] {
   const items: AttentionItem[] = [];
-  const { allocation, plan } = input;
+  const { allocation, plan, gaps } = input;
 
   // Every data-quality problem collapses into one card pointing at the "Dados da carteira" panel:
-  // unpriced, unclassified and negative custody share one fix surface, so the Cockpit does not
-  // raise one interruption per problem. The bucket never appears: its units are attributed.
-  const quality = dataQualityCounts(allocation);
+  // unpriced custody, unclassified tickers, negative positions and open GAPs share one fix
+  // surface, so the Cockpit does not raise one interruption per problem. The bucket never appears:
+  // its units are attributed.
+  const quality = dataQualityCounts(allocation, gaps);
   if (quality.total > 0) {
     items.push({
       key: "data-quality",

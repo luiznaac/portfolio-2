@@ -115,7 +115,9 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
 
   return (
     <>
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_300px]">
+      {/* `minmax(0,1fr)` lets the table track shrink and scroll instead of forcing the 300px rail
+          past the shell's right edge on a 1280px screen. */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex flex-col gap-4">
           <LegacyAttributionBanner allocation={allocation} />
 

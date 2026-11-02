@@ -5,6 +5,7 @@ import {
   useCurrentAllocation,
   useCurrentMonth,
   useEditionCoverage,
+  useGaps,
   useIncome,
   useOrderPlan,
   useOrders,
@@ -43,6 +44,7 @@ export function Cockpit() {
   const allocation = useCurrentAllocation();
   const orders = useOrders();
   const plan = useOrderPlan();
+  const gaps = useGaps();
   const trades = useTrades();
   const strategies = useStrategies();
   const income = useIncome();
@@ -109,9 +111,10 @@ export function Cockpit() {
   const attention = attentionItems({
     allocation: allocation.data ?? null,
     plan: plan.data ?? null,
+    gaps: gaps.data ?? [],
   });
   const segments = allocationStrip(allocation.data ?? null);
-  const attentionLoading = allocation.isLoading || plan.isLoading;
+  const attentionLoading = allocation.isLoading || plan.isLoading || gaps.isLoading;
   const attentionError = allocation.isError || plan.isError;
 
   return (
@@ -219,7 +222,7 @@ function AttentionCard({ item }: { item: AttentionItem }) {
     >
       <span>{mark}</span>
       <div className="text-ink">
-        {item.text}{" "}
+        <span data-testid={`attention-text-${item.key}`}>{item.text}</span>{" "}
         <Link to={item.to} className="font-medium text-principal underline">
           {item.actionLabel ?? "Ver"}
         </Link>

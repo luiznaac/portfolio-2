@@ -201,6 +201,26 @@ export function IconLock(props: IconProps) {
   );
 }
 
+export function IconHistory(props: IconProps) {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M2.5 8a5.5 5.5 0 1 0 1.7-4"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+      />
+      <path
+        d="M2.5 2.8V6h3.2M8 5.2V8l2.2 1.4"
+        stroke="currentColor"
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function IconChart(props: IconProps) {
   return (
     <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>

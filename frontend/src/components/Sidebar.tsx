@@ -1,6 +1,8 @@
 import type { ComponentType, SVGProps } from "react";
 import { NavLink } from "react-router-dom";
+import { useCurrentAllocation, useGaps } from "../api/queries.ts";
 import { cn } from "../lib/cn.ts";
+import { historyAttentionCount } from "../lib/history.ts";
 import { NAV_GROUPS, type NavIcon } from "../lib/navigation.ts";
 import {
   BrandMark,
@@ -11,6 +13,7 @@ import {
   IconCoins,
   IconEvent,
   IconGrid,
+  IconHistory,
   IconLayers,
   IconList,
   IconLock,
@@ -24,6 +27,7 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
   grid: IconGrid,
   upload: IconUpload,
   assets: IconAssets,
+  history: IconHistory,
   bank: IconBank,
   calendar: IconCalendar,
   target: IconTarget,
@@ -39,6 +43,13 @@ const ICONS: Record<NavIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
 // The shell's primary navigation: brand mark, grouped items, 236px wide collapsing to 60px. Groups
 // with no shipped routes yet ("Resultados") are skipped until their pages land.
 export function Sidebar({ collapsed }: { collapsed: boolean }) {
+  const allocation = useCurrentAllocation();
+  const gaps = useGaps();
+  const historyBadge = historyAttentionCount(
+    allocation.data?.negative?.length ?? 0,
+    gaps.data ?? [],
+  );
+
   return (
     <aside
       data-testid="sidebar"
@@ -72,6 +83,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  data-testid={`nav-${item.to === "/" ? "root" : item.to.slice(1)}`}
                   end={item.to === "/"}
                   className={({ isActive }) =>
                     cn(
@@ -87,6 +99,18 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                     <>
                       <Icon className={isActive ? "text-accent" : "opacity-80"} />
                       {!collapsed && <span>{item.label}</span>}
+                      {item.to === "/history" && historyBadge > 0 && (
+                        <span
+                          data-testid="nav-history-badge"
+                          aria-label={`${historyBadge} pendências no histórico`}
+                          className={cn(
+                            "rounded-sm bg-tax-bg font-mono text-[10px] text-tax",
+                            collapsed ? "absolute px-1" : "ml-auto px-1.5",
+                          )}
+                        >
+                          {historyBadge}
+                        </span>
+                      )}
                     </>
                   )}
                 </NavLink>
