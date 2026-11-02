@@ -34,6 +34,15 @@ internal val B3_INVESTOR_HEADERS = listOf(
     "Valor",
 )
 
+// The committed workbooks on the test classpath (the parsers' fixture and the acceptance run's
+// artifacts). One loader keeps the missing-fixture failure message the same everywhere.
+internal object B3Fixtures {
+    fun bytes(name: String): ByteArray =
+        checkNotNull(B3Fixtures::class.java.classLoader.getResource(name)) {
+            "B3 fixture $name not found in test resources"
+        }.readBytes()
+}
+
 // One sheet of a fabricated workbook: an optional title row, a header row, then data rows. B3's
 // exports put a title above the Negociação headers on some sheets, so the builder can too.
 // `numericFormat`, when set, styles the sheet's numeric cells (e.g. a B3 export's `R$ #,##0.00`),

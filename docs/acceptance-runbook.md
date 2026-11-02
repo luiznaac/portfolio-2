@@ -618,3 +618,18 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   ```
 
   Run it independently of the other seeds, after the app has migrated and is healthy. The browser reads `/allocation` (Dados da carteira panel: Sem classe **2**, Sem cotação **1**; "Classificar pendentes" opens the bulk modal listing UNCL1 and UNCL2 with their reasons), the legacy banner (the preview lists OVR9 under Ações with Confirmar enabled), `/trades/OVR9` (the "classe manual: Ações" line with Reverter), and `/` (the Cockpit's "Não foi possível ler a alocação e o plano." attention error, the plan refusing on the unpriced NOPR1).
+
+## Acceptance scenario — import resume states and movements re-upload (issue [#311](https://github.com/luiznaac/portfolio-2/issues/311))
+
+**Scenario**: the run drives the four B3 wizard resume states and the Movimentações all-zero re-upload on the combined image, staging every file through the browser capability's `upload` action. [`b3-negociacao.xlsx`](../backend/http-api/src/test/resources/b3-negociacao.xlsx) uploads once as a fresh file (no banner), then re-uploads while it is still STAGED, again after review and again after apply, so STAGED, REVIEWED and APPLIED each resume on the step [#302](https://github.com/luiznaac/portfolio-2/issues/302) specifies. [`b3-negociacao-failed.xlsx`](../backend/http-api/src/test/resources/b3-negociacao-failed.xlsx) is seeded as a FAILED import because no staging path writes FAILED, and its upload resumes that record. [`b3-movimentacao.xlsx`](../backend/http-api/src/test/resources/b3-movimentacao.xlsx) uploads twice through the Eventos corporativos "Importar movimentações" input: the first applies its VALE3 buy, the second is the idempotent all-zero re-upload that reports `Arquivo já importado em <date> — nenhum lançamento novo.`
+
+Apply this seed after the app is healthy and before the browser intents:
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM import_row; DELETE FROM import; \
+      INSERT INTO import (\`source\`, file_name, file_hash, status, created_at) VALUES \
+        ('B3_TRADES', 'b3-negociacao-failed.xlsx', '7f3249811ced02ff21eeb4be457681f7a8e82499524fa34f4f6cc6f82d742451', 'FAILED', '2026-10-20 09:00:00');"
+```
+
+The seed resets the import tables so `b3-negociacao.xlsx` stages fresh, then stages the failed fixture as a FAILED import under its own SHA-256, so that fixture's upload resumes the record instead of creating a new import. Nothing else is seeded: the wizard's apply writes the negotiation rows, and the movements upload writes its own VALE3 buy. The run leaves the ledger with the fixtures' trades and the imported records; it resets nothing on teardown. Run it independently of the other seeds.
