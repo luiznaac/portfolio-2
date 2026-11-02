@@ -13,9 +13,7 @@ class B3NegotiationParserTest : DescribeSpec({
     describe("B3NegotiationParser") {
 
         val parser = B3NegotiationParser()
-        val fixtureResource = javaClass.classLoader.getResource("b3-negociacao.xlsx")
-            ?: throw IllegalStateException("Fixture b3-negociacao.xlsx not found in test resources")
-        val fixtureBytes = fixtureResource.readBytes()
+        val fixtureBytes = B3Fixtures.bytes("b3-negociacao.xlsx")
 
         describe("shouldExecute") {
             it("claims a file by its header row regardless of filename") {
