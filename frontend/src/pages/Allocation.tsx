@@ -41,10 +41,12 @@ import {
 import { cn } from "../lib/cn.ts";
 import { formatCurrency, formatIsoDate, formatNumber } from "../lib/format.ts";
 import {
+  attributionValueLabel,
   noBucketSkips,
   outsideCustody,
   previewAddCount,
   previewTotalValue,
+  previewUnpricedCount,
   shouldShowBanner,
   skipAction,
   skipReasonLabel,
@@ -613,6 +615,7 @@ function LegacyAttributionDialog({
 }) {
   const apply = useApplyLegacyAttribution();
   const adds = previewAddCount(preview);
+  const unpriced = previewUnpricedCount(preview);
 
   return (
     <dialog
@@ -636,7 +639,8 @@ function LegacyAttributionDialog({
           <>
             <p className="text-[12.5px] text-ink-dim">
               {adds} {adds === 1 ? "posição" : "posições"} ·{" "}
-              {formatCurrency(previewTotalValue(preview))}. Nada muda até confirmar.
+              {adds > 0 && unpriced === adds ? "—" : formatCurrency(previewTotalValue(preview))}
+              {unpriced > 0 ? ` · ${unpriced} sem cotação` : ""}. Nada muda até confirmar.
             </p>
 
             {preview.groups.map((group) => (
@@ -652,7 +656,9 @@ function LegacyAttributionDialog({
                         <td className="py-1.5 text-right font-mono">
                           {formatNumber(add.quantity)} un
                         </td>
-                        <td className="py-1.5 text-right font-mono">{formatCurrency(add.value)}</td>
+                        <td className="py-1.5 text-right font-mono">
+                          {attributionValueLabel(add.value)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -716,7 +722,7 @@ function LegacyAttributionResultBody({ result }: { result: LegacyAttributionResu
               <span className="font-mono">{applied.ticker}</span>
               <span className="text-ink-dim">{applied.strategy_name}</span>
               <span className="font-mono">
-                {formatNumber(applied.quantity)} un · {formatCurrency(applied.value)}
+                {formatNumber(applied.quantity)} un · {attributionValueLabel(applied.value)}
               </span>
             </li>
           ))}

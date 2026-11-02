@@ -34,7 +34,7 @@ class LegacyAttributionPlannerTest : StringSpec({
         preview.groups.single().strategyName shouldBe "Legado Ações"
         preview.groups.single().adds.single().ticker shouldBe "ITUB4"
         preview.groups.single().adds.single().quantity.plain() shouldBe "50"
-        preview.groups.single().adds.single().value.plain() shouldBe "500"
+        preview.groups.single().adds.single().value?.plain() shouldBe "500"
     }
 
     "skips a ticker that already carries a report attribution, even with unattributed custody" {
@@ -87,7 +87,7 @@ class LegacyAttributionPlannerTest : StringSpec({
 
         preview.skips.shouldBeEmpty()
         preview.groups.single().adds.single().quantity.plain() shouldBe "150"
-        preview.groups.single().adds.single().value.plain() shouldBe "1500"
+        preview.groups.single().adds.single().value?.plain() shouldBe "1500"
     }
 
     "shrinks a bucket ticker on a sale" {
@@ -171,7 +171,7 @@ class LegacyAttributionPlannerTest : StringSpec({
         preview.groups.last().adds.single().ticker shouldBe "HGLG11"
     }
 
-    "values a ticker with no stored close at zero" {
+    "leaves a ticker with no stored close unpriced" {
         val preview = plan(
             positions = listOf(position("ITUB4", "50")),
             classByTicker = mapOf("ITUB4" to AssetClass.ACOES),
@@ -179,7 +179,22 @@ class LegacyAttributionPlannerTest : StringSpec({
             prices = emptyMap(),
         )
 
-        preview.groups.single().adds.single().value.plain() shouldBe "0"
+        preview.groups.single().adds.single().value shouldBe null
+    }
+
+    "keeps a priced ticker valued when another ticker is unpriced" {
+        val preview = plan(
+            positions = listOf(position("ITUB4", "50"), position("VALE3", "10")),
+            classByTicker = mapOf(
+                "ITUB4" to AssetClass.ACOES,
+                "VALE3" to AssetClass.ACOES,
+            ),
+            slicesByTicker = emptyMap(),
+            prices = mapOf("ITUB4" to BigDecimal("10")),
+        )
+
+        preview.groups.single().adds.map { it.ticker to it.value?.plain() } shouldBe
+            listOf("ITUB4" to "500", "VALE3" to null)
     }
 
     "ignores a position with no custody" {

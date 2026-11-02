@@ -101,10 +101,12 @@ object LegacyAttributionPlanner {
         }
     }
 
+    // A missing close leaves the value unknown (null), never zero: an unpriced holding must not read
+    // as R$ 0,00. The custody still moves — the write path is quantity-based.
     private fun add(position: Position, prices: Map<String, BigDecimal>) = LegacyAttributionAdd(
         ticker = position.ticker,
         quantity = position.quantity,
-        value = position.quantity.valueAt(price = prices[position.ticker]),
+        value = prices[position.ticker]?.let { position.quantity.valueAt(price = it) },
     )
 
     private fun skip(ticker: String, reason: LegacyAttributionSkipReason, assetClass: AssetClass?) =

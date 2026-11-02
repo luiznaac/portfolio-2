@@ -208,7 +208,8 @@ export type LegacyAttributionSkipReason =
 export interface LegacyAttributionAdd {
   ticker: string;
   quantity: number;
-  value: number;
+  // Omitted when the ticker has no stored close: the value is unknown ("—"), never R$ 0,00.
+  value?: number;
 }
 
 export interface LegacyAttributionGroup {

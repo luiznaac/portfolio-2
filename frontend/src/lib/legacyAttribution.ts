@@ -8,6 +8,7 @@ import type {
   LegacyAttributionSkip,
   LegacyAttributionSkipReason,
 } from "../api/types.ts";
+import { formatCurrency } from "./format.ts";
 
 // The custody the bulk action targets: the outside rows of every class. The unclassified line is a
 // data-quality state, not outside custody, so it never counts here.
@@ -16,7 +17,7 @@ export function outsideCustody(allocation: Allocation): number {
 }
 
 // The page-level action appears while a class still holds outside Tickers. The ticker list, not its
-// value: a Ticker with no stored close is worth zero but still has custody to attribute.
+// value: a Ticker with no stored close has an unknown value but still has custody to attribute.
 export function shouldShowBanner(allocation: Allocation): boolean {
   return allocation.classes.some((cls) => cls.outside.tickers.length > 0);
 }
@@ -25,9 +26,23 @@ export function previewAddCount(preview: LegacyAttributionPreview): number {
   return preview.groups.reduce((total, group) => total + group.adds.length, 0);
 }
 
+// An absent value is unknown ("—"), never R$ 0,00.
+export function attributionValueLabel(value: number | undefined): string {
+  return value === undefined ? "—" : formatCurrency(value);
+}
+
+// Only the priced adds enter the total: an unpriced add's value is unknown, never R$ 0,00.
 export function previewTotalValue(preview: LegacyAttributionPreview): number {
   return preview.groups.reduce(
-    (total, group) => total + group.adds.reduce((sum, add) => sum + add.value, 0),
+    (total, group) =>
+      total + group.adds.reduce((sum, add) => (add.value === undefined ? sum : sum + add.value), 0),
+    0,
+  );
+}
+
+export function previewUnpricedCount(preview: LegacyAttributionPreview): number {
+  return preview.groups.reduce(
+    (total, group) => total + group.adds.filter((add) => add.value === undefined).length,
     0,
   );
 }

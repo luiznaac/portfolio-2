@@ -247,6 +247,23 @@ class AttributionControllerTest : DescribeSpec({
             }
         }
 
+        it("omits an unpriced add's value from the body") {
+            val legacy = mockk<LegacyAttributionService>()
+            coEvery { legacy.preview() } returns unpricedPreview
+
+            testApplication {
+                application { installRoutes(AttributionController(mockk(relaxed = true), legacy)) }
+
+                val response = client.get("/positions/legacy-attribution/preview")
+
+                response.status shouldBe HttpStatusCode.OK
+                val add = ObjectMapper().readTree(response.bodyAsText())
+                    .get("groups").get(0).get("adds").get(0)
+                add.get("ticker").asText() shouldBe "ITUB4"
+                add.has("value") shouldBe false
+            }
+        }
+
         it("returns 200 with the per-ticker apply result") {
             val legacy = mockk<LegacyAttributionService>()
             coEvery { legacy.apply() } returns result
@@ -290,6 +307,24 @@ private val preview = LegacyAttributionPreview(
     skips = listOf(
         LegacyAttributionSkip("VALE3", LegacyAttributionSkipReason.HAS_ATTRIBUTION, AssetClass.ACOES),
     ),
+)
+
+private val unpricedPreview = LegacyAttributionPreview(
+    groups = listOf(
+        LegacyAttributionGroup(
+            assetClass = AssetClass.ACOES,
+            strategyId = 9,
+            strategyName = "Legado Ações",
+            adds = listOf(
+                LegacyAttributionAdd(
+                    ticker = "ITUB4",
+                    quantity = BigDecimal("50"),
+                    value = null,
+                ),
+            ),
+        ),
+    ),
+    skips = emptyList(),
 )
 
 private val result = LegacyAttributionResult(

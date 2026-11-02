@@ -71,7 +71,7 @@ class LegacyAttributionServiceTest : StringSpec({
         preview.groups.single().strategyId shouldBe 9
         preview.groups.single().strategyName shouldBe "Legado Ações"
         preview.groups.single().adds.single().ticker shouldBe "ITUB4"
-        preview.groups.single().adds.single().value.plain() shouldBe "500"
+        preview.groups.single().adds.single().value?.plain() shouldBe "500"
         preview.skips.map { it.ticker to it.reason } shouldBe listOf(
             "VALE3" to LegacyAttributionSkipReason.HAS_ATTRIBUTION,
             "ZZZZ3" to LegacyAttributionSkipReason.UNCLASSIFIED,
@@ -115,7 +115,21 @@ class LegacyAttributionServiceTest : StringSpec({
         }
         result.attributed.single().ticker shouldBe "ITUB4"
         result.attributed.single().strategyName shouldBe "Legado Ações"
-        result.attributed.single().value.plain() shouldBe "500"
+        result.attributed.single().value?.plain() shouldBe "500"
+        result.skipped.shouldBeEmpty()
+    }
+
+    "apply keeps an unpriced add's value unknown" {
+        coEvery { positions.fetchAll() } returns listOf(position("ITUB4", "50"))
+        coEvery { catalog.fetchAll() } returns listOf(entry("ITUB4", AssetClass.ACOES))
+        coEvery { strategies.fetchAll() } returns listOf(acoesBucket)
+        coEvery { quotes.latestClose("ITUB4") } returns null
+        coEvery { attributions.setSlice(any(), any()) } returns summary
+
+        val result = service.apply()
+
+        result.attributed.single().ticker shouldBe "ITUB4"
+        result.attributed.single().value shouldBe null
         result.skipped.shouldBeEmpty()
     }
 

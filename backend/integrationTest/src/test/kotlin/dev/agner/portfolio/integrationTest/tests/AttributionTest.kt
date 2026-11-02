@@ -192,7 +192,7 @@ private fun Map<String, Any>.toPreview(): LegacyAttributionPreview = LegacyAttri
                 LegacyAttributionAdd(
                     ticker = add["ticker"] as String,
                     quantity = BigDecimal((add["quantity"] as Number).toString()),
-                    value = BigDecimal((add["value"] as Number).toString()),
+                    value = add["value"].toBigDecimalOrNull(),
                 )
             },
         )
@@ -206,13 +206,17 @@ private fun Map<String, Any>.toResult(): LegacyAttributionResult = LegacyAttribu
         LegacyAttributionApplied(
             ticker = applied["ticker"] as String,
             quantity = BigDecimal((applied["quantity"] as Number).toString()),
-            value = BigDecimal((applied["value"] as Number).toString()),
+            value = applied["value"].toBigDecimalOrNull(),
             strategyId = (applied["strategy_id"] as Number).toInt(),
             strategyName = applied["strategy_name"] as String,
         )
     },
     skipped = (this["skipped"] as List<Map<String, Any>>).map { it.toSkip() },
 )
+
+// The wire omits an unpriced add's `value`, so the decode must treat absence as unknown (null).
+private fun Any?.toBigDecimalOrNull(): BigDecimal? =
+    (this as Number?)?.let { BigDecimal(it.toString()) }
 
 private fun Map<String, Any>.toSkip(): LegacyAttributionSkip = LegacyAttributionSkip(
     ticker = this["ticker"] as String,
