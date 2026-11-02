@@ -305,11 +305,8 @@ export function ImportWizard() {
 
           {state.upload.import.status === "APPLIED" && (
             <div className="mt-4 space-y-4">
-              <div
-                data-testid="import-quality-summary"
-                className="rounded-sm border border-line bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink"
-              >
-                <p>
+              <div className="rounded-sm border border-line bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink">
+                <p data-testid="import-quality-summary">
                   {importedEntries} entradas importadas · {heldPositions.length} posições na
                   carteira · {negativePositions}{" "}
                   <Link to="/history" className="text-principal hover:underline">
