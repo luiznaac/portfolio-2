@@ -370,3 +370,23 @@ Grain behaviour the prototype encodes, from the fixture rather than invented:
 
 Not modelled: editing targets, the harvest UI (the Impostos view is read-only here), the visual
 direction (#355) and the additive read models a combined resumo would need.
+
+**Decided in #353: treatment A — one Análise with three sibling views.** Performance / Proventos /
+Impostos stay page tabs under one Análise object, over a single shared period rail. The rail opens on
+**12 months ending the last closed month** and keeps no cross-visit memory; within the session the
+window survives a tab switch, which is the point of the shared rail. The monthly grain of the tax read
+is handled inside that rail: the month-anchor selects the apuração and the window only filters which
+months the side panel lists.
+
+What the decision drops, and why:
+
+- B's three destinations are not carried forward: the period context would have to be re-established
+  on every jump between the three questions.
+- C's resumo landing is not carried forward either. It reads well, but the owner opens the area
+  already knowing the question — the tabs at the top of A are the cheaper surface, and C would add a
+  combined month-by-month read model with no screen explicitly asking for it.
+- Because Proventos is a tab, the "a receber" bubble stays inside it, and the attention deep link
+  (`analysis/income/24`) lands in the same shared window instead of a separate destination.
+
+The losing treatments stay in this file as comparison evidence only; the assembled prototype (#357)
+and the spec (#358) take A.
