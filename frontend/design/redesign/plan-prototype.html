@@ -417,6 +417,10 @@ const EXECUTABLE = F.plan.orderList.orders.length;
 const SCENARIOS = {
   fresh: { label: "Início do mês", short: "0/3 executadas", executed: 0, transfer: "PENDING", closed: false },
   mid: { label: "Meio do mês", short: "1/3 executadas", executed: 1, transfer: "PENDING", closed: false },
+  partial: {
+    label: "Execução parcial", short: "AAPL34 120/250 · transferência recusada",
+    executedByTicker: { AAPL34: 120, MSFT34: 0, KNCR11: 0 }, transfer: "REJECTED", closed: false,
+  },
   ready: { label: "Pronto para fechar", short: "3/3 · transferência decidida", executed: 3, transfer: "APPROVED", closed: false },
   closed: { label: "Novembro fechado", short: "snapshot gravado", executed: 3, transfer: "APPROVED", closed: true },
 };
@@ -427,7 +431,19 @@ const decisions = { transfer: null, closed: false };
 const scenario = () => SCENARIOS[state.s];
 const transferStatus = () => decisions.transfer ?? scenario().transfer;
 const isClosed = () => decisions.closed || scenario().closed;
-const executedCount = () => scenario().executed;
+const ORDERS = F.plan.orderList.orders;
+const executedQty = (order) => {
+  const byTicker = scenario().executedByTicker;
+  if (byTicker) return Math.min(order.quantity, byTicker[order.ticker] ?? 0);
+  return ORDERS.findIndex((o) => o.id === order.id) < scenario().executed ? order.quantity : 0;
+};
+const fullExecuted = () => ORDERS.filter((o) => executedQty(o) >= o.quantity).length;
+const partialExecuted = () => ORDERS.filter((o) => { const q = executedQty(o); return q > 0 && q < o.quantity; }).length;
+const orderStatus = (order) => {
+  const q = executedQty(order);
+  return q >= order.quantity ? "EXECUTADA" : q > 0 ? "PARCIAL" : "SUGERIDA";
+};
+const statusChip = (status) => status === "EXECUTADA" ? "green" : status === "PARCIAL" ? "amber" : "grey";
 
 let capitalSaved = PLANNED_CAPITAL; // edited by the owner; the plan below stays at its 02/11 snapshot
 let planStale = false;
@@ -447,7 +463,7 @@ function stepState() {
     if (s.key === "capital") return { ...s, done: true, meta: money0(capitalSaved) };
     if (s.key === "targets") return { ...s, done: true, meta: "3 classes · 3 estratégias · 3 subclasses" };
     if (s.key === "plan") return { ...s, done: true, meta: `02/11 · fase FULL` };
-    if (s.key === "execution") return { ...s, done: executedCount() === EXECUTABLE, meta: `${executedCount()}/${EXECUTABLE}`, blocked: false };
+    if (s.key === "execution") return { ...s, done: fullExecuted() === EXECUTABLE, meta: `${fullExecuted()}/${EXECUTABLE}${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}`, blocked: false };
     if (s.key === "transfer") return { ...s, done: decisionsMade, blocked: !decisionsMade, meta: transferStatus() === "PENDING" ? "1 pendente · trava o fechamento" : transferStatus() === "APPROVED" ? "aprovada" : "recusada" };
     return { ...s, done: isClosed(), meta: isClosed() ? "snapshot gravado" : "aberto" };
   });
@@ -473,10 +489,13 @@ function nextAction() {
       primary: "Aprovar transferência", secondary: "Ver transferência",
     };
   }
-  if (executedCount() < EXECUTABLE) {
+  if (fullExecuted() < EXECUTABLE) {
+    const partial = partialExecuted();
     return {
       code: "execution", tone: "normal",
-      title: `${EXECUTABLE - executedCount()} ordens ainda não voltaram do broker`,
+      title: partial
+        ? `${partial} ordem parcial e ${EXECUTABLE - fullExecuted() - partial} sem execução`
+        : `${EXECUTABLE - fullExecuted()} ordens ainda não voltaram do broker`,
       detail: "Execução entra pela importação do extrato e casa sozinha com a ordem sugerida. O plano não reescreve com a execução — só o próximo recálculo mexe nos números.",
       primary: "Recalcular plano", secondary: "Ver ordens",
     };
@@ -578,8 +597,8 @@ const SURFACINGS = {
 
 function parseURL() {
   const q = new URLSearchParams(location.search);
-  const v = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "a";
-  const l = ["quiet", "card", "attention"].includes(q.get("l")) ? q.get("l") : "card";
+  const v = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "b";
+  const l = ["quiet", "card", "attention"].includes(q.get("l")) ? q.get("l") : "quiet";
   const s = Object.keys(SCENARIOS).includes(q.get("s")) ? q.get("s") : "mid";
   const parts = (location.hash.replace(/^#\/?/, "") || "portfolio/overview").split("/");
   const obj = objByKey[parts[0]] ? parts[0] : "portfolio";
@@ -604,14 +623,14 @@ window.addEventListener("hashchange", () => { state = parseURL(); render(); });
 
 function attentionItems() {
   let items = F.attention.filter((a) => a.kind !== "pending_transfer" || transferStatus() === "PENDING");
-  if (state.l === "attention" && !isClosed() && executedCount() < EXECUTABLE) {
+  if (state.l === "attention" && !isClosed() && fullExecuted() < EXECUTABLE) {
     items = [
       ...items,
       {
         id: "plan-orders",
         kind: "plan_orders",
         severity: "watch",
-        title: `${EXECUTABLE - executedCount()} ordens sugeridas sem execução`,
+        title: `${EXECUTABLE - fullExecuted()} ordens sem execução completa`,
         detail: "o plano fica parado até o extrato chegar",
         route: "plan/orders",
       },
@@ -825,16 +844,12 @@ function sectionTargets() {
   </section>`;
 }
 
-function orderStatus(index) {
-  return index < executedCount() ? "EXECUTADA" : "SUGERIDA";
-}
-
 function ordersSection({ full = false } = {}) {
   const p = F.plan.orderPlan;
   const f = p.funding;
   const t = F.plan.orderList.transfers[0];
   const status = transferStatus();
-  const orders = F.plan.orderList.orders.map((o, i) => ({ ...o, status: orderStatus(i), amount: o.quantity * o.suggested_price }));
+  const orders = ORDERS.map((o) => ({ ...o, executed: executedQty(o), status: orderStatus(o), amount: o.quantity * o.suggested_price }));
   const buyAmount = orders.filter((o) => o.side === "BUY").reduce((s, o) => s + o.amount, 0);
   const sellAmount = orders.filter((o) => o.side === "SELL").reduce((s, o) => s + o.amount, 0);
 
@@ -874,7 +889,7 @@ function ordersSection({ full = false } = {}) {
             <td class="r num">${money0(o.amount)}</td>
             <td>${o.side === "SELL" ? '<span class="chip amber plain">fundo de compra</span>' : '<span class="faint">caixa</span>'}</td>
             <td class="dim">${att ? `${esc(att.strategy)} ${att.side === "ALLOCATE" ? "+" : "−"}${att.quantity}` : "—"}</td>
-            <td><span class="chip ${o.status === "EXECUTADA" ? "green" : "grey"}">${o.status}</span></td>
+            <td><span class="chip ${statusChip(o.status)}">${o.status}</span></td>
           </tr>`;
         }).join("")}</tbody>
       </table>
@@ -898,14 +913,14 @@ function ordersSection({ full = false } = {}) {
 }
 
 function executionSection() {
-  const orders = F.plan.orderList.orders.map((o, i) => ({ ...o, status: orderStatus(i) }));
+  const orders = ORDERS.map((o) => ({ ...o, executed: executedQty(o), status: orderStatus(o) }));
   return `
   <section class="panel section" id="s-execution">
     <header>
-      <span class="step-head ${executedCount() === EXECUTABLE ? "done" : ""}"><span class="step-no">${executedCount() === EXECUTABLE ? "✓" : "4"}</span></span>
+      <span class="step-head ${fullExecuted() === EXECUTABLE ? "done" : ""}"><span class="step-no">${fullExecuted() === EXECUTABLE ? "✓" : "4"}</span></span>
       <h2>Execução</h2>
       <span class="sp"></span>
-      <span class="hint">${executedCount()}/${EXECUTABLE} casadas com a importação</span>
+      <span class="hint">${fullExecuted()}/${EXECUTABLE} completas${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}</span>
     </header>
     <div class="body flush">
       <table class="t">
@@ -913,14 +928,14 @@ function executionSection() {
         <tbody>${orders.map((o) => `<tr>
           <td><b class="ticker">${o.ticker}</b> <span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td>
           <td class="r num">${o.quantity}</td>
-          <td class="r num">${o.status === "EXECUTADA" ? o.quantity.toLocaleString("pt-BR") : "0"}</td>
-          <td class="dim">${o.status === "EXECUTADA" ? "casa com negócio importado" : "—"}</td>
-          <td><span class="chip ${o.status === "EXECUTADA" ? "green" : "grey"}">${o.status}</span></td>
+          <td class="r num">${o.executed.toLocaleString("pt-BR")}</td>
+          <td class="dim">${o.status === "EXECUTADA" ? "casa com negócio importado" : o.status === "PARCIAL" ? "parcial · resto ainda não voltou" : "—"}</td>
+          <td><span class="chip ${statusChip(o.status)}">${o.status}</span></td>
         </tr>`).join("")}</tbody>
       </table>
     </div>
     <div class="foot">
-      <span class="faint" style="font-size:11px">Negócios do mês fora de qualquer ordem aparecem aqui como <b>não planejados</b> — nunca entram no plano.</span>
+      <span class="faint" style="font-size:11px">Execução parcial deixa a ordem <b>SUGERIDA</b> com a quantidade casada ao lado. "Não operar" não existe por ordem hoje: uma ordem deliberadamente não executada fica igual a uma que ainda não voltou.</span>
       <span class="sp"></span>
       <span class="chip grey">0 não planejados</span>
     </div>
@@ -930,7 +945,7 @@ function executionSection() {
 function checksSection() {
   const checks = [
     { t: "Transferência pendente", d: "WEGE3 · 372 cotas · Legado Ações → Dividendos BR", v: transferStatus() === "PENDING" ? '<span class="chip red">trava o fechamento</span>' : '<span class="chip green plain">decidida</span>' },
-    { t: "Ordens não executadas", d: `${EXECUTABLE - executedCount()} de ${EXECUTABLE} ainda voltam do broker`, v: `<span class="chip amber plain">congela como sugerida</span>` },
+    { t: "Ordens sem execução completa", d: `${EXECUTABLE - fullExecuted()} de ${EXECUTABLE}${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}`, v: `<span class="chip amber plain">congela como está</span>` },
     { t: "Lacuna de custódia em AAPL34", d: "50 cotas em 16/10 · resultado pendente", v: `<span class="chip amber plain">não trava</span>` },
     { t: "Desdobramento WEGE3", d: "1:2, ex 20/10 · aguardando revisão", v: `<span class="chip amber plain">não trava</span>` },
     { t: "Cotação de VALE3", d: "último fechamento em 24/10", v: `<span class="chip amber plain">não trava</span>` },
@@ -1168,11 +1183,11 @@ function pagePlanMonth() {
 }
 
 function pagePlanOrders() {
-  const rows = F.plan.orderList.orders.map((o, i) => ({ ...o, status: orderStatus(i) }));
+  const rows = ORDERS.map((o) => ({ ...o, executed: executedQty(o), status: orderStatus(o) }));
   return `
   ${head("Plano · Ordens", "A lista persistida do mês, com o ciclo sugerida → executada → importada.", `<button class="btn" data-recalc="1" ${isClosed() ? "disabled" : ""}>Recalcular</button>`)}
   <section class="panel">
-    <header><h2>Ordens de novembro</h2><span class="sp"></span><span class="hint">${executedCount()}/${EXECUTABLE} executadas</span></header>
+    <header><h2>Ordens de novembro</h2><span class="sp"></span><span class="hint">${fullExecuted()}/${EXECUTABLE} completas${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}</span></header>
     <div class="body flush">
       <table class="t">
         <thead><tr><th>#</th><th>Ticker</th><th>Lado</th><th class="r">Sugerida</th><th class="r">Executada</th><th class="r">Preço sugerido</th><th class="r">Valor</th><th>Estado</th></tr></thead>
@@ -1181,10 +1196,10 @@ function pagePlanOrders() {
           <td><b class="ticker">${o.ticker}</b></td>
           <td><span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td>
           <td class="r num">${o.quantity}</td>
-          <td class="r num">${o.status === "EXECUTADA" ? o.quantity : 0}</td>
+          <td class="r num">${o.executed.toLocaleString("pt-BR")}</td>
           <td class="r num">${money(o.suggested_price)}</td>
           <td class="r num">${money0(o.quantity * o.suggested_price)}</td>
-          <td><span class="chip ${o.status === "EXECUTADA" ? "green" : "grey"}">${o.status}</span></td>
+          <td><span class="chip ${statusChip(o.status)}">${o.status}</span></td>
         </tr>`).join("")}</tbody>
       </table>
     </div>
@@ -1226,9 +1241,11 @@ function pagePlanTransfers() {
     <div class="body mini-list">
       <div class="mini-row"><span class="dim">Custódia</span><span class="sp"></span><b>não muda · 372 cotas ficam na conta</b></div>
       <div class="mini-row"><span class="dim">Atribuição</span><span class="sp"></span><b>Legado Ações −372 · Dividendos BR +372</b></div>
-      <div class="mini-row"><span class="dim">Fechamento</span><span class="sp"></span><b>${transferStatus() === "PENDING" ? "recusado enquanto pendente" : "liberado"}</b></div>
+      <div class="mini-row"><span class="dim">Decisão</span><span class="sp"></span><b>atômica · aprovar move 372, recusar move 0</b></div>
+      <div class="mini-row"><span class="dim">Fechamento</span><span class="sp"></span><b>${transferStatus() === "PENDING" ? "recusado enquanto pendente" : "liberado · inclusive se recusada"}</b></div>
       <div class="mini-row"><span class="dim">Autoaprovação</span><span class="sp"></span><b>abaixo de R$ 500 · este é R$ 19.492,80</b></div>
     </div>
+    <div class="foot"><span class="faint" style="font-size:11px">Não existe aprovação parcial: se quiser mover menos, é outra proposta. Recusar é a decisão explícita de não mover — e libera o fechamento.</span></div>
   </section>`;
 }
 
@@ -1262,7 +1279,12 @@ function pagePlanClose() {
     ? '<span class="chip green">novembro fechado</span>'
     : `<button class="btn primary" data-close-month="1" ${blocked ? "disabled" : ""}>Fechar novembro</button>`)}
   ${closeGateBody()}
-  ${blocked || isClosed() ? "" : `<div class="callout" style="margin-top:12px">${EXECUTABLE - executedCount() === 0 ? "Todas as ordens voltaram do broker: o snapshot fecha o mês sem sugestões pendentes." : `Fechar agora congela <b>${EXECUTABLE - executedCount()} ordens ainda sugeridas</b> como sugeridas no snapshot. Elas não são executadas retroativamente.`}</div>`}
+  <div class="callout" style="margin-top:12px">
+    <b>O que conta como pendência:</b> só a transferência <i>indecidida</i>. Recusar é uma decisão e libera o fechamento; não existe transferência parcial. Compra ou venda parcialmente executada não trava nada — o snapshot congela a quantidade executada e mantém o resto como sugestão.
+  </div>
+  ${blocked || isClosed() ? "" : `<div class="callout" style="margin-top:12px">${EXECUTABLE - fullExecuted() === 0
+    ? "Todas as ordens voltaram do broker: o snapshot fecha o mês sem sugestões pendentes."
+    : `Fechar agora congela <b>${EXECUTABLE - fullExecuted()} ordens sem execução completa</b>${partialExecuted() ? ` (${partialExecuted()} parcial${partialExecuted() > 1 ? "is" : ""})` : ""} com a quantidade executada de cada uma. Não há execução retroativa.`}</div>`}
   <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
     <section class="panel">
       <header><h2>O que o snapshot congela</h2></header>
