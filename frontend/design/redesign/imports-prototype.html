@@ -356,7 +356,7 @@ const VARIANTS = {
 
 function parseURL() {
   const q = new URLSearchParams(location.search);
-  const v = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "a";
+  const v = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "c";
   const parts = (location.hash.replace(/^#\/?/, "") || "imports/inbox").split("/").filter(Boolean);
   return { v, parts };
 }
@@ -776,7 +776,8 @@ function pageStrategies(parts) {
       </div>
     </div></section>`;
   } else {
-    body = `${reviewOpen && state.v === "b" ? inlineReview("xp") : ""}
+    body = `${state.v === "c" && editionStatus() === "STAGED" ? `<div class="infobanner"><b>Sessão em revisão.</b><span>Edição 104 de Dividendos BR está aberta no assistente (etapa 3 de 4). O assistente é o único lugar de revisão.</span><span class="sp"></span><a data-go="import/wizard/xp/3">Retomar no assistente →</a></div>` : ""}
+      ${reviewOpen && state.v === "b" ? inlineReview("xp") : ""}
       ${editionCards(reviewOpen && state.v === "b")}
       ${!reviewOpen && state.v === "b" && editionStatus() === "STAGED" ? `<div class="callout" style="margin-top:12px"><b>Revisão no destino.</b> Nesta variante o arquivo enviado por <b>Enviar relatório</b> é lido e revisado aqui mesmo; a caixa de entrada só aponta para esta tela.</div>` : ""}`;
   }
@@ -868,7 +869,12 @@ function pageAssets(parts) {
     ? `<div class="infobanner"><b>2 importações aguardam.</b><span>Extrato B3 (101) em revisão e custódia (102) pronta para aplicar — ambas na Caixa de entrada.</span><span class="sp"></span><a data-go="imports/inbox">Abrir Importações →</a></div>`
     : state.v === "b"
     ? `<div class="infobanner"><b>Revisão no destino.</b><span>O extrato B3 e o snapshot de custódia são revisados e aplicados aqui, sem sair de Ativos.</span><span class="sp"></span><a data-go="assets/positions/review/101">Revisar extrato (101) →</a><a data-go="assets/positions/review/102">Revisar custódia (102) →</a></div>`
-    : `<div class="infobanner"><b>Fluxo de importação à parte.</b><span>Nesta variante a revisão abre no assistente em tela cheia, e a caixa de entrada lista a sessão.</span><span class="sp"></span><a data-go="import/wizard/b3/1">Abrir assistente →</a></div>`;
+    : (() => {
+        const links = [];
+        if (!rt.b3) links.push(`<a data-go="import/wizard/b3/3">Extrato B3 (101) →</a>`);
+        if (!rt.custody) links.push(`<a data-go="import/wizard/custody/3">Custódia (102) →</a>`);
+        return `<div class="infobanner"><b>Sessão em revisão.</b><span>${links.length ? "Há uma sessão do assistente aguardando decisão; ele é o único lugar de revisão." : "Nenhuma sessão aberta. O assistente é o único lugar de revisão."}</span><span class="sp"></span>${links.join('<span style="width:12px"></span>')}</div>`;
+      })();
   return `${head("Ativos · Posições", "Custódia real e preço médio fiscal; a atribuição por estratégia vem em segundo plano.", actions)}${tabBar}
     ${reviewKind && state.v === "b" ? inlineReview(reviewKind) : ""}
     ${pendingStrip}
@@ -1127,7 +1133,7 @@ function wizardHTML(kind, stepInput) {
   const meta = kind === "xp" ? "XP · layout 2026-07" : kind === "custody" ? "B3 · posição em custódia" : "B3 · movimentação";
   const stepBody = () => {
     if (step === 1) {
-      return `<section class="wiz-panel"><header><h2>Arquivo</h2><span class="sp"></span><span class="hint">aberto de: ${kind === "xp" ? "Estratégias · Dividendos BR" : "Ativos · Posições"}</span></header>
+      return `<section class="wiz-panel"><header><h2>Arquivo</h2><span class="sp"></span><span class="hint">destino e parser pré-preenchidos</span></header>
         <div class="pad" style="display:grid;gap:12px">
           <div class="segmented">
             <button class="${kind === "xp" ? "active" : ""}" data-wiz-kind="xp">Relatório XP</button>
@@ -1136,7 +1142,7 @@ function wizardHTML(kind, stepInput) {
           </div>
           <div class="drop"><b>Arraste o arquivo aqui</b><span>o contexto já escolheu o parser: ${meta}</span></div>
           <div class="sample"><span class="mono">${kind === "xp" ? "XP_Relatorio_Novembro_2026.csv" : kind === "custody" ? "posicao-2026-10-31.xlsx" : "movimentacao-2026-10-31.xlsx"}</span><span class="sp"></span><span class="chip green plain">arquivo escolhido</span></div>
-          <div class="callout"><b>Contexto sem cerimônia.</b> O destino ${dest} veio de onde o assistente foi aberto; trocar é explícito, não um passo a mais.</div>
+          <div class="callout"><b>Contexto sem cerimônia.</b> O destino ${dest} pode vir de onde o assistente foi aberto; trocar é explícito, não um passo a mais.</div>
         </div>
       </section>`;
     }
@@ -1376,12 +1382,15 @@ document.addEventListener("click", (e) => {
     else if (kind === "custody") rt.custody = "applied";
     else rt.b3 = "partial";
     toast(kind === "xp" ? "Edição 104 promovida a ativa" : kind === "custody" ? "Snapshot aplicado · 1 lacuna aberta" : "3 linhas aplicadas · 1 no lote de reenvio");
+    ui.parked = null;
+    go(kind === "xp" ? "strategies/edicoes" : "assets/positions");
     render();
     return;
   }
   if (a === "wiz-finish") {
+    const kind = state.parts[2] || "b3";
     ui.parked = null;
-    go("imports/inbox");
+    go(kind === "xp" ? "strategies/edicoes" : "assets/positions");
     toast("Importação concluída");
     return;
   }

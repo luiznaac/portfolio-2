@@ -396,7 +396,7 @@ and the spec (#358) take A.
 [`imports-prototype.html`](imports-prototype.html) compares where report and extract uploads are
 reviewed, on the same fixture. Serve the folder as above and open
 `http://localhost:8765/imports-prototype.html`; append `?v=a|b|c` to switch treatment. The default
-is **A**, the global review workshop.
+is **C**, the chosen treatment.
 
 Three treatments (bottom bar **tratamento**):
 
@@ -406,9 +406,11 @@ Three treatments (bottom bar **tratamento**):
 - `?v=b` — **revisão no destino**: the file is reviewed where the data lives — the edition diff in the
   strategy's Edições tab, the B3 rows in the Ativos · Posições page. The inbox is a router: every row
   opens the destination's review, and the report never re-renders its own review surface.
-- `?v=c` — **assistente em tela cheia**: every upload opens the same four-step wizard (arquivo,
-  destino e mapeamento, linhas/diff, aplicar). The context pre-fills destination and parser, and
-  leaving early parks the session in the inbox to resume.
+- `?v=c` — **assistente em tela cheia** (chosen): every upload opens the same four-step wizard
+  (arquivo, destino e mapeamento, linhas/diff, aplicar). The context pre-fills destination and parser,
+  leaving early parks the session in the inbox to resume, and a successful apply lands on the
+  destination object. The object pages keep a one-line **sessão em revisão** strip that resumes the
+  wizard, so a pending edition is visible from the strategy and a pending extract from Ativos.
 
 Scenarios in the bottom bar: **Relatório XP** (contextual upload from Dividendos BR), **Extrato B3**
 (contextual upload from Ativos · Posições), **Caixa de entrada** (the global queue), **Erro de linha**
@@ -434,5 +436,16 @@ Not modelled: real parsers and file reading, per-row error containers in the bac
 body is file-level), a persisted import → destination link, resumability beyond the parked wizard
 session, authentication, and the visual direction (#355).
 
-**Decision pending in #354**: which treatment (or which parts of each) the assembled prototype (#357)
-and the spec (#358) carry.
+**Decided in #354: treatment C, with the safety rails.** The wizard is the only review surface:
+step 1 carries the contextual prefill, step 4 carries the "o que esta importação muda" card, and the
+apply lands on the destination object. What survives around it:
+
+- the per-source status surface (Importações · Fontes) — attention lives on the source;
+- row-level errors with an **N rejeitadas** retry batch, never all-or-nothing;
+- a one-line **sessão em revisão** strip on the strategy/Ativos page that resumes the wizard;
+- the parked session in the inbox for an upload abandoned mid-flow.
+
+What is dropped: A's review inside the import detail and B's inline review inside the destination
+pages. A and B stay in this file as comparison evidence only; the assembled prototype (#357) and the
+spec (#358) take C. The apply-lands-on-destination choice also fixes the "back to the object" question
+the ticket asked: the owner arrives there directly, with the record's provenance one link away.
