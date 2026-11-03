@@ -1,0 +1,1966 @@
+<!DOCTYPE html>
+<!--
+  THROWAWAY PROTOTYPE — wayfinder map #347, assembly ticket #357.
+  One navigable app assembled from the per-area prototypes (#350–#355), on the shared fixture (#356),
+  in the decided console visual language (#355).
+  Data: ./fixture.js. Serve the folder: python3 -m http.server 8765 -d frontend/design/redesign
+  No build step, no persistence: decisions live in memory and reset on reload.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Carteira Ideal — protótipo navegável (ticket #357)</title>
+<style>
+  :root {
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --bg: #0b0e12; --sur: #11161c; --sur2: #161d25; --sur3: #1b232c;
+    --line: #232c37; --line2: #19212a;
+    --ink: #e7edf4; --ink2: #9ba8b7; --ink3: #64707f;
+    --accent: #78a9ff; --accent-bg: #14243d;
+    --gain: #54c98c; --loss: #f0736a; --warn: #d9a45e; --warn-bg: #2a2115;
+    --short: #78a9ff; --over: #d9a45e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font: 12.5px/1.38 var(--sans); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  a { color: inherit; text-decoration: none; cursor: pointer; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .up { color: var(--gain); } .down { color: var(--loss); }
+  .short { color: var(--short); } .over { color: var(--over); }
+  .dim { color: var(--ink2); } .faint { color: var(--ink3); }
+
+  .dk { display: grid; grid-template-columns: 198px minmax(0, 1fr); min-height: 100vh; }
+  .dk-side { background: #0d1117; border-right: 1px solid var(--line); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow: auto; }
+  .dk-brand { padding: 15px 14px 11px; display: flex; align-items: baseline; gap: 5px; }
+  .dk-brand .a, .dk-brand .b { font: 600 13.5px/1 var(--mono); letter-spacing: -.03em; }
+  .dk-brand .b { color: var(--accent); }
+  .dk-brand .c { margin-left: auto; font: 9px/1 var(--mono); letter-spacing: .12em; color: var(--ink3); text-transform: uppercase; }
+  .dk-group { font: 600 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); padding: 13px 14px 5px; }
+  .dk-nav { padding: 0 7px; }
+  .dk-nav a { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; color: var(--ink2); font-size: 12px; line-height: 1.2; }
+  .dk-nav a:hover { background: var(--sur2); color: var(--ink); }
+  .dk-nav a.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .dk-nav a .cnt { margin-left: auto; min-width: 16px; padding: 1px 4px; border-radius: 8px; font: 600 9.5px/1.2 var(--mono); text-align: center; background: var(--line); color: var(--ink2); }
+  .dk-nav a .cnt.action { background: var(--loss); color: #16090a; }
+  .dk-side-foot { margin-top: auto; border-top: 1px solid var(--line2); padding: 10px 14px; font: 10.5px/1.5 var(--mono); color: var(--ink3); }
+  .dk-side-foot b { color: var(--ink2); font-weight: 600; }
+  .dk-main { min-width: 0; display: flex; flex-direction: column; }
+  .dk-top { min-height: 44px; border-bottom: 1px solid var(--line); background: #0d1117; display: flex; align-items: center; gap: 12px; padding: 0 16px; position: sticky; top: 0; z-index: 20; }
+  .dk-crumb { color: var(--ink3); font: 11px/1 var(--mono); letter-spacing: .02em; }
+  .dk-crumb b { color: var(--ink); font-weight: 600; }
+  .dk-top .sp { flex: 1; }
+  .dk-live { display: inline-flex; align-items: center; gap: 6px; font: 10.5px/1 var(--mono); color: var(--ink2); }
+  .dk-live i { width: 5px; height: 5px; border-radius: 50%; background: var(--gain); display: block; }
+  .dk-pill { border: 1px solid var(--line); background: var(--sur2); color: var(--ink2); font: 10.5px/1 var(--mono); padding: 5px 9px; border-radius: 2px; }
+  .dk-body { padding: 16px 18px 44px; max-width: 1620px; width: 100%; }
+  .dk-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--sur); margin-bottom: 12px; }
+  .dk-cell { padding: 9px 11px; border-right: 1px solid var(--line2); min-width: 0; }
+  .dk-cell:last-child { border-right: 0; }
+  .dk-cell .k { font: 600 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .dk-cell .v { font: 600 18px/1.25 var(--mono); letter-spacing: -.04em; margin-top: 3px; }
+  .dk-cell .s { font: 10px/1.3 var(--mono); color: var(--ink3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dk-monthline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 7px 0; margin-bottom: 10px; font-size: 11.5px; color: var(--ink2); }
+  .dk-monthline .k { font: 600 9px/1 var(--mono); letter-spacing: .14em; color: var(--ink3); }
+  .dk-monthline b { color: var(--ink); font-weight: 600; }
+  .dk-monthline .sep { color: #39434f; }
+  .dk-monthline .sp { flex: 1; }
+  .dk-standfirst { font-size: 13.5px; line-height: 1.55; color: var(--ink2); max-width: 860px; margin: 0 0 14px; }
+  .dk-standfirst b { color: var(--ink); font-weight: 600; }
+  .dk-link { color: var(--accent); font-size: 11.5px; cursor: pointer; }
+  .dk-cols { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+  .dk-stack { display: grid; gap: 14px; min-width: 0; }
+  .dk-panel { background: var(--sur); border: 1px solid var(--line); border-radius: 3px; min-width: 0; }
+  .dk-panel > h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 11px; font: 600 9.5px/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink2); border-bottom: 1px solid var(--line2); }
+  .dk-panel > h2 .sp { flex: 1; }
+  .dk-panel > h2 .hint { font: 9.5px/1.2 var(--mono); letter-spacing: .02em; text-transform: none; color: var(--ink3); }
+  .dk-panel > h2 .badge { font: 600 9.5px/1 var(--mono); color: #16090a; background: var(--loss); padding: 3px 5px; border-radius: 2px; }
+  .dk-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .dk-table th { text-align: left; font: 600 8.5px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); padding: 6px 10px; border-bottom: 1px solid var(--line2); background: var(--sur2); white-space: nowrap; }
+  .dk-table td { padding: 6px 10px; border-bottom: 1px solid var(--line2); vertical-align: middle; }
+  .dk-table tr:last-child td { border-bottom: 0; }
+  .dk-table .r { text-align: right; }
+  .dk-table .r .num { font-size: 11.5px; }
+  .dk-table tr.total td { background: var(--sur2); border-top: 1px solid var(--line); font-weight: 600; }
+  .dk-table tr.ind td:first-child { padding-left: 24px; color: var(--ink2); }
+  .dk-table tr.semi td { color: var(--ink3); }
+  .dk-table tr.click { cursor: pointer; }
+  .dk-table tr.click:hover td { background: var(--sur2); }
+  .dk-sw { width: 6px; height: 6px; border-radius: 1px; display: inline-block; margin-right: 7px; vertical-align: 1px; }
+  .dk-bar { height: 4px; background: var(--line2); position: relative; min-width: 74px; border-radius: 1px; }
+  .dk-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 1px; }
+  .dk-bar u { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink); opacity: .65; }
+  .dk-bar.over i { background: var(--warn); }
+  .dk-note { font: 10px/1.5 var(--mono); color: var(--ink3); padding: 2px 2px 0; }
+  .dk-note b { color: var(--ink2); font-weight: 500; }
+  .dk-attn-group { font: 600 8.5px/1 var(--mono); letter-spacing: .14em; color: var(--ink3); padding: 8px 11px 4px; border-bottom: 1px solid var(--line2); background: var(--sur2); }
+  .dk-attn { display: grid; }
+  .dk-attn-item { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; padding: 7px 11px; border-bottom: 1px solid var(--line2); cursor: pointer; text-align: left; border-left: 0; border-right: 0; border-top: 0; background: none; width: 100%; }
+  .dk-attn-item:last-child { border-bottom: 0; }
+  .dk-attn-item:hover { background: var(--sur2); }
+  .dk-attn-item .dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 5px; }
+  .dk-attn-item .dot.a { background: var(--loss); }
+  .dk-attn-item .dot.w { background: var(--warn); }
+  .dk-attn-item > span:last-child { min-width: 0; }
+  .dk-attn-item .t { display: block; font-size: 11.5px; line-height: 1.3; color: var(--ink); }
+  .dk-attn-item .d { display: block; font: 10px/1.35 var(--mono); color: var(--ink3); margin-top: 2px; }
+  .dk-attn-item .r { display: block; font: 9.5px/1 var(--mono); color: var(--accent); margin-top: 3px; }
+  .dk-pagehead { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+  .dk-pagehead h1 { margin: 0; font: 600 17px/1.2 var(--sans); letter-spacing: -.02em; }
+  .dk-pagehead p { margin: 3px 0 0; font: 10.5px/1.4 var(--mono); color: var(--ink3); }
+  .dk-pagehead .sp { flex: 1; }
+  .dk-chips { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .dk-chips button, .dk-chips span { font: 600 9.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); padding: 6px 9px; border: 0; border-right: 1px solid var(--line); background: var(--sur); cursor: pointer; }
+  .dk-chips button:last-child, .dk-chips span:last-child { border-right: 0; }
+  .dk-chips button.on, .dk-chips span.on { background: var(--sur3); color: var(--ink); }
+  .dk-tabs { display: flex; gap: 1px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .dk-tabs button { border: 0; background: none; cursor: pointer; color: var(--ink3); font: 11.5px/1 var(--mono); padding: 8px 11px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .dk-tabs button:hover { color: var(--ink); }
+  .dk-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .dk-tabs .sp { flex: 1; }
+  .dk-tabs .ctx { font: 10px/1 var(--mono); color: var(--ink3); align-self: center; }
+  .dk-kv { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--sur); margin-bottom: 14px; }
+  .dk-kv > div { padding: 9px 11px; border-right: 1px solid var(--line2); min-width: 0; }
+  .dk-kv > div:last-child { border-right: 0; }
+  .dk-kv .k { font: 600 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .dk-kv .v { font: 600 16px/1.3 var(--mono); letter-spacing: -.03em; margin-top: 3px; }
+  .dk-kv .s { font: 10px/1.3 var(--mono); color: var(--ink3); margin-top: 1px; }
+  .dk-chart { padding: 10px 11px 6px; }
+  .dk-chart svg { display: block; width: 100%; height: auto; }
+  .dk-legend { display: flex; gap: 14px; font: 10px/1 var(--mono); color: var(--ink3); padding: 2px 11px 10px; flex-wrap: wrap; }
+  .dk-legend i { display: inline-block; width: 12px; height: 2px; vertical-align: 3px; margin-right: 5px; }
+  .dk-legend .btn { cursor: pointer; color: var(--accent); }
+  .dk-callout { border-left: 2px solid var(--warn); background: var(--warn-bg); padding: 8px 11px; font-size: 11.5px; color: #e5cfa6; margin: 10px 11px; }
+  .dk-callout b { color: #f1dcb4; }
+  .dk-mini { display: grid; gap: 6px; padding: 9px 11px; }
+  .dk-mini-row { display: flex; align-items: center; gap: 8px; font-size: 11px; min-width: 0; }
+  .dk-mini-row .sp { flex: 1; }
+  .dk-read { padding: 9px 11px; font-size: 11.5px; line-height: 1.5; color: var(--ink2); }
+  .dk-read p { margin: 0 0 7px; }
+  .dk-read p:last-child { margin: 0; }
+  .dk-read b { color: var(--ink); font-weight: 600; }
+  .dk-spark { display: flex; align-items: flex-end; gap: 3px; height: 46px; padding: 10px 11px 0; }
+  .dk-spark i { flex: 1; min-width: 2px; background: #2f6a52; }
+  .dk-spark i.neg { background: #7a3a35; }
+  .chip { display: inline-flex; align-items: center; font: 600 9px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 2px; border: 1px solid var(--line); background: var(--sur3); color: var(--ink2); white-space: nowrap; }
+  .chip.plain { background: transparent; }
+  .chip.blue { color: var(--accent); border-color: #2a4368; background: var(--accent-bg); }
+  .chip.amber { color: var(--warn); border-color: #4a3a22; background: var(--warn-bg); }
+  .chip.green { color: var(--gain); border-color: #234d39; background: #10241b; }
+  .chip.red { color: var(--loss); border-color: #552b28; background: #2a1515; }
+  .chip.grey { color: var(--ink3); }
+  .btn { border: 1px solid var(--line); background: var(--sur2); color: var(--ink2); font: 10.5px/1 var(--mono); padding: 6px 9px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: #46515f; color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b0e12; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.sm { padding: 4px 7px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .seg button { border: 0; border-right: 1px solid var(--line); background: var(--sur); color: var(--ink3); font: 600 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 6px 9px; cursor: pointer; }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--sur3); color: var(--ink); }
+  .railbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .railbar .lbl { font: 600 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); }
+  .railbar .range { font: 10.5px/1.3 var(--mono); color: var(--ink2); }
+  .railbar .range small { display: block; color: var(--ink3); font-size: 9.5px; }
+  .railbar .sp { flex: 1; }
+  .railbar .grain { font: 9.5px/1.3 var(--mono); color: var(--warn); max-width: 330px; }
+  .chev { border: 1px solid var(--line); background: var(--sur); color: var(--ink2); font: 12px/1 var(--mono); width: 24px; height: 25px; border-radius: 3px; cursor: pointer; }
+  .steps { display: grid; gap: 2px; }
+  .step { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border-bottom: 1px solid var(--line2); text-align: left; background: none; border-left: 0; border-right: 0; border-top: 0; cursor: pointer; color: var(--ink2); }
+  .step:last-child { border-bottom: 0; }
+  .step:hover { background: var(--sur2); }
+  .step .bub { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 600 9.5px/1 var(--mono); color: var(--ink3); }
+  .step.done .bub { background: #10241b; border-color: #234d39; color: var(--gain); }
+  .step.blocked .bub { background: var(--warn-bg); border-color: #4a3a22; color: var(--warn); }
+  .step.current { background: var(--sur2); color: var(--ink); }
+  .step.current .bub { border-color: var(--accent); color: var(--accent); }
+  .step .lbl { display: block; font-size: 11.5px; line-height: 1.25; }
+  .step .meta { display: block; font: 9.5px/1.3 var(--mono); color: var(--ink3); }
+  .progress { display: flex; gap: 2px; }
+  .progress i { flex: 1; height: 3px; background: var(--line); border-radius: 1px; }
+  .progress i.on { background: var(--accent); }
+  .progress i.blocked { background: var(--warn); }
+  .plan-eq { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font: 10.5px/1.3 var(--mono); }
+  .plan-eq .k { color: var(--ink3); }
+  .plan-eq .box { border: 1px solid var(--line); background: var(--sur2); padding: 4px 6px; border-radius: 2px; color: var(--ink); }
+  .plan-eq .op { color: var(--ink3); }
+  .gate { border: 1px solid #4a2a27; background: #1d1213; border-radius: 3px; padding: 11px; margin-bottom: 12px; }
+  .gate.ok { border-color: #234d39; background: #101c17; }
+  .gate h3 { margin: 0 0 4px; font: 600 14px/1.2 var(--sans); }
+  .gate p { margin: 0; color: var(--ink2); font-size: 11.5px; line-height: 1.45; }
+  .infobanner, .warnbanner, .okbanner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid var(--line); background: var(--sur2); padding: 8px 11px; font-size: 11.5px; color: var(--ink2); margin-bottom: 12px; }
+  .infobanner b, .warnbanner b, .okbanner b { color: var(--ink); }
+  .warnbanner { border-color: #4a3a22; background: var(--warn-bg); color: #e5cfa6; }
+  .okbanner { border-color: #234d39; background: #101c17; color: #bfe6d2; }
+  .infobanner .sp, .warnbanner .sp, .okbanner .sp { flex: 1; }
+  .infobanner a, .warnbanner a, .okbanner a { color: var(--accent); }
+  .source-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .source-card { border: 1px solid var(--line); background: var(--sur); border-radius: 3px; padding: 9px 11px; cursor: pointer; }
+  .source-card:hover { border-color: #39434f; }
+  .source-card .lbl { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; }
+  .source-card .lbl .sp { flex: 1; }
+  .source-card .meta { font: 9.5px/1.4 var(--mono); color: var(--ink3); margin-top: 4px; }
+  .source-card .st { font: 10.5px/1.4 var(--mono); color: var(--ink2); margin-top: 3px; }
+  .queue { display: grid; }
+  .qitem { display: grid; grid-template-columns: minmax(160px, 1.2fr) minmax(180px, 1.1fr) minmax(140px, .8fr) auto; gap: 12px; align-items: center; padding: 9px 11px; border-bottom: 1px solid var(--line2); background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; cursor: pointer; width: 100%; }
+  .qitem:last-child { border-bottom: 0; }
+  .qitem:hover { background: var(--sur2); }
+  .qitem .src { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+  .qitem .file { font: 10px/1.4 var(--mono); color: var(--ink3); }
+  .qitem .what { font-size: 11px; color: var(--ink2); }
+  .qitem .right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+  .qitem .go { font: 10px/1 var(--mono); color: var(--accent); white-space: nowrap; }
+  .mapping { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; }
+  .map-cell { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line2); background: var(--sur2); border-radius: 2px; padding: 6px 8px; font: 9.5px/1.2 var(--mono); color: var(--ink3); }
+  .map-cell .to { color: var(--ink2); }
+  .map-cell .ok { margin-left: auto; color: var(--gain); }
+  .dest-rows { display: grid; gap: 6px; }
+  .dest-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink2); flex-wrap: wrap; }
+  .dest-row .sp { flex: 1; }
+  .dest-row b { color: var(--ink); font-weight: 600; }
+  .dest-row a { color: var(--accent); font: 10px/1 var(--mono); }
+  .row-error td { background: #1d1213; }
+  .muted td { color: var(--ink3); }
+  .drop { border: 1px dashed #39434f; border-radius: 3px; background: var(--sur2); padding: 18px; text-align: center; }
+  .drop b { display: block; font-size: 12px; color: var(--ink); }
+  .drop span { font: 10px/1.4 var(--mono); color: var(--ink3); }
+  .field { display: grid; gap: 5px; }
+  .field .lbl { font: 600 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .sample { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--sur); border-radius: 3px; padding: 7px 9px; font-size: 11px; }
+  .sample .sp { flex: 1; }
+  .wiz { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); }
+  .wiz-top { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); background: #0d1117; padding: 11px 16px; }
+  .wiz-brand { font: 600 13px/1 var(--mono); }
+  .wiz-brand span { color: var(--ink3); font-weight: 400; }
+  .wiz-dest { font: 10.5px/1 var(--mono); color: var(--ink3); border-left: 1px solid var(--line); padding-left: 12px; }
+  .wiz-top .sp { flex: 1; }
+  .wiz-close { border: 1px solid var(--line); background: var(--sur2); color: var(--ink2); width: 28px; height: 28px; border-radius: 3px; cursor: pointer; }
+  .steps-rail { display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-bottom: 1px solid var(--line); background: var(--sur); font: 10px/1 var(--mono); color: var(--ink3); flex-wrap: wrap; }
+  .steps-rail .step { display: flex; grid-template-columns: none; gap: 6px; padding: 0; border: 0; cursor: default; color: var(--ink3); }
+  .steps-rail .step .n { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 9px; }
+  .steps-rail .step.active { color: var(--accent); }
+  .steps-rail .step.active .n { border-color: var(--accent); color: var(--accent); }
+  .steps-rail .step.done { color: var(--gain); }
+  .steps-rail .step.done .n { border-color: #234d39; background: #10241b; }
+  .steps-rail .step-rule { flex: 1; min-width: 20px; height: 1px; background: var(--line); }
+  .wiz-body { flex: 1; max-width: 1120px; width: 100%; margin: 0 auto; padding: 18px 16px 40px; }
+  .wiz-panel { background: var(--sur); border: 1px solid var(--line); border-radius: 3px; }
+  .wiz-panel > header { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--line2); }
+  .wiz-panel > header h2 { margin: 0; font: 600 9.5px/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink2); }
+  .wiz-panel > header .sp { flex: 1; }
+  .wiz-panel > header .hint { font: 9.5px/1.2 var(--mono); color: var(--ink3); }
+  .wiz-panel .pad { padding: 11px; }
+  .wiz-foot { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); background: #0d1117; padding: 10px 16px; }
+  .wiz-foot .sp { flex: 1; }
+  .wiz-foot .note { font: 9.5px/1.4 var(--mono); color: var(--ink3); }
+  .applybar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--line); padding: 9px 11px; background: var(--sur2); }
+  .applybar .sum { font-size: 11px; }
+  .applybar .sum b { color: var(--ink); }
+  .applybar .sp { flex: 1; }
+  .guide-back { position: fixed; inset: 0; background: rgba(4,6,9,.72); z-index: 120; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .guide { background: var(--sur); border: 1px solid var(--line); border-radius: 4px; width: min(720px, 100%); max-height: 88vh; overflow: auto; box-shadow: 0 24px 60px rgba(0,0,0,.6); }
+  .guide > header { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line2); }
+  .guide > header h2 { margin: 0; font: 600 12px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .guide > header .sp { flex: 1; }
+  .guide ol { list-style: none; margin: 0; padding: 0; counter-reset: g; }
+  .guide li { counter-increment: g; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--line2); }
+  .guide li:last-child { border-bottom: 0; }
+  .guide li::before { content: counter(g, decimal-leading-zero); font: 10px/1 var(--mono); color: var(--ink3); }
+  .guide .t { font-size: 12px; color: var(--ink); }
+  .guide .d { display: block; font-size: 11px; color: var(--ink3); margin-top: 2px; line-height: 1.45; }
+  .guide .go { font: 10px/1 var(--mono); color: var(--accent); white-space: nowrap; }
+  .guide .note { padding: 10px 14px; font: 10px/1.5 var(--mono); color: var(--ink3); border-top: 1px solid var(--line2); }
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px); background: var(--sur3); border: 1px solid #39434f; color: var(--ink); font: 11px/1.4 var(--mono); padding: 9px 14px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 200; max-width: 520px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 1000px) {
+    .dk { grid-template-columns: 1fr; }
+    .dk-side { position: static; height: auto; }
+    .dk-cols { grid-template-columns: 1fr; }
+    .dk-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .source-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .qitem { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+
+<script type="module">
+import F from "./fixture.js";
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl0 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const money = (n) => brl.format(n ?? 0);
+const money0 = (n) => brl0.format(n ?? 0);
+const pct = (n, d = 2) => `${(n ?? 0).toFixed(d).replace(".", ",")}%`;
+const spct = (n, d = 2) => `${(n ?? 0) > 0 ? "+" : ""}${pct(n, d)}`;
+const pp = (n, d = 2) => `${(n ?? 0) > 0 ? "+" : ""}${(n ?? 0).toFixed(d).replace(".", ",")} pp`;
+const num = (n) => new Intl.NumberFormat("pt-BR").format(n ?? 0);
+const signed = (n) => `${n >= 0 ? "" : "−"}${money0(Math.abs(n))}`;
+const dateBR = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—");
+const MONTHS_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const LONG_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const monthLabel = (period) => { const [y, m] = period.split("-"); return `${MONTHS_PT[Number(m) - 1]}/${y.slice(2)}`; };
+const longMonth = (period) => { const [y, m] = period.split("-"); return `${LONG_PT[Number(m) - 1]} de ${y}`; };
+const retClass = (n) => (n > 0 ? "up" : n < 0 ? "down" : "dim");
+const defClass = (n) => (n > 0 ? "short" : n < 0 ? "over" : "dim");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const SUMMARY = F.portfolio.summary;
+const ALLOC = F.portfolio.allocation;
+const CLASSES = ALLOC.classes;
+const ATTN = F.attention;
+const MONTHS = F.analysis.performanceSeries.months;
+const INCOME = F.analysis.income;
+const TAX = F.analysis.tax;
+const TAX_CURRENT = F.analysis.currentTax;
+const LAST = MONTHS.at(-1).period;
+const FIRST = MONTHS[0].period;
+const CLASS_LABEL = { ACOES: "Ações", FIIS: "FIIs", RENDA_FIXA: "Renda fixa" };
+const CLASS_COLOR = { ACOES: "#78a9ff", FIIS: "#d9a45e", RENDA_FIXA: "#54c98c" };
+const RF_LABEL = { FIXED_RATE: "Pré-fixado", FLOATING_RATE: "Pós-fixado", INFLATION_LINKED: "Inflação" };
+const RF_ACTUAL_TOTAL = F.assets.fixedIncome.positions.reduce((s, p) => s + p.value, 0);
+const RF_ROWS = F.plan.currentMonth.targets.sub_classes.map((t) => {
+  const actual = F.assets.fixedIncome.positions.filter((p) => p.sub_class === t.sub_class).reduce((s, p) => s + p.value, 0);
+  const ideal = 377500 * (t.percentage / 100);
+  return { label: RF_LABEL[t.sub_class], target: t.percentage, ideal, actual, deficit: ideal - actual, drift: (actual / RF_ACTUAL_TOTAL) * 100 - t.percentage };
+});
+const MANUALS = F.strategies.holdings.map((h) => ({ name: h.strategy_name, value: h.total_value, kind: h.strategy_name.includes("Ações") ? "ACOES" : "FIIS", id: h.strategy_id }));
+const ALL_TICKERS = CLASSES.flatMap((c) => c.strategies.flatMap((s) => s.tickers.map((t) => ({ ...t, strategy: s.strategy, asset_class: c.asset_class }))));
+const BIGGEST_DRIFTS = [...ALL_TICKERS].sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift)).slice(0, 7);
+const barMarkup = (actual, ideal, cls = "") => {
+  const max = Math.max(actual, ideal) * 1.04;
+  return `<div class="dk-bar ${cls}"><i style="width:${((actual / max) * 100).toFixed(1)}%"></i><u style="left:${((ideal / max) * 100).toFixed(1)}%"></u></div>`;
+};
+
+const OBJECTS = [
+  { key: "portfolio", label: "Carteira", group: "Posição", subs: [["overview", "Visão geral"], ["allocation", "Alocação"], ["history", "Histórico"]] },
+  { key: "strategies", label: "Estratégias", group: "Posição", subs: [["list", "Todas"]] },
+  { key: "assets", label: "Ativos", group: "Posição", subs: [["positions", "Posições"], ["fixed", "Renda fixa"], ["quotes", "Cotações"], ["gaps", "Lacunas"]] },
+  { key: "imports", label: "Importações", group: "Operações", subs: [["inbox", "Caixa de entrada"], ["sources", "Fontes"], ["corporate", "Ações corporativas"], ["history", "Histórico"]] },
+  { key: "plan", label: "Plano / Mês", group: "Operações", subs: [["month", "Mês atual"], ["orders", "Ordens"], ["transfers", "Transferências"], ["close", "Fechamentos"]] },
+  { key: "analysis", label: "Análise", group: "Resultados", subs: [["performance", "Performance"], ["income", "Proventos"], ["tax", "Impostos"]] },
+];
+const objByKey = Object.fromEntries(OBJECTS.map((o) => [o.key, o]));
+
+const STATE = {
+  plan: { transfer: "PENDING", closed: false, step: null, capital: F.portfolio.summary.capital },
+  imports: { b3: false, custody: false, editions: {}, rejected504: false, parked: null },
+  period: { preset: "12m", anchor: LAST },
+  guide: false,
+};
+
+const editionById = (id) => F.strategies.editions.find((e) => e.id === id);
+const editionStatus = (id) => STATE.imports.editions[id] ?? editionById(id)?.status;
+const strategyById = (id) => F.strategies.rows.find((r) => r.id === id);
+const isClosed = () => STATE.plan.closed;
+const transferStatus = () => STATE.plan.transfer;
+const transfer = () => F.plan.orderList.transfers[0];
+
+function route() {
+  const raw = location.hash.replace(/^#\/?/, "") || "portfolio/overview";
+  return raw.split("/").filter(Boolean);
+}
+function go(path) {
+  const next = `#/${path}`;
+  if (location.hash === next) render();
+  else location.hash = next;
+}
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+function visibleAttention() {
+  return ATTN.filter((a) => {
+    if (a.route.startsWith("plan/transfers") && (transferStatus() !== "PENDING" || isClosed())) return false;
+    if (a.route.startsWith("imports/101") && STATE.imports.b3) return false;
+    if (a.route.startsWith("strategies/")) {
+      const edId = Number(a.route.split("/").at(-1));
+      if (editionStatus(edId) !== "STAGED") return false;
+    }
+    return true;
+  });
+}
+const routeOwner = (routeStr) => routeStr.split("/")[0];
+function attentionLink(routeStr) {
+  if (routeStr.startsWith("imports/101")) return "imports/wizard/b3/3";
+  if (routeStr.startsWith("imports/corporate")) return "imports/corporate";
+  if (routeStr.startsWith("strategies/")) {
+    const parts = routeStr.split("/");
+    return `strategies/${parts[1]}/edicoes`;
+  }
+  if (routeStr.startsWith("plan/transfers")) return "plan/transfers";
+  return routeStr;
+}
+function navBadge(key) {
+  const items = visibleAttention().filter((a) => routeOwner(a.route) === key);
+  return { count: items.length, action: items.some((a) => a.severity === "action") };
+}
+
+function objectTabs(objKey, active) {
+  const o = objByKey[objKey];
+  return `<div class="dk-tabs">
+    ${o.subs.map(([key, label]) => `<button class="${key === active ? "on" : ""}" data-go="${objKey}/${key}">${label}</button>`).join("")}
+    <span class="sp"></span><span class="ctx">nov/26 · ${o.label}</span>
+  </div>`;
+}
+function pageHead(title, sub, extra = "") {
+  return `<div class="dk-pagehead"><div><h1>${title}</h1><p>${sub}</p></div><span class="sp"></span>${extra}</div>`;
+}
+function cell(k, v, s, cls = "") {
+  return `<div class="dk-cell"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`;
+}
+function tableHead(cols, barLast = false) {
+  return `<tr>${cols.map((c, i) => `<th class="${i === 0 ? "" : "r"}${barLast && i === cols.length - 1 ? " barcol" : ""}">${c}</th>`).join("")}</tr>`;
+}
+function distanceText(d) {
+  return d >= 0 ? `faltam ${money0(d)}` : `sobram ${money0(-d)}`;
+}
+
+function sidebar(activeObj) {
+  return `<aside class="dk-side">
+    <div class="dk-brand"><span class="a">carteira</span><span class="b">ideal</span><span class="c">console</span></div>
+    ${["Posição", "Operações", "Resultados"].map((group) => `
+      <div class="dk-group">${group}</div>
+      <div class="dk-nav">
+        ${OBJECTS.filter((o) => o.group === group).map((o) => {
+          const b = navBadge(o.key);
+          return `<a class="${o.key === activeObj ? "active" : ""}" data-go="${o.key}/${o.subs[0][0]}">${o.label}${b.count ? `<span class="cnt ${b.action ? "action" : ""}">${b.count}</span>` : ""}</a>`;
+        }).join("")}
+      </div>`).join("")}
+    <div class="dk-side-foot">
+      <div><b>nov/26</b> · ${isClosed() ? "fechado" : "plano aberto"}</div>
+      <div>snapshot out/26 congelado</div>
+      <div>dados de 02/11 09:14</div>
+    </div>
+  </aside>`;
+}
+
+function crumbFor(objKey, subKey, parts) {
+  const o = objByKey[objKey];
+  if (objKey === "strategies" && parts[1] && /^\d+$/.test(parts[1])) {
+    return `Posição / Estratégias / <b>${esc(strategyById(Number(parts[1]))?.name ?? "—")}</b>`;
+  }
+  const label = (o.subs.find((s) => s[0] === subKey) ?? o.subs[0])[1];
+  return `${o.group} / ${o.label} / <b>${label}</b>`;
+}
+
+function topbar(objKey, subKey, parts) {
+  return `<header class="dk-top">
+    <div class="dk-crumb">${crumbFor(objKey, subKey, parts)}</div>
+    <span class="sp"></span>
+    <span class="dk-live"><i></i>cotações 30/10 · 18:12</span>
+    <span class="dk-pill">${isClosed() ? "nov/26 · fechado" : "nov/26 · aberto"}</span>
+    <button class="dk-pill" data-act="guide" title="Roteiro da caminhada">roteiro</button>
+    <button class="dk-pill" data-act="reset" title="Voltar ao estado inicial do protótipo">protótipo · resetar</button>
+  </header>`;
+}
+function allocationClassRows({ worded = false } = {}) {
+  return CLASSES.map((c) => `
+    <tr>
+      <td><span class="dk-sw" style="background:${CLASS_COLOR[c.asset_class]}"></span>${CLASS_LABEL[c.asset_class]}</td>
+      <td class="r num">${c.target}%</td>
+      <td class="r num">${money0(c.ideal)}</td>
+      <td class="r num">${money0(c.actual)}</td>
+      <td class="r num ${defClass(c.deficit)}">${signed(c.deficit)}${worded ? `<div class="faint" style="font-size:9.5px">${distanceText(c.deficit)}</div>` : ""}</td>
+      <td class="r num ${c.drift > 0 ? "over" : "short"}">${pp(c.drift)}</td>
+      <td class="barcol">${barMarkup(c.actual, c.ideal, c.drift > 0 ? "over" : "")}</td>
+    </tr>`).join("");
+}
+
+function allocationPanel({ worded = false, link = false } = {}) {
+  return `<section class="dk-panel">
+    <h2>Alocação por classe <span class="sp"></span><span class="hint">${link ? "classes; estratégias em Alocação" : "Capital × alvo = Ideal"}</h2>
+    <table class="dk-table">
+      ${tableHead(["Classe", "Alvo", "Ideal", "Atual", "Déficit", "Drift", "Atual × Ideal"], true)}
+      ${allocationClassRows({ worded })}
+      <tr class="total"><td>Portfolio</td><td class="r num">—</td><td class="r num">${money0(SUMMARY.capital)}</td><td class="r num">${money0(SUMMARY.holdings_value)}</td><td class="r num short">${signed(SUMMARY.deficit)}</td><td class="r num short">${pp(SUMMARY.drift)}</td><td class="barcol">${barMarkup(SUMMARY.holdings_value, SUMMARY.capital)}</td></tr>
+    </table>
+  </section>`;
+}
+
+function attentionPanel() {
+  const items = visibleAttention();
+  const action = items.filter((a) => a.severity === "action");
+  const watch = items.filter((a) => a.severity === "watch");
+  const row = (a) => `<button class="dk-attn-item" data-go="${attentionLink(a.route)}">
+    <span class="dot ${a.severity === "action" ? "a" : "w"}"></span>
+    <span><span class="t">${esc(a.title)}</span><span class="d">${esc(a.detail)}</span><span class="r">${esc(a.route)} →</span></span>
+  </button>`;
+  return `<section class="dk-panel">
+    <h2>Precisa de você <span class="sp"></span><span class="badge">${action.length}</span></h2>
+    <div class="dk-attn-group">AÇÃO · ${action.length}</div>
+    <div class="dk-attn">${action.map(row).join("")}</div>
+    <div class="dk-attn-group">ACOMPANHAR · ${watch.length}</div>
+    <div class="dk-attn">${watch.map(row).join("")}</div>
+  </section>`;
+}
+
+function dataStatePanel() {
+  return `<section class="dk-panel">
+    <h2>Estado dos dados</h2>
+    <div class="dk-mini">
+      <div class="dk-mini-row"><span class="dim">Cotações</span><span class="sp"></span><span class="num">30/10 · 18:12</span></div>
+      <div class="dk-mini-row"><span class="dim">VALE3</span><span class="sp"></span><span class="num over">24/10 · desatualizada</span></div>
+      <div class="dk-mini-row"><span class="dim">Snapshot</span><span class="sp"></span><span class="num">out/26 · congelado</span></div>
+      <div class="dk-mini-row"><span class="dim">Lacuna AAPL34</span><span class="sp"></span><span class="num over">50 cotas</span></div>
+      <div class="dk-mini-row"><span class="dim">Último fechamento</span><span class="sp"></span><span class="num">${longMonth(SUMMARY.last_close)}</span></div>
+    </div>
+  </section>`;
+}
+
+function resultsPanel() {
+  return `<section class="dk-panel">
+    <h2>Resultados · out/26 <span class="sp"></span><span class="hint">12 meses encerrados · barra = retorno do mês</span></h2>
+    <div class="dk-spark">
+      ${MONTHS.map((m) => {
+        const r = m.decomposition.return_percentage;
+        const h = Math.max(3, Math.min(40, Math.pow(Math.abs(r ?? 0), 0.7) * 16));
+        return `<i class="${(r ?? 0) < 0 ? "neg" : ""}" style="height:${h}px" title="${monthLabel(m.period)} · ${r != null ? spct(r) : "—"}"></i>`;
+      }).join("")}
+    </div>
+    <div class="dk-mini" style="border-top:1px solid var(--line2)">
+      <div class="dk-mini-row"><span class="dim">Outubro</span><span class="sp"></span><span class="num up">+0,12%</span><span class="faint">vs +1,75%</span></div>
+      <div class="dk-mini-row"><span class="dim">Proventos do mês</span><span class="sp"></span><span class="num">${money0(3200)}</span></div>
+      <div class="dk-mini-row"><span class="dim">DARF de outubro</span><span class="sp"></span><span class="num over">${money(255)}</span><span class="faint">vence 30/11</span></div>
+      <div class="dk-mini-row"><span class="dim">XIRR desde ago/26</span><span class="sp"></span><span class="num">4,1%</span></div>
+    </div>
+  </section>`;
+}
+
+function monthLine() {
+  const steps = planStepsState();
+  const done = steps.filter((s) => s.done).length;
+  const transferText = isClosed()
+    ? `<span class="up">mês fechado</span>`
+    : transferStatus() === "PENDING"
+      ? `<span class="over">1 transferência pendente</span>`
+      : transferStatus() === "APPROVED"
+        ? `<span class="up">transferência aprovada</span>`
+        : `<span class="dim">transferência recusada</span>`;
+  return `<div class="dk-monthline">
+    <span class="k">MÊS</span><b>nov/26</b><span class="sep">/</span>${isClosed() ? "fechado" : "plano aberto"}<span class="sep">/</span>${done} de 6 etapas<span class="sep">/</span>3 ordens sugeridas<span class="sep">/</span>${transferText}
+    <span class="sp"></span><span class="dk-link" data-go="plan/month">abrir plano →</span>
+  </div>`;
+}
+
+function portfolioOverview() {
+  return `
+  ${objectTabs("portfolio", "overview")}
+  <div class="dk-strip">
+    ${cell("Capital", money0(SUMMARY.capital), `alvo de ${monthLabel(SUMMARY.open_month)}`)}
+    ${cell("Investido", money0(SUMMARY.holdings_value), `${pct((SUMMARY.holdings_value / SUMMARY.capital) * 100, 1)} do Capital`)}
+    ${cell("Caixa", money0(SUMMARY.uninvested_balance), "acima do piso de 10.000")}
+    ${cell("Drift", pp(SUMMARY.drift), "contra os alvos", "short")}
+    ${cell("Déficit", money0(SUMMARY.deficit), "a alocar", "short")}
+    ${cell("Atenção", String(visibleAttention().length), `${visibleAttention().filter((a) => a.severity === "action").length} para agir`, "over")}
+  </div>
+  ${monthLine()}
+  <div class="dk-standfirst">Outubro fechou em <b>+0,12%</b>, atrás do benchmark de <b>+1,75%</b>; novembro abre com <b>${money0(SUMMARY.uninvested_balance)}</b> de caixa e <b>R$ 34.536</b> de compras a financiar. A carteira está <b>${pp(SUMMARY.drift)}</b> abaixo dos alvos e a transferência de WEGE3 espera uma decisão.</div>
+  <div class="dk-cols">
+    <div class="dk-stack">
+      ${allocationPanel({ worded: true, link: true })}
+      <div class="dk-note">déficit <b>azul</b> · superávit <b>âmbar</b> · retorno <b>verde</b>/<b class="down">vermelho</b> · a barra compara Atual com o traço do Ideal · cotações de 30/10; VALE3 de 24/10 <b>desatualizada</b></div>
+      ${resultsPanel()}
+    </div>
+    <aside class="dk-stack">
+      ${attentionPanel()}
+      ${dataStatePanel()}
+    </aside>
+  </div>`;
+}
+
+function allocationTree() {
+  let rows = "";
+  for (const c of CLASSES) {
+    rows += `<tr><td><span class="dk-sw" style="background:${CLASS_COLOR[c.asset_class]}"></span><b>${CLASS_LABEL[c.asset_class]}</b></td><td class="r num">${c.target}%</td><td class="r num">${money0(c.ideal)}</td><td class="r num">${money0(c.actual)}</td><td class="r num ${defClass(c.deficit)}">${signed(c.deficit)}<div class="faint" style="font-size:9.5px">${distanceText(c.deficit)}</div></td><td class="r num ${c.drift > 0 ? "over" : "short"}">${pp(c.drift)}</td><td class="barcol">${barMarkup(c.actual, c.ideal, c.drift > 0 ? "over" : "")}</td></tr>`;
+    for (const s of c.strategies) {
+      rows += `<tr class="ind"><td>${esc(s.strategy)} <span class="faint">· relatório</span></td><td class="r num">${s.target}%</td><td class="r num">${money0(s.ideal)}</td><td class="r num">${money0(s.actual)}</td><td class="r num ${defClass(s.deficit)}">${signed(s.deficit)}<div class="faint" style="font-size:9.5px">${distanceText(s.deficit)}</div></td><td class="r num ${s.drift > 0 ? "over" : "short"}">${pp(s.drift)}</td><td class="barcol">${barMarkup(s.actual, s.ideal, s.drift > 0 ? "over" : "")}</td></tr>`;
+    }
+    for (const m of MANUALS.filter((x) => x.kind === c.asset_class)) {
+      rows += `<tr class="ind semi"><td>${esc(m.name)} <span class="faint">· manual, sem alvo</span></td><td class="r num">—</td><td class="r num">—</td><td class="r num">${money0(m.value)}</td><td class="r num">—</td><td class="r num">—</td><td class="barcol"></td></tr>`;
+    }
+    if (c.asset_class === "RENDA_FIXA") {
+      for (const r of RF_ROWS) {
+        rows += `<tr class="ind"><td>${r.label} <span class="faint">· sub-classe</span></td><td class="r num">${r.target}%</td><td class="r num">${money0(r.ideal)}</td><td class="r num">${money0(r.actual)}</td><td class="r num ${defClass(r.deficit)}">${signed(r.deficit)}<div class="faint" style="font-size:9.5px">${distanceText(r.deficit)}</div></td><td class="r num ${r.drift > 0 ? "over" : "short"}">${pp(r.drift)}</td><td class="barcol">${barMarkup(r.actual, r.ideal, r.drift > 0 ? "over" : "")}</td></tr>`;
+      }
+    }
+  }
+  return rows;
+}
+
+function portfolioAllocation() {
+  return `${pageHead("Alocação", `Capital ${money0(ALLOC.capital)} · piso ${money0(ALLOC.floor)} · ${longMonth(ALLOC.period)}`, `<div class="dk-chips"><span class="on">Árvore</span><span>Por estratégia</span><span>Por ticker</span></div>`)}
+  ${objectTabs("portfolio", "allocation")}
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Cadeia de alvos <span class="sp"></span><span class="hint">alvo da classe × alvo da estratégia = fatia</span></h2>
+        <table class="dk-table">
+          ${tableHead(["Nível", "Alvo", "Ideal", "Atual", "Déficit / distância", "Drift", "Atual × Ideal"], true)}
+          ${allocationTree()}
+          <tr class="total"><td>Portfolio</td><td class="r num">—</td><td class="r num">${money0(ALLOC.capital)}</td><td class="r num">${money0(ALLOC.actual)}</td><td class="r num short">${signed(ALLOC.deficit)}</td><td class="r num short">${pp(ALLOC.drift)}</td><td class="barcol">${barMarkup(ALLOC.actual, ALLOC.capital)}</td></tr>
+        </table>
+      </section>
+      <div class="dk-note">A classe soma as estratégias de relatório e os buckets manuais. Buckets manuais não têm alvo, então não geram ordem: aparecem só como custódia.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Maiores desvios <span class="sp"></span><span class="hint">por |drift|</span></h2>
+        <table class="dk-table">
+          ${tableHead(["Ativo", "Estratégia", "Drift"])}
+          ${BIGGEST_DRIFTS.map((t) => `<tr><td><span class="num">${t.ticker}</span></td><td class="faint" style="font-size:10.5px">${esc(t.strategy)}</td><td class="r num ${t.drift > 0 ? "over" : "short"}">${pp(t.drift)}</td></tr>`).join("")}
+        </table>
+      </section>
+      <section class="dk-panel">
+        <h2>Como ler</h2>
+        <div class="dk-read">
+          <p><b>Alvo</b> é percentual; <b>Ideal</b> é Capital × alvo, em reais. <b>Distância</b> diz em palavras o que falta ou sobra.</p>
+          <p><b>Drift</b> é a distância em pontos percentuais. Azul puxa para baixo do alvo, âmbar puxa para cima.</p>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function portfolioHistory(parts) {
+  const selected = parts[2] ? F.snapshots.find((s) => s.state.period === parts[2]) : null;
+  const list = `<section class="dk-panel">
+    <h2>Fechamentos guardados <span class="sp"></span><span class="hint">um snapshot imutável por mês</span></h2>
+    <table class="dk-table">
+      ${tableHead(["Mês", "Capital", "Investido", "Caixa", "Proventos", "Estado"])}
+      ${F.snapshots.map((s) => {
+        const st = s.state;
+        return `<tr class="click" data-go="portfolio/history/${st.period}"><td class="num dim">${monthLabel(st.period)}</td><td class="r num">${money0(st.capital)}</td><td class="r num">${money0(st.capital - st.caixa)}</td><td class="r num">${money0(st.caixa)}</td><td class="r num">${money0(st.income.net)}</td><td><span class="chip green">FECHADO</span></td></tr>`;
+      }).join("")}
+    </table>
+  </section>`;
+  if (!selected) {
+    return `${pageHead("Histórico", "Fechamentos guardados como snapshot; a evolução é construída a partir deles.")}
+      ${objectTabs("portfolio", "history")}${list}
+      <div class="dk-note" style="margin-top:10px">Selecione um mês para ver o que o snapshot congelou.</div>`;
+  }
+  const st = selected.state;
+  return `${pageHead(`Histórico · ${monthLabel(st.period)}`, `Snapshot de ${dateBR(selected.created_at)} · ${selected.id}`, `<button class="btn ghost" data-go="portfolio/history">← Todos os fechamentos</button>`)}
+    ${objectTabs("portfolio", "history")}
+    <div class="dk-kv">
+      <div><div class="k">Capital</div><div class="v">${money0(st.capital)}</div><div class="s">piso ${money0(st.floor)}</div></div>
+      <div><div class="k">Aportes</div><div class="v">${money0(st.aportes)}</div><div class="s">capital novo</div></div>
+      <div><div class="k">Caixa</div><div class="v">${money0(st.caixa)}</div><div class="s">não investido</div></div>
+      <div><div class="k">Proventos</div><div class="v">${money0(st.income.net)}</div><div class="s">recebidos no mês</div></div>
+      <div><div class="k">DARF</div><div class="v over">${money(st.tax.meter.tax)}</div><div class="s">apuração fechada</div></div>
+    </div>
+    <div class="dk-cols">
+      <div class="dk-stack">
+        <section class="dk-panel"><h2>Classes congeladas</h2><table class="dk-table">${tableHead(["Classe", "Alvo", "Ideal", "Atual", "Déficit", "Drift"])}${st.classes.map((c) => `<tr><td><span class="dk-sw" style="background:${CLASS_COLOR[c.asset_class]}"></span>${CLASS_LABEL[c.asset_class]}</td><td class="r num">${c.target}%</td><td class="r num">${money0(c.ideal)}</td><td class="r num">${money0(c.actual)}</td><td class="r num ${defClass(c.deficit)}">${signed(c.deficit)}</td><td class="r num ${c.drift > 0 ? "over" : "short"}">${pp(c.drift)}</td></tr>`).join("")}</table></section>
+        <section class="dk-panel"><h2>Ordens e negócios do mês</h2><table class="dk-table">${tableHead(["Ticker", "Lado", "Qtd", "Preço", "Estado"])}${st.orders.orders.map((o) => `<tr><td><b class="num">${o.ticker}</b></td><td><span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td><td class="r num">${num(o.quantity)}</td><td class="r num">${money(o.suggested_price)}</td><td><span class="chip grey">${o.status}</span></td></tr>`).join("")}${st.orders.unplanned_trades.map((o) => `<tr><td><b class="num">${o.ticker}</b></td><td><span class="chip amber plain">${o.side}</span></td><td class="r num">${num(o.quantity)}</td><td class="r num faint">—</td><td><span class="chip grey">não planejada</span></td></tr>`).join("")}</table></section>
+      </div>
+      <aside class="dk-stack">
+        <section class="dk-panel"><h2>Estratégias no fechamento</h2><table class="dk-table">${tableHead(["Estratégia", "Valor"])}${st.strategies.map((s) => `<tr><td>${esc(s.strategy)}</td><td class="r num">${money0(s.value_end)}</td></tr>`).join("")}</table></section>
+        <section class="dk-panel"><h2>O que este snapshot congela</h2><div class="dk-read"><p>Holdings, atribuições, ordens, proventos e a apuração de imposto como estavam no fechamento. Nada aqui é recalculado depois.</p></div></section>
+      </aside>
+    </div>`;
+}
+function strategyAllocationRow(id) {
+  const name = strategyById(id)?.name;
+  for (const c of CLASSES) for (const s of (c.strategies || [])) if (s.strategy === name) return { cls: c, row: s };
+  return null;
+}
+function strategyPerformance(id) { return F.strategies.performance.find((p) => p.strategy_id === id); }
+function editionsOf(id) { return F.strategies.editions.filter((e) => e.strategy_id === id).sort((a, b) => a.reference_month.localeCompare(b.reference_month)); }
+function activeEdition(id) {
+  const eds = editionsOf(id);
+  const promoted = eds.find((e) => editionStatus(e.id) === "PROMOTED");
+  if (promoted) return promoted;
+  return eds.filter((e) => editionStatus(e.id) === "ACTIVE").at(-1);
+}
+function stagedEdition(id) { return editionsOf(id).find((e) => editionStatus(e.id) === "STAGED"); }
+
+function strategiesList() {
+  const rows = F.strategies.rows.map((r) => {
+    const alloc = strategyAllocationRow(r.id);
+    const value = alloc ? alloc.row.actual : F.strategies.holdings.find((h) => h.strategy_id === r.id)?.total_value ?? 0;
+    const drift = alloc ? alloc.row.drift : null;
+    const staged = stagedEdition(r.id);
+    return `<tr class="click" data-go="strategies/${r.id}/carteira">
+      <td><b>${esc(r.name)}</b></td>
+      <td><span class="chip ${r.asset_class === "ACOES" ? "blue" : "amber"} plain">${CLASS_LABEL[r.asset_class]}</span></td>
+      <td><span class="chip ${r.kind === "MANUAL" ? "grey" : "blue"} plain">${r.kind === "MANUAL" ? "Manual (legado)" : "Com relatório"}</span></td>
+      <td>${staged ? `<span class="chip amber">staged ${monthLabel(staged.reference_month)}</span>` : `<span class="chip grey plain">—</span>`}</td>
+      <td class="r num">${money0(value)}</td>
+      <td class="r num ${drift == null ? "" : drift > 0 ? "over" : "short"}">${drift == null ? "—" : pp(drift)}</td>
+    </tr>`;
+  }).join("");
+  return `${pageHead("Estratégias", "Três estratégias com relatório e dois buckets manuais (legado). O detalhe de cada uma é uma página tabulada.")}
+    <section class="dk-panel"><table class="dk-table">
+      ${tableHead(["Estratégia", "Classe", "Tipo", "Edição", "Valor", "Drift"])}
+      ${rows}
+    </table></section>
+    <div class="dk-note" style="margin-top:10px">Estratégia com relatório é um objeto com Carteira / Edições / Atribuição / Fatia; o bucket manual é o mesmo objeto com a aba reduzida e “sem alvo”.</div>`;
+}
+
+function strategyKpis(id, alloc) {
+  const perf = strategyPerformance(id)?.decomposition;
+  if (!alloc) {
+    const value = F.strategies.holdings.find((h) => h.strategy_id === id)?.total_value ?? 0;
+    const share = (value / ALLOC.actual) * 100;
+    return `<div class="dk-kv">
+      <div><div class="k">Fatia</div><div class="v">${money0(value)}</div><div class="s">${pct(share, 1)} da carteira</div></div>
+      <div><div class="k">Alvo</div><div class="v">sem alvo</div><div class="s">bucket manual</div></div>
+      <div><div class="k">Ideal</div><div class="v">—</div><div class="s">não gera ordem</div></div>
+      <div><div class="k">Drift</div><div class="v">—</div><div class="s">só custódia</div></div>
+      <div><div class="k">Retorno out/26</div><div class="v ${retClass(perf?.return_percentage)}">${perf ? spct(perf.return_percentage) : "—"}</div><div class="s">estratégia manual</div></div>
+    </div>`;
+  }
+  const share = (alloc.row.actual / ALLOC.actual) * 100;
+  return `<div class="dk-kv">
+    <div><div class="k">Fatia</div><div class="v">${money0(alloc.row.actual)}</div><div class="s">${pct(share, 1)} da carteira</div></div>
+    <div><div class="k">Alvo</div><div class="v">${alloc.row.target}%</div><div class="s">da classe ${CLASS_LABEL[alloc.cls.asset_class]}</div></div>
+    <div><div class="k">Ideal</div><div class="v">${money0(alloc.row.ideal)}</div><div class="s">${alloc.row.deficit < 0 ? "superávit" : "déficit"} de ${money0(Math.abs(alloc.row.deficit))}</div></div>
+    <div><div class="k">Drift</div><div class="v ${alloc.row.drift > 0 ? "over" : "short"}">${pp(alloc.row.drift)}</div><div class="s">contra o alvo</div></div>
+    <div><div class="k">Retorno out/26</div><div class="v ${retClass(perf?.return_percentage)}">${perf ? spct(perf.return_percentage) : "—"}</div><div class="s">benchmark +2,10%</div></div>
+  </div>`;
+}
+
+function strategyCarteira(id, alloc) {
+  if (!alloc) {
+    const h = F.strategies.holdings.find((x) => x.strategy_id === id);
+    return `<section class="dk-panel">
+      <h2>Custódia do bucket <span class="sp"></span><span class="hint">${h?.holdings.length ?? 0} ativos · sem alvo</span></h2>
+      <table class="dk-table">${tableHead(["Ativo", "Qtd", "Valor", "Peso no bucket"])}${(h?.holdings ?? []).map((x) => `<tr><td><b class="num">${x.ticker}</b></td><td class="r num">${num(x.quantity)}</td><td class="r num">${money0(x.value)}</td><td class="r num">${pct(x.share, 1)}</td></tr>`).join("")}</table>
+      <div class="dk-callout"><b>Bucket manual.</b> A custódia existe, mas não há alvo: nenhuma compra ou venda nasce daqui. O WEGE3 transfer sugerido sai deste bucket para Dividendos BR.</div>
+    </section>`;
+  }
+  const rows = alloc.row.tickers.map((t) => `<tr>
+    <td><span class="num" style="font-weight:600">${t.ticker}</span>${t.stale ? ' <span class="over" style="font-size:9.5px">cotação 24/10</span>' : ""}${t.ticker === "WEGE3" && id === 1 ? ' <span class="chip amber plain">0 atribuída</span>' : ""}</td>
+    <td class="r num">${num(t.quantity)}</td>
+    <td class="r num">${money(t.price)}</td>
+    <td class="r num">${money0(t.actual)}</td>
+    <td class="r num">${t.target}%</td>
+    <td class="r num">${money0(t.ideal)}</td>
+    <td class="r num ${t.drift > 0 ? "over" : "short"}">${pp(t.drift)}</td>
+    <td class="barcol">${barMarkup(t.actual, t.ideal, t.drift > 0 ? "over" : "")}</td>
+  </tr>`).join("");
+  const staged = stagedEdition(id);
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Carteira da estratégia <span class="sp"></span><span class="hint">${alloc.row.tickers.length} ativos · ${pct(alloc.row.target)} do alvo de ${CLASS_LABEL[alloc.cls.asset_class]}</span></h2>
+        <table class="dk-table">
+          ${tableHead(["Ativo", "Qtd", "Preço", "Atual", "Alvo", "Ideal", "Drift", "Atual × Ideal"], true)}
+          ${rows}
+        </table>
+      </section>
+      <div class="dk-note">A coluna Alvo é o peso dentro da estratégia; o Ideal é a fatia da estratégia × Capital. O traço na barra é o Ideal, não a quantidade-alvo em cotas.</div>
+    </div>
+    <aside class="dk-stack">
+      ${staged ? `<section class="dk-panel"><h2>Edição em revisão</h2>
+        <div class="dk-callout"><b>Edição ${staged.id} · ${monthLabel(staged.reference_month)}</b><br>${staged.diff_from_previous.changed.length} pesos alterados, ${staged.entries.filter((e) => e.target_price).length} preços-alvo${staged.entries.some((e) => e.do_not_trade) ? ", VALE3 vira <b>não operar</b>" : ""}. Promover substitui a edição ativa.</div>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Edição ativa</span><span class="sp"></span><span class="num">${activeEdition(id)?.id ?? "—"} · ${activeEdition(id) ? monthLabel(activeEdition(id).reference_month) : "—"}</span></div>
+          <div class="dk-mini-row"><span class="dim">Origem</span><span class="sp"></span><span class="num">XP · relatório</span></div>
+          <div class="dk-mini-row"><span class="dim">Sessão</span><span class="sp"></span><span class="dk-link" data-go="strategies/${id}/edicoes">revisar →</span></div>
+        </div>
+      </section>` : `<section class="dk-panel"><h2>Edições</h2><div class="dk-read"><p>Sem edição staged. A ativa é a <b>${activeEdition(id)?.id ?? "—"}</b> de ${activeEdition(id) ? monthLabel(activeEdition(id).reference_month) : "—"}.</p></div></section>`}
+      <section class="dk-panel"><h2>Genética da fatia</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Aporte do mês</span><span class="sp"></span><span class="num">${money0(strategyPerformance(id)?.decomposition.net_aportes ?? 0)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Proventos</span><span class="sp"></span><span class="num">${money0(strategyPerformance(id)?.decomposition.net_income ?? 0)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Transferência sugerida</span><span class="sp"></span><span class="num">${id === 1 ? "WEGE3 · 372" : "—"}</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function strategyEdicoes(id) {
+  const staged = stagedEdition(id);
+  const active = activeEdition(id);
+  const source = staged ?? active;
+  if (!source) {
+    return `<section class="dk-panel"><h2>Edições</h2><div class="dk-read"><p>Esta estratégia manual não tem edição de relatório.</p></div></section>`;
+  }
+  const before = active && staged && active.id !== staged.id ? Object.fromEntries(active.entries.map((e) => [e.ticker, e])) : null;
+  const rows = source.entries.map((e) => {
+    const b = before?.[e.ticker];
+    const wChanged = b && b.weight !== e.weight;
+    const pChanged = b && b.target_price !== e.target_price;
+    const flip = b && !b.do_not_trade && e.do_not_trade;
+    return `<tr>
+      <td><b class="num">${e.ticker}</b></td>
+      <td class="r num ${wChanged ? "over" : "faint"}">${b ? `${b.weight}%${wChanged ? ` → ${e.weight}%` : ""}` : `${e.weight}%`}</td>
+      <td class="r num ${pChanged ? "over" : "faint"}">${b ? `${money(b.target_price)}${pChanged ? ` → ${money(e.target_price)}` : ""}` : money(e.target_price)}</td>
+      <td class="r">${b && b.rating !== e.rating ? `<span class="over">${b.rating} → ${e.rating}</span>` : e.rating}</td>
+      <td class="r ${flip ? "over" : "faint"}">${e.do_not_trade ? "não operar" : "operar"}</td>
+      <td class="r">${wChanged || pChanged || flip ? '<span class="short">● alterada</span>' : '<span class="faint">—</span>'}</td>
+    </tr>`;
+  }).join("");
+  const status = staged ? editionStatus(staged.id) : editionStatus(active.id);
+  const actions = staged && status === "STAGED"
+    ? `<div class="applybar"><div class="sum"><b>Edição ${staged.id} staged.</b> <span class="dim">promover substitui a ${active?.id ?? "ativa"}; descartar mantém a atual.</span></div><span class="sp"></span><button class="btn ghost" data-act="discard-edition" data-id="${staged.id}" data-strategy="${id}">Descartar</button><button class="btn primary" data-act="promote-edition" data-id="${staged.id}" data-strategy="${id}">Promover a ativa</button></div>`
+    : status === "PROMOTED" || (!staged && active)
+      ? `<div class="applybar"><span class="chip green">${staged ? "promovida a ativa" : "edição ativa"}</span><span class="dim">os alvos entram no próximo recálculo do plano.</span></div>`
+      : `<div class="applybar"><span class="chip grey">descartada</span><span class="dim">a edição ativa continua valendo.</span></div>`;
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>${staged ? `Edição ${staged.id} · ${monthLabel(staged.reference_month)}` : `Edição ativa ${active.id} · ${monthLabel(active.reference_month)}`} <span class="sp"></span><span class="hint">${staged ? `staged · comparada com a ativa ${active?.id ?? "—"}` : "pesos e preços-alvo vigentes"}</span></h2>
+        <table class="dk-table">
+          ${tableHead(["Ativo", "Peso", "Preço-alvo", "Rating", "Operar", "Diff"])}
+          ${rows}
+        </table>
+        ${actions}
+      </section>
+      <div class="dk-note">Promover a edição substitui a ativa. O plano de novembro só pega os novos pesos no próximo recálculo.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel"><h2>Resumo do diff</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Pesos alterados</span><span class="sp"></span><span class="num over">${staged ? staged.diff_from_previous.changed.length : 0}</span></div>
+          <div class="dk-mini-row"><span class="dim">Preços alterados</span><span class="sp"></span><span class="num over">${staged ? source.entries.filter((e) => e.target_price).length : 0}</span></div>
+          <div class="dk-mini-row"><span class="dim">Não operar</span><span class="sp"></span><span class="num over">${source.entries.filter((e) => e.do_not_trade).map((e) => e.ticker).join(", ") || "—"}</span></div>
+          <div class="dk-mini-row"><span class="dim">Ativos</span><span class="sp"></span><span class="num">${source.entries.length}</span></div>
+        </div>
+        <div class="dk-callout">VALE3 marcado <b>não operar</b> não vende a posição: o déficit fica visível e sem compra. As cotas só saem para financiar outra compra.</div>
+      </section>
+      <section class="dk-panel"><h2>Proveniência</h2><div class="dk-read"><p>${staged ? "XP_Relatorio_Novembro_2026.csv · sha256 c4e8a2d6f0b4… · original retido." : "Edição promovida; a próxima leitura do relatório abre uma nova sessão."}</p></div></section>
+    </aside>
+  </div>`;
+}
+
+function strategyAtribuicao(id) {
+  const rows = F.strategies.attribution.map((a) => {
+    const own = a.slices.find((s) => s.strategy_id === id);
+    const others = a.slices.filter((s) => s.strategy_id !== id);
+    return `<tr>
+      <td><b class="num">${a.ticker}</b></td>
+      <td class="r num">${num(a.custody_quantity)}</td>
+      <td class="r num">${num(own?.quantity ?? 0)}</td>
+      <td class="r num ${own ? "faint" : "over"}">${num(a.unattributed_quantity + others.reduce((s, o) => s + o.quantity, 0))}</td>
+      <td class="r faint">${others.length ? others.map((o) => `${o.strategy_name} · ${num(o.quantity)}`).join(" · ") : "—"}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Custódia × atribuição <span class="sp"></span><span class="hint">a custódia não se move numa transferência</span></h2>
+        <table class="dk-table">
+          ${tableHead(["Ativo", "Custódia", "Nesta estratégia", "Fora", "Outra estratégia"])}
+          ${rows}
+        </table>
+      </section>
+      ${id === 1 ? `<div class="dk-callout"><b>Transferência pendente · WEGE3 · 372 cotas</b><br>Legado Ações → Dividendos BR · ${money(19492.8)} · um bucket manual como doador sempre espera um humano.</div>` : ""}
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel"><h2>Reconciliação</h2><div class="dk-read"><p>A coluna <b>Fora</b> mostra o que está na custódia mas não nesta fatia. Tudo que aparece fora de toda estratégia é lacuna de atribuição, não de custódia.</p><p>WEGE3 está inteiro em <b>Legado Ações</b>. A transferência sugerida moveria 372 cotas sem tocar na custódia.</p></div></section>
+    </aside>
+  </div>`;
+}
+
+function strategyFatia(id, alloc) {
+  if (!alloc) {
+    const value = F.strategies.holdings.find((h) => h.strategy_id === id)?.total_value ?? 0;
+    return `<div class="dk-cols"><div class="dk-stack"><section class="dk-panel"><h2>Fatia no portfólio</h2><div class="dk-mini"><div class="dk-mini-row"><span class="dim">Valor do bucket</span><span class="sp"></span><span class="num">${money0(value)}</span></div><div class="dk-mini-row"><span class="dim">Fatia da carteira</span><span class="sp"></span><span class="num">${pct((value / ALLOC.actual) * 100, 1)}</span></div><div class="dk-mini-row"><span class="dim">Alvo</span><span class="sp"></span><span class="num">sem alvo</span></div></div><div class="dk-read"><p>Um bucket manual não tem fatia-alvo; ele existe só como custódia e doador de transferências.</p></div></section></div><aside class="dk-stack"><section class="dk-panel"><h2>Contexto</h2><div class="dk-read"><p>Manual, sem alvo, sem edição. Pode doar atribuição para uma estratégia com alvo.</p></div></section></aside></div>`;
+  }
+  const total = alloc.row.tickers.reduce((s, t) => s + t.actual, 0);
+  const perf = strategyPerformance(id)?.decomposition;
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel"><h2>Composição da fatia</h2>
+        <table class="dk-table">
+          ${tableHead(["Ativo", "Valor", "Peso na estratégia", "Peso dentro do alvo"], true)}
+          ${alloc.row.tickers.map((t) => `<tr><td><span class="num">${t.ticker}</span></td><td class="r num">${money0(t.actual)}</td><td class="r num">${pct(total ? (t.actual / total) * 100 : 0, 1)}</td><td class="barcol">${barMarkup(t.actual, t.ideal, t.drift > 0 ? "over" : "")}</td></tr>`).join("")}
+          <tr class="total"><td>Total</td><td class="r num">${money0(total)}</td><td class="r num">100%</td><td class="barcol"></td></tr>
+        </table>
+      </section>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel"><h2>Contexto</h2><div class="dk-mini">
+        <div class="dk-mini-row"><span class="dim">Fatia na carteira</span><span class="sp"></span><span class="num">${pct((alloc.row.actual / ALLOC.actual) * 100, 1)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Fatia na classe</span><span class="sp"></span><span class="num">${pct(alloc.cls.actual ? (alloc.row.actual / alloc.cls.actual) * 100 : 0, 1)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Alvo na classe</span><span class="sp"></span><span class="num">${alloc.row.target}%</span></div>
+        <div class="dk-mini-row"><span class="dim">Drift</span><span class="sp"></span><span class="num ${alloc.row.drift > 0 ? "over" : "short"}">${pp(alloc.row.drift)}</span></div>
+      </div></section>
+      <section class="dk-panel"><h2>Retorno do mês</h2><div class="dk-mini">
+        <div class="dk-mini-row"><span class="dim">Início</span><span class="sp"></span><span class="num">${money0(perf?.value_start)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Fim</span><span class="sp"></span><span class="num">${money0(perf?.value_end)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Aportes</span><span class="sp"></span><span class="num">${money0(perf?.net_aportes)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Proventos</span><span class="sp"></span><span class="num">${money0(perf?.net_income)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Retorno</span><span class="sp"></span><span class="num ${retClass(perf?.return_percentage)}">${spct(perf?.return_percentage)}</span></div>
+      </div></section>
+    </aside>
+  </div>`;
+}
+
+function strategyDetail(id, tab) {
+  const s = strategyById(id);
+  if (!s) return `${pageHead("Estratégia", "Não encontrada")}`;
+  const alloc = strategyAllocationRow(id);
+  const manual = s.kind === "MANUAL";
+  const tabs = manual ? [["carteira", "Carteira"], ["fatia", "Fatia no portfólio"]] : [["carteira", "Carteira"], ["edicoes", "Edições"], ["atribuicao", "Atribuição"], ["fatia", "Fatia no portfólio"]];
+  const active = tabs.some(([k]) => k === tab) ? tab : "carteira";
+  const staged = stagedEdition(id);
+  const body = active === "edicoes" ? strategyEdicoes(id) : active === "atribuicao" ? strategyAtribuicao(id) : active === "fatia" ? strategyFatia(id, alloc) : strategyCarteira(id, alloc);
+  return `${pageHead(s.name, `${manual ? "bucket manual" : `estratégia de relatório · edição ativa ${activeEdition(id)?.id ?? "—"}`} · ${CLASS_LABEL[s.asset_class]}`, `<button class="btn ghost" data-go="strategies/list">← Todas as estratégias</button>${!manual ? `<button class="btn primary" data-go="imports/wizard/xp/1">Enviar relatório</button>` : ""}`)}
+  ${strategyKpis(id, alloc)}
+  <div class="dk-tabs">
+    ${tabs.map(([k, label]) => `<button class="${k === active ? "on" : ""}" data-go="strategies/${id}/${k}">${label}${k === "edicoes" && staged ? ' <span class="chip amber">1</span>' : ""}</button>`).join("")}
+    <span class="sp"></span><span class="ctx">${manual ? "sem alvo · sem relatório" : "relatório · XP"}</span>
+  </div>
+  ${body}`;
+}
+function assetsPage(sub) {
+  const actions = `<button class="btn" data-go="imports/wizard/b3/1">Importar extrato</button><button class="btn ghost" data-go="imports/wizard/custody/1">Reconciliar custódia</button>`;
+  if (sub === "fixed") {
+    const subLabel = { INFLATION_LINKED: "IPCA+", FIXED_RATE: "Prefixado", FLOATING_RATE: "CDI" };
+    return `${pageHead("Ativos · Renda fixa", "Títulos e contas na mesma tabela; o valor é por accrual.", actions)}
+      ${objectTabs("assets", "fixed")}
+      <section class="dk-panel"><table class="dk-table">${tableHead(["Produto", "Indexador", "Valor"])}${F.assets.fixedIncome.positions.map((p) => `<tr><td>${esc(p.product)}</td><td class="dim">${subLabel[p.sub_class] || p.sub_class}</td><td class="r num">${money0(p.value)}</td></tr>`).join("")}<tr class="total"><td>Total</td><td></td><td class="r num">${money0(RF_ACTUAL_TOTAL)}</td></tr></table></section>
+      <div class="dk-note" style="margin-top:10px">Extratos B3 não cobrem renda fixa: ela tem o próprio caminho de entrada, sem o assistente de importação.</div>`;
+  }
+  if (sub === "quotes") {
+    return `${pageHead("Ativos · Cotações", "Último fechamento por ticker e a idade da cotação.", actions)}
+      ${objectTabs("assets", "quotes")}
+      <section class="dk-panel"><table class="dk-table">${tableHead(["Ticker", "Data", "Fechamento", "Fonte", "Estado"])}${F.assets.quotes.map((q) => `<tr><td><b class="num">${q.ticker}</b></td><td class="num dim">${dateBR(q.date)}</td><td class="r num">${money(q.close)}</td><td class="dim">${q.source}</td><td>${q.date < "2026-10-30" ? '<span class="chip amber">desatualizada</span>' : '<span class="chip green plain">ok</span>'}</td></tr>`).join("")}</table></section>
+      <div class="dk-note" style="margin-top:10px">A cotação velha de VALE3 é uma pendência de acompanhamento, não uma trava de fechamento: o snapshot congela o último preço conhecido.</div>`;
+  }
+  if (sub === "gaps") {
+    return `${pageHead("Ativos · Lacunas", "Deltas de custódia que o livro não explica; nunca alimentam o imposto.", actions)}
+      ${objectTabs("assets", "gaps")}
+      <section class="dk-panel"><table class="dk-table">${tableHead(["Ticker", "Data", "Quantidade", "Resultado", "Estado"])}${F.assets.gaps.map((g) => `<tr><td><b class="num">${g.ticker}</b></td><td class="num dim">${dateBR(g.date)}</td><td class="r num">${num(g.quantity)}</td><td>${g.realized_pending ? '<span class="chip amber">pendente</span>' : '<span class="chip green plain">resolvido</span>'}</td><td><span class="chip ${g.status === "OPEN" ? "red" : "grey"}">${g.status}</span></td></tr>`).join("")}</table></section>
+      <div class="dk-callout"><b>A lacuna nasce no snapshot de custódia.</b> A importação 102 mostra AAPL34 com +50 cotas contra o livro; aplicar o snapshot abre a lacuna e deixa o resultado pendente. Fechar o mês não é bloqueado por ela.</div>`;
+  }
+  const pos = F.assets.positions.map((p) => {
+    const q = F.assets.quotes.find((x) => x.ticker === p.ticker);
+    const cat = F.assets.catalog.find((x) => x.ticker === p.ticker);
+    return { ...p, close: q?.close, cls: cat?.asset_class, stale: q && q.date < "2026-10-30" };
+  });
+  const total = pos.reduce((s, p) => s + p.quantity * (p.close || 0), 0);
+  return `${pageHead("Ativos · Posições", "Custódia real e preço médio fiscal; a atribuição por estratégia vem em segundo plano.", actions)}
+    ${objectTabs("assets", "positions")}
+    <div class="infobanner"><b>Revisão contextual.</b><span>O extrato B3 (101) e a custódia (102) abrem o assistente já no destino Ativos · Posições.</span><span class="sp"></span><a data-go="imports/inbox">Ver caixa de entrada →</a></div>
+    <section class="dk-panel"><table class="dk-table">
+      ${tableHead(["Ticker", "Classe", "Quantidade", "Preço médio", "Fechamento", "Valor"])}
+      ${pos.map((p) => `<tr><td><b class="num">${p.ticker}</b>${p.stale ? ' <span class="chip amber plain">cotação velha</span>' : ""}${p.ticker === "AAPL34" ? ' <span class="chip red plain">lacuna</span>' : ""}</td><td><span class="chip ${p.cls === "ACOES" ? "blue" : "amber"} plain">${CLASS_LABEL[p.cls] ?? "—"}</span></td><td class="r num">${num(p.quantity)}</td><td class="r num">${money(p.average_price)}</td><td class="r num">${p.close ? money(p.close) : "—"}</td><td class="r num">${p.close ? money0(p.quantity * p.close) : "—"}</td></tr>`).join("")}
+      <tr class="total"><td colspan="5">Total listado</td><td class="r num">${money0(total)}</td></tr>
+    </table></section>`;
+}
+
+function sourceStatus(key) {
+  if (key === "mov") return STATE.imports.b3 ? "APPLIED" : "STAGED";
+  if (key === "pos") return STATE.imports.custody ? "APPLIED" : "REVIEWED";
+  if (key === "xp") {
+    const st = editionStatus(104);
+    return st === "PROMOTED" ? "APPLIED" : st === "DISCARDED" ? "DISCARDED" : "STAGED";
+  }
+  return "APPLIED";
+}
+const SOURCES = [
+  { key: "mov", label: "B3 · Movimentações", detail: "Negócios, proventos e eventos", last: "01/11 · 18:42" },
+  { key: "pos", label: "B3 · Custódia", detail: "Snapshot de posição", last: "31/10 · 19:05" },
+  { key: "trades", label: "B3 · Negócios", detail: "Extrato de negócios fechados", last: "31/10 · 18:20" },
+  { key: "xp", label: "XP · Relatórios", detail: "Relatório mensal por estratégia", last: "01/11 · 09:10" },
+];
+const statusTone = { STAGED: "amber", REVIEWED: "blue", APPLIED: "green", FAILED: "red", ACTIVE: "green", DISCARDED: "grey", PROMOTED: "green" };
+const statusLabel = { STAGED: "Em revisão", REVIEWED: "Pronto para aplicar", APPLIED: "Aplicado", FAILED: "Falhou", ACTIVE: "Ativa", DISCARDED: "Descartada", PROMOTED: "Promovida" };
+
+function sourceText(key) {
+  if (key === "mov") return STATE.imports.b3 ? "3 linhas aplicadas · 1 no lote de reenvio" : "4 linhas · 1 erro · 2 duplicatas";
+  if (key === "pos") return STATE.imports.custody ? "Aplicado · 1 lacuna aberta" : "11 posições · 1 divergência";
+  if (key === "xp") return editionStatus(104) === "PROMOTED" ? "Edição 104 promovida a ativa" : editionStatus(104) === "DISCARDED" ? "Edição 104 descartada" : "PDF falhou · CSV gerou a edição 104";
+  return "3 trades em 31/10";
+}
+
+function sourceStrip() {
+  return `<div class="source-grid">${SOURCES.map((s) => {
+    const st = sourceStatus(s.key);
+    return `<div class="source-card" data-go="imports/sources">
+      <div class="lbl">${s.label}<span class="sp"></span><span class="chip ${statusTone[st] ?? "grey"}">${statusLabel[st] ?? st}</span></div>
+      <div class="meta">${s.detail} · última ${s.last}</div>
+      <div class="st">${sourceText(s.key)}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function queueItems() {
+  return [
+    { key: "101", kind: "b3", source: "B3 · Movimentações", file: F.imports.items.find((i) => i.id === 101).file_name, status: sourceStatus("mov"), text: sourceText("mov"), dest: "Ativos · Posições", go: STATE.imports.b3 ? "assets/positions" : "imports/wizard/b3/3" },
+    { key: "102", kind: "custody", source: "B3 · Custódia", file: F.imports.items.find((i) => i.id === 102).file_name, status: sourceStatus("pos"), text: sourceText("pos"), dest: "Ativos · Posições", go: STATE.imports.custody ? "assets/positions" : "imports/wizard/custody/3" },
+    { key: "ed104", kind: "xp", source: "XP · Relatório", file: "XP_Relatorio_Novembro_2026.csv", status: sourceStatus("xp"), text: sourceText("xp"), dest: "Estratégias · Dividendos BR", go: editionStatus(104) === "STAGED" ? "imports/wizard/xp/3" : "strategies/1/edicoes" },
+  ];
+}
+
+function importsInbox() {
+  const queued = queueItems();
+  const pending = queued.filter((q) => q.status !== "APPLIED" && q.status !== "DISCARDED");
+  const parked = STATE.imports.parked ? `<section class="dk-panel" style="margin-bottom:12px">
+    <h2>Sessão aberta <span class="sp"></span><span class="chip amber plain">retomável</span><span class="hint">saiu sem concluir</span></h2>
+    <div class="dk-mini"><div class="dk-mini-row">
+      <span class="chip blue plain">${STATE.imports.parked.kind === "xp" ? "Relatório XP" : STATE.imports.parked.kind === "custody" ? "Custódia B3" : "Extrato B3"}</span>
+      <span class="dim">etapa ${STATE.imports.parked.step} de 4 · arquivo lido, nada aplicado</span><span class="sp"></span>
+      <span class="dk-link" data-go="imports/wizard/${STATE.imports.parked.kind}/${STATE.imports.parked.step}">Retomar →</span>
+    </div></div>
+  </section>` : "";
+  return `${pageHead("Importações", "Um só lugar para arquivos em revisão — movimentação, custódia, negócios e relatório.", `<button class="btn primary" data-go="imports/wizard/b3/1">Enviar arquivo</button>`)}
+    ${objectTabs("imports", "inbox")}
+    ${sourceStrip()}
+    <div class="infobanner"><b>Sessões, não linhas.</b><span>Cada upload vira uma sessão de assistente; abandonar guarda a sessão aqui para retomar.</span></div>
+    ${parked}
+    <section class="dk-panel">
+      <h2>Na fila <span class="sp"></span><span class="hint">${pending.length} ${pending.length === 1 ? "item" : "itens"} · os aplicados continuam no histórico</span></h2>
+      <div class="queue">${queued.map((q) => `<button class="qitem" data-go="${q.go}">
+        <div><div class="src">${q.source}</div><div class="file">${esc(q.file)}</div></div>
+        <div class="what">${q.text}</div>
+        <div><span class="chip blue plain">${q.dest}</span></div>
+        <div class="right"><span class="chip ${statusTone[q.status] ?? "grey"}">${statusLabel[q.status] ?? q.status}</span><span class="go">${q.status === "APPLIED" ? "Ver →" : "Retomar →"}</span></div>
+      </button>`).join("")}</div>
+    </section>
+    <section class="dk-panel" style="margin-top:12px">
+      <h2>Falhas e reenvios <span class="sp"></span><span class="hint">a fonte guarda a última tentativa</span></h2>
+      <table class="dk-table"><thead><tr><th>Fonte</th><th>Arquivo</th><th>Motivo</th><th>Quando</th><th class="r">Ação</th></tr></thead>
+        <tbody><tr><td><span class="chip grey">XP · Relatório</span></td><td class="num dim">XP_Relatorio_Outubro_2026.pdf</td><td class="dim">PDF sem camada de texto · o CSV reexportado gerou a edição 104</td><td class="num">30/10</td><td class="r"><button class="btn sm" data-go="imports/wizard/xp/1">Reenviar →</button></td></tr></tbody>
+      </table>
+    </section>`;
+}
+
+function importsSources() {
+  return `${pageHead("Importações · Fontes", "Estado por fonte; a atenção mora aqui, não item a item.")}
+    ${objectTabs("imports", "sources")}
+    <div class="dk-cols">
+      <div class="dk-stack">
+        ${SOURCES.map((s) => {
+          const st = sourceStatus(s.key);
+          const action = s.key === "xp" ? `<button class="btn sm ghost" data-go="${editionStatus(104) === "STAGED" ? "imports/wizard/xp/3" : "strategies/1/edicoes"}">Revisar edição →</button>`
+            : s.key === "mov" ? `<button class="btn sm ghost" data-go="${STATE.imports.b3 ? "assets/positions" : "imports/wizard/b3/3"}">Revisar linhas →</button>`
+            : s.key === "pos" ? `<button class="btn sm ghost" data-go="${STATE.imports.custody ? "assets/positions" : "imports/wizard/custody/3"}">Revisar snapshot →</button>`
+            : `<button class="btn sm ghost" data-go="imports/history">Ver no histórico →</button>`;
+          return `<section class="dk-panel"><h2>${s.label} <span class="sp"></span><span class="hint">última leitura ${s.last}</span><span class="chip ${statusTone[st] ?? "grey"}">${statusLabel[st] ?? st}</span></h2>
+            <div class="dk-mini">
+              <div class="dk-mini-row"><span class="dim">${s.detail}</span><span class="sp"></span><b>${sourceText(s.key)}</b></div>
+              <div class="dk-mini-row"><span class="chip ${s.key === "xp" ? "red" : "grey"} plain">${s.key === "xp" ? "2 tentativas" : "1 arquivo"}</span><span class="dim">${s.key === "xp" ? "PDF falhou · CSV aceito" : "última leitura dentro do esperado"}</span><span class="sp"></span>${action}</div>
+            </div>
+          </section>`;
+        }).join("")}
+      </div>
+      <aside class="dk-stack">
+        <section class="dk-panel"><h2>Regras da fonte</h2><div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Extrato B3</span><span class="sp"></span><span class="chip blue plain">não cobre RF</span></div>
+          <div class="dk-mini-row"><span class="dim">Reenvio</span><span class="sp"></span><span class="chip grey plain">hash + original</span></div>
+          <div class="dk-mini-row"><span class="dim">Atenção</span><span class="sp"></span><span class="chip amber plain">na fonte</span></div>
+        </div><div class="dk-read"><p><b>Uma fonte falha, não a caixa.</b> O histórico do arquivo fica na fonte; a caixa de entrada só mostra o que ainda precisa de decisão.</p></div></section>
+      </aside>
+    </div>`;
+}
+
+function importsCorporate() {
+  return `${pageHead("Importações · Ações corporativas", "Eventos que mudam quantidade ou preço médio, sempre com revisão humana.")}
+    ${objectTabs("imports", "corporate")}
+    <section class="dk-panel"><table class="dk-table">
+      ${tableHead(["Evento", "Ticker", "Tipo", "Ex", "Fonte", "Estado"])}
+      ${F.imports.corporateActions.map((c) => `<tr class="${c.status === "NEEDS_REVIEW" ? "click" : ""}" ${c.status === "NEEDS_REVIEW" ? 'data-go="imports/wizard/b3/3"' : ""}><td class="num dim">#${c.id}</td><td><b class="num">${c.ticker}</b></td><td>${esc(c.kind || "—")}</td><td class="num dim">${dateBR(c.ex_date)}</td><td class="dim">${c.source}</td><td><span class="chip ${c.status === "NEEDS_REVIEW" ? "red" : "green"}">${c.status === "NEEDS_REVIEW" ? "Revisar" : "Aplicada"}</span></td></tr>`).join("")}
+    </table></section>
+    ${F.imports.corporateActions.filter((c) => c.status === "NEEDS_REVIEW").map((c) => `<div class="warnbanner" style="margin-top:12px"><b>Desdobramento 1:${c.ratio} em revisão.</b><span>${c.ticker} com ex em ${dateBR(c.ex_date)}. Aplicar muda quantidade e preço médio; nunca o caixa.</span><span class="sp"></span><a data-go="imports/wizard/b3/3">Abrir revisão →</a></div>`).join("")}`;
+}
+
+function importsHistory() {
+  return `${pageHead("Importações · Histórico", "Tudo que já foi staged, revisado, aplicado ou falhou.")}
+    ${objectTabs("imports", "history")}
+    <section class="dk-panel"><table class="dk-table">
+      ${tableHead(["#", "Fonte", "Arquivo", "Criado", "Estado"])}
+      ${F.imports.items.map((i) => {
+        const status = i.id === 101 ? sourceStatus("mov") : i.id === 102 ? sourceStatus("pos") : i.status;
+        return `<tr><td class="num dim">#${i.id}</td><td><span class="chip grey">${i.source}</span></td><td class="dim">${esc(i.file_name)}</td><td class="num">${dateBR(i.created_at)}</td><td><span class="chip ${statusTone[status] ?? "grey"}">${statusLabel[status] ?? status}</span></td></tr>`;
+      }).join("")}
+      <tr><td class="num dim">ed. 104</td><td><span class="chip grey">XP · Relatório</span></td><td class="dim">XP_Relatorio_Novembro_2026.csv</td><td class="num">01/11</td><td><span class="chip ${statusTone[editionStatus(104)]}">${statusLabel[editionStatus(104)] ?? editionStatus(104)}</span></td></tr>
+    </table></section>`;
+}
+const WIZ_LABELS = {
+  b3: ["Arquivo", "Destino e mapeamento", "Linhas", "Aplicar"],
+  custody: ["Arquivo", "Destino e mapeamento", "Divergências", "Aplicar"],
+  xp: ["Arquivo", "Destino e mapeamento", "Diff da edição", "Promover"],
+};
+
+function mappingPanel(kind) {
+  const cells = kind === "xp"
+    ? [["ticker", "Código"], ["peso", "Peso alvo"], ["preço-alvo", "Preço-alvo"], ["rating", "Recomendação"], ["não operar", "Não operar"]]
+    : [["Data", "Data do negócio"], ["Tipo de mercado", "Compra / venda"], ["Código de negociação", "Ticker"], ["Quantidade", "Quantidade"], ["Preço unitário", "Preço"], ["Instituição", "Corretora"]];
+  return `<section class="wiz-panel">
+    <header><h2>Mapeamento</h2><span class="sp"></span><span class="chip blue plain">template lembrado</span><span class="hint">${kind === "xp" ? "XP · layout 2026-07" : "B3 · movimentação (xlsx)"}</span></header>
+    <div class="pad">
+      <div class="mapping">${cells.map(([from, to]) => `<div class="map-cell"><span>${from}</span><span class="to">→ ${to}</span><span class="ok">✓</span></div>`).join("")}</div>
+      <div class="dk-callout" style="margin:10px 0 0"><b>Sem auto-mapa cego.</b> O template reconhecido preenche as colunas, mas nada entra sem esta revisão. O mapeamento fica ligado à fonte para o próximo arquivo.</div>
+    </div>
+  </section>`;
+}
+
+let REVIEW_ONLY = false;
+
+function b3RowsTable() {
+  const rows = F.imports.rows[101];
+  const rejected = STATE.imports.rejected504;
+  const situation = (r) => {
+    if (r.id === 504 && rejected) return `<span class="chip grey">rejeitada · lote de reenvio</span>`;
+    if (r.situation === "new") return `<span class="chip green">aceita</span>`;
+    if (r.situation === "duplicate_in_file") return `<span class="chip grey">duplicata no arquivo</span>`;
+    if (r.situation === "duplicate_in_ledger") return `<span class="chip grey">já lançada em 28/10</span>`;
+    return `<span class="chip red">erro · linha 7</span>`;
+  };
+  const rowClass = (r) => r.id === 504 ? (rejected ? "muted" : "row-error") : (r.situation === "new" ? "" : "muted");
+  const errorCell = (r) => {
+    if (r.id !== 504) return "";
+    if (rejected) return `<div class="faint" style="font-size:10.5px">fora do lote aplicado · pode ser reenviada depois</div>`;
+    return `<div style="margin-top:5px"><span class="chip red plain">COTAHIST desconhecido</span></div><div class="faint" style="font-size:10px;margin-top:3px">Corrija o código ou ignore a linha.</div><div style="margin-top:5px"><button class="btn sm" data-act="reject-row">Ignorar linha</button></div>`;
+  };
+  return `<section class="wiz-panel">
+    <header><h2>Linhas</h2><span class="chip green plain">3 aceitas</span><span class="chip grey plain">2 duplicatas</span><span class="chip ${rejected ? "grey" : "red"} plain">${rejected ? "1 rejeitada" : "1 erro"}</span><span class="sp"></span><span class="hint">4 linhas no arquivo</span></header>
+    <table class="dk-table"><thead><tr><th>#</th><th>Data</th><th>Tipo</th><th>Código</th><th class="r">Qtd.</th><th class="r">Preço</th><th>Instituição</th><th>Situação</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr class="${rowClass(r)}"><td class="num dim">${r.id}</td><td class="num">${dateBR(r.date)}</td><td><span class="chip ${r.side === "BUY" ? "blue" : "amber"} plain">${r.side === "BUY" ? "Compra" : "Venda"}</span></td><td><b class="num">${r.ticker}</b></td><td class="r num">${num(r.quantity)}</td><td class="r num">${money(r.unit_price)}</td><td class="dim">${r.institution_name}</td><td>${situation(r)}${errorCell(r)}</td></tr>`).join("")}</tbody>
+    </table>
+    ${REVIEW_ONLY ? "" : `<div class="applybar"><div class="sum"><b>3 de 4 linhas válidas</b><span class="dim"> · duplicatas ignoradas automaticamente</span></div><span class="sp"></span>${STATE.imports.b3 ? `<span class="chip green">aplicada</span>` : `<button class="btn primary" data-act="wiz-apply" data-kind="b3">Aplicar 3 linhas válidas</button>`}</div>`}
+  </section>`;
+}
+
+function custodyDiffTable() {
+  const custody = F.assets.positions.map((p) => ({ ticker: p.ticker, book: p.quantity, custody: p.ticker === "AAPL34" ? p.quantity + 50 : p.quantity }));
+  return `<section class="wiz-panel">
+    <header><h2>Snapshot de custódia</h2><span class="chip blue plain">11 posições</span><span class="chip amber plain">1 divergência</span><span class="sp"></span><span class="hint">31/10/2026</span></header>
+    <table class="dk-table"><thead><tr><th>Ticker</th><th class="r">Livro</th><th class="r">Custódia</th><th class="r">Delta</th><th>Efeito</th></tr></thead>
+      <tbody>${custody.map((c) => {
+        const delta = c.custody - c.book;
+        return `<tr class="${delta ? "row-error" : ""}"><td><b class="num">${c.ticker}</b></td><td class="r num">${num(c.book)}</td><td class="r num">${num(c.custody)}</td><td class="r num ${delta ? "over" : "faint"}">${delta ? `+${delta}` : "—"}</td><td>${delta ? '<span class="chip amber">abre lacuna · resultado pendente</span>' : '<span class="chip green plain">confere</span>'}</td></tr>`;
+      }).join("")}</tbody>
+    </table>
+    ${REVIEW_ONLY ? "" : `<div class="applybar"><div class="sum"><b>Estado como snapshot.</b><span class="dim"> posições se sobrescrevem; a divergência não bloqueia a aplicação.</span></div><span class="sp"></span>${STATE.imports.custody ? `<span class="chip green">aplicado</span>` : `<button class="btn primary" data-act="wiz-apply" data-kind="custody">Aplicar snapshot</button>`}</div>`}
+  </section>`;
+}
+
+function editionDiffTable() {
+  const id = 104;
+  const staged = stagedEdition(id);
+  const active = activeEdition(id);
+  const before = active ? Object.fromEntries(active.entries.map((e) => [e.ticker, e])) : {};
+  const source = staged ?? active;
+  if (!source) return "";
+  const rows = source.entries.map((e) => {
+    const b = before[e.ticker];
+    const wChanged = b && b.weight !== e.weight;
+    const flip = b && !b.do_not_trade && e.do_not_trade;
+    return `<tr class="${wChanged || flip ? "row-error" : ""}"><td><b class="num">${e.ticker}</b></td><td class="r num">${b ? `${b.weight}% → <b>${e.weight}%</b>` : `<b>${e.weight}%</b>`}${wChanged ? ` <span class="chip blue plain">${e.weight > b.weight ? "+" : ""}${e.weight - b.weight} pp</span>` : ""}</td><td class="r num">${b ? `${money(b.target_price)} → <b>${money(e.target_price)}</b>` : money(e.target_price)}</td><td>${b && b.rating !== e.rating ? `<span class="chip amber plain">${b.rating} → ${e.rating}</span>` : `<span class="chip grey plain">${e.rating}</span>`}</td><td>${flip ? '<span class="chip red">novo: não operar</span>' : e.do_not_trade ? '<span class="chip amber plain">sim</span>' : '<span class="chip grey plain">—</span>'}</td></tr>`;
+  }).join("");
+  return `<section class="wiz-panel">
+    <header><h2>Diff contra a edição ativa</h2><span class="chip amber plain">2 pesos alterados</span><span class="chip grey plain">5 preços-alvo</span><span class="chip red plain">1 alerta</span><span class="sp"></span><span class="hint">edição ${active?.id ?? "—"} → ${source.id}</span></header>
+    <table class="dk-table"><thead><tr><th>Ticker</th><th class="r">Peso</th><th class="r">Preço-alvo</th><th>Recomendação</th><th>Não operar</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="pad" style="padding-top:0">
+      <div class="warnbanner" style="margin:0 0 8px"><b>Alerta.</b><span>VALE3 passa a <b>não operar</b> nesta edição: o plano não sugere compra nem venda do ativo enquanto ela estiver ativa.</span></div>
+      <div class="dk-note">O diff muda alvos de estratégia, não custódia. O plano de novembro já está calculado; os novos pesos entram no próximo recálculo.</div>
+    </div>
+    ${REVIEW_ONLY ? "" : `<div class="applybar"><div class="sum"><b>Edição ${source.id} staged.</b><span class="dim"> promover substitui a ${active?.id ?? "ativa"} como ativa; descartar mantém a atual.</span></div><span class="sp"></span>${editionStatus(source.id) === "PROMOTED" ? `<span class="chip green">promovida a ativa</span>` : editionStatus(source.id) === "DISCARDED" ? `<span class="chip grey">descartada</span>` : `<button class="btn ghost" data-act="discard-edition" data-id="${source.id}" data-strategy="${id}">Descartar</button><button class="btn primary" data-act="wiz-apply" data-kind="xp" data-id="${source.id}">Promover a ativa</button>`}</div>`}
+  </section>`;
+}
+
+function destinationsPanel(kind) {
+  const rows = kind === "b3"
+    ? [["Ativos · Posições", "+500 ITSA4 em 27/10 · preço médio recalculado", "assets/positions"], ["Plano · Ordens", "1 ordem de novembro passa a coberta pelo negócio importado", "plan/orders"]]
+    : kind === "custody"
+    ? [["Ativos · Posições", "AAPL34 2.000 → 2.050; as outras 10 posições conferem", "assets/positions"], ["Ativos · Lacunas", "abre a lacuna de 50 cotas em AAPL34, com resultado pendente", "assets/gaps"]]
+    : [["Estratégias · Dividendos BR", "nova edição ativa: 2 pesos e 5 preços-alvo", "strategies/1/edicoes"], ["Carteira · Alocação", "os alvos da estratégia entram no próximo recálculo do plano", "portfolio/allocation"]];
+  return `<section class="wiz-panel">
+    <header><h2>O que esta importação muda</h2><span class="sp"></span><span class="hint">destino do dado</span></header>
+    <div class="pad"><div class="dest-rows">${rows.map(([d, what, route]) => `<div class="dest-row"><span class="chip blue plain">${d}</span><span>${what}</span><span class="sp"></span><a data-go="${route}">Abrir no destino →</a></div>`).join("")}</div></div>
+  </section>`;
+}
+
+function wizardStepBody(kind, step) {
+  const dest = kind === "xp" ? "Dividendos BR · nov/2026" : kind === "custody" ? "Ativos · Posições · 31/10" : "Ativos · Posições · extrato B3";
+  const parser = kind === "xp" ? "XP · layout 2026-07" : kind === "custody" ? "B3 · posição em custódia" : "B3 · movimentação";
+  if (step === 1) {
+    return `<section class="wiz-panel"><header><h2>Arquivo</h2><span class="sp"></span><span class="hint">destino e parser pré-preenchidos</span></header>
+      <div class="pad" style="display:grid;gap:12px">
+        <div class="seg">${["xp", "b3", "custody"].map((k) => `<button class="${kind === k ? "on" : ""}" data-go="imports/wizard/${k}/1">${k === "xp" ? "Relatório XP" : k === "b3" ? "Extrato B3" : "Custódia B3"}</button>`).join("")}</div>
+        <div class="drop"><b>Arraste o arquivo aqui</b><span>o contexto já escolheu o parser: ${parser}</span></div>
+        <div class="sample"><span class="num">${kind === "xp" ? "XP_Relatorio_Novembro_2026.csv" : kind === "custody" ? "posicao-2026-10-31.xlsx" : "movimentacao-2026-10-31.xlsx"}</span><span class="sp"></span><span class="chip green plain">arquivo escolhido</span></div>
+        <div class="dk-callout" style="margin:0"><b>Contexto sem cerimônia.</b> O destino ${dest} pode vir de onde o assistente foi aberto; trocar é explícito, não um passo a mais.</div>
+      </div>
+    </section>`;
+  }
+  if (step === 2) {
+    return `<div class="dk-stack">
+      <section class="wiz-panel"><header><h2>Destino</h2><span class="sp"></span><span class="chip blue plain">pré-preenchido</span></header>
+        <div class="pad"><div class="dest-rows">
+          <div class="dest-row"><span class="dim">Destino</span><span class="sp"></span><b>${dest}</b></div>
+          <div class="dest-row"><span class="dim">Parser</span><span class="sp"></span><b>${parser}</b><span class="chip green plain">reconhecido</span></div>
+          <div class="dest-row"><span class="dim">Aplicação</span><span class="sp"></span><b>${kind === "xp" ? "promover a edição a ativa" : kind === "custody" ? "sobrescrever o snapshot" : "aplicar as linhas válidas"}</b></div>
+        </div></div>
+      </section>
+      ${kind === "custody" ? `<div class="dk-callout"><b>A custódia não passa por mapeamento de colunas.</b> O parser lê ticker e quantidade, e a revisão é a divergência contra o livro.</div>` : mappingPanel(kind)}
+    </div>`;
+  }
+  if (step === 3) {
+    REVIEW_ONLY = true;
+    const body = `<div class="dk-stack">
+      ${kind === "xp" ? `<div class="dk-callout"><b>Compare com a edição ativa antes de promover.</b> A promoção acontece na última etapa.</div>` : ""}
+      ${kind === "xp" ? editionDiffTable() : kind === "custody" ? custodyDiffTable() : b3RowsTable()}
+    </div>`;
+    REVIEW_ONLY = false;
+    return body;
+  }
+  const applied = kind === "xp" ? editionStatus(104) === "PROMOTED" : kind === "custody" ? STATE.imports.custody : STATE.imports.b3;
+  const counts = kind === "xp" ? ["2 pesos alterados", "5 preços-alvo", "1 alerta: VALE3 não operar"] : kind === "custody" ? ["11 posições", "1 divergência", "1 lacuna ao aplicar"] : ["3 linhas válidas", "1 rejeitada", "1 lote de reenvio"];
+  return `<div class="dk-stack">
+    <section class="wiz-panel"><header><h2>${applied ? "Concluído" : "Resumo"}</h2><span class="sp"></span><span class="chip ${applied ? "green" : "amber"} plain">${applied ? "aplicado" : "nada aplicado ainda"}</span></header>
+      <div class="pad" style="display:grid;gap:12px">
+        <div class="dest-rows">
+          <div class="dest-row"><span class="dim">Destino</span><span class="sp"></span><b>${dest}</b></div>
+          ${counts.map((c) => `<div class="dest-row"><span class="dim">${c}</span></div>`).join("")}
+        </div>
+        ${applied
+          ? `<div class="okbanner" style="margin:0"><b>${kind === "xp" ? "Edição 104 promovida." : kind === "custody" ? "Snapshot aplicado." : "3 linhas aplicadas."}</b><span>${kind === "b3" ? "A linha rejeitada ficou no lote de reenvio." : "O objeto de destino já reflete a mudança."}</span><span class="sp"></span><a data-go="${kind === "xp" ? "strategies/1/edicoes" : "assets/positions"}">Concluir →</a></div>`
+          : `<div class="applybar" style="border:1px solid var(--line);border-radius:3px"><div class="sum"><b>${kind === "xp" ? "Promover substitui a edição ativa." : kind === "custody" ? "A divergência vira lacuna." : "A rejeitada fica fora do lote."}</b><span class="dim"> a sessão pode ficar aqui até a decisão.</span></div><span class="sp"></span><button class="btn primary" data-act="wiz-apply" data-kind="${kind}">${kind === "xp" ? "Promover a ativa" : kind === "custody" ? "Aplicar snapshot" : "Aplicar 3 linhas válidas"}</button></div>`}
+      </div>
+    </section>
+    ${destinationsPanel(kind)}
+  </div>`;
+}
+
+function wizardScreen(kind, stepInput) {
+  const safeKind = WIZ_LABELS[kind] ? kind : "b3";
+  const step = Math.max(1, Math.min(4, Number(stepInput) || 1));
+  const dest = safeKind === "xp" ? "Dividendos BR · nov/2026" : safeKind === "custody" ? "Ativos · Posições · 31/10" : "Ativos · Posições · extrato B3";
+  return `<div class="wiz">
+    <div class="wiz-top">
+      <div class="wiz-brand">Carteira Ideal <span>· Importar</span></div>
+      <div class="wiz-dest">${dest}</div>
+      <span class="sp"></span>
+      <span class="hint" style="font-size:11px;color:var(--ink3)">Ctrl K desligado neste modo</span>
+      <button class="wiz-close" data-act="wiz-close" aria-label="Sair">✕</button>
+    </div>
+    <div class="steps-rail">
+      ${WIZ_LABELS[safeKind].map((l, i) => `<div class="step ${i + 1 === step ? "active" : i + 1 < step ? "done" : ""}"><span class="n">${i + 1 < step ? "✓" : i + 1}</span>${l}</div>${i < 3 ? '<span class="step-rule"></span>' : ""}`).join("")}
+    </div>
+    <div class="wiz-body">${wizardStepBody(safeKind, step)}</div>
+    <div class="wiz-foot">
+      ${step > 1 ? `<button class="btn ghost" data-act="wiz-back">← Voltar</button>` : ""}
+      <span class="sp"></span>
+      <span class="note">${step < 4 ? "Sair a qualquer momento guarda a sessão na caixa de entrada." : "Aplicar é a decisão; o registro guarda hash e original."}</span>
+      ${step < 4 ? `<button class="btn primary" data-act="wiz-next">Continuar →</button>` : ""}
+    </div>
+  </div>`;
+}
+const PLAN_STEPS = [
+  { key: "capital", label: "Capital do mês" },
+  { key: "targets", label: "Cadeia de alvos" },
+  { key: "plan", label: "Plano calculado" },
+  { key: "execution", label: "Ordens executadas" },
+  { key: "transfer", label: "Transferência decidida" },
+  { key: "close", label: "Mês fechado" },
+];
+const ORDERS = F.plan.orderList.orders;
+const EXECUTABLE = ORDERS.length;
+const executedQty = () => ORDERS.reduce((s, o) => s + (o.executed_quantity ?? 0), 0);
+const fullyExecuted = () => ORDERS.filter((o) => (o.executed_quantity ?? 0) >= o.quantity).length;
+const partialExecuted = () => ORDERS.filter((o) => { const q = o.executed_quantity ?? 0; return q > 0 && q < o.quantity; }).length;
+const orderStatus = (o) => o.status === "IMPORTED" ? "IMPORTADA" : (o.executed_quantity ?? 0) >= o.quantity ? "EXECUTADA" : (o.executed_quantity ?? 0) > 0 ? "PARCIAL" : "SUGERIDA";
+const orderTone = (o) => orderStatus(o) === "EXECUTADA" || orderStatus(o) === "IMPORTADA" ? "green" : orderStatus(o) === "PARCIAL" ? "amber" : "grey";
+
+function planStepsState() {
+  return PLAN_STEPS.map((s) => {
+    if (s.key === "capital") return { ...s, done: true, meta: money0(STATE.plan.capital) };
+    if (s.key === "targets") return { ...s, done: true, meta: "3 classes · 3 estratégias · 3 subclasses" };
+    if (s.key === "plan") return { ...s, done: true, meta: "02/11 · fase FULL" };
+    if (s.key === "execution") return { ...s, done: fullyExecuted() === EXECUTABLE || isClosed(), meta: `${fullyExecuted()}/${EXECUTABLE}${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}` };
+    if (s.key === "transfer") return { ...s, done: transferStatus() !== "PENDING" || isClosed(), blocked: transferStatus() === "PENDING" && !isClosed(), meta: isClosed() ? "congelada no snapshot" : transferStatus() === "PENDING" ? "1 pendente · trava o fechamento" : transferStatus() === "APPROVED" ? "aprovada" : "recusada" };
+    return { ...s, done: isClosed(), meta: isClosed() ? "snapshot gravado" : "aberto" };
+  });
+}
+const doneStepCount = () => planStepsState().filter((s) => s.done).length;
+const currentPlanStep = () => planStepsState().find((s) => !s.done) ?? planStepsState().at(-1);
+
+function progressRail() {
+  return `<section class="dk-panel">
+    <h2>Progresso do mês <span class="sp"></span><span class="hint">${doneStepCount()} de 6</span></h2>
+    <div class="dk-mini" style="padding-top:8px">
+      <div class="progress">${planStepsState().map((s) => `<i class="${s.done ? "on" : s.blocked ? "blocked" : ""}"></i>`).join("")}</div>
+    </div>
+    <div class="steps">
+      ${planStepsState().map((s, i) => `<button class="step ${s.done ? "done" : ""} ${s.blocked ? "blocked" : ""}" data-step="${s.key}">
+        <span class="bub">${s.done ? "✓" : i + 1}</span>
+        <span><span class="lbl">${s.label}</span><span class="meta">${s.meta}</span></span>
+      </button>`).join("")}
+    </div>
+  </section>
+  <section class="dk-panel"><h2>O mês é um só</h2><div class="dk-read"><p>Um mês aberto por vez, por calendário — não porque você começou. Fechar trava novembro; abrir dezembro fecha o que estiver aberto.</p></div></section>`;
+}
+
+function chainTable() {
+  const rows = CLASSES.map((c) => `<tr>
+      <td><span class="chip ${c.asset_class === "ACOES" ? "blue" : c.asset_class === "FIIS" ? "amber" : "green"} plain">${CLASS_LABEL[c.asset_class]}</span></td>
+      <td class="r num">${c.target}%</td><td class="r num">${money0(c.ideal)}</td><td class="r num">${money0(c.actual)}</td><td class="r num ${defClass(c.deficit)}">${signed(c.deficit)}</td><td class="r num ${c.drift > 0 ? "over" : "short"}">${pp(c.drift)}</td>
+    </tr>
+    ${c.strategies.map((s) => `<tr class="ind"><td>↳ ${esc(s.strategy)}</td><td class="r num">${s.target}%</td><td class="r num">${money0(s.ideal)}</td><td class="r num">${money0(s.actual)}</td><td class="r num ${defClass(s.deficit)}">${signed(s.deficit)}</td><td class="r num ${s.drift > 0 ? "over" : "short"}">${pp(s.drift)}</td></tr>
+      ${s.tickers.map((t) => `<tr class="ind semi"><td style="padding-left:38px"><span class="num">${t.ticker}</span> · ${num(t.quantity)} un</td><td class="r num">${t.target}%</td><td class="r num">${money0(t.ideal)}</td><td class="r num">${money0(t.actual)}</td><td class="r num ${defClass(t.deficit)}">${signed(t.deficit)}</td><td class="r num ${t.drift > 0 ? "over" : "short"}">${pp(t.drift)}</td></tr>`).join("")}`).join("")}
+    ${c.asset_class === "RENDA_FIXA" ? RF_ROWS.map((r) => `<tr class="ind"><td>↳ ${r.label}</td><td class="r num">${r.target}%</td><td class="r num">${money0(r.ideal)}</td><td class="r num">${money0(r.actual)}</td><td class="r num ${defClass(r.deficit)}">${signed(r.deficit)}</td><td class="r num ${r.drift > 0 ? "over" : "short"}">${pp(r.drift)}</td></tr>`).join("") : ""}
+  `).join("");
+  return `<table class="dk-table">
+    ${tableHead(["Nível", "Alvo", "Ideal", "Real", "Déficit", "Drift"])}
+    ${rows}
+  </table>`;
+}
+
+function transferInline({ wide = false } = {}) {
+  const t = transfer();
+  const status = transferStatus();
+  return `<div class="dk-mini-row" style="${wide ? "padding:0" : ""}">
+    <b class="num" style="font-size:13px">${t.ticker}</b>
+    <span class="chip grey">${t.from_strategy} → ${t.to_strategy}</span>
+    <span class="dim">${t.quantity} cotas · ${money0(t.amount)}</span>
+    <span class="sp"></span>
+    ${isClosed() ? `<span class="chip green">congelada no snapshot</span>`
+      : status === "PENDING"
+        ? `<span class="chip red">aguarda decisão</span><button class="btn" data-act="transfer-approve">Aprovar</button><button class="btn" data-act="transfer-reject">Recusar</button>`
+        : `<span class="chip ${status === "APPROVED" ? "green" : "grey"}">${status === "APPROVED" ? "aprovada" : "recusada"}</span><span class="faint">decisão final</span>`}
+  </div>
+  <div class="dk-callout" style="margin-left:0;margin-right:0"><b>Por que sempre para um humano:</b> o doador é o bucket manual (Legado Ações), sem alvo. Só a atribuição se move; a custódia fica intacta. Abaixo de R$ 500 e vindo de fatia com alvo, o refresh aprovaria sozinho.</div>`;
+}
+
+function planStepBody(key) {
+  if (key === "capital") {
+    return `<section class="dk-panel">
+      <h2>Capital do mês <span class="sp"></span><span class="hint">${isClosed() ? "congelado no snapshot" : "único número digitado do mês"}</span></h2>
+      <div class="dk-mini">
+        <div class="dk-mini-row"><span class="dim">Capital</span><span class="sp"></span><b class="num" style="font-size:16px">${money0(STATE.plan.capital)}</b></div>
+        <div class="dk-mini-row"><span class="dim">Piso</span><span class="sp"></span><span class="num">${money0(F.plan.currentMonth.month.floor)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Caixa não investido</span><span class="sp"></span><span class="num">${money0(SUMMARY.uninvested_balance)}</span></div>
+        <div class="dk-mini-row"><span class="dim">Todo o resto da cadeia é derivado: ideal = Capital × alvo</span><span class="sp"></span><button class="btn ghost" data-act="recalculate" ${isClosed() ? "disabled" : ""}>Recalcular plano →</button></div>
+      </div>
+    </section>`;
+  }
+  if (key === "targets") {
+    return `<section class="dk-panel">
+      <h2>Cadeia de alvos · nov/26 <span class="sp"></span><span class="hint">alvos pertencem ao mês, nunca a uma config global</span></h2>
+      ${chainTable()}
+      <div class="dk-note" style="padding:8px 11px">Legado Ações e Legado FIIs não têm alvo: são buckets manuais, não degraus.</div>
+    </section>`;
+  }
+  if (key === "plan") {
+    const p = F.plan.orderPlan;
+    const buy = ORDERS.filter((o) => o.side === "BUY").reduce((s, o) => s + o.quantity * o.suggested_price, 0);
+    const sell = ORDERS.filter((o) => o.side === "SELL").reduce((s, o) => s + o.quantity * o.suggested_price, 0);
+    return `<section class="dk-panel">
+      <h2>Plano de nov/26 <span class="sp"></span><span class="hint">fase ${p.phase.toLowerCase()} · calculado em 02/11</span><span class="chip green">completo</span></h2>
+      <div class="dk-mini">
+        <div class="plan-eq">
+          <span class="k">compras</span><span class="box">${money0(buy)}</span><span class="op">−</span>
+          <span class="k">caixa deployável</span><span class="box">${money0(10859.9)}</span><span class="op">=</span>
+          <span class="k">vendas de funding</span><span class="box">${money0(sell)}</span><span class="op">+</span>
+          <span class="k">não financiado</span><span class="box">${money0(p.funding.unfunded_amount)}</span>
+        </div>
+      </div>
+      <table class="dk-table">
+        ${tableHead(["Ordem", "Lado", "Qtd", "Preço", "Valor", "Atribuição", "Estado"])}
+        ${ORDERS.map((o) => {
+          const att = p.attribution.find((a) => a.ticker === o.ticker);
+          return `<tr><td><b class="num">${o.ticker}</b></td><td><span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td><td class="r num">${num(o.quantity)}</td><td class="r num">${money(o.suggested_price)}</td><td class="r num">${money0(o.quantity * o.suggested_price)}</td><td class="dim">${att ? `${esc(att.strategy)} ${att.side === "ALLOCATE" ? "+" : "−"}${num(att.quantity)}` : "—"}</td><td><span class="chip ${orderTone(o)}">${orderStatus(o)}</span></td></tr>`;
+        }).join("")}
+      </table>
+      <div class="dk-mini" style="border-top:1px solid var(--line2)">${transferInline()}</div>
+    </section>`;
+  }
+  if (key === "execution") {
+    return `<section class="dk-panel">
+      <h2>Execução <span class="sp"></span><span class="hint">${fullyExecuted()}/${EXECUTABLE} completas${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}</span></h2>
+      <table class="dk-table">
+        ${tableHead(["Ordem", "Sugerida", "Executada", "Origem", "Estado"])}
+        ${ORDERS.map((o) => `<tr><td><b class="num">${o.ticker}</b> <span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td><td class="r num">${num(o.quantity)}</td><td class="r num">${num(o.executed_quantity ?? 0)}</td><td class="dim">${orderStatus(o) === "EXECUTADA" ? "casa com negócio importado" : orderStatus(o) === "PARCIAL" ? "parcial · resto ainda não voltou" : "—"}</td><td><span class="chip ${orderTone(o)}">${orderStatus(o)}</span></td></tr>`).join("")}
+      </table>
+      <div class="dk-note" style="padding:8px 11px">Execução parcial deixa a ordem <b>SUGERIDA</b> com a quantidade casada ao lado. “Não operar” não existe por ordem hoje: uma ordem deliberadamente não executada fica igual a uma que ainda não voltou.</div>
+    </section>`;
+  }
+  if (key === "transfer") {
+    return `<section class="dk-panel">
+      <h2>Transferência de atribuição <span class="sp"></span><span class="hint">decide-se aqui</span></h2>
+      <div class="dk-mini">${transferInline({ wide: true })}</div>
+    </section>`;
+  }
+  const blocked = transferStatus() === "PENDING" && !isClosed();
+  return `<section class="dk-panel">
+    <h2>Fechamento <span class="sp"></span><span class="hint">o último passo</span></h2>
+    <div class="dk-mini">
+      ${isClosed()
+        ? `<div class="gate ok"><h3>Novembro fechado</h3><p>Snapshot gravado em 30/11. O mês não reabre; a evolução é construída a partir dos snapshots.</p></div>`
+        : `<div class="gate ${blocked ? "" : "ok"}"><h3>${blocked ? "Fechamento recusado: transferência pendente" : "Pronto para fechar"}</h3><p>${blocked ? "O fechamento recalcula o plano antes de gravar — é esse refresh que finaliza as transferências — e recusa enquanto sobrar uma PENDING." : "O refresh do fechamento não encontra transferência pendente. Fechar recalcula, grava o snapshot e trava novembro."}</p>${blocked ? `<div style="margin-top:8px">${transferInline({ wide: true })}</div>` : ""}</div>`}
+      <div class="dk-mini-row"><span class="dim">Só a transferência pendente recusa o fechamento. Ordens não executadas, lacuna, desdobramento e cotação velha congelam como estão.</span><span class="sp"></span><button class="btn ${blocked || isClosed() ? "" : "primary"}" data-act="close-month" ${blocked || isClosed() ? "disabled" : ""}>${isClosed() ? "Fechado" : "Fechar novembro"}</button></div>
+    </div>
+  </section>`;
+}
+
+function planMonth() {
+  const steps = planStepsState();
+  const activeKey = STATE.plan.step && steps.some((s) => s.key === STATE.plan.step) ? STATE.plan.step : currentPlanStep().key;
+  const activeIndex = steps.findIndex((s) => s.key === activeKey);
+  return `${pageHead("Plano / Mês", "Novembro aberto por calendário · última consolidação há 2 h · plano calculado em 02/11", `<button class="btn" data-step="${currentPlanStep().key}">Retomar no passo ${steps.findIndex((s) => s.key === currentPlanStep().key) + 1} →</button>`)}
+    ${objectTabs("plan", "month")}
+    <div class="dk-cols">
+      <div class="dk-stack">
+        <section class="dk-panel">
+          <h2>Etapas do mês <span class="sp"></span><span class="hint">${doneStepCount()} de 6</span></h2>
+          <div class="dk-mini" style="padding-top:8px"><div class="progress">${steps.map((s) => `<i class="${s.done ? "on" : s.blocked ? "blocked" : ""}"></i>`).join("")}</div></div>
+          <div class="steps" style="padding:0 7px 7px">
+            ${steps.map((s, i) => `<button class="step ${s.done ? "done" : ""} ${s.blocked ? "blocked" : ""} ${s.key === activeKey ? "current" : ""}" data-step="${s.key}">
+              <span class="bub">${s.done ? "✓" : i + 1}</span>
+              <span><span class="lbl">${s.label}</span><span class="meta">${s.meta}</span></span>
+            </button>`).join("")}
+          </div>
+        </section>
+        ${planStepBody(activeKey)}
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn" data-act="step-prev" ${activeIndex === 0 ? "disabled" : ""}>← Etapa anterior</button>
+          <span class="sp" style="flex:1"></span>
+          <span class="faint" style="font:10px var(--mono)">etapa ${activeIndex + 1} de 6</span>
+          <button class="btn" data-act="step-next" ${activeIndex === steps.length - 1 ? "disabled" : ""}>Próxima etapa →</button>
+        </div>
+        <div class="dk-callout" style="margin:0"><b>O resto do mês não desaparece.</b> As etapas concluídas viram uma linha de resumo acima; o que muda é o que ocupa a tela.</div>
+      </div>
+      <aside class="dk-stack">${progressRail()}</aside>
+    </div>`;
+}
+
+function planOrders() {
+  return `${pageHead("Plano · Ordens", "A lista persistida do mês, com o ciclo sugerida → executada → importada.", `<button class="btn" data-act="recalculate" ${isClosed() ? "disabled" : ""}>Recalcular</button>`)}
+    ${objectTabs("plan", "orders")}
+    <section class="dk-panel">
+      <h2>Ordens de novembro <span class="sp"></span><span class="hint">${fullyExecuted()}/${EXECUTABLE} completas${partialExecuted() ? ` · ${partialExecuted()} parcial` : ""}</span></h2>
+      <table class="dk-table">
+        ${tableHead(["#", "Ticker", "Lado", "Sugerida", "Executada", "Preço sugerido", "Valor", "Estado"])}
+        ${ORDERS.map((o) => `<tr><td class="num dim">${o.id}</td><td><b class="num">${o.ticker}</b></td><td><span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td><td class="r num">${num(o.quantity)}</td><td class="r num">${num(o.executed_quantity ?? 0)}</td><td class="r num">${money(o.suggested_price)}</td><td class="r num">${money0(o.quantity * o.suggested_price)}</td><td><span class="chip ${orderTone(o)}">${orderStatus(o)}</span></td></tr>`).join("")}
+      </table>
+      <div class="dk-note" style="padding:8px 11px">Execuções chegam pela importação do extrato e casam sozinhas; o plano persistido só muda no refresh.</div>
+    </section>
+    <div class="dk-callout" style="margin:12px 0 0"><b>Fora deste protótipo:</b> a edição manual de uma ordem (marcar/desmarcar execução) é o endpoint de match; aqui só o estado derivado aparece.</div>`;
+}
+
+function planTransfers() {
+  return `${pageHead("Plano · Transferências", "Mover atribuição sem tocar custódia; o bucket manual doador sempre espera decisão humana.")}
+    ${objectTabs("plan", "transfers")}
+    <section class="dk-panel">
+      <h2>Caixa de transferências de novembro <span class="sp"></span><span class="hint">${transferStatus() === "PENDING" && !isClosed() ? "1 pendente" : "0 pendentes"}</span></h2>
+      <div class="dk-mini">${transferInline({ wide: true })}</div>
+    </section>
+    <section class="dk-panel" style="margin-top:12px">
+      <h2>Efeito da decisão</h2>
+      <div class="dk-mini">
+        <div class="dk-mini-row"><span class="dim">Custódia</span><span class="sp"></span><b>não muda · 372 cotas ficam na conta</b></div>
+        <div class="dk-mini-row"><span class="dim">Atribuição</span><span class="sp"></span><b>Legado Ações −372 · Dividendos BR +372</b></div>
+        <div class="dk-mini-row"><span class="dim">Decisão</span><span class="sp"></span><b>atômica · aprovar move 372, recusar move 0</b></div>
+        <div class="dk-mini-row"><span class="dim">Fechamento</span><span class="sp"></span><b>${transferStatus() === "PENDING" && !isClosed() ? "recusado enquanto pendente" : "liberado · inclusive se recusada"}</b></div>
+        <div class="dk-mini-row"><span class="dim">Autoaprovação</span><span class="sp"></span><b>abaixo de R$ 500 · este é R$ 19.492,80</b></div>
+      </div>
+      <div class="dk-note" style="padding:8px 11px">Não existe aprovação parcial: se quiser mover menos, é outra proposta. Recusar é a decisão explícita de não mover — e libera o fechamento.</div>
+    </section>`;
+}
+
+function planClose() {
+  const blocked = transferStatus() === "PENDING" && !isClosed();
+  const frozen = [
+    "Holdings e quantidades, valorizadas no último fechamento",
+    "Atribuições por estratégia e o fluxo desde o fechamento anterior",
+    "Classes, fatias de estratégia e proventos do mês",
+    "Ordens, transferências e negócios não planejados como estavam",
+    "Imposto: carry, medidor e o DARF do mês",
+  ];
+  return `${pageHead("Plano · Fechamentos", "Um mês por vez; o fechamento congela o snapshot e trava a edição.", isClosed() ? '<span class="chip green">novembro fechado</span>' : `<button class="btn primary" data-act="close-month" ${blocked ? "disabled" : ""}>Fechar novembro</button>`)}
+    ${objectTabs("plan", "close")}
+    ${isClosed()
+      ? `<div class="gate ok"><h3>Novembro fechado</h3><p>Snapshot gravado em 30/11. O mês não reabre; a evolução é construída a partir dos snapshots.</p></div>`
+      : `<div class="gate ${blocked ? "" : "ok"}"><h3>${blocked ? "Fechamento recusado: transferência pendente" : "Pronto para fechar"}</h3><p>${blocked ? "O fechamento recalcula o plano antes de gravar — é esse refresh que finaliza as transferências — e recusa enquanto sobrar uma PENDING." : "O refresh do fechamento não encontra transferência pendente. Fechar recalcula, grava o snapshot e trava novembro."}</p></div>`}
+    <div class="dk-callout" style="margin:0 0 12px"><b>O que conta como pendência:</b> só a transferência <i>indecidida</i>. Recusar é uma decisão e libera o fechamento; não existe transferência parcial. Compra ou venda parcialmente executada não trava nada — o snapshot congela a quantidade executada e mantém o resto como sugestão.</div>
+    <div class="dk-cols">
+      <div class="dk-stack">
+        <section class="dk-panel"><h2>O que o snapshot congela</h2><div class="dk-mini">${frozen.map((f) => `<div class="dk-mini-row"><span class="dim">${esc(f)}</span></div>`).join("")}</div></section>
+        <section class="dk-panel"><h2>Fechamentos guardados <span class="sp"></span><span class="hint">os três últimos</span></h2>
+          <table class="dk-table">${tableHead(["Mês", "Capital", "Investido", "Caixa", "Estado"])}${F.snapshots.map((s) => { const st = s.state; return `<tr><td class="num dim">${monthLabel(st.period)}</td><td class="r num">${money0(st.capital)}</td><td class="r num">${money0(st.capital - st.caixa)}</td><td class="r num">${money0(st.caixa)}</td><td><span class="chip green">FECHADO</span></td></tr>`; }).join("")}${isClosed() ? `<tr><td class="num">nov/26</td><td class="r num">${money0(STATE.plan.capital)}</td><td class="r num">${money0(ALLOC.actual)}</td><td class="r num">${money0(SUMMARY.uninvested_balance)}</td><td><span class="chip green">FECHADO</span></td></tr>` : ""}</table>
+        </section>
+      </div>
+      <aside class="dk-stack"><section class="dk-panel"><h2>Depois do fechamento</h2><div class="dk-mini">
+        <div class="dk-mini-row"><span class="dim">Novembro</span><span class="sp"></span><b>CLOSED · imutável</b></div>
+        <div class="dk-mini-row"><span class="dim">Dezembro</span><span class="sp"></span><b>ainda não aberto</b></div>
+        <div class="dk-mini-row"><span class="dim">Abrir o próximo mês</span><span class="sp"></span><b>Capital + piso + alvos</b></div>
+        <div class="dk-mini-row"><span class="dim">Histórico e performance</span><span class="sp"></span><b>lêem o snapshot</b></div>
+      </div><div class="dk-note" style="padding:0 11px 9px">Um mês só fecha se for o mês corrente do servidor — meses retroativos são só planejamento.</div></section></aside>
+    </div>`;
+}
+const PRESETS = { "1m": 1, "3m": 3, "6m": 6, "12m": 12, year: null };
+function addMonths(period, delta) {
+  const [y, m] = period.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+function clampAnchor(anchor) {
+  if (!anchor) return LAST;
+  if (anchor > LAST) return LAST;
+  if (anchor < FIRST) return FIRST;
+  return anchor;
+}
+function currentRange() {
+  const anchor = clampAnchor(STATE.period.anchor);
+  if (STATE.period.preset === "year") return { start: `${anchor.slice(0, 4)}-01`, end: anchor };
+  const span = PRESETS[STATE.period.preset] ?? 12;
+  return { start: addMonths(anchor, -(span - 1)), end: anchor };
+}
+const monthsInRange = (r) => MONTHS.filter((m) => m.period >= r.start && m.period <= r.end);
+const inRange = (iso, r) => iso.slice(0, 7) >= r.start && iso.slice(0, 7) <= r.end;
+
+function windowPerformance(r) {
+  const months = monthsInRange(r);
+  let portfolio = 100;
+  let benchmark = 100;
+  let benchmarkCount = 0;
+  const points = [{ period: addMonths(r.start, -1), portfolio: 100, benchmark: undefined }];
+  for (const month of months) {
+    if (month.decomposition.return_percentage != null) portfolio *= 1 + month.decomposition.return_percentage / 100;
+    let benchmarkPoint;
+    if (month.benchmark_return != null) {
+      benchmark *= 1 + month.benchmark_return / 100;
+      benchmarkCount += 1;
+      benchmarkPoint = benchmark;
+    }
+    points.push({ period: month.period, portfolio, benchmark: benchmarkPoint });
+  }
+  return { months, points, returnPercentage: portfolio - 100, benchmarkPercentage: benchmarkCount > 0 ? benchmark - 100 : null, benchmarkCount };
+}
+function periodIncome(r) {
+  const closedInRange = INCOME.filter((row) => (row.status === "RECEIVED" || row.status === "RECONCILED") && inRange(row.date, r));
+  const upcoming = INCOME.filter((row) => row.status !== "RECEIVED" && row.status !== "RECONCILED");
+  const rows = [...upcoming, ...closedInRange];
+  const total = (list) => list.reduce((sum, row) => sum + row.net_amount, 0);
+  const byKey = (list, key) => Object.entries(list.reduce((acc, row) => ({ ...acc, [row[key]]: (acc[row[key]] ?? 0) + row.net_amount }), {})).sort((a, b) => b[1] - a[1]);
+  return {
+    rows,
+    closed: closedInRange,
+    upcoming,
+    upcomingOutsideRange: upcoming.some((row) => !inRange(row.date, r)),
+    received: total(closedInRange),
+    toReceive: total(upcoming),
+    byMonth: monthsInRange(r).map((month) => ({ period: month.period, value: total(closedInRange.filter((row) => row.date.startsWith(month.period))) })),
+    byTicker: byKey(rows, "ticker"),
+    next: [...upcoming].sort((a, b) => a.date.localeCompare(b.date))[0],
+  };
+}
+
+function lineChart(points) {
+  const width = 760, height = 210, pad = { top: 12, right: 14, bottom: 24, left: 38 };
+  const innerW = width - pad.left - pad.right, innerH = height - pad.top - pad.bottom;
+  const values = points.flatMap((p) => [p.portfolio, p.benchmark].filter((v) => v != null));
+  const min = Math.min(...values, 99), max = Math.max(...values, 101);
+  const padV = (max - min) * 0.12 || 1;
+  const lo = min - padV, hi = max + padV;
+  const x = (i) => pad.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+  const y = (v) => pad.top + (1 - (v - lo) / (hi - lo)) * innerH;
+  const polyline = (key) => {
+    const segments = [];
+    let current = [];
+    points.forEach((point, index) => {
+      if (point[key] == null) {
+        if (current.length) segments.push(current);
+        current = [];
+        return;
+      }
+      current.push(index);
+    });
+    if (current.length) segments.push(current);
+    return segments.map((segment) => segment.map((i) => `${x(i).toFixed(1)},${y(points[i][key]).toFixed(1)}`).join(" ")).filter((s) => s.includes(","));
+  };
+  const grid = [0, 0.5, 1].map((t) => { const value = hi - t * (hi - lo); return { value, y: y(value) }; });
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Rentabilidade acumulada da carteira e do benchmark no período">
+    ${grid.map((g) => `<line x1="${pad.left}" x2="${width - pad.right}" y1="${g.y.toFixed(1)}" y2="${g.y.toFixed(1)}" stroke="#1d2630"/>
+      <text x="${pad.left - 6}" y="${(g.y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#64707f" font-family="ui-monospace, monospace">${g.value.toFixed(1)}</text>`).join("")}
+    ${points.map((point, index) => `<text x="${x(index).toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="9" fill="#64707f">${point.period === addMonths(points[0].period, 0) ? "início" : monthLabel(point.period)}</text>`).join("")}
+    ${polyline("portfolio").map((segment) => `<polyline points="${segment}" fill="none" stroke="#78a9ff" stroke-width="2" stroke-linejoin="round"/>`).join("")}
+    ${polyline("benchmark").map((segment) => `<polyline points="${segment}" fill="none" stroke="#d9a45e" stroke-width="1.7" stroke-dasharray="4 3" stroke-linejoin="round"/>`).join("")}
+    ${points.map((point, index) => point.portfolio == null ? "" : `<circle cx="${x(index).toFixed(1)}" cy="${y(point.portfolio).toFixed(1)}" r="2.2" fill="#78a9ff"/>`).join("")}
+  </svg>`;
+}
+
+function incomeChart(rows) {
+  const width = 760, height = 130, pad = { top: 10, right: 12, bottom: 22, left: 38 };
+  const innerW = width - pad.left - pad.right, innerH = height - pad.top - pad.bottom;
+  const max = Math.max(...rows.map((row) => row.value), 1);
+  const slot = innerW / Math.max(rows.length, 1);
+  const barW = Math.min(34, slot * 0.62);
+  const y = (value) => pad.top + (1 - value / max) * innerH;
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Proventos líquidos por mês no período">
+    <line x1="${pad.left}" x2="${width - pad.right}" y1="${pad.top + innerH}" y2="${pad.top + innerH}" stroke="#232c37"/>
+    <text x="${pad.left - 6}" y="${pad.top + 4}" text-anchor="end" font-size="9" fill="#64707f" font-family="ui-monospace, monospace">${money0(max)}</text>
+    <text x="${pad.left - 6}" y="${pad.top + innerH}" text-anchor="end" font-size="9" fill="#64707f" font-family="ui-monospace, monospace">R$ 0</text>
+    ${rows.map((row, index) => {
+      const cx = pad.left + slot * index + slot / 2;
+      const barH = (row.value / max) * innerH;
+      return `<g>
+        <rect x="${(cx - barW / 2).toFixed(1)}" y="${y(row.value).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH, 1).toFixed(1)}" fill="#2a4368"/>
+        <text x="${cx.toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="9" fill="#64707f">${monthLabel(row.period)}</text>
+        ${row.value > 0 ? `<text x="${cx.toFixed(1)}" y="${(y(row.value) - 3).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#9ba8b7" font-family="ui-monospace, monospace">${money0(row.value)}</text>` : ""}
+      </g>`;
+    }).join("")}
+  </svg>`;
+}
+
+function analysisRail(grainNote = "") {
+  const r = currentRange();
+  const presets = Object.entries(PRESETS).map(([key, span]) => `<button class="${key === STATE.period.preset ? "on" : ""}" data-preset="${key}">${key === "year" ? "Ano" : key === "1m" ? "Mês" : `${span}m`}</button>`).join("");
+  return `<div class="railbar">
+    <span class="lbl">Período</span>
+    <div class="seg">${presets}</div>
+    <button class="chev" data-shift="-1" title="Um mês antes">‹</button>
+    <span class="range">${monthLabel(r.start)} – ${monthLabel(r.end)}<small>${monthLabel(r.end)} é o mês-âncora</small></span>
+    <button class="chev" data-shift="1" title="Um mês depois">›</button>
+    <span class="sp"></span>
+    ${grainNote ? `<span class="grain">${grainNote}</span>` : ""}
+    <span class="faint" style="font-size:9.5px">compartilhado por Performance · Proventos · Impostos</span>
+  </div>`;
+}
+
+function analysisPerformance() {
+  const r = currentRange();
+  const win = windowPerformance(r);
+  const monthsWithReturn = win.months.filter((m) => m.decomposition.return_percentage != null);
+  const best = [...monthsWithReturn].sort((a, b) => b.decomposition.return_percentage - a.decomposition.return_percentage)[0];
+  const worst = [...monthsWithReturn].sort((a, b) => a.decomposition.return_percentage - b.decomposition.return_percentage)[0];
+  const income = periodIncome(r);
+  const aportes = win.months.reduce((s, m) => s + (m.decomposition.net_aportes ?? 0), 0);
+  const rows = [...win.months].reverse().map((m) => {
+    const d = m.decomposition;
+    const ret = d.return_percentage;
+    const comparable = m.benchmark_return != null && ret != null;
+    return `<tr>
+      <td class="num dim">${monthLabel(m.period)}</td>
+      <td class="r num">${d.net_aportes ? money0(d.net_aportes) : "—"}</td>
+      <td class="r num">${d.net_income ? money0(d.net_income) : "—"}</td>
+      <td class="r num ${ret != null ? retClass(ret) : "faint"}">${ret != null ? spct(ret) : "—"}</td>
+      <td class="r num faint">${m.benchmark_return != null ? spct(m.benchmark_return) : "—"}</td>
+      <td class="r num ${comparable ? retClass(ret - m.benchmark_return) : "faint"}">${comparable ? pp(ret - m.benchmark_return) : "—"}</td>
+      <td class="r faint">${m.source === "snapshot" ? "snapshot" : "computado"}</td>
+    </tr>`;
+  }).join("");
+  const covered = win.benchmarkCount;
+  const total = win.months.length;
+  return `<div class="dk-strip">
+    ${cell("Retorno da janela", spct(win.returnPercentage), `${monthLabel(r.start)}–${monthLabel(r.end)}`, retClass(win.returnPercentage))}
+    ${cell("Benchmark", win.benchmarkPercentage != null ? spct(win.benchmarkPercentage) : "—", `blend cobre ${covered} de ${total} meses`)}
+    ${cell("Melhor mês", best ? spct(best.decomposition.return_percentage) : "—", best ? monthLabel(best.period) : "—", "up")}
+    ${cell("Pior mês", worst ? spct(worst.decomposition.return_percentage) : "—", worst ? monthLabel(worst.period) : "—", retClass(worst?.decomposition.return_percentage))}
+    ${cell("Proventos", money0(income.received), "recebidos na janela")}
+    ${cell("Aportes", money0(aportes), "capital novo na janela")}
+  </div>
+  ${analysisRail()}
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Retorno acumulado <span class="sp"></span><span class="hint">base 100 no início da janela · tracejado = benchmark onde existe</span></h2>
+        <div class="dk-chart">${lineChart(win.points)}</div>
+        <div class="dk-legend"><span><i style="background:#78a9ff"></i>carteira</span><span><i style="background:#d9a45e"></i>benchmark blend</span><span class="faint">${pct(win.returnPercentage)} na janela</span></div>
+        <div class="dk-read" style="border-top:1px solid var(--line2)"><p>O blend de benchmark só existe desde <b>ago/26</b>; nesta janela, <b>${covered} de ${total} meses</b> têm comparação. O retorno acumulado da carteira usa todos os meses do recorte.</p></div>
+      </section>
+      <section class="dk-panel">
+        <h2>Mês a mês</h2>
+        <table class="dk-table">${tableHead(["Mês", "Aportes", "Proventos", "Retorno", "Benchmark", "Delta", "Fonte"])}${rows}</table>
+      </section>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel"><h2>Como ler</h2><div class="dk-read"><p><b>Retorno</b> decompõe o mês: valor final menos aportes e proventos sobre o valor inicial. <b>XIRR</b> é anualizado e cobre a era de snapshots.</p><p>A janela abre em 12 meses encerrados no último fechamento. Trocar de aba mantém a janela.</p></div></section>
+      <section class="dk-panel"><h2>Retorno por classe · out/26</h2><table class="dk-table">${tableHead(["Classe", "Retorno"])}${F.analysis.monthPerformance.classes.map((c) => `<tr><td>${CLASS_LABEL[c.asset_class]}</td><td class="r num ${retClass(c.decomposition.return_percentage)}">${spct(c.decomposition.return_percentage)}</td></tr>`).join("")}</table></section>
+    </aside>
+  </div>`;
+}
+
+function analysisIncome() {
+  const r = currentRange();
+  const data = periodIncome(r);
+  const rows = data.rows.slice().sort((a, b) => b.date.localeCompare(a.date)).map((i) => `<tr>
+    <td class="num dim">${dateBR(i.date)}</td>
+    <td><b class="num">${i.ticker}</b></td>
+    <td class="faint">${i.type === "JCP" ? "JCP" : i.type === "FUND_INCOME" ? "Rendimento" : "Dividendo"}</td>
+    <td class="r num">${money(i.gross_amount)}</td>
+    <td class="r num faint">${i.retained_amount ? money(i.retained_amount) : "—"}</td>
+    <td class="r num">${money(i.net_amount)}</td>
+    <td class="r ${i.status === "PAYABLE" || i.status === "ANNOUNCED" ? "over" : "faint"}">${i.status === "PAYABLE" ? "a pagar" : i.status === "ANNOUNCED" ? "anunciado" : "recebido"}</td>
+  </tr>`).join("");
+  const next = data.next;
+  return `<div class="dk-strip">
+    ${cell("Proventos na janela", money0(data.received), `${data.closed.length} lançamentos recebidos`)}
+    ${cell("A receber", money0(data.toReceive), data.upcomingOutsideRange ? "inclui fora do recorte" : "nov/26", "over")}
+    ${cell("Rendimento médio", money0(data.received / Math.max(data.closed.length, 1)), "por lançamento")}
+    ${cell("Maior fonte", data.byTicker[0]?.[0] ?? "—", data.byTicker[0] ? money0(data.byTicker[0][1]) : "—")}
+    ${cell("Próximo", next ? dateBR(next.date).slice(0, 5) : "—", next ? `${next.ticker} · ${money(next.net_amount)}` : "—")}
+    ${cell("Retenção", money0(data.rows.reduce((s, i) => s + (i.retained_amount ?? 0), 0)), "JCP · 15%")}
+  </div>
+  ${analysisRail()}
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel"><h2>Proventos por mês</h2><div class="dk-chart">${incomeChart(data.byMonth)}</div></section>
+      <section class="dk-panel"><h2>Lançamentos <span class="sp"></span><span class="hint">a receber primeiro, depois a janela</span></h2><table class="dk-table">${tableHead(["Data", "Ativo", "Tipo", "Bruto", "Retido", "Líquido", "Status"])}${rows}</table></section>
+      <div class="dk-read" style="padding:0 2px"><p>A receber é prospectivo: um lançamento <b>anunciado</b> ou <b>a pagar</b> aparece mesmo quando a data cai fora da janela${data.upcomingOutsideRange ? " — e aqui um deles cai" : ""}.</p></div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel"><h2>Por ativo</h2><div class="dk-mini">${data.byTicker.slice(0, 6).map(([ticker, value]) => `<div class="dk-mini-row"><span class="dim">${ticker}</span><span class="sp"></span><span class="num">${money0(value)}</span></div>`).join("")}</div></section>
+      <section class="dk-panel"><h2>Como ler</h2><div class="dk-read"><p>A janela do rail filtra os lançamentos recebidos. O <b>mês-âncora</b> de Impostos não muda aqui.</p></div></section>
+    </aside>
+  </div>`;
+}
+
+function analysisTax() {
+  const r = currentRange();
+  const anchor = clampAnchor(STATE.period.anchor);
+  const report = anchor === TAX.period ? TAX : anchor === TAX_CURRENT.period ? TAX_CURRENT : null;
+  if (!report) {
+    return `${pageHead("Análise · Impostos", `Leitura mensal · ${monthLabel(anchor)}`)}
+      ${analysisRail(`mês-âncora ${monthLabel(anchor)} · a janela só filtra o painel`)}
+      <section class="dk-panel"><div class="dk-read"><p>Não há apuração guardada para <b>${monthLabel(anchor)}</b>. O fixture carrega duas: <b>out/26 fechada</b> e <b>nov/26 aberta</b>. Use o mês-âncora ou as setas para voltar a outubro.</p><div style="margin-top:8px"><button class="btn" data-preset="1m" data-act="go-tax-current">Ir para out/26 →</button></div></div></section>`;
+  }
+  const m = report.meter;
+  const isCurrent = report === TAX_CURRENT;
+  const rows = report.realized.map((x) => `<tr><td>${x.kind === "SWING" ? "Swing trade" : x.kind === "DAY_TRADE" ? "Day trade" : "FII"}</td><td class="r num">${money(x.gross_sales)}</td><td class="r num">${money(x.gains)}</td><td class="r num">${money(x.losses)}</td><td class="r num ${retClass(x.result)}">${money(x.result)}</td></tr>`).join("");
+  return `<div class="dk-strip">
+    ${cell("Vendas de ações", money0(m.gross_sales), m.exceeded ? "isenção de 20.000 excedida" : "dentro da isenção", m.exceeded ? "over" : "")}
+    ${cell("Ganho realizado", money0(m.realized_gain), "swing trade")}
+    ${cell("Ganho tributável", money0(m.taxable_gain), "após prejuízo acumulado")}
+    ${cell("DARF", money(m.tax), isCurrent ? "aberto · vence 31/12" : `vence ${dateBR(report.darf_due_date).slice(0, 5)}`, "over")}
+    ${cell("Prejuízo a compensar", money0(report.carry.find((c) => c.kind === "SWING")?.closing_balance ?? 0), "swing · saldo final")}
+    ${cell("FII", money0(report.carry.find((c) => c.kind === "FII")?.closing_balance ?? 0), "prejuízo acumulado")}
+  </div>
+  ${analysisRail(`mês-âncora ${monthLabel(anchor)} · leitura mensal`)}
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel"><h2>Apuração de ${monthLabel(report.period)} <span class="sp"></span><span class="hint">${isCurrent ? "aberta" : "fechada"} · DARF de ${dateBR(report.darf_due_date).slice(0, 5)}</span></h2>
+        <table class="dk-table">${tableHead(["Tipo", "Vendas", "Ganhos", "Prejuízos", "Resultado"])}${rows}</table>
+      </section>
+      <section class="dk-panel"><h2>Compensação</h2><table class="dk-table">${tableHead(["Tipo", "Saldo inicial", "Aplicado", "Saldo final"])}${report.carry.map((c) => `<tr><td>${c.kind === "SWING" ? "Swing trade" : c.kind === "DAY_TRADE" ? "Day trade" : "FII"}</td><td class="r num">${money(c.opening_balance)}</td><td class="r num">${money(c.loss_applied)}</td><td class="r num">${money(c.closing_balance)}</td></tr>`).join("")}</table></section>
+      <div class="dk-read" style="padding:0 2px"><p>Impostos é leitura <b>mensal</b>: <code>GET /tax/{period}</code> existe por mês, então o rail escolhe o <b>mês-âncora</b>; a janela só filtra quais apurações o painel lista.</p></div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel"><h2>O que explica o DARF</h2><div class="dk-read">
+        <p>Vendas de ações de <b>${money(m.gross_sales)}</b> cruzaram a isenção de ${money0(m.exemption_limit)}. Todo o ganho do mês vira tributável depois de aplicar os prejuízos acumulados.</p>
+        <p><b>${money(m.tax)}</b> = ${pct(m.rate, 0)} sobre ${money0(m.taxable_gain)}, vencimento em ${dateBR(report.darf_due_date)}.</p>
+        <p>As vendas de FII ficam fora do medidor de ações; o prejuízo de FII fecha o saldo em ${money0(report.carry.find((c) => c.kind === "FII")?.closing_balance ?? 0)}.</p>
+      </div></section>
+      <section class="dk-panel"><h2>Pendências</h2><div class="dk-mini">
+        <div class="dk-mini-row"><span class="dim">Lacuna AAPL34</span><span class="sp"></span><span class="num over">50 cotas</span></div>
+        <div class="dk-mini-row"><span class="dim">Day trade PETR4</span><span class="sp"></span><span class="num">aviso</span></div>
+        <div class="dk-mini-row"><span class="dim">nov/26 aberto</span><span class="sp"></span><span class="num">DARF 31/12</span></div>
+      </div></section>
+    </aside>
+  </div>`;
+}
+
+function analysisPage(sub) {
+  const s = ["performance", "income", "tax"].includes(sub) ? sub : "performance";
+  const tabs = `<div class="dk-tabs">${[["performance", "Performance"], ["income", "Proventos"], ["tax", "Impostos"]].map(([k, l]) => `<button class="${k === s ? "on" : ""}" data-go="analysis/${k}">${l}</button>`).join("")}<span class="sp"></span><span class="ctx">rail compartilhado</span></div>`;
+  const head = s === "tax"
+    ? pageHead("Análise · Impostos", `Leitura mensal do ganho de capital · mês-âncora ${monthLabel(clampAnchor(STATE.period.anchor))}`)
+    : pageHead(s === "income" ? "Análise · Proventos" : "Análise · Performance", `Janela ${monthLabel(currentRange().start)} – ${monthLabel(currentRange().end)} · encerrada no último fechamento`);
+  return `${head}${tabs}${s === "tax" ? analysisTax() : s === "income" ? analysisIncome() : analysisPerformance()}`;
+}
+function pageFor(objKey, sub, parts) {
+  if (objKey === "portfolio") {
+    if (sub === "allocation") return portfolioAllocation();
+    if (sub === "history") return portfolioHistory(parts);
+    return portfolioOverview();
+  }
+  if (objKey === "strategies") {
+    if (parts[1] && /^\d+$/.test(parts[1])) return strategyDetail(Number(parts[1]), parts[2] || "carteira");
+    return strategiesList();
+  }
+  if (objKey === "assets") return assetsPage(sub);
+  if (objKey === "imports") {
+    if (sub === "sources") return importsSources();
+    if (sub === "corporate") return importsCorporate();
+    if (sub === "history") return importsHistory();
+    return importsInbox();
+  }
+  if (objKey === "plan") {
+    if (sub === "orders") return planOrders();
+    if (sub === "transfers") return planTransfers();
+    if (sub === "close") return planClose();
+    return planMonth();
+  }
+  if (objKey === "analysis") return analysisPage(sub);
+  return portfolioOverview();
+}
+
+function guideOverlay() {
+  const tasks = [
+    ["Ler o mês na Carteira", "status, alocação por classe, atenção e a frase do mês acima da dobra", "portfolio/overview"],
+    ["Encontrar o desvio", "a árvore completa: classes, estratégias, buckets manuais e sub-classes de RF", "portfolio/allocation"],
+    ["Inspecionar uma estratégia e a edição", "Dividendos BR → Edições; promover a 104 muda a ativa e limpa a atenção", "strategies/1/edicoes"],
+    ["Ver um bucket manual", "Legado Ações sem alvo, com abas reduzidas", "strategies/4/carteira"],
+    ["Enviar e revisar um relatório", "assistente em tela cheia: arquivo → destino/mapeamento → diff → promover", "imports/wizard/xp/3"],
+    ["Enviar um extrato B3", "4 linhas, 1 erro; ignorar a linha, aplicar as 3 válidas, cair em Ativos", "imports/wizard/b3/3"],
+    ["Rodar o plano de novembro", "6 etapas, abrindo na primeira aberta; ordens, transferência e fechamento", "plan/month"],
+    ["Ler performance, proventos e impostos", "uma Análise, três abas, rail compartilhado; Impostos usa o mês-âncora", "analysis/performance"],
+    ["Fechar o mês", "a transferência pendente bloqueia; aprovar ou recusar libera e fecha", "plan/close"],
+    ["Consultar um fechamento", "o que cada snapshot congelou", "portfolio/history/2026-10"],
+  ];
+  return `<div class="guide-back" data-act="guide-close">
+    <div class="guide" data-stop="1">
+      <header><h2>Roteiro da caminhada</h2><span class="sp"></span><button class="btn ghost sm" data-act="guide-close">✕</button></header>
+      <ol>${tasks.map(([t, d, go]) => `<li><span><span class="t">${t}</span><span class="d">${d}</span></span><span class="go" data-go="${go}">abrir →</span></li>`).join("")}</ol>
+      <div class="note">Tudo é dado fictício de 02/11/2026. Decisões (promover, aplicar, aprovar, fechar) vivem em memória; “protótipo · resetar” devolve o estado inicial.</div>
+    </div>
+  </div>`;
+}
+
+function render() {
+  const parts = route();
+  const app = document.getElementById("app");
+  if (parts[0] === "imports" && parts[1] === "wizard") {
+    app.innerHTML = wizardScreen(parts[2], parts[3]) + (STATE.guide ? guideOverlay() : "");
+    window.scrollTo(0, 0);
+    return;
+  }
+  const objKey = objByKey[parts[0]] ? parts[0] : "portfolio";
+  const o = objByKey[objKey];
+  const sub = o.subs.some((s) => s[0] === parts[1]) ? parts[1] : o.subs[0][0];
+  const body = pageFor(objKey, sub, parts);
+  app.innerHTML = `<div class="dk">${sidebar(objKey)}<div class="dk-main">${topbar(objKey, sub, parts)}<div class="dk-body">${body}</div></div></div>${STATE.guide ? guideOverlay() : ""}`;
+  window.scrollTo(0, 0);
+}
+
+function shiftAnchor(delta) {
+  const next = clampAnchor(addMonths(STATE.period.anchor, delta));
+  if (next !== STATE.period.anchor) STATE.period.anchor = next;
+  else showToast(delta < 0 ? "A janela já começa no primeiro mês da série" : "O último fechamento é out/26");
+}
+
+function wizardRoute() {
+  const parts = route();
+  return { kind: parts[2], step: Math.max(1, Math.min(4, Number(parts[3]) || 1)) };
+}
+
+function act(name, data) {
+  if (name === "guide" || name === "guide-close") {
+    STATE.guide = name === "guide" ? !STATE.guide : false;
+    render();
+    return;
+  }
+  if (name === "reset") {
+    STATE.plan = { transfer: "PENDING", closed: false, step: null, capital: SUMMARY.capital };
+    STATE.imports = { b3: false, custody: false, editions: {}, rejected504: false, parked: null };
+    STATE.period = { preset: "12m", anchor: LAST };
+    STATE.guide = false;
+    go("portfolio/overview");
+    showToast("Protótipo resetado ao estado de 02/11");
+    return;
+  }
+  if (name === "recalculate") {
+    showToast("Plano recalculado — o protótipo mantém os números de 02/11");
+    return;
+  }
+  if (name === "transfer-approve" || name === "transfer-reject") {
+    STATE.plan.transfer = name === "transfer-approve" ? "APPROVED" : "REJECTED";
+    showToast(name === "transfer-approve" ? "Transferência aprovada: 372 WEGE3 vão para Dividendos BR" : "Transferência recusada: nada se move e o fechamento libera");
+    render();
+    return;
+  }
+  if (name === "close-month") {
+    if (transferStatus() === "PENDING") {
+      showToast("Fechamento recusado: ainda há uma transferência pendente");
+      return;
+    }
+    STATE.plan.closed = true;
+    STATE.plan.step = "close";
+    showToast("Novembro fechado · snapshot gravado");
+    render();
+    return;
+  }
+  if (name === "step-prev" || name === "step-next") {
+    const steps = planStepsState();
+    const currentKey = STATE.plan.step && steps.some((s) => s.key === STATE.plan.step) ? STATE.plan.step : currentPlanStep().key;
+    const idx = steps.findIndex((s) => s.key === currentKey);
+    const next = name === "step-prev" ? Math.max(0, idx - 1) : Math.min(steps.length - 1, idx + 1);
+    STATE.plan.step = steps[next].key;
+    render();
+    return;
+  }
+  if (name === "promote-edition" || name === "discard-edition") {
+    const id = Number(data.id);
+    STATE.imports.editions[id] = name === "promote-edition" ? "PROMOTED" : "DISCARDED";
+    showToast(name === "promote-edition" ? `Edição ${id} promovida a ativa` : `Edição ${id} descartada`);
+    render();
+    return;
+  }
+  if (name === "reject-row") {
+    STATE.imports.rejected504 = true;
+    showToast("Linha rejeitada · guardada no lote de reenvio");
+    render();
+    return;
+  }
+  if (name === "wiz-close") {
+    const { kind, step } = wizardRoute();
+    const applied = kind === "b3" ? STATE.imports.b3 : kind === "custody" ? STATE.imports.custody : editionStatus(104) === "PROMOTED";
+    if (!applied) STATE.imports.parked = { kind, step };
+    showToast(applied ? "Sessão concluída" : "Sessão guardada na caixa de entrada");
+    go("imports/inbox");
+    return;
+  }
+  if (name === "wiz-next" || name === "wiz-back") {
+    const { kind, step } = wizardRoute();
+    const next = Math.max(1, Math.min(4, step + (name === "wiz-next" ? 1 : -1)));
+    go(`imports/wizard/${kind}/${next}`);
+    return;
+  }
+  if (name === "wiz-apply") {
+    const kind = data.kind;
+    if (kind === "b3") {
+      STATE.imports.b3 = true;
+      STATE.imports.parked = null;
+      showToast("3 linhas aplicadas · a rejeitada ficou no lote de reenvio");
+    } else if (kind === "custody") {
+      STATE.imports.custody = true;
+      STATE.imports.parked = null;
+      showToast("Snapshot aplicado · lacuna de 50 AAPL34 aberta");
+    } else if (kind === "xp") {
+      STATE.imports.editions[104] = "PROMOTED";
+      STATE.imports.parked = null;
+      showToast("Edição 104 promovida a ativa");
+    }
+    render();
+    return;
+  }
+  if (name === "go-tax-current") {
+    STATE.period.preset = "1m";
+    STATE.period.anchor = TAX.period;
+    render();
+    return;
+  }
+  if (name === "noop") return;
+}
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-go],[data-act],[data-step],[data-preset],[data-shift]");
+  if (!el) return;
+  if (el.dataset.act === "guide-close" && el.classList.contains("guide-back") && e.target !== el) return;
+  if (el.dataset.go) { e.preventDefault(); STATE.guide = false; go(el.dataset.go); return; }
+  if (el.dataset.act) { act(el.dataset.act, el.dataset); return; }
+  if (el.dataset.step) {
+    STATE.plan.step = el.dataset.step;
+    if (!location.hash.startsWith("#/plan")) go("plan/month");
+    else render();
+    return;
+  }
+  if (el.dataset.preset) { STATE.period.preset = el.dataset.preset; render(); return; }
+  if (el.dataset.shift) { shiftAnchor(Number(el.dataset.shift)); render(); }
+});
+window.addEventListener("hashchange", render);
+
+if (!location.hash) history.replaceState(null, "", "#/portfolio/overview");
+render();
+</script>
+</body>
+</html>

@@ -497,3 +497,42 @@ landing (text, not a card), the worded distance beside the colour in allocation 
 coverage. B's serif display scale, statement cards and text-only nav are dropped; B stays in this
 file as comparison evidence only. The assembled prototype (#357) and the spec (#358) take A plus the
 three borrowings.
+
+## Assembled navigable prototype (wayfinder ticket #357)
+
+[`app-prototype.html`](app-prototype.html) is the assembled artifact: one console-styled app that
+carries the chosen treatment from every per-area prototype on the shared fixture, so the owner can
+walk the real tasks end to end without narration. It implements the interface, not the production
+SPA; decisions live in memory and reset on reload.
+
+```
+python3 -m http.server 8765 -d frontend/design/redesign
+# then open http://localhost:8765/app-prototype.html
+```
+
+The top bar carries **roteiro**, a ten-step walkthrough with links (Carteira → Alocação → strategy
+and edition → manual bucket → XP report → B3 extract → month plan → Análise → close → snapshot), and
+**protótipo · resetar**, which returns every decision to the 02/11 state.
+
+What it carries from the decisions:
+
+- **Shell (#350, B):** six objects grouped Posição / Operações / Resultados; sub-views as page tabs;
+  portfolio status and attention above the fold; landing allocation is class-only.
+- **Strategies (#351, A):** first-class objects, list → detail → Carteira / Edições / Atribuição /
+  Fatia; manual buckets are the same object with a reduced tab set and “sem alvo”.
+- **Plan/Month (#352, B):** six steps opening at the first unfinished one, a `n de 6` fraction, one
+  status line on the landing; only an undecided transfer blocks Fechamento, and a rejection unblocks
+  it. Closing freezes the month and updates the landing.
+- **Análise (#353, A):** one object, three sibling tabs over one shared period rail; the rail opens
+  on 12 months ending the last close, and Impostos keeps its monthly grain through the month-anchor.
+- **Imports (#354, C):** the four-step full-screen assistant is the only review surface; contextual
+  prefill, mapping, row-level errors with a retry batch, per-source status, a parked session in the
+  inbox, and applying lands on the destination.
+- **Visual language (#355, A · Console):** every screen is in the dark dense console, with the three
+  document borrowings — the month standfirst on the landing, worded distances (“faltam” / “sobram”)
+  in allocation tables, and prose captions under the Análise charts that state benchmark coverage.
+
+Live interactions: promote a staged edition, apply a B3 extract or custody snapshot, abandon and
+resume the assistant, approve/reject the WEGE3 transfer, close November, switch the shared period
+rail, and read a stored snapshot. Not modelled: global search / command layer (decided in #359),
+editing the target chain, manual order matching, the RF import path, and persistence.
