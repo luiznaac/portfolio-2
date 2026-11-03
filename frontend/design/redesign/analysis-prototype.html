@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<!--
+  THROWAWAY PROTOTYPE — wayfinder ticket #353, map #347.
+  Question: should performance, income and taxes be one Analysis area with sibling views over a
+  shared period, or three separate destinations?
+  Three treatments, switchable in the bottom bar and in the URL (?v=a|b|c).
+  Data: ./fixture.js (ticket #356). No build step, no persistence.
+  Visual direction is NOT decided here — that is ticket #355.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Protótipo da Análise — Carteira Ideal (ticket #353)</title>
+<style>
+  :root {
+    --bg: #f3f5f7;
+    --panel: #ffffff;
+    --panel-2: #f8fafb;
+    --ink: #14181d;
+    --ink-2: #5a6572;
+    --ink-3: #8b95a1;
+    --line: #dfe4e9;
+    --line-2: #edf0f3;
+    --accent: #1d4ed8;
+    --accent-bg: #e8eefc;
+    --deficit: #1d4ed8;
+    --surplus: #a16207;
+    --gain: #15803d;
+    --loss: #b91c1c;
+    --warn: #b45309;
+    --warn-bg: #fdf3e3;
+    --action-bg: #fdeaea;
+    --action: #b91c1c;
+    --focus-bg: #fdf6d8;
+
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    --bar: 54px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.45 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: calc(var(--bar) + 26px);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  button { font: inherit; color: inherit; }
+  .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .num { text-align: right; white-space: nowrap; }
+  .dim { color: var(--ink-2); }
+  .faint { color: var(--ink-3); }
+  .gain { color: var(--gain); }
+  .loss { color: var(--loss); }
+  .def { color: var(--deficit); }
+  .sur { color: var(--surplus); }
+
+  .proto-banner {
+    background: #101826; color: #c7d2e3; font-size: 11px; letter-spacing: .01em;
+    padding: 5px 16px; display: flex; gap: 14px; align-items: center; position: relative; z-index: 40;
+  }
+  .proto-banner b { color: #fff; font-weight: 600; }
+  .proto-banner .sp { flex: 1; }
+  .proto-banner .tag { border: 1px solid #33415a; padding: 0 6px; border-radius: 3px; color: #93a4bd; }
+
+  .shell { min-height: 100vh; }
+  .shell.a, .shell.b, .shell.c { display: grid; grid-template-columns: 230px minmax(0, 1fr); }
+
+  .side {
+    background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; position: sticky; top: 27px;
+    height: calc(100vh - 27px - var(--bar));
+  }
+  .side .brand { padding: 16px 16px 10px; display: flex; align-items: baseline; gap: 7px; }
+  .side .brand b { font-size: 14px; letter-spacing: -.01em; }
+  .side .brand span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; }
+  .side nav { padding: 6px 8px; overflow: auto; }
+  .side .group-label {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3);
+    padding: 13px 8px 4px; font-weight: 600;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 7px 8px; border: 0; border-radius: 5px; background: none; cursor: pointer;
+    color: var(--ink-2); text-align: left; font-size: 12.5px;
+  }
+  .nav-item:hover { background: var(--panel-2); color: var(--ink); }
+  .nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .nav-item .ico { width: 15px; height: 15px; flex: none; color: currentColor; opacity: .85; }
+  .nav-item .cnt {
+    margin-left: auto; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    font: 600 10px/17px var(--mono); text-align: center; background: var(--line); color: var(--ink-2);
+  }
+  .nav-item .cnt.action { background: var(--action); color: #fff; }
+  .nav-item .cnt.watch { background: var(--warn-bg); color: var(--warn); }
+  .side .foot {
+    margin-top: auto; border-top: 1px solid var(--line-2); padding: 11px 16px; font-size: 11px; color: var(--ink-3);
+    display: grid; gap: 3px;
+  }
+  .side .foot b { color: var(--ink-2); font-weight: 600; }
+
+  .main { min-width: 0; }
+  .topbar {
+    min-height: 52px; border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; align-items: center; gap: 14px; padding: 0 22px;
+    position: sticky; top: 27px; z-index: 20;
+  }
+  .crumb { color: var(--ink-2); font-size: 12px; }
+  .crumb b { color: var(--ink); }
+  .topbar .sp { flex: 1; }
+  .month-pill {
+    display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line);
+    background: var(--panel-2); border-radius: 16px; padding: 4px 11px; font-size: 11.5px; color: var(--ink-2);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gain); display: inline-block; }
+  .topbar .age { font-size: 11px; color: var(--ink-3); }
+  .kbd {
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px;
+    font: 10px/14px var(--mono); color: var(--ink-3); background: var(--panel);
+  }
+
+  .content { padding: 20px 22px 40px; max-width: 1440px; }
+  .shell.b .content { max-width: 1360px; }
+
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .page-head h1 { font-size: 21px; line-height: 1.15; letter-spacing: -.025em; margin: 0 0 3px; font-weight: 650; }
+  .page-head p { margin: 0; color: var(--ink-2); font-size: 12px; max-width: 780px; }
+  .page-head .sp { flex: 1; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 14px; }
+  .tabs button {
+    border: 0; background: none; cursor: pointer; padding: 7px 11px; color: var(--ink-2);
+    font-size: 12.5px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .segmented {
+    display: inline-flex; gap: 2px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 2px;
+  }
+  .segmented button {
+    border: 0; background: none; cursor: pointer; padding: 4px 10px; border-radius: 4px;
+    color: var(--ink-2); font-size: 12px; white-space: nowrap;
+  }
+  .segmented button:hover { color: var(--ink); }
+  .segmented button.active { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 34, .10); }
+
+  /* ---------- period rail ---------- */
+  .rail {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+    padding: 8px 12px; margin-bottom: 14px;
+  }
+  .rail .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 650; }
+  .rail .range { font: 600 12.5px/1.2 var(--mono); }
+  .rail .range small { display: block; font: 10.5px/1.3 var(--sans); color: var(--ink-3); font-weight: 400; }
+  .rail .chev {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 4px; cursor: pointer;
+    width: 22px; height: 22px; line-height: 1; color: var(--ink-2); padding: 0;
+  }
+  .rail .chev:hover { background: var(--panel-2); color: var(--ink); }
+  .rail .sp { flex: 1; }
+  .rail .share {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-3);
+    border: 1px dashed var(--line); border-radius: 12px; padding: 2px 8px;
+  }
+  .rail .share b { color: var(--ink-2); font-weight: 600; }
+  .rail .share.solo { border-style: solid; color: var(--warn); background: var(--warn-bg); border-color: #f3e0bd; }
+  .rail .share.solo b { color: var(--warn); }
+  .rail .grain { font-size: 10.5px; color: var(--ink-3); }
+  .rail .grain b { color: var(--ink-2); font-weight: 600; }
+
+  .grid { display: grid; gap: 14px; }
+  .grid > * { min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; }
+  .panel > header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2);
+  }
+  .panel > header h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; margin: 0; color: var(--ink-2); font-weight: 650; }
+  .panel > header .sp { flex: 1; }
+  .panel > header .hint { font-size: 11px; color: var(--ink-3); }
+  .panel .body { padding: 13px 14px; }
+  .panel .body.flush { padding: 0; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; }
+  .kpi .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; }
+  .kpi .v { font: 600 19px/1.25 var(--mono); margin-top: 3px; letter-spacing: -.03em; }
+  .kpi .v.small { font-size: 15px; }
+  .kpi .s { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
+  .kpi .s b { font-weight: 600; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.t th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--ink-3); font-weight: 600; padding: 7px 12px; border-bottom: 1px solid var(--line-2);
+    background: var(--panel-2);
+  }
+  table.t td { padding: 7px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t th.r, table.t td.r { text-align: right; }
+  table.t tr.click { cursor: pointer; }
+  table.t tr.click:hover td { background: var(--panel-2); }
+  table.t tr.focus-row td { background: var(--focus-bg); box-shadow: inset 2px 0 0 var(--warn); }
+  table.t tr.anchor-row td { background: #f5f8ff; }
+  .ticker { font: 600 12px/1 var(--mono); letter-spacing: -.01em; }
+  .chip {
+    display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 9.5px; font-weight: 650;
+    letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--line); color: var(--ink-2);
+    background: var(--panel-2); line-height: 15px; white-space: nowrap;
+  }
+  .chip.blue { color: var(--accent); background: var(--accent-bg); border-color: #cfdcfb; }
+  .chip.amber { color: var(--warn); background: var(--warn-bg); border-color: #f3e0bd; }
+  .chip.red { color: var(--action); background: var(--action-bg); border-color: #f5cfcf; }
+  .chip.green { color: var(--gain); background: #e9f6ee; border-color: #cce9d7; }
+  .chip.grey { color: var(--ink-3); }
+  .chip.plain { background: none; }
+
+  .bar { height: 5px; border-radius: 3px; background: var(--line-2); position: relative; overflow: visible; min-width: 80px; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); display: block; }
+  .bar i.loss { background: var(--loss); }
+  .bar u { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .55; text-decoration: none; transform: translateX(-1px); }
+  .meter { display: grid; gap: 5px; }
+  .meter .lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-2); }
+
+  .mini-list { display: grid; gap: 0; }
+  .mini-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-2); font-size: 12px; flex-wrap: wrap; }
+  .mini-row:last-child { border-bottom: 0; }
+  .mini-row .sp { flex: 1; }
+
+  .callout {
+    border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; font-size: 11px;
+    color: var(--ink-3); background: var(--panel-2);
+  }
+  .callout b { color: var(--ink-2); font-weight: 600; }
+  .callout.warn { border-color: #f3e0bd; background: var(--warn-bg); color: #7c5a1d; }
+  .note-line { font-size: 11px; color: var(--ink-3); margin: 8px 0 0; }
+  .note-line b { color: var(--ink-2); font-weight: 600; }
+
+  .banner-tests {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;
+    font-size: 11.5px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 5px; padding: 7px 11px;
+  }
+  .banner-tests b { color: var(--ink); }
+  .banner-tests .q { color: var(--ink-3); }
+
+  /* ---------- treatment C: three reads ---------- */
+  .tri { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .tri-card {
+    text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+    padding: 12px 14px; cursor: pointer; display: grid; gap: 5px; align-content: start;
+  }
+  .tri-card:hover { border-color: #c9d3df; box-shadow: 0 2px 8px rgba(15, 23, 34, .06); }
+  .tri-card .q { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 650; }
+  .tri-card .v { font: 600 21px/1.2 var(--mono); letter-spacing: -.03em; }
+  .tri-card .s { font-size: 11.5px; color: var(--ink-2); }
+  .tri-card .go { font-size: 11px; color: var(--accent); margin-top: 2px; }
+  .tri-card .v.loss, .tri-card .v.gain { font-family: var(--mono); }
+
+  .chart { width: 100%; overflow: hidden; }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; gap: 14px; font-size: 10.5px; color: var(--ink-3); padding: 0 2px 6px; }
+  .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+  .month-strip { display: grid; gap: 6px; }
+  .month-line {
+    display: grid; grid-template-columns: 70px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr);
+    gap: 10px; align-items: center; font-size: 11.5px;
+  }
+  .month-line .mo { font: 600 11px/1 var(--mono); color: var(--ink-2); }
+  .month-line .ln { height: 16px; position: relative; background: var(--line-2); border-radius: 3px; overflow: hidden; }
+  .month-line .ln i { position: absolute; top: 0; bottom: 0; }
+  .month-line .ln i.pos { background: #bfe3cd; }
+  .month-line .ln i.neg { background: #f3cccc; }
+  .month-line .ln u { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--ink); opacity: .6; }
+  .month-line .val { font: 600 11px var(--mono); text-align: right; }
+  .month-line .sub { font-size: 10.5px; color: var(--ink-3); text-align: right; }
+  .month-line.head { color: var(--ink-3); font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 650; }
+
+  /* ---------- treatment B: destination context ---------- */
+  .dest-note {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--warn-bg); border: 1px solid #f3e0bd; color: #7c5a1d;
+    border-radius: 6px; padding: 7px 11px; font-size: 11.5px; margin-bottom: 12px;
+  }
+  .dest-note b { color: #6b4c12; }
+  .dest-note .sp { flex: 1; }
+  .dest-note .tag { border: 1px solid #e7cf9f; border-radius: 3px; padding: 0 5px; font-size: 10px; }
+
+  .stub { max-width: 620px; }
+  .stub p { color: var(--ink-2); font-size: 12.5px; }
+
+  /* ---------- bottom prototype bar ---------- */
+  .pbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: #0f1722; color: #dbe3ee; border-top: 1px solid #263242;
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px; min-height: var(--bar);
+    box-shadow: 0 -6px 24px rgba(9, 15, 25, .18);
+  }
+  .pbar .title { font-size: 11px; color: #8fa0b8; line-height: 1.25; max-width: 175px; }
+  .pbar .title b { color: #fff; display: block; font-size: 11.5px; }
+  .pbar .sep { width: 1px; align-self: stretch; background: #263242; margin: 2px 6px; }
+  .pbar button.v {
+    border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 5px;
+    padding: 5px 9px; cursor: pointer; font-size: 11.5px; text-align: left; line-height: 1.2;
+  }
+  .pbar button.v small { display: block; color: #8092aa; font-size: 9.5px; margin-top: 1px; }
+  .pbar button.v:hover { border-color: #4b5d7a; }
+  .pbar button.v.active { background: #e8eefc; border-color: #e8eefc; color: #14306b; }
+  .pbar button.v.active small { color: #3d5a8f; }
+  .pbar .sp { flex: 1; }
+  .pbar .scen { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+  .pbar .scen .lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: #8092aa; margin-right: 3px; white-space: nowrap; }
+  .pbar button.pv {
+    border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 4px;
+    padding: 4px 7px; cursor: pointer; font-size: 11px; white-space: nowrap;
+  }
+  .pbar button.pv:hover { border-color: #4b5d7a; }
+  .pbar button.pv.hot { border-color: #7d6626; background: #2c2515; color: #f0d792; }
+  .pbar .note { font-size: 10.5px; color: #8092aa; max-width: 240px; text-align: right; }
+  .pbar .note b { color: #c8d4e5; font-weight: 600; }
+  .pbar .ghost {
+    border: 1px solid #33415a; background: none; color: #c8d4e5; border-radius: 5px;
+    padding: 5px 8px; cursor: pointer; font-size: 11px;
+  }
+
+  .drawer {
+    position: fixed; right: 12px; bottom: calc(var(--bar) + 10px); z-index: 70; width: 470px; max-width: calc(100vw - 24px);
+    max-height: calc(100vh - var(--bar) - 40px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 40px rgba(15, 23, 34, .22);
+    padding: 14px 16px; font-size: 12px; display: none;
+  }
+  .drawer.open { display: block; }
+  .drawer h3 { margin: 0 0 6px; font-size: 13px; }
+  .drawer p { margin: 0 0 8px; color: var(--ink-2); }
+  .drawer ul { margin: 0 0 8px; padding-left: 16px; color: var(--ink-2); }
+  .drawer li { margin-bottom: 3px; }
+  .drawer .k { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 650; margin: 10px 0 3px; }
+  .drawer .close { position: absolute; top: 8px; right: 10px; border: 0; background: none; cursor: pointer; color: var(--ink-3); }
+  .drawer table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .drawer td { padding: 5px 6px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+  .drawer td:first-child { color: var(--ink-3); width: 34%; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(var(--bar) + 16px); transform: translateX(-50%) translateY(10px);
+    background: #111a27; color: #e6edf7; font-size: 11.5px; padding: 7px 12px; border-radius: 6px;
+    opacity: 0; pointer-events: none; transition: .18s ease; z-index: 80; max-width: 90vw;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 1320px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pbar .title, .pbar .note { display: none; }
+    body { padding-bottom: calc(var(--bar) + 18px); }
+  }
+  @media (max-width: 980px) {
+    .shell.a, .shell.b, .shell.c { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; }
+    .tri { grid-template-columns: 1fr; }
+    .pbar .note, .pbar .title { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="pbar" id="pbar"></div>
+<div class="drawer" id="drawer"></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import F from "./fixture.js";
+
+/* ============================ formatting & periods ============================ */
+
+const A = F.analysis;
+const SERIES = A.performanceSeries;
+const MONTHS = SERIES.months;
+const FIRST = MONTHS[0].period;
+const LAST = MONTHS.at(-1).period;
+const OPEN = F.plan.currentMonth?.month?.period ?? LAST;
+
+const MONTH_NAMES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const money = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const money0 = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const pct = (n, digits = 2) => `${n > 0 ? "+" : ""}${n.toFixed(digits).replace(".", ",")}%`;
+const pp = (n) => `${n > 0 ? "+" : ""}${n.toFixed(2).replace(".", ",")} pp`;
+const dateBR = (iso) => iso.split("-").reverse().join("/");
+const monthLabel = (period) => {
+  const [y, m] = period.split("-");
+  return `${MONTH_NAMES[Number(m) - 1]}/${y.slice(2)}`;
+};
+const monthIndex = (period) => {
+  const [y, m] = period.split("-").map(Number);
+  return y * 12 + (m - 1);
+};
+const fromIndex = (i) => {
+  const y = Math.floor(i / 12);
+  const m = (i % 12) + 1;
+  return `${y}-${String(m).padStart(2, "0")}`;
+};
+const addMonths = (period, delta) => fromIndex(monthIndex(period) + delta);
+const clampAnchor = (period) => {
+  const i = Math.min(Math.max(monthIndex(period), monthIndex(FIRST)), monthIndex(OPEN));
+  return fromIndex(i);
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const PRESETS = {
+  "1m": { label: "Mês", short: "mês", span: 1 },
+  "3m": { label: "3 meses", short: "3 m", span: 3 },
+  "6m": { label: "6 meses", short: "6 m", span: 6 },
+  "12m": { label: "12 meses", short: "12 m", span: 12 },
+  year: { label: "Ano", short: "ano", span: null },
+};
+
+function rangeOf(period) {
+  const anchor = clampAnchor(period.anchor);
+  if (period.preset === "year") return { start: `${anchor.slice(0, 4)}-01`, end: anchor };
+  const span = PRESETS[period.preset].span;
+  return { start: addMonths(anchor, -(span - 1)), end: anchor };
+}
+const monthsInRange = (range) => MONTHS.filter((m) => m.period >= range.start && m.period <= range.end);
+const isInRange = (iso, range) => {
+  const key = iso.slice(0, 7);
+  return key >= range.start && key <= range.end;
+};
+
+const classLabel = { ACOES: "Ações", FIIS: "FIIs", RENDA_FIXA: "Renda fixa" };
+const classChip = { ACOES: "blue", FIIS: "amber", RENDA_FIXA: "green" };
+const returnClass = (n) => ((n ?? 0) < 0 ? "loss" : "gain");
+
+const taxReports = { [A.tax.period]: A.tax, [A.currentTax.period]: A.currentTax };
+const taxReport = (period) => taxReports[period] ?? null;
+
+/* ============================ reads over the fixture ============================ */
+
+// The window's chained return: every month in the window counts, the base is 100 at the window's
+// start. The benchmark line only exists where the blend has data (ago/26 onward).
+function windowPerformance(range) {
+  const months = monthsInRange(range);
+  let portfolio = 100;
+  let benchmark = 100;
+  let benchmarkCount = 0;
+  const points = [{ period: addMonths(range.start, -1), portfolio: 100, benchmark: undefined }];
+
+  for (const month of months) {
+    if (month.decomposition.return_percentage != null) {
+      portfolio *= 1 + month.decomposition.return_percentage / 100;
+    }
+    let benchmarkPoint;
+    if (month.benchmark_return != null) {
+      benchmark *= 1 + month.benchmark_return / 100;
+      benchmarkCount += 1;
+      benchmarkPoint = benchmark;
+    }
+    points.push({ period: month.period, portfolio, benchmark: benchmarkPoint });
+  }
+
+  return {
+    months,
+    points,
+    returnPercentage: portfolio - 100,
+    benchmarkPercentage: benchmarkCount > 0 ? benchmark - 100 : null,
+    benchmarkCount,
+    lastValue: months.at(-1)?.decomposition.value_end ?? 0,
+  };
+}
+
+function periodIncome(range) {
+  const closedInRange = A.income.filter(
+    (row) => (row.status === "RECEIVED" || row.status === "RECONCILED") && isInRange(row.date, range),
+  );
+  // What is still owed to you is a forward-looking question: an announced or payable row counts
+  // even when its payment date falls just outside the selected window.
+  const upcoming = A.income.filter((row) => row.status !== "RECEIVED" && row.status !== "RECONCILED");
+  const rows = [...upcoming, ...closedInRange];
+  const total = (list) => list.reduce((sum, row) => sum + row.net_amount, 0);
+  const byKey = (list, key) =>
+    Object.entries(list.reduce((acc, row) => ({ ...acc, [row[key]]: (acc[row[key]] ?? 0) + row.net_amount }), {}))
+      .sort((a, b) => b[1] - a[1]);
+
+  return {
+    rows,
+    closed: closedInRange,
+    upcoming,
+    upcomingOutsideRange: upcoming.some((row) => !isInRange(row.date, range)),
+    received: total(closedInRange),
+    toReceive: total(upcoming),
+    byMonth: monthsInRange(range).map((month) => ({
+      period: month.period,
+      value: total(closedInRange.filter((row) => row.date.startsWith(month.period))),
+    })),
+    byType: byKey(rows, "type"),
+    byTicker: byKey(rows, "ticker"),
+    next: [...upcoming].sort((a, b) => a.date.localeCompare(b.date))[0],
+    months: monthsInRange(range).length,
+  };
+}
+
+function cumulativePoints(points, key) {
+  return points.map((point) => point[key]);
+}
+
+/* ============================ charts ============================ */
+
+function lineChart(points) {
+  const width = 760;
+  const height = 210;
+  const pad = { top: 12, right: 14, bottom: 24, left: 38 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const values = points.flatMap((p) => [p.portfolio, p.benchmark].filter((v) => v != null));
+  const min = Math.min(...values, 99);
+  const max = Math.max(...values, 101);
+  const padV = (max - min) * 0.12 || 1;
+  const lo = min - padV;
+  const hi = max + padV;
+  const x = (i) => pad.left + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+  const y = (v) => pad.top + (1 - (v - lo) / (hi - lo)) * innerH;
+
+  const polyline = (key) => {
+    const segments = [];
+    let current = [];
+    points.forEach((point, index) => {
+      if (point[key] == null) {
+        if (current.length) segments.push(current);
+        current = [];
+        return;
+      }
+      current.push(index);
+    });
+    if (current.length) segments.push(current);
+    return segments
+      .map((segment) => segment.map((i) => `${x(i).toFixed(1)},${y(points[i][key]).toFixed(1)}`).join(" "))
+      .filter((segment) => segment.includes(","));
+  };
+
+  const grid = [0, 0.5, 1].map((t) => {
+    const value = hi - t * (hi - lo);
+    return { value, y: y(value) };
+  });
+
+  const ticks = points.map((point, index) => ({ point, index })).filter(({ point }) => point.period !== addMonths(points[0].period, 0));
+
+  return `<div class="chart">
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>Carteira</span>
+      <span><i style="background:var(--warn)"></i>Benchmark blend</span>
+      <span class="faint">base 100 no início do período</span>
+    </div>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Rentabilidade acumulada da carteira e do benchmark no período">
+      ${grid.map((g) => `<line x1="${pad.left}" x2="${width - pad.right}" y1="${g.y.toFixed(1)}" y2="${g.y.toFixed(1)}" stroke="#edf0f3"/>
+        <text x="${pad.left - 6}" y="${(g.y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#8b95a1" font-family="ui-monospace, monospace">${g.value.toFixed(1)}</text>`).join("")}
+      ${points.map((point, index) => `<text x="${x(index).toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="9" fill="#8b95a1">${point.period === addMonths(points[0].period, 0) ? "início" : monthLabel(point.period)}</text>`).join("")}
+      ${polyline("portfolio").map((segment) => `<polyline points="${segment}" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-linejoin="round"/>`).join("")}
+      ${polyline("benchmark").map((segment) => `<polyline points="${segment}" fill="none" stroke="#a16207" stroke-width="1.7" stroke-dasharray="4 3" stroke-linejoin="round"/>`).join("")}
+      ${points.map((point, index) => point.portfolio == null ? "" : `<circle cx="${x(index).toFixed(1)}" cy="${y(point.portfolio).toFixed(1)}" r="2.4" fill="#1d4ed8"/>`).join("")}
+    </svg>
+  </div>`;
+}
+
+function incomeChart(rows) {
+  const width = 760;
+  const height = 130;
+  const pad = { top: 10, right: 12, bottom: 22, left: 38 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const max = Math.max(...rows.map((row) => row.value), 1);
+  const slot = innerW / Math.max(rows.length, 1);
+  const barW = Math.min(34, slot * 0.62);
+  const y = (value) => pad.top + (1 - value / max) * innerH;
+
+  return `<div class="chart">
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Proventos líquidos por mês no período">
+      <line x1="${pad.left}" x2="${width - pad.right}" y1="${pad.top + innerH}" y2="${pad.top + innerH}" stroke="#dfe4e9"/>
+      <text x="${pad.left - 6}" y="${pad.top + 4}" text-anchor="end" font-size="9" fill="#8b95a1" font-family="ui-monospace, monospace">${money0(max)}</text>
+      <text x="${pad.left - 6}" y="${pad.top + innerH}" text-anchor="end" font-size="9" fill="#8b95a1" font-family="ui-monospace, monospace">R$ 0</text>
+      ${rows.map((row, index) => {
+        const cx = pad.left + slot * index + slot / 2;
+        const barH = (row.value / max) * innerH;
+        return `<g>
+          <rect x="${(cx - barW / 2).toFixed(1)}" y="${y(row.value).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH, 1).toFixed(1)}" rx="2" fill="#bfd3f7"/>
+          <text x="${cx.toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="9" fill="#8b95a1">${monthLabel(row.period)}</text>
+          ${row.value > 0 ? `<text x="${cx.toFixed(1)}" y="${(y(row.value) - 3).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#5a6572" font-family="ui-monospace, monospace">${money0(row.value)}</text>` : ""}
+        </g>`;
+      }).join("")}
+    </svg>
+  </div>`;
+}
+
+/* ============================ IA model ============================ */
+
+const ICONS = {
+  portfolio: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 6h12M5 10h3" stroke="currentColor" stroke-width="1.3"/></svg>',
+  strategies: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3-6 3-6-3 6-3Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 8l6 3 6-3M2 11l6 3 6-3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  assets: '<svg class="ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5.5 8h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  imports: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 6l3-3 3 3M3 12h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  plan: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 6h11M5 2v2M11 2v2M5.5 9h2M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  analysis: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M3 13V9M8 13V3M13 13V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  performance: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M2 12l4-4 3 2 5-6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4h4v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  income: '<svg class="ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.5v7M10 6.2c0-.8-.9-1.2-2-1.2s-2 .5-2 1.4c0 2 4 1 4 3 0 .9-1 1.4-2 1.4s-2-.4-2-1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  tax: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="3" y="2.5" width="10" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+};
+
+const attentionFor = (prefix) => F.attention.filter((a) => a.route.startsWith(prefix));
+
+const BASE_OBJECTS = [
+  {
+    key: "portfolio", label: "Carteira", group: "Posição", icon: ICONS.portfolio,
+    subs: [{ key: "overview", label: "Visão geral" }, { key: "allocation", label: "Alocação" }, { key: "history", label: "Histórico" }],
+    badge: () => 0,
+  },
+  {
+    key: "strategies", label: "Estratégias", group: "Posição", icon: ICONS.strategies,
+    subs: [{ key: "list", label: "Todas" }, { key: "editions", label: "Edições" }],
+    badge: () => attentionFor("strategies").length,
+  },
+  {
+    key: "assets", label: "Ativos", group: "Posição", icon: ICONS.assets,
+    subs: [{ key: "positions", label: "Posições" }, { key: "fixed", label: "Renda fixa" }, { key: "quotes", label: "Cotações" }, { key: "gaps", label: "Lacunas" }],
+    badge: () => attentionFor("assets").length,
+  },
+  {
+    key: "imports", label: "Importações", group: "Operações", icon: ICONS.imports,
+    subs: [{ key: "inbox", label: "Caixa de entrada" }, { key: "corporate", label: "Ações corporativas" }, { key: "history", label: "Histórico" }],
+    badge: () => attentionFor("imports").length,
+  },
+  {
+    key: "plan", label: "Plano / Mês", group: "Operações", icon: ICONS.plan,
+    subs: [{ key: "month", label: "Mês atual" }, { key: "orders", label: "Ordens" }, { key: "transfers", label: "Transferências" }, { key: "close", label: "Fechamentos" }],
+    badge: () => attentionFor("plan").length,
+  },
+];
+
+const ANALYSIS_A = {
+  key: "analysis", label: "Análise", group: "Resultados", icon: ICONS.analysis,
+  subs: [
+    { key: "performance", label: "Performance" },
+    { key: "income", label: "Proventos" },
+    { key: "tax", label: "Impostos" },
+  ],
+  badge: () => attentionFor("analysis").length,
+};
+const ANALYSIS_C = {
+  ...ANALYSIS_A,
+  subs: [{ key: "overview", label: "Resumo" }, ...ANALYSIS_A.subs],
+};
+
+const B_DESTINATIONS = [
+  {
+    key: "performance", label: "Performance", group: "Resultados", icon: ICONS.performance,
+    subs: [{ key: "main", label: "Performance" }], badge: () => 0,
+  },
+  {
+    key: "income", label: "Proventos", group: "Resultados", icon: ICONS.income,
+    subs: [{ key: "main", label: "Proventos" }], badge: () => attentionFor("analysis/income").length,
+  },
+  {
+    key: "tax", label: "Impostos", group: "Resultados", icon: ICONS.tax,
+    subs: [{ key: "main", label: "Impostos" }], badge: () => 0,
+  },
+];
+
+const DESTINATIONS = ["performance", "income", "tax"];
+
+function objectsFor(variant) {
+  if (variant === "b") return [...BASE_OBJECTS, ...B_DESTINATIONS];
+  return [...BASE_OBJECTS, variant === "c" ? ANALYSIS_C : ANALYSIS_A];
+}
+const objectsByKey = (variant) => Object.fromEntries(objectsFor(variant).map((o) => [o.key, o]));
+
+const VARIANTS = {
+  a: {
+    name: "A · Uma Análise, três vistas",
+    short: "uma área",
+    thesis: "Um objeto Análise no sidebar, com Performance / Proventos / Impostos como abas sobre uma rail de período compartilhada. Trocar de vista preserva o recorte.",
+  },
+  b: {
+    name: "B · Três destinos",
+    short: "três objetos",
+    thesis: "Performance, Proventos e Impostos são objetos próprios no sidebar. Cada destino tem o seu período; o recorte não viaja entre eles.",
+  },
+  c: {
+    name: "C · Análise com resumo",
+    short: "resumo + vistas",
+    thesis: "Um objeto Análise que abre num Resumo respondendo \"como fui / o que recebi / o que devo\" no mesmo recorte, com as três vistas como abas para o detalhe.",
+  },
+};
+
+const ownerTicket = { performance: 353, income: 353, tax: 353, analysis: 353 };
+
+/* ============================ state / routing ============================ */
+
+function parseURL() {
+  const q = new URLSearchParams(location.search);
+  const variant = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "a";
+  const preset = ["1m", "3m", "6m", "12m", "year"].includes(q.get("per")) ? q.get("per") : "12m";
+  const anchor = /^\d{4}-\d{2}$/.test(q.get("anchor") ?? "") ? clampAnchor(q.get("anchor")) : LAST;
+  const focus = q.get("focus") || null;
+  const parts = (location.hash.replace(/^#\/?/, "") || "").split("/");
+  const objects = objectsByKey(variant);
+  const fallback = variant === "b" ? "performance" : "analysis";
+  const obj = objects[parts[0]] ? parts[0] : fallback;
+  const sub = (objects[obj].subs.find((s) => s.key === parts[1]) || objects[obj].subs[0]).key;
+  return { variant, preset, anchor, focus, obj, sub };
+}
+
+const firstRoute = parseURL();
+let state = {
+  variant: firstRoute.variant,
+  preset: firstRoute.preset,
+  anchor: firstRoute.anchor,
+  focus: firstRoute.focus,
+  obj: firstRoute.obj,
+  sub: firstRoute.sub,
+  // In B each destination owns its period, so moving between them resets the context.
+  destinations: {
+    performance: { preset: firstRoute.preset, anchor: firstRoute.anchor },
+    income: { preset: "12m", anchor: LAST },
+    tax: { preset: "1m", anchor: LAST },
+  },
+};
+
+const isDestination = () => state.variant === "b" && DESTINATIONS.includes(state.obj);
+const activeDestination = () => {
+  if (state.variant === "b" && DESTINATIONS.includes(state.obj)) return state.obj;
+  return state.obj === "analysis" ? state.sub : "performance";
+};
+const activePeriod = () =>
+  isDestination() ? state.destinations[state.obj] : { preset: state.preset, anchor: state.anchor };
+
+function setPeriod(patch) {
+  if (isDestination()) {
+    Object.assign(state.destinations[state.obj], patch);
+    state.destinations[state.obj].anchor = clampAnchor(state.destinations[state.obj].anchor);
+  } else {
+    Object.assign(state, patch);
+    state.anchor = clampAnchor(state.anchor);
+  }
+  syncURL();
+  render();
+}
+
+function syncURL() {
+  const q = new URLSearchParams(location.search);
+  q.set("v", state.variant);
+  q.set("per", state.variant === "b" ? (DESTINATIONS.includes(state.obj) ? state.destinations[state.obj].preset : state.preset) : state.preset);
+  q.set("anchor", state.variant === "b" && DESTINATIONS.includes(state.obj) ? state.destinations[state.obj].anchor : state.anchor);
+  if (state.focus) q.set("focus", state.focus);
+  else q.delete("focus");
+  const hash = state.variant === "b" ? `#/${state.obj}` : `#/${state.obj}/${state.sub}`;
+  history.replaceState(null, "", `${location.pathname}?${q.toString()}${hash}`);
+}
+
+function navigate(obj, sub, { keepFocus = false } = {}) {
+  const previous = state.variant === "b" ? state.obj : state.sub;
+  state.obj = obj;
+  state.sub = sub || objectsByKey(state.variant)[obj].subs[0].key;
+  if (!keepFocus) state.focus = null;
+
+  if (state.variant === "b" && DESTINATIONS.includes(obj) && obj !== previous) {
+    const own = state.destinations[obj];
+    const was = state.destinations[previous];
+    const same = was && was.preset === own.preset && was.anchor === own.anchor;
+    toast(same
+      ? `${objectsByKey("b")[obj].label} abre no período próprio dela (${PRESETS[own.preset].label}) — igual por coincidência, não porque o recorte viajou.`
+      : `${objectsByKey("b")[obj].label} abre no período dela (${PRESETS[own.preset].label}); o recorte de ${PRESETS[was?.preset ?? state.preset].label} não viaja entre destinos.`);
+  }
+  syncURL();
+  render();
+}
+
+function setVariant(variant) {
+  state.variant = variant;
+  if (variant === "b") {
+    const dest = state.obj === "analysis" ? state.sub : state.obj;
+    if (DESTINATIONS.includes(dest)) {
+      state.obj = dest;
+      state.sub = "main";
+    } else {
+      state.obj = "performance";
+      state.sub = "main";
+    }
+  } else if (DESTINATIONS.includes(state.obj) && !state.obj.startsWith("analysis")) {
+    state.obj = "analysis";
+    state.sub = DESTINATIONS.includes(state.obj) ? state.sub : "performance";
+  }
+  if (variant !== "b" && state.obj === "analysis") {
+    const allowed = objectsByKey(variant).analysis.subs.map((s) => s.key);
+    if (!allowed.includes(state.sub)) state.sub = "performance";
+  }
+  syncURL();
+  render();
+}
+
+function setRouteWithoutHistoryState(obj, sub) {
+  state.obj = obj;
+  state.sub = sub;
+  syncURL();
+}
+
+window.addEventListener("hashchange", () => {
+  const parsed = parseURL();
+  state.variant = parsed.variant;
+  state.obj = parsed.obj;
+  state.sub = parsed.sub;
+  state.focus = parsed.focus;
+  render();
+});
+
+/* ============================ shared UI ============================ */
+
+const objectTitle = () => objectsByKey(state.variant)[state.obj]?.label ?? "Análise";
+const rangeLabel = (range) => `${monthLabel(range.start)} – ${monthLabel(range.end)}`;
+
+function rail({ shared = true, grainNote = "" } = {}) {
+  const period = activePeriod();
+  const range = rangeOf(period);
+  const presets = Object.entries(PRESETS)
+    .map(([key, preset]) => `<button data-preset="${key}" class="${key === period.preset ? "active" : ""}">${preset.label}</button>`)
+    .join("");
+
+  return `<div class="rail">
+    <span class="lbl">Período</span>
+    <div class="segmented">${presets}</div>
+    <button class="chev" data-shift="-1" title="Um mês antes">‹</button>
+    <span class="range">${rangeLabel(range)}<small>${monthLabel(range.end)} é o mês-âncora</small></span>
+    <button class="chev" data-shift="1" title="Um mês depois">›</button>
+    <span class="sp"></span>
+    ${grainNote ? `<span class="grain"><b>${grainNote}</b></span>` : ""}
+    <span class="share ${shared ? "" : "solo"}">${shared
+      ? "compartilhado por Performance · Proventos · Impostos"
+      : "<b>período desta tela</b> · não compartilhado"}</span>
+  </div>`;
+}
+
+function analysisTabs(active) {
+  const subs = objectsByKey(state.variant).analysis.subs;
+  return `<div class="tabs">
+    ${subs.map((sub) => `<button data-go="analysis/${sub.key}" class="${sub.key === active ? "active" : ""}">${sub.label}</button>`).join("")}
+  </div>`;
+}
+
+function pageHead(title, description, right = "") {
+  return `<div class="page-head">
+    <div><h1>${title}</h1><p>${description}</p></div>
+    <span class="sp"></span>${right}
+  </div>`;
+}
+
+function ticketNote(ticket, text) {
+  return `<div class="callout" style="margin-top:12px"><b>Ticket #${ticket}</b> — ${text}</div>`;
+}
+
+/* ============================ views: Performance ============================ */
+
+function performanceView(range) {
+  const window = windowPerformance(range);
+  const anchorMonth = MONTHS.find((month) => month.period === range.end);
+  const lastMonth = window.months.at(-1);
+  const anchorBreakdown = A.monthPerformance.period === range.end ? A.monthPerformance : null;
+  const benchmarkAvailable = window.benchmarkPercentage != null;
+  const comparable = benchmarkAvailable && window.benchmarkCount === window.months.length;
+  const delta = comparable ? window.returnPercentage - window.benchmarkPercentage : null;
+
+  const monthRows = window.months.slice().reverse().map((month) => {
+    const decomposition = month.decomposition;
+    const result = decomposition.value_start == null
+      ? null
+      : decomposition.value_end - decomposition.value_start - decomposition.net_aportes - decomposition.net_income - (decomposition.flow ?? 0);
+    return `<tr>
+      <td><b class="mono">${monthLabel(month.period)}</b>${month.period === range.end ? ' <span class="chip blue plain">âncora</span>' : ""}</td>
+      <td class="r num ${returnClass(decomposition.return_percentage)}">${decomposition.return_percentage == null ? '<span class="faint">—</span>' : pct(decomposition.return_percentage)}</td>
+      <td class="r num ${returnClass(month.benchmark_return)}">${month.benchmark_return == null ? '<span class="faint">—</span>' : pct(month.benchmark_return)}</td>
+      <td class="r num">${decomposition.value_end == null ? "—" : money0(decomposition.value_end)}</td>
+      <td class="r num">${money0(decomposition.net_aportes ?? 0)}</td>
+      <td class="r num">${money0(decomposition.net_income ?? 0)}</td>
+      <td class="r num ${returnClass(result)}">${result == null ? "—" : money0(result)}</td>
+    </tr>`;
+  }).join("");
+
+  const classRows = anchorBreakdown?.classes?.map((row) => {
+    const d = row.decomposition;
+    return `<tr>
+      <td><span class="chip ${classChip[row.asset_class]} plain">${classLabel[row.asset_class]}</span></td>
+      <td class="r num">${money0(d.value_end)}</td>
+      <td class="r num">${money0(d.net_aportes)}</td>
+      <td class="r num">${money0(d.net_income)}</td>
+      <td class="r num ${returnClass(d.return_percentage)}">${pct(d.return_percentage)}</td>
+      <td class="r num ${returnClass(row.benchmark_return)}">${pct(row.benchmark_return)}</td>
+    </tr>`;
+  }).join("") ?? "";
+
+  const strategyRows = anchorBreakdown?.classes?.flatMap((row) =>
+    (row.strategies ?? []).map((slice) => `<tr>
+      <td><b class="ticker">${esc(slice.strategy)}</b> <span class="chip ${slice.kind === "MANUAL" ? "grey" : "blue"} plain">${slice.kind === "MANUAL" ? "manual" : "relatório"}</span></td>
+      <td class="dim">${classLabel[row.asset_class]}</td>
+      <td class="r num">${money0(slice.decomposition.value_end)}</td>
+      <td class="r num ${returnClass(slice.decomposition.return_percentage)}">${pct(slice.decomposition.return_percentage)}</td>
+    </tr>`)).join("") ?? "";
+
+  const benchmarkRows = anchorBreakdown?.benchmark?.contributions?.map((row) => `<div class="mini-row">
+    <span class="chip grey">${row.benchmark}</span>
+    <span>${esc(row.label)}</span>
+    <span class="sp"></span>
+    <span class="dim num">alvo ${row.target.toFixed(1).replace(".", ",")}%</span>
+    <b class="num ${returnClass(row.return_percentage)}">${pct(row.return_percentage)}</b>
+  </div>`).join("") ?? "";
+
+  return `
+    <div class="kpis" style="margin-bottom:14px">
+      <div class="kpi"><div class="k">Retorno no período</div><div class="v ${returnClass(window.returnPercentage)}">${pct(window.returnPercentage)}</div><div class="s">${window.months.length} ${window.months.length === 1 ? "mês" : "meses"} · ${rangeLabel(range)}</div></div>
+      <div class="kpi"><div class="k">Benchmark blend</div><div class="v ${benchmarkAvailable ? returnClass(window.benchmarkPercentage) : "faint"}">${benchmarkAvailable ? pct(window.benchmarkPercentage) : "—"}</div><div class="s">${comparable ? `${delta >= 0 ? "+" : ""}${delta.toFixed(2).replace(".", ",")} pp de diferença` : benchmarkAvailable ? `blend cobre ${window.benchmarkCount} de ${window.months.length} meses` : "sem série no recorte"}</div></div>
+      <div class="kpi"><div class="k">Último mês fechado</div><div class="v ${returnClass(lastMonth?.decomposition.return_percentage)}">${lastMonth?.decomposition.return_percentage == null ? "—" : pct(lastMonth.decomposition.return_percentage)}</div><div class="s">${lastMonth ? monthLabel(lastMonth.period) : "—"} · benchmark ${lastMonth?.benchmark_return == null ? "—" : pct(lastMonth.benchmark_return)}</div></div>
+      <div class="kpi"><div class="k">Valor no fechamento</div><div class="v">${money0(window.lastValue)}</div><div class="s">${lastMonth ? monthLabel(lastMonth.period) : "—"} · XIRR ${pct(SERIES.xirr, 1)}</div></div>
+    </div>
+
+    <section class="panel" style="margin-bottom:14px">
+      <header><h2>Rentabilidade acumulada</h2><span class="sp"></span><span class="hint">${rangeLabel(range)} · ${range.end === OPEN ? "nov/26 aberto, série fecha em out/26" : "a série só tem blend a partir de ago/26"}</span></header>
+      <div class="body">${lineChart(window.points)}
+        <p class="note-line">O retorno é a decomposição mensal encadeada; aportes e proventos ficam de fora. O XIRR não é recalculado no recorte: a série expõe <b>${pct(SERIES.xirr, 1)}</b> nos fechamentos e <b>${pct(SERIES.computed_xirr, 1)}</b> no histórico computado — as duas eras nunca são misturadas.</p>
+      </div>
+    </section>
+
+    <div class="grid" style="grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);margin-bottom:14px">
+      <section class="panel">
+        <header><h2>Mês a mês</h2><span class="sp"></span><span class="hint">mais recente primeiro</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Mês</th><th class="r">Rentab.</th><th class="r">Bench.</th><th class="r">Valor</th><th class="r">Aportes</th><th class="r">Proventos</th><th class="r">Resultado</th></tr></thead>
+          <tbody>${monthRows}</tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <header><h2>Benchmark do mês-âncora</h2><span class="sp"></span><span class="hint">${anchorBreakdown ? monthLabel(anchorBreakdown.period) : "—"}</span></header>
+        <div class="body">
+          ${anchorBreakdown ? `<div class="mini-list">
+            ${benchmarkRows}
+            <div class="mini-row" style="border-top:1px solid var(--line);margin-top:2px;padding-top:8px">
+              <b>Blend alvo</b><span class="sp"></span><b class="num ${returnClass(anchorBreakdown.benchmark.return_percentage)}">${pct(anchorBreakdown.benchmark.return_percentage)}</b>
+            </div>
+          </div>
+          <p class="note-line">A carteira rendeu <b class="${returnClass(anchorBreakdown.decomposition.return_percentage)}">${pct(anchorBreakdown.decomposition.return_percentage)}</b> no mês, <b>${pp(anchorBreakdown.decomposition.return_percentage - anchorBreakdown.benchmark.return_percentage)}</b> contra o blend.</p>`
+          : `<p class="note-line">O fixture carrega a decomposição do benchmark para out/26. Em outro mês-âncora a série mensal ainda mostra o <b>benchmark_return</b>, mas não as contribuições por índice.</p>`}
+        </div>
+      </section>
+    </div>
+
+    ${anchorBreakdown ? `<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+      <section class="panel">
+        <header><h2>Por classe no mês-âncora</h2><span class="sp"></span><span class="hint">${monthLabel(anchorBreakdown.period)}</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Classe</th><th class="r">Valor</th><th class="r">Aportes</th><th class="r">Proventos</th><th class="r">Rentab.</th><th class="r">Bench.</th></tr></thead>
+          <tbody>${classRows}</tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <header><h2>Por estratégia no mês-âncora</h2><span class="sp"></span><span class="hint">${monthLabel(anchorBreakdown.period)}</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Estratégia</th><th>Classe</th><th class="r">Valor</th><th class="r">Rentab.</th></tr></thead>
+          <tbody>${strategyRows}</tbody>
+        </table></div>
+      </section>
+    </div>` : ""}
+
+    ${ticketNote(353, "O agrupamento da Análise e a rail de período compartilhada são o que este ticket decide.")}
+  `;
+}
+
+/* ============================ views: Proventos ============================ */
+
+function incomeView(range) {
+  const view = periodIncome(range);
+  const typeLabels = { DIVIDEND: "Dividendo", JCP: "JCP", FUND_INCOME: "Rendimento" };
+  const statusChip = { PAYABLE: "amber", ANNOUNCED: "blue", RECEIVED: "green", RECONCILED: "green" };
+  const orderedRows = [...view.upcoming, ...view.closed.slice().sort((a, b) => b.date.localeCompare(a.date))];
+  const focusId = state.focus;
+
+  const ledger = orderedRows.length === 0
+    ? `<tr><td colspan="6" class="faint">Nenhum provento no período.</td></tr>`
+    : orderedRows.map((row) => {
+      const focused = focusId === `income-${row.id}`;
+      return `<tr id="income-${row.id}" class="${focused ? "focus-row" : ""}">
+        <td><b class="ticker">${row.ticker}</b>${focused ? ' <span class="chip amber plain">do alerta</span>' : ""}</td>
+        <td class="dim">${typeLabels[row.type]}</td>
+        <td class="mono">${dateBR(row.date)}</td>
+        <td><span class="chip ${statusChip[row.status]} plain">${row.status === "PAYABLE" ? "pagável" : row.status === "ANNOUNCED" ? "anunciado" : row.status === "RECONCILED" ? "conciliado" : "recebido"}</span></td>
+        <td class="r num ${row.retained_amount > 0 ? "dim" : "faint"}">${row.retained_amount > 0 ? `−${money(row.retained_amount)}` : "—"}</td>
+        <td class="r num"><b>${money(row.net_amount)}</b></td>
+      </tr>`;
+    }).join("");
+
+  const tickerRows = view.byTicker.map(([ticker, amount]) => `<div class="mini-row">
+    <b class="ticker">${ticker}</b><span class="sp"></span>
+    <span class="dim num">${((amount / (view.received + view.toReceive)) * 100).toFixed(1).replace(".", ",")}%</span>
+    <b class="num">${money(amount)}</b>
+  </div>`).join("");
+
+  const typeRows = view.byType.map(([type, amount]) => `<div class="mini-row">
+    <span class="dim">${typeLabels[type]}</span><span class="sp"></span>
+    <b class="num">${money(amount)}</b>
+  </div>`).join("");
+
+  return `
+    <div class="kpis" style="margin-bottom:14px">
+      <div class="kpi"><div class="k">Recebidos no período</div><div class="v">${money(view.received)}</div><div class="s">${view.closed.length} lançamentos conciliados</div></div>
+      <div class="kpi"><div class="k">A receber</div><div class="v ${view.toReceive > 0 ? "sur" : ""}">${money(view.toReceive)}</div><div class="s">${view.upcoming.length} ${view.upcoming.length === 1 ? "linha em aberto" : "linhas em aberto"}${view.upcomingOutsideRange ? " · fora do recorte" : ""}</div></div>
+      <div class="kpi"><div class="k">Próximo</div><div class="v small">${view.next ? esc(view.next.ticker) : "—"}</div><div class="s">${view.next ? `${money(view.next.net_amount)} em ${dateBR(view.next.date)}` : "nada a receber"}</div></div>
+      <div class="kpi"><div class="k">Média mensal</div><div class="v">${money0(view.received / Math.max(view.months ?? 0, 1))}</div><div class="s">${view.months ?? ""} meses no recorte</div></div>
+    </div>
+
+    <section class="panel" style="margin-bottom:14px">
+      <header><h2>Proventos líquidos por mês</h2><span class="sp"></span><span class="hint">${rangeLabel(range)}</span></header>
+      <div class="body">${incomeChart(view.byMonth)}
+        <p class="note-line">Rendimentos de FII, dividendos e JCP, líquidos de retenção, no mês da sua <b>data de pagamento</b>. As linhas ainda em aberto aparecem no livro mesmo quando vencem fora do recorte.</p>
+      </div>
+    </section>
+
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:14px">
+      <section class="panel"><header><h2>Por ticker</h2><span class="sp"></span><span class="hint">recorte + em aberto</span></header><div class="body">${tickerRows || '<p class="faint" style="margin:0">Sem proventos no período.</p>'}</div></section>
+      <section class="panel"><header><h2>Por tipo</h2><span class="sp"></span><span class="hint">recorte + em aberto</span></header><div class="body">${typeRows || '<p class="faint" style="margin:0">Sem proventos no período.</p>'}</div></section>
+    </div>
+
+    <section class="panel">
+      <header><h2>Livro do período</h2><span class="sp"></span><span class="hint">${orderedRows.length} linhas · a receber primeiro · recebidos no recorte</span></header>
+      <div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th>Tipo</th><th>Data</th><th>Estado</th><th class="r">Retenção</th><th class="r">Líquido</th></tr></thead>
+        <tbody>${ledger}</tbody>
+      </table></div>
+    </section>
+    ${ticketNote(353, "O agrupamento da Análise e a rail de período compartilhada são o que este ticket decide.")}
+  `;
+}
+
+/* ============================ views: Impostos ============================ */
+
+function taxView(range, { shared = true } = {}) {
+  const report = taxReport(range.end);
+  const anchor = range.end;
+  const reportsInRange = Object.values(taxReports)
+    .filter((row) => row.period >= range.start && row.period <= range.end)
+    .sort((a, b) => b.period.localeCompare(a.period));
+
+  const strip = reportsInRange.length === 0
+    ? `<p class="note-line">Nenhum mês do recorte tem apuração carregada no fixture.</p>`
+    : reportsInRange.map((row) => `<button class="mini-row" style="border:0;background:none;text-align:left;cursor:pointer;width:100%" data-anchor-month="${row.period}">
+        <b class="mono">${monthLabel(row.period)}</b>
+        <span class="chip ${row === A.currentTax ? "green" : "grey"} plain">${row === A.currentTax ? "mês aberto" : "fechado"}</span>
+        <span class="sp"></span>
+        <span class="dim num">vendas ${money0(row.meter.gross_sales)}</span>
+        <b class="num ${row.meter.tax > 0 ? "loss" : "faint"}">${row.meter.tax > 0 ? money0(row.meter.tax) : "—"}</b>
+        <span class="faint">vence ${dateBR(row.darf_due_date)}</span>
+      </button>`).join("");
+
+  if (!report) {
+    return `${rail({ shared, grainNote: "apuração mensal" })}
+      <section class="panel"><header><h2>Imposto do mês-âncora</h2><span class="sp"></span><span class="hint">${monthLabel(anchor)}</span></header>
+      <div class="body"><p class="note-line" style="margin:0">O fixture carrega duas apurações: <b>out/26</b> (fechado) e <b>nov/26</b> (aberto). Escolha um desses meses na rail para ver o livro completo.</p></div></section>
+      ${ticketNote(353, "O grão mensal do imposto dentro de uma rail de período é exatamente o que este ticket quer julgar.")}`;
+  }
+
+  const meter = report.meter;
+  const meterScale = Math.max(meter.gross_sales, meter.exemption_limit);
+  const progress = (meter.gross_sales / meterScale) * 100;
+  const limitPosition = (meter.exemption_limit / meterScale) * 100;
+  const realized = report.realized.map((row) => `<tr>
+    <td><span class="chip ${row.kind === "FII" ? "amber" : row.kind === "DAY_TRADE" ? "red" : "grey"} plain">${row.kind === "SWING" ? "Swing" : row.kind === "DAY_TRADE" ? "Day trade" : "FIIs"}</span></td>
+    <td class="r num">${money0(row.gross_sales)}</td>
+    <td class="r num gain">${money0(row.gains)}</td>
+    <td class="r num loss">${money0(row.losses)}</td>
+    <td class="r num ${returnClass(row.result)}">${money0(row.result)}</td>
+  </tr>`).join("");
+
+  const carry = report.carry.map((row) => `<tr>
+    <td><span class="chip grey plain">${row.kind === "SWING" ? "Swing" : row.kind === "DAY_TRADE" ? "Day trade" : "FIIs"}</span></td>
+    <td class="r num">${row.opening_balance == null ? "—" : money0(row.opening_balance)}</td>
+    <td class="r num loss">${money0(row.loss_banked)}</td>
+    <td class="r num">${money0(row.loss_applied)}</td>
+    <td class="r num"><b>${row.closing_balance == null ? "—" : money0(row.closing_balance)}</b></td>
+  </tr>`).join("");
+
+  const gaps = report.pending_gaps.length
+    ? report.pending_gaps.map((gap) => `<span class="chip amber">${gap.ticker} · ${gap.quantity} cotas em ${dateBR(gap.date)}</span>`).join(" ")
+    : `<span class="chip green">nenhuma lacuna aberta</span>`;
+  const dayTrades = report.day_trades.length
+    ? report.day_trades.map((trade) => `<span class="chip red">${trade.ticker} · ${trade.quantity} em ${dateBR(trade.date)}</span>`).join(" ")
+    : `<span class="chip green">nenhum day trade</span>`;
+
+  return `
+    ${rail({ shared, grainNote: "apuração mensal · a rail escolhe o mês-âncora" })}
+    <div class="kpis" style="margin-bottom:14px">
+      <div class="kpi"><div class="k">Vendas de ações</div><div class="v">${money0(meter.gross_sales)}</div><div class="s">limite ${money0(meter.exemption_limit)} · <b class="${meter.exceeded ? "loss" : "gain"}">${meter.exceeded ? "estourado" : "dentro"}</b></div></div>
+      <div class="kpi"><div class="k">Ganho realizado</div><div class="v">${money0(meter.realized_gain)}</div><div class="s">tributável ${money0(meter.taxable_gain)} após prejuízo</div></div>
+      <div class="kpi"><div class="k">DARF</div><div class="v ${meter.tax > 0 ? "loss" : "faint"}">${meter.tax > 0 ? money(meter.tax) : "—"}</div><div class="s">${meter.rate}% sobre o ganho tributável</div></div>
+      <div class="kpi"><div class="k">Vencimento</div><div class="v small">${dateBR(report.darf_due_date)}</div><div class="s">${report === A.currentTax ? "mês aberto · pode mudar" : "mês fechado"}</div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);margin-bottom:14px">
+      <section class="panel">
+        <header><h2>Realizado por tipo</h2><span class="sp"></span><span class="hint">${monthLabel(report.period)}</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Tipo</th><th class="r">Vendas brutas</th><th class="r">Ganhos</th><th class="r">Perdas</th><th class="r">Resultado</th></tr></thead>
+          <tbody>${realized}</tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <header><h2>Medidor de isenção</h2><span class="sp"></span><span class="hint">${monthLabel(report.period)}</span></header>
+        <div class="body">
+          <div class="meter">
+            <div class="lbl"><span>Vendas de ações</span><b class="num">${money0(meter.gross_sales)} / ${money0(meter.exemption_limit)}</b></div>
+            <div class="bar" style="height:8px"><i class="${meter.exceeded ? "loss" : ""}" style="width:${progress}%"></i><u style="left:${limitPosition}%"></u></div>
+            <p class="note-line" style="margin-top:2px">${meter.exceeded
+              ? `O mês cruzou o teto de isenção: <b>todo</b> o ganho líquido de ações é tributado, não só o excedente.`
+              : `Abaixo do teto: vendas de ações até ${money0(meter.exemption_limit)} ficam isentas.`}</p>
+          </div>
+          <div class="mini-list" style="margin-top:10px">
+            <div class="mini-row"><span class="dim">Lacunas de custódia</span><span class="sp"></span>${gaps}</div>
+            <div class="mini-row"><span class="dim">Day trades</span><span class="sp"></span>${dayTrades}</div>
+          </div>
+          <p class="note-line">Uma lacuna com resultado pendente não entra na conta: o imposto fica subestimado até o preço ser corrigido ou a trade chegar.</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid" style="grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)">
+      <section class="panel">
+        <header><h2>Prejuízo a compensar</h2><span class="sp"></span><span class="hint">saldo por balde</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Balde</th><th class="r">Saldo inicial</th><th class="r">Prejuízo do mês</th><th class="r">Compensado</th><th class="r">Saldo final</th></tr></thead>
+          <tbody>${carry}</tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <header><h2>Apurações no período</h2><span class="sp"></span><span class="hint">${rangeLabel(range)}</span></header>
+        <div class="body">
+          ${strip}
+          <p class="note-line">Imposto é apurado por mês, não por janela: a rail escolhe o <b>mês-âncora</b> e o recorte só filtra quais apurações aparecem.</p>
+        </div>
+      </section>
+    </div>
+
+    ${ticketNote(353, "O grão mensal do imposto dentro de uma rail de período é exatamente o que este ticket quer julgar.")}
+  `;
+}
+
+/* ============================ views: Resumo (treatment C) ============================ */
+
+function overviewView(range) {
+  const window = windowPerformance(range);
+  const income = periodIncome(range);
+  const report = taxReport(range.end);
+  const meter = report?.meter;
+  const delta = window.benchmarkPercentage == null || window.benchmarkCount !== window.months.length
+    ? null
+    : window.returnPercentage - window.benchmarkPercentage;
+
+  const months = window.months;
+  const monthRows = months.slice().reverse().map((month) => {
+    const incomeValue = income.byMonth.find((row) => row.period === month.period)?.value ?? 0;
+    const taxRow = taxReports[month.period];
+    return `<tr class="${month.period === range.end ? "anchor-row" : ""}">
+      <td><b class="mono">${monthLabel(month.period)}</b>${month.period === range.end ? ' <span class="chip blue plain">âncora</span>' : ""}</td>
+      <td class="r num ${returnClass(month.decomposition.return_percentage)}">${month.decomposition.return_percentage == null ? '<span class="faint">—</span>' : pct(month.decomposition.return_percentage)}</td>
+      <td class="r num ${returnClass(month.benchmark_return)}">${month.benchmark_return == null ? '<span class="faint">—</span>' : pct(month.benchmark_return)}</td>
+      <td class="r num">${money0(incomeValue)}</td>
+      <td class="r num ${taxRow?.meter.tax ? "loss" : "faint"}">${taxRow ? (taxRow.meter.tax > 0 ? money0(taxRow.meter.tax) : "—") : "—"}</td>
+      <td class="faint">${taxRow ? `vence ${dateBR(taxRow.darf_due_date)}` : ""}</td>
+    </tr>`;
+  }).join("");
+
+  return `
+    ${rail()}
+    <div class="tri" style="margin-bottom:14px">
+      <button class="tri-card" data-go="analysis/performance">
+        <span class="q">Como fui</span>
+        <span class="v ${returnClass(window.returnPercentage)}">${pct(window.returnPercentage)}</span>
+        <span class="s">${rangeLabel(range)} · ${delta == null ? (window.benchmarkPercentage == null ? "benchmark sem série" : `blend cobre ${window.benchmarkCount} de ${window.months.length} meses`) : `${delta >= 0 ? "+" : ""}${delta.toFixed(2).replace(".", ",")} pp vs blend (${pct(window.benchmarkPercentage)})`}</span>
+        <span class="go">Ver performance →</span>
+      </button>
+      <button class="tri-card" data-go="analysis/income">
+        <span class="q">O que recebi</span>
+        <span class="v">${money0(income.received)}</span>
+        <span class="s">${income.closed.length} lançamentos · ${income.next ? `próximo ${income.next.ticker} ${money0(income.next.net_amount)}` : "nada a receber"}</span>
+        <span class="go">Ver proventos →</span>
+      </button>
+      <button class="tri-card" data-go="analysis/tax">
+        <span class="q">O que devo</span>
+        <span class="v ${meter?.tax ? "loss" : ""}">${meter?.tax ? money0(meter.tax) : "—"}</span>
+        <span class="s">${report ? `${monthLabel(report.period)} · vence ${dateBR(report.darf_due_date)}` : "sem apuração no mês-âncora"}</span>
+        <span class="go">Ver impostos →</span>
+      </button>
+    </div>
+
+    <section class="panel" style="margin-bottom:14px">
+      <header><h2>Mês a mês · as três leituras no mesmo recorte</h2><span class="sp"></span><span class="hint">${rangeLabel(range)} · apuração carregada em out/26 e nov/26</span></header>
+      <div class="body flush"><table class="t">
+        <thead><tr><th>Mês</th><th class="r">Rentabilidade</th><th class="r">Benchmark</th><th class="r">Proventos</th><th class="r">DARF</th><th>Vencimento</th></tr></thead>
+        <tbody>${monthRows}</tbody>
+      </table></div>
+    </section>
+
+    <section class="panel" style="margin-bottom:14px">
+      <header><h2>Rentabilidade acumulada</h2><span class="sp"></span><span class="hint">${rangeLabel(range)}</span></header>
+      <div class="body">${lineChart(window.points)}</div>
+    </section>
+
+    <p class="note-line">O resumo usa o mesmo período nas três perguntas. O imposto é a exceção de grão: a coluna DARF mostra a apuração de cada mês e a rail ancora o mês que abre em Impostos.${range.end === OPEN ? " <b>nov/26 é o mês aberto</b>: proventos e imposto já aparecem, performance ainda não." : ""}</p>
+    ${ticketNote(353, "O resumo é a variante que mais depende da rail compartilhada — e a que o ticket quer comparar com os três destinos.")}
+  `;
+}
+
+/* ============================ treatment B: standalone destinations ============================ */
+
+function destinationView(destination, range) {
+  const period = activePeriod();
+  const note = `<div class="dest-note">
+    <b>${objectsByKey("b")[destination].label}</b>
+    <span>ao trocar de destino, o recorte recomeça no período próprio desta tela — <b>não viaja</b> entre Performance, Proventos e Impostos.</span>
+    <span class="sp"></span>
+    <button class="pv" data-copy-period="1">Comparar com as outras</button>
+  </div>`;
+  const ownRail = rail({ shared: false });
+
+  if (destination === "performance") return `${note}${ownRail}${performanceView(range)}`;
+  if (destination === "income") return `${note}${ownRail}${incomeView(range)}`;
+  return `${note}${taxView(range, { shared: false })}`;
+}
+
+/* ============================ pages ============================ */
+
+function pageAnalysis() {
+  if (state.variant === "b") return pageStub();
+  const period = activePeriod();
+  const range = rangeOf(period);
+  const sub = state.sub;
+
+  const heads = {
+    overview: ["Análise", "Como a carteira performou, o que ela pagou e o que você deve — no mesmo recorte de período."],
+    performance: ["Análise", "Como a carteira performou contra o benchmark, mês a mês e por classe e estratégia."],
+    income: ["Análise", "O que a carteira pagou e o que ainda vai pagar, no recorte de período compartilhado."],
+    tax: ["Análise", "O que você deve: ganho de capital, isenção e DARF, apurados por mês."],
+  }[sub];
+
+  const body = sub === "overview"
+    ? overviewView(range)
+    : sub === "income"
+      ? `${rail()}${incomeViewBody(range)}`
+      : sub === "tax"
+        ? taxView(range)
+        : `${rail()}${performanceBody(range)}`;
+
+  return `${pageHead(heads[0], heads[1])}
+    ${analysisTabs(sub)}
+    ${body}`;
+}
+
+// The rail lives outside these bodies (except tax, whose body owns its own rail line).
+function performanceBody(range) { return performanceView(range); }
+function incomeViewBody(range) { return incomeView(range); }
+
+function pageStub() {
+  const object = objectsByKey(state.variant)[state.obj];
+  return `${pageHead(object?.label ?? "Tela", "Esta tela é coberta por outro ticket do mapa; o protótipo da Análise (#353) fica em Resultados → Performance, Proventos ou Impostos.")}
+    <div class="panel stub"><div class="body">
+      <p>O shell e a navegação vêm do <b>ticket #350</b>, e o desenho desta página pertence ao ticket <b>#${ownerFor(state.obj)}</b>.</p>
+      <p><button class="pv" data-go="${state.variant === "b" ? "performance/main" : "analysis/performance"}">Abrir a Análise</button></p>
+    </div></div>`;
+}
+function ownerFor(key) {
+  return { portfolio: 350, strategies: 351, assets: 351, imports: 354, plan: 352 }[key] ?? 353;
+}
+
+const PAGES = { analysis: pageAnalysis };
+
+/* ============================ chrome ============================ */
+
+function sidebarLink(object) {
+  const active = object.key === state.obj;
+  const badge = object.badge();
+  return `<button class="nav-item ${active ? "active" : ""}" data-go="${object.key}/${object.subs[0].key}">
+    ${object.icon}<span>${object.label}</span>${badge ? `<span class="cnt ${active ? "" : badge > 0 ? "watch" : ""}">${badge}</span>` : ""}
+  </button>`;
+}
+
+function sidebar() {
+  const groups = ["Posição", "Operações", "Resultados"];
+  const objects = objectsFor(state.variant);
+  return `<aside class="side">
+    <div class="brand"><b>Carteira Ideal</b><span>console</span></div>
+    <nav>${groups.map((group) => `<div class="group-label">${group}</div>${objects.filter((o) => o.group === group).map(sidebarLink).join("")}`).join("")}</nav>
+    <div class="foot"><span><b>Nov 2026</b> · plano completo</span><span>out 2026 fechado</span><span>consolidado há 2 h</span></div>
+  </aside>`;
+}
+
+function topbar() {
+  const object = objectsByKey(state.variant)[state.obj];
+  const sub = object?.subs.find((s) => s.key === state.sub);
+  const crumb = object
+    ? `<b>${object.label}</b>${sub && sub.key !== object.subs[0].key ? " · " + sub.label : ""}`
+    : "Análise";
+  return `<div class="topbar">
+    <div class="crumb">${crumb}</div>
+    <span class="sp"></span>
+    <span class="month-pill"><span class="dot"></span> Nov 2026 aberto · 3/7</span>
+    <span class="age">consolidado há 2 h</span>
+    <span class="kbd">Ctrl K</span>
+  </div>`;
+}
+
+function banner() {
+  const variant = VARIANTS[state.variant];
+  const tests = {
+    a: "Uma Análise, três vistas: a rail de período é uma só e sobrevive à troca de aba. Repare no grão mensal do imposto.",
+    b: "Três destinos: cada um guarda o próprio período. Use os cenários e veja o recorte não viajar entre eles.",
+    c: "Análise com resumo: as três perguntas no mesmo recorte, e as vistas para o detalhe.",
+  };
+  return `<div class="banner-tests"><b>${variant.name}</b><span class="q">${tests[state.variant]}</span></div>`;
+}
+
+function content() {
+  if (state.obj === "analysis") return banner() + pageAnalysis();
+  if (state.variant === "b" && DESTINATIONS.includes(state.obj)) {
+    const range = rangeOf(activePeriod());
+    return banner() + `${pageHead(
+      objectsByKey("b")[state.obj].label,
+      "Um destino próprio: a pergunta tem endereço, mas o período começa do zero ao entrar.",
+    )}${destinationView(state.obj, range)}`;
+  }
+  return banner() + pageStub();
+}
+
+/* ============================ bottom bar & drawer ============================ */
+
+function pbar() {
+  const scenarios = [
+    { key: "como-fui", label: "Como fui", hot: true },
+    { key: "o-que-recebi", label: "O que recebi" },
+    { key: "o-que-devo", label: "O que devo" },
+    { key: "trocar-periodo", label: "Trocar período" },
+    { key: "abrir-alerta", label: "Abrir do alerta" },
+  ];
+  return `
+    <div class="title"><b>Protótipo da Análise</b>ticket #353 · dados fictícios</div>
+    <div class="sep"></div>
+    ${Object.entries(VARIANTS).map(([key, variant]) => `<button class="v ${key === state.variant ? "active" : ""}" data-variant="${key}">${variant.name.split(" · ")[0]} · ${variant.short}<small>${key === state.variant ? "tratamento atual" : "ver tratamento"}</small></button>`).join("")}
+    <div class="sep"></div>
+    <div class="scen"><span class="lbl">Cenário</span>
+      ${scenarios.map((scenario) => `<button class="pv ${scenario.hot ? "hot" : ""}" data-scenario="${scenario.key}">${scenario.label}</button>`).join("")}
+    </div>
+    <div class="sp"></div>
+    <div class="note">A rail de período é o centro da comparação: <b>compartilhada</b> em A/C, <b>por tela</b> em B.</div>
+    <button class="ghost" data-drawer="1">O que estou vendo?</button>`;
+}
+
+function drawer() {
+  return `
+    <button class="close" data-drawer="0">✕</button>
+    <div class="k">A pergunta do ticket</div>
+    <h3>Uma Análise com vistas irmãs, ou três destinos?</h3>
+    <p>As três perguntas — <b>como fui</b>, <b>o que recebi</b>, <b>o que devo</b> — compartilham um recorte de período. A comparação é sobre onde esse recorte vive e quanto custa mantê-lo coerente.</p>
+    <div class="k">A · Uma Análise, três vistas</div>
+    <ul>
+      <li>Um objeto no sidebar; Performance / Proventos / Impostos são abas.</li>
+      <li>Uma rail de período só, preservada ao trocar de vista.</li>
+      <li>O imposto tem grão mensal: a rail vira mês-âncora nessa vista — a tensão a julgar.</li>
+    </ul>
+    <div class="k">B · Três destinos</div>
+    <ul>
+      <li>Performance, Proventos e Impostos ganham endereço e item de sidebar próprios.</li>
+      <li>Cada destino guarda o seu período; trocar de pergunta reinicia o recorte.</li>
+      <li>O badge de “provento a receber” aterrissa só em Proventos.</li>
+    </ul>
+    <div class="k">C · Análise com resumo</div>
+    <ul>
+      <li>Abre respondendo as três perguntas no mesmo recorte, com as vistas como abas.</li>
+      <li>A tabela mês a mês junta rentabilidade, proventos e DARF numa linha.</li>
+      <li>Custo: mais uma tela para desenhar e manter; o resumo pode virar a superfície principal.</li>
+    </ul>
+    <div class="k">O que julgar no clique</div>
+    <ul>
+      <li>Você abre o app para “como fui” e escorrega para “o que devo”? A aba basta ou o resumo do C é melhor?</li>
+      <li>O imposto mensal dentro de uma rail de período confunde, ou o mês-âncora resolve?</li>
+      <li>Três destinos no sidebar valem o endereço, ou só incham Resultados?</li>
+      <li>A rail deve lembrar o último período entre visitas, ou sempre abrir em 12 meses?</li>
+    </ul>
+    <div class="k">Fora deste protótipo</div>
+    <p style="margin-bottom:0">Direção visual (#355), os read models aditivos que o resumo exigiria e a implementação no SPA (fora do escopo do mapa).</p>`;
+}
+
+/* ============================ render / events ============================ */
+
+let drawerOpen = false;
+let toastTimer;
+
+function toast(message) {
+  const el = document.getElementById("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3200);
+}
+
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="proto-banner"><b>Protótipo descartável</b><span>ticket #353 · agrupamento da Análise</span><span class="sp"></span><span class="tag">dados fictícios · fixture #356</span><span class="tag">visual neutro · decisão no #355</span></div>
+    <div class="shell ${state.variant}">${sidebar()}<div class="main">${topbar()}<div class="content">${content()}</div></div></div>`;
+  document.getElementById("pbar").innerHTML = pbar();
+  document.getElementById("drawer").innerHTML = drawer();
+  document.getElementById("drawer").className = "drawer" + (drawerOpen ? " open" : "");
+  window.scrollTo(0, 0);
+  if (state.focus) {
+    requestAnimationFrame(() => document.getElementById(state.focus)?.scrollIntoView({ block: "center" }));
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const variant = event.target.closest("[data-variant]");
+  if (variant) { setVariant(variant.dataset.variant); return; }
+
+  const preset = event.target.closest("[data-preset]");
+  if (preset) { setPeriod({ preset: preset.dataset.preset }); return; }
+
+  const shift = event.target.closest("[data-shift]");
+  if (shift) {
+    const period = activePeriod();
+    setPeriod({ anchor: addMonths(period.anchor, Number(shift.dataset.shift)) });
+    return;
+  }
+
+  const monthJump = event.target.closest("[data-anchor-month]");
+  if (monthJump) { setPeriod({ preset: "1m", anchor: monthJump.dataset.anchorMonth }); return; }
+
+  const drawerButton = event.target.closest("[data-drawer]");
+  if (drawerButton) { drawerOpen = drawerButton.dataset.drawer === "1"; render(); return; }
+
+  const go = event.target.closest("[data-go]");
+  if (go) {
+    const [obj, sub] = go.dataset.go.split("/");
+    navigate(obj, sub);
+    return;
+  }
+
+  const scenario = event.target.closest("[data-scenario]");
+  if (scenario) {
+    const key = scenario.dataset.scenario;
+    if (key === "como-fui") {
+      setVariant(state.variant);
+      if (state.variant === "b") { setRouteWithoutHistoryState("performance", "main"); }
+      else { setRouteWithoutHistoryState("analysis", "performance"); }
+      setPeriod({ preset: "12m", anchor: LAST });
+      toast("Recorte de 12 meses em Performance.");
+    } else if (key === "o-que-recebi") {
+      if (state.variant === "b") { navigate("income", "main"); }
+      else { navigate("analysis", "income"); }
+    } else if (key === "o-que-devo") {
+      if (state.variant === "b") { navigate("tax", "main"); }
+      else { navigate("analysis", "tax"); }
+    } else if (key === "trocar-periodo") {
+      // Set a 3-month window on Performance, then ask "what did it pay" and watch whether the
+      // period travels. A/C share it; B starts income at its own default.
+      if (state.variant === "b") {
+        setRouteWithoutHistoryState("performance", "main");
+        setPeriod({ preset: "3m", anchor: LAST });
+        setTimeout(() => navigate("income", "main"), 80);
+      } else {
+        setRouteWithoutHistoryState("analysis", "performance");
+        setPeriod({ preset: "3m", anchor: LAST });
+        setTimeout(() => navigate("analysis", "income"), 80);
+        toast("O recorte de 3 meses segue para Proventos: a rail é compartilhada.");
+      }
+    } else if (key === "abrir-alerta") {
+      state.focus = "income-24";
+      if (state.variant === "b") {
+        state.obj = "income"; state.sub = "main";
+        syncURL(); render();
+        toast("Alerta “JCP de BBAS3 a receber” abriu em Proventos — com o período próprio do destino.");
+      } else {
+        state.obj = "analysis"; state.sub = "income";
+        setPeriod({ preset: "1m", anchor: OPEN });
+        toast("Alerta “JCP de BBAS3 a receber” abriu em Análise · Proventos, preservando a rail.");
+      }
+    }
+    return;
+  }
+
+  const copy = event.target.closest("[data-copy-period]");
+  if (copy) {
+    const others = DESTINATIONS.filter((dest) => dest !== state.obj)
+      .map((dest) => `${objectsByKey("b")[dest].label} (${PRESETS[state.destinations[dest].preset].label})`)
+      .join(" · ");
+    toast(`Os outros destinos seguem no período deles: ${others}.`);
+    return;
+  }
+
+  const route = event.target.closest("[data-route]");
+  if (route) {
+    toast(`Destino real: ${route.dataset.route} — o desenho dessa tela é outro ticket do mapa.`);
+    return;
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && drawerOpen) { drawerOpen = false; render(); }
+});
+
+render();
+</script>
+</body>
+</html>

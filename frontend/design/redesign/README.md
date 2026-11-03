@@ -330,3 +330,43 @@ trade this" order state does not exist yet and stays a recorded gap — the clos
 unexecuted orders instead of pretending to tell them apart from unreported ones. A partial execution
 is a display-only label derived from `executed_quantity`; the persisted order status stays
 `SUGGESTED` until fully covered.
+
+## Analysis prototype (wayfinder ticket #353)
+
+[`analysis-prototype.html`](analysis-prototype.html) compares where performance, income and taxes
+live, on the same fixture. Serve the folder as above and open
+`http://localhost:8765/analysis-prototype.html`; append
+`?v=a|b|c&per=1m|3m|6m|12m|year&anchor=YYYY-MM` to reproduce any state. The default is **A**, 12
+months anchored on the last closed month (out/26).
+
+Three treatments (bottom bar **Tratamento**):
+
+- `?v=a` — **one Analysis area, three views**: Análise in the sidebar with Performance / Proventos /
+  Impostos as page tabs over one shared period rail. Switching tabs keeps the window.
+- `?v=b` — **three destinations**: Performance, Proventos and Impostos are their own sidebar objects
+  under Resultados. Each destination owns its period; the rail is labelled "período desta tela".
+- `?v=c` — **Análise with a resumo**: a Resumo tab answers "como fui / o que recebi / o que devo" in
+  the shared window, with a month-by-month table carrying the three reads side by side, then the
+  same three views for the detail.
+
+The period rail is the object under comparison: presets (mês, 3, 6, 12 meses, ano), a month arrow on
+each side, and the month-anchor. Bottom bar scenarios jump to **Como fui**, **O que recebi**, **O que
+devo**, **Trocar período** (sets 3 months and moves to Proventos, so you can see whether the window
+travels) and **Abrir do alerta** (the "JCP de BBAS3 a receber" attention item, which lands in
+Proventos with the row highlighted).
+
+Grain behaviour the prototype encodes, from the fixture rather than invented:
+
+- Performance and Proventos are **window** reads: the monthly series is filtered to the rail's range,
+  and the chained return is the window's own (base 100 at the start).
+- Impostos is a **monthly** read: `GET /tax/{period}` exists per month, so the rail selects the
+  month-anchor there. The window only filters which apurações the side panel lists.
+- "A receber" in Proventos is forward-looking: an `ANNOUNCED`/`PAYABLE` row shows even when its
+  payment date falls just outside the window, marked "fora do recorte".
+- The benchmark blend only exists from ago/26, so a 12-month window labels it "blend cobre 3 de 12
+  meses" instead of comparing a 12-month return with a 3-month one.
+- The fixture carries two tax apurações (out/26 fechado, nov/26 aberto); the window's other months
+  show an empty DARF cell rather than a fabricated zero.
+
+Not modelled: editing targets, the harvest UI (the Impostos view is read-only here), the visual
+direction (#355) and the additive read models a combined resumo would need.
