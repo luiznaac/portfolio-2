@@ -216,3 +216,24 @@ explicit:
 
 Not modelled: authentication and users, benchmark point series (only monthly index returns), RF
 product histories, and notification delivery.
+
+## Shell prototype (wayfinder ticket #350)
+
+[`shell-prototype.html`](shell-prototype.html) is the shell, navigation and landing prototype. It
+imports `fixture.js` directly and needs no build step; serve the folder so the module import works:
+
+```
+python3 -m http.server 8765 -d frontend/design/redesign
+# then open http://localhost:8765/shell-prototype.html
+```
+
+Everything is switchable from the bottom bar and preserved in the URL:
+
+- `?v=a` — flat six-object sidebar; the active object's sub-views open beneath it.
+- `?v=b` — **chosen**: six objects grouped Posição / Operações / Resultados; sub-views as page tabs.
+- `?v=c` — no sidebar; objects in a top rail, landing as a three-column cockpit.
+- `?p=tabs|sidebar|segment` — on an object page, the three sub-view placements.
+
+The landing decisions carried forward: portfolio status (Capital, invested, cash, drift) and the
+attention queue above the fold, attention in the right rail grouped **Ação → Acompanhar**, and the
+allocation table showing classes only — strategy drift lives on the Alocação page, not the landing.

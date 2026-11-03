@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<!--
+  THROWAWAY PROTOTYPE — wayfinder ticket #350, map #347.
+  Question: what shell, navigation and landing screen should the object-first IA have?
+  Three shell variants, switchable in the bottom bar and in the URL (?v=a|b|c).
+  Data: ../redesign/fixture.js (ticket #356). No build step, no persistence.
+  Visual direction is NOT decided here — that is ticket #355.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Protótipo de shell — Carteira Ideal (ticket #350)</title>
+<style>
+  :root {
+    --bg: #f3f5f7;
+    --panel: #ffffff;
+    --panel-2: #f8fafb;
+    --ink: #14181d;
+    --ink-2: #5a6572;
+    --ink-3: #8b95a1;
+    --line: #dfe4e9;
+    --line-2: #edf0f3;
+    --accent: #1d4ed8;
+    --accent-bg: #e8eefc;
+    --deficit: #1d4ed8;
+    --surplus: #a16207;
+    --gain: #15803d;
+    --loss: #b91c1c;
+    --warn: #b45309;
+    --warn-bg: #fdf3e3;
+    --action-bg: #fdeaea;
+    --action: #b91c1c;
+
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    --bar: 54px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.45 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: calc(var(--bar) + 26px);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  button { font: inherit; color: inherit; }
+  .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .num { text-align: right; white-space: nowrap; }
+  .dim { color: var(--ink-2); }
+  .faint { color: var(--ink-3); }
+  .gain { color: var(--gain); }
+  .loss { color: var(--loss); }
+  .def { color: var(--deficit); }
+  .sur { color: var(--surplus); }
+
+  .proto-banner {
+    background: #101826; color: #c7d2e3; font-size: 11px; letter-spacing: .01em;
+    padding: 5px 16px; display: flex; gap: 14px; align-items: center; position: relative; z-index: 40;
+  }
+  .proto-banner b { color: #fff; font-weight: 600; }
+  .proto-banner .sp { flex: 1; }
+  .proto-banner .tag { border: 1px solid #33415a; padding: 0 6px; border-radius: 3px; color: #93a4bd; }
+
+  /* ---------- shell A: flat six sidebar with contextual subs ---------- */
+  .shell { min-height: 100vh; }
+  .shell.a, .shell.b { display: grid; grid-template-columns: 230px minmax(0, 1fr); }
+  .shell.c { display: block; }
+
+  .side {
+    background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; position: sticky; top: 27px;
+    height: calc(100vh - 27px - var(--bar));
+  }
+  .side .brand {
+    padding: 16px 16px 10px; display: flex; align-items: baseline; gap: 7px;
+  }
+  .side .brand b { font-size: 14px; letter-spacing: -.01em; }
+  .side .brand span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; }
+  .side nav { padding: 6px 8px; overflow: auto; }
+  .side .group-label {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3);
+    padding: 13px 8px 4px; font-weight: 600;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 7px 8px; border: 0; border-radius: 5px; background: none; cursor: pointer;
+    color: var(--ink-2); text-align: left; font-size: 12.5px;
+  }
+  .nav-item:hover { background: var(--panel-2); color: var(--ink); }
+  .nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .nav-item .ico { width: 15px; height: 15px; flex: none; color: currentColor; opacity: .85; }
+  .nav-item .cnt {
+    margin-left: auto; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    font: 600 10px/17px var(--mono); text-align: center; background: var(--line); color: var(--ink-2);
+  }
+  .nav-item .cnt.action { background: var(--action); color: #fff; }
+  .subnav { margin: 2px 0 6px 23px; border-left: 1px solid var(--line); padding-left: 8px; }
+  .subnav button {
+    display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+    padding: 4px 7px; border-radius: 4px; color: var(--ink-2); font-size: 12px;
+  }
+  .subnav button:hover { background: var(--panel-2); color: var(--ink); }
+  .subnav button.active { color: var(--accent); font-weight: 600; background: var(--panel-2); }
+  .side .foot {
+    margin-top: auto; border-top: 1px solid var(--line-2); padding: 11px 16px; font-size: 11px; color: var(--ink-3);
+    display: grid; gap: 3px;
+  }
+  .side .foot b { color: var(--ink-2); font-weight: 600; }
+
+  /* ---------- main ---------- */
+  .main { min-width: 0; }
+  .topbar {
+    min-height: 52px; border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; align-items: center; gap: 14px; padding: 0 22px;
+    position: sticky; top: 27px; z-index: 20;
+  }
+  .shell.a .topbar, .shell.b .topbar { top: 27px; }
+  .crumb { color: var(--ink-2); font-size: 12px; }
+  .crumb b { color: var(--ink); }
+  .topbar .sp { flex: 1; }
+  .month-pill {
+    display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line);
+    background: var(--panel-2); border-radius: 16px; padding: 4px 11px; font-size: 11.5px; color: var(--ink-2);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gain); display: inline-block; }
+  .topbar .age { font-size: 11px; color: var(--ink-3); }
+  .kbd {
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px;
+    font: 10px/14px var(--mono); color: var(--ink-3); background: var(--panel);
+  }
+
+  .content { padding: 20px 22px 40px; max-width: 1500px; }
+  .shell.b .content { max-width: 1360px; }
+  .shell.c .content { max-width: 1460px; margin: 0 auto; }
+
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+  .page-head h1 { font-size: 21px; line-height: 1.15; letter-spacing: -.025em; margin: 0 0 3px; font-weight: 650; }
+  .page-head p { margin: 0; color: var(--ink-2); font-size: 12px; }
+  .page-head .sp { flex: 1; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 16px; }
+  .tabs button {
+    border: 0; background: none; cursor: pointer; padding: 7px 11px; color: var(--ink-2);
+    font-size: 12.5px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .segmented {
+    display: inline-flex; gap: 2px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 2px; margin-bottom: 14px;
+  }
+  .segmented button {
+    border: 0; background: none; cursor: pointer; padding: 4px 11px; border-radius: 4px;
+    color: var(--ink-2); font-size: 12px;
+  }
+  .segmented button:hover { color: var(--ink); }
+  .segmented button.active { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 34, .10); }
+
+  .grid { display: grid; gap: 14px; }
+  .grid > * { min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; }
+  .panel > header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2);
+  }
+  .panel > header h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; margin: 0; color: var(--ink-2); font-weight: 650; }
+  .panel > header .sp { flex: 1; }
+  .panel > header .hint { font-size: 11px; color: var(--ink-3); }
+  .panel .body { padding: 13px 14px; }
+  .panel .body.flush { padding: 0; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; }
+  .kpi .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; }
+  .kpi .v { font: 600 19px/1.25 var(--mono); margin-top: 3px; letter-spacing: -.03em; }
+  .kpi .s { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
+  .kpi .s b { font-weight: 600; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.t th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--ink-3); font-weight: 600; padding: 7px 12px; border-bottom: 1px solid var(--line-2);
+    background: var(--panel-2);
+  }
+  table.t td { padding: 7px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t th.r, table.t td.r { text-align: right; }
+  table.t tr.click { cursor: pointer; }
+  table.t tr.click:hover td { background: var(--panel-2); }
+  .ticker { font: 600 12px/1 var(--mono); letter-spacing: -.01em; }
+  .chip {
+    display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 9.5px; font-weight: 650;
+    letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--line); color: var(--ink-2);
+    background: var(--panel-2); line-height: 15px; white-space: nowrap;
+  }
+  .chip.blue { color: var(--accent); background: var(--accent-bg); border-color: #cfdcfb; }
+  .chip.amber { color: var(--warn); background: var(--warn-bg); border-color: #f3e0bd; }
+  .chip.red { color: var(--action); background: var(--action-bg); border-color: #f5cfcf; }
+  .chip.green { color: var(--gain); background: #e9f6ee; border-color: #cce9d7; }
+  .chip.grey { color: var(--ink-3); }
+  .chip.plain { background: none; }
+
+  .bar { height: 5px; border-radius: 3px; background: var(--line-2); position: relative; overflow: visible; min-width: 80px; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); display: block; }
+  .bar u {
+    position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .55;
+    text-decoration: none; transform: translateX(-1px);
+  }
+  .alloc-row td { padding-top: 9px; padding-bottom: 9px; }
+  .alloc-sub { font-size: 11px; color: var(--ink-3); display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+  .alloc-sub b { font-weight: 600; color: var(--ink-2); }
+  .class-bar { display: flex; align-items: center; gap: 8px; }
+  .class-bar .bar { flex: 1; max-width: 150px; }
+
+  .attn { display: grid; }
+  .attn-item {
+    display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 9px;
+    padding: 9px 12px; border-bottom: 1px solid var(--line-2); align-items: start;
+    background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; cursor: pointer;
+    width: 100%;
+  }
+  .attn-item:hover { background: var(--panel-2); }
+  .attn-item:last-child { border-bottom: 0; }
+  .attn-item .mark { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; background: var(--ink-3); }
+  .attn-item .mark.action { background: var(--action); }
+  .attn-item .mark.watch { background: var(--surplus); }
+  .attn-item .ttl { display: block; font-size: 12px; font-weight: 550; }
+  .attn-item .det { display: block; font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+  .attn-item .go { font-size: 11px; color: var(--accent); margin-top: 1px; white-space: nowrap; }
+  .attn-head { display: flex; align-items: center; gap: 8px; }
+  .attn-counts { display: flex; gap: 6px; }
+  .attn-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-items: start; }
+  .attn-group { min-width: 0; }
+  .attn-split .attn-group + .attn-group { border-left: 1px solid var(--line-2); }
+
+  .plan-eq { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font: 12px var(--mono); }
+  .plan-eq .k { color: var(--ink-3); font: 11px var(--sans); }
+  .plan-eq .op { color: var(--ink-3); }
+  .plan-eq .box { border: 1px solid var(--line); background: var(--panel-2); border-radius: 4px; padding: 2px 7px; }
+
+  .mini-list { display: grid; gap: 0; }
+  .mini-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-2); font-size: 12px; flex-wrap: wrap; }
+  .mini-row:last-child { border-bottom: 0; }
+  .mini-row .sp { flex: 1; }
+
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 42px; }
+  .spark i { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .75; }
+  .spark i.neg { background: var(--loss); }
+
+  .shortcut { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-2); }
+  .shortcut:last-child { border-bottom: 0; }
+  .shortcut .sp { flex: 1; }
+
+  .callout {
+    border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; font-size: 11px;
+    color: var(--ink-3); background: var(--panel-2);
+  }
+  .callout b { color: var(--ink-2); font-weight: 600; }
+
+  .banner-tests {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;
+    font-size: 11.5px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 5px; padding: 7px 11px;
+  }
+  .banner-tests b { color: var(--ink); }
+  .banner-tests .q { color: var(--ink-3); }
+
+  /* ---------- shell C top object rail ---------- */
+  .shell.c .toprail {
+    background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 27px; z-index: 25;
+  }
+  .shell.c .toprail .inner { max-width: 1460px; margin: 0 auto; padding: 0 22px; display: flex; align-items: center; gap: 18px; min-height: 52px; }
+  .shell.c .toprail .brand { font-weight: 650; font-size: 14px; letter-spacing: -.02em; white-space: nowrap; }
+  .shell.c .toprail .brand span { font-weight: 400; color: var(--ink-3); font-size: 10px; margin-left: 6px; text-transform: uppercase; letter-spacing: .08em; }
+  .objrail { display: flex; gap: 2px; flex: 1; overflow: auto; }
+  .objrail button {
+    border: 0; background: none; cursor: pointer; padding: 7px 11px; border-radius: 5px;
+    color: var(--ink-2); font-size: 12.5px; white-space: nowrap; display: flex; align-items: center; gap: 6px;
+  }
+  .objrail button:hover { background: var(--panel-2); color: var(--ink); }
+  .objrail button.active { background: var(--ink); color: #fff; font-weight: 600; }
+  .objrail button .cnt { background: var(--action); color: #fff; border-radius: 8px; font: 600 9.5px/15px var(--mono); padding: 0 4px; }
+  .objrail button.active .cnt { background: #fff; color: var(--action); }
+
+  .c-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .95fr) minmax(320px, .9fr); gap: 14px; align-items: start; }
+  .c-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+
+  /* ---------- bottom prototype bar ---------- */
+  .pbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: #0f1722; color: #dbe3ee; border-top: 1px solid #263242;
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px; min-height: var(--bar);
+    box-shadow: 0 -6px 24px rgba(9, 15, 25, .18);
+  }
+  .pbar .title { font-size: 11px; color: #8fa0b8; line-height: 1.25; max-width: 190px; }
+  .pbar .title b { color: #fff; display: block; font-size: 11.5px; }
+  .pbar .sep { width: 1px; align-self: stretch; background: #263242; margin: 2px 6px; }
+  .pbar button.v {
+    border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 5px;
+    padding: 5px 9px; cursor: pointer; font-size: 11.5px; text-align: left; line-height: 1.2;
+  }
+  .pbar button.v small { display: block; color: #8092aa; font-size: 9.5px; margin-top: 1px; }
+  .pbar button.v:hover { border-color: #4b5d7a; }
+  .pbar button.v.active { background: #e8eefc; border-color: #e8eefc; color: #14306b; }
+  .pbar button.v.active small { color: #3d5a8f; }
+  .pbar .sp { flex: 1; }
+  .pbar .subctl { display: flex; align-items: center; gap: 4px; }
+  .pbar .subctl .lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: #8092aa; margin-right: 3px; white-space: nowrap; }
+  .pbar button.pv {
+    border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 4px;
+    padding: 4px 7px; cursor: pointer; font-size: 11px; white-space: nowrap;
+  }
+  .pbar button.pv:hover { border-color: #4b5d7a; }
+  .pbar button.pv.active { background: #e8eefc; color: #14306b; border-color: #e8eefc; font-weight: 600; }
+  .pbar .note { font-size: 10.5px; color: #8092aa; max-width: 340px; text-align: right; }
+  .pbar .note b { color: #c8d4e5; font-weight: 600; }
+  .pbar .ghost {
+    border: 1px solid #33415a; background: none; color: #c8d4e5; border-radius: 5px;
+    padding: 5px 8px; cursor: pointer; font-size: 11px;
+  }
+
+  .drawer {
+    position: fixed; right: 12px; bottom: calc(var(--bar) + 10px); z-index: 70; width: 430px; max-width: calc(100vw - 24px);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 40px rgba(15, 23, 34, .22);
+    padding: 14px 16px; font-size: 12px; display: none;
+  }
+  .drawer.open { display: block; }
+  .drawer h3 { margin: 0 0 6px; font-size: 13px; }
+  .drawer p { margin: 0 0 8px; color: var(--ink-2); }
+  .drawer ul { margin: 0 0 8px; padding-left: 16px; color: var(--ink-2); }
+  .drawer li { margin-bottom: 3px; }
+  .drawer .k { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 650; margin-bottom: 3px; }
+  .drawer .close { position: absolute; top: 8px; right: 10px; border: 0; background: none; cursor: pointer; color: var(--ink-3); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(var(--bar) + 16px); transform: translateX(-50%) translateY(10px);
+    background: #111a27; color: #e6edf7; font-size: 11.5px; padding: 7px 12px; border-radius: 6px;
+    opacity: 0; pointer-events: none; transition: .18s ease; z-index: 80; max-width: 90vw;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 1320px) {
+    .c-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, .9fr); }
+    .c-grid > .c-col:last-child { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 980px) {
+    .shell.a, .shell.b { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .landing-a { grid-template-columns: 1fr !important; }
+    .c-grid { grid-template-columns: 1fr; }
+    .c-grid > .c-col:last-child { grid-template-columns: 1fr; }
+    .attn-split { grid-template-columns: 1fr; }
+    .pbar .note, .pbar .title { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="drawer" id="drawer"></div>
+<div class="pbar" id="pbar"></div>
+
+<script type="module">
+import F from "./fixture.js";
+
+/* ============================ helpers ============================ */
+
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl0 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const money = (n) => brl.format(n);
+const money0 = (n) => brl0.format(n);
+const short = (n) => n >= 1e6 ? `R$ ${(n / 1e6).toFixed(2).replace(".", ",")} mi` : n >= 1e3 ? `R$ ${(n / 1e3).toFixed(1).replace(".", ",")} mil` : money(n);
+const pct = (n, digits = 2) => `${n.toFixed(digits).replace(".", ",")}%`;
+const pp = (n) => `${n > 0 ? "+" : ""}${n.toFixed(2).replace(".", ",")} pp`;
+const classLabel = { ACOES: "Ações", FIIS: "FIIs", RENDA_FIXA: "Renda fixa" };
+const classChip = { ACOES: "blue", FIIS: "amber", RENDA_FIXA: "green" };
+const monthLabel = (period) => {
+  const [y, m] = period.split("-");
+  return `${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(m) - 1]}/${y.slice(2)}`;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ============================ IA model ============================ */
+
+const OBJECTS = [
+  {
+    key: "portfolio", label: "Carteira", group: "Posição",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 6h12M5 10h3" stroke="currentColor" stroke-width="1.3"/></svg>',
+    subs: [
+      { key: "overview", label: "Visão geral" },
+      { key: "allocation", label: "Alocação" },
+      { key: "history", label: "Histórico" },
+    ],
+    badge: () => 0,
+  },
+  {
+    key: "strategies", label: "Estratégias", group: "Posição",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3-6 3-6-3 6-3Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 8l6 3 6-3M2 11l6 3 6-3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+    subs: [
+      { key: "list", label: "Todas" },
+      { key: "editions", label: "Edições" },
+    ],
+    badge: () => F.attention.filter((a) => a.route.startsWith("strategies")).length,
+  },
+  {
+    key: "assets", label: "Ativos", group: "Posição",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5.5 8h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    subs: [
+      { key: "positions", label: "Posições" },
+      { key: "fixed", label: "Renda fixa" },
+      { key: "quotes", label: "Cotações" },
+      { key: "gaps", label: "Lacunas" },
+    ],
+    badge: () => F.attention.filter((a) => a.route.startsWith("assets")).length,
+  },
+  {
+    key: "imports", label: "Importações", group: "Operações",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 6l3-3 3 3M3 12h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    subs: [
+      { key: "inbox", label: "Caixa de entrada" },
+      { key: "corporate", label: "Ações corporativas" },
+      { key: "history", label: "Histórico" },
+    ],
+    badge: () => F.attention.filter((a) => a.route.startsWith("imports")).length,
+  },
+  {
+    key: "plan", label: "Plano / Mês", group: "Operações",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 6h11M5 2v2M11 2v2M5.5 9h2M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    subs: [
+      { key: "month", label: "Mês atual" },
+      { key: "orders", label: "Ordens" },
+      { key: "transfers", label: "Transferências" },
+      { key: "close", label: "Fechamentos" },
+    ],
+    badge: () => F.attention.filter((a) => a.route.startsWith("plan")).length,
+  },
+  {
+    key: "analysis", label: "Análise", group: "Resultados",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M3 13V9M8 13V3M13 13V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    subs: [
+      { key: "performance", label: "Performance" },
+      { key: "income", label: "Proventos" },
+      { key: "tax", label: "Impostos" },
+    ],
+    badge: () => F.attention.filter((a) => a.route.startsWith("analysis")).length,
+  },
+];
+const objByKey = Object.fromEntries(OBJECTS.map((o) => [o.key, o]));
+const totalBadge = () => OBJECTS.reduce((s, o) => s + o.badge(), 0);
+const actionCount = (list) => list.filter((a) => a.severity === "action").length;
+
+/* Route mapping: an attention item points at the object + sub-view that owns it. */
+function routeTarget(route) {
+  const [root, second] = route.split("/");
+  if (root === "imports") return { obj: "imports", sub: second === "corporate-actions" ? "corporate" : "inbox" };
+  if (root === "strategies") return { obj: "strategies", sub: route.includes("/editions/") ? "editions" : "list" };
+  if (root === "plan") return { obj: "plan", sub: second === "transfers" ? "transfers" : "month" };
+  if (root === "assets") return { obj: "assets", sub: second === "gaps" ? "gaps" : "quotes" };
+  if (root === "analysis") return { obj: "analysis", sub: second === "income" ? "income" : "tax" };
+  return { obj: "portfolio", sub: "overview" };
+}
+const ownerTicket = { imports: 354, strategies: 351, plan: 352, assets: 351, analysis: 353, portfolio: 350 };
+
+/* ============================ state / routing ============================ */
+
+const VARIANTS = {
+  a: { name: "A · Seis objetos + subnav contextual", short: "sidebar plano", thesis: "Seis objetos num sidebar plano; os sub-itens do objeto ativo abrem em acordeão. A atenção fica na coluna à direita da visão geral." },
+  b: { name: "B · Sidebar agrupado + atenção à direita", short: "escolhida", thesis: "Os seis objetos agrupados em Posição / Operações / Resultados; a mesma landing com a atenção na coluna à direita. Os sub-itens ficam na página, com três placements para comparar." },
+  c: { name: "C · Trilho superior + cockpit", short: "sem sidebar", thesis: "Sem sidebar: objetos num trilho horizontal, página em três colunas. A atenção é uma coluna central permanente." },
+};
+
+const PLACEMENTS = {
+  tabs: { label: "Abas", long: "abas na página" },
+  sidebar: { label: "Sidebar", long: "subnav no sidebar" },
+  segment: { label: "Segmento", long: "segmentado no corpo" },
+};
+
+function parseURL() {
+  const q = new URLSearchParams(location.search);
+  const variant = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "b";
+  const placement = ["tabs", "sidebar", "segment"].includes(q.get("p"))
+    ? q.get("p")
+    : variant === "a" ? "sidebar" : "tabs";
+  const parts = (location.hash.replace(/^#\/?/, "") || "portfolio/overview").split("/");
+  const obj = objByKey[parts[0]] ? parts[0] : "portfolio";
+  const sub = (objByKey[obj].subs.find((s) => s.key === parts[1]) || objByKey[obj].subs[0]).key;
+  return { variant, placement, obj, sub };
+}
+let state = parseURL();
+
+function navigate(obj, sub) {
+  const target = sub || objByKey[obj].subs[0].key;
+  location.hash = `#/${obj}/${target}`;
+}
+function setQueryParam(key, value) {
+  const q = new URLSearchParams(location.search);
+  q.set(key, value);
+  location.search = q.toString();
+}
+function setVariant(v) {
+  const q = new URLSearchParams(location.search);
+  const wasDefault = !q.has("p");
+  q.set("v", v);
+  if (wasDefault) q.delete("p");
+  location.search = q.toString();
+}
+window.addEventListener("hashchange", () => { state = parseURL(); render(); });
+
+/* ============================ shared pieces ============================ */
+
+function attentionList({ compact = false } = {}) {
+  const action = F.attention.filter((a) => a.severity === "action");
+  const watch = F.attention.filter((a) => a.severity === "watch");
+  const row = (a) => `
+    <button class="attn-item" data-route="${esc(a.route)}">
+      <span class="mark ${a.severity}"></span>
+      <span>
+        <span class="ttl">${esc(a.title)}</span>
+        <span class="det">${esc(a.detail)}</span>
+      </span>
+      <span class="go">Abrir →</span>
+    </button>`;
+  const group = (label, items) => `
+    <div class="attn-group">
+      <div class="attn-head" style="padding:8px 12px 4px">
+        <span class="chip ${label === "Ação" ? "red" : "amber"} plain">${label}</span>
+        <span class="faint" style="font-size:11px">${items.length} ${items.length === 1 ? "item" : "itens"}</span>
+      </div>
+      <div class="attn">${items.map(row).join("")}</div>
+    </div>`;
+  return compact
+    ? `<div class="attn">${F.attention.map(row).join("")}</div>`
+    : `${action.length ? group("Ação", action) : ""}${watch.length ? group("Acompanhar", watch) : ""}`;
+}
+
+function attentionPanel({ full = false } = {}) {
+  const action = actionCount(F.attention);
+  return `
+  <section class="panel">
+    <header>
+      <h2>Precisa de atenção</h2>
+      <span class="sp"></span>
+      <span class="cnt chip red plain">${action} ações</span>
+      <span class="cnt chip amber plain">${F.attention.length - action} acompanhar</span>
+    </header>
+    <div class="body flush">${attentionList()}</div>
+  </section>`;
+}
+
+function kpiStrip() {
+  const s = F.portfolio.summary;
+  return `
+  <div class="kpis">
+    <div class="kpi">
+      <div class="k">Capital</div>
+      <div class="v">${money0(s.capital)}</div>
+      <div class="s">patrimônio-alvo de ${monthLabel(s.open_month)}</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Investido</div>
+      <div class="v">${money0(s.holdings_value)}</div>
+      <div class="s">${pct((s.holdings_value / s.capital) * 100)} do Capital</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Caixa não investido</div>
+      <div class="v">${money0(s.uninvested_balance)}</div>
+      <div class="s">piso ${money0(F.portfolio.currentMonth.month.floor)}</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Drift da carteira</div>
+      <div class="v ${s.drift < 0 ? "def" : "sur"}">${pp(s.drift)}</div>
+      <div class="s">déficit ${money0(s.deficit)}</div>
+    </div>
+  </div>`;
+}
+
+function allocationRows() {
+  return F.portfolio.allocation.classes.map((c) => {
+    const actualPct = (c.actual / F.portfolio.allocation.capital) * 100;
+    return `
+    <tr class="click alloc-row" data-go="portfolio/allocation">
+      <td><span class="chip ${classChip[c.asset_class]}">${classLabel[c.asset_class]}</span></td>
+      <td class="r" style="width:44px">${pct(c.target, 0)}</td>
+      <td class="class-bar">
+        <span class="bar"><i style="width:${Math.min(100, actualPct)}%"></i><u style="left:${c.target}%"></u></span>
+      </td>
+      <td class="r num">${money0(c.ideal)}</td>
+      <td class="r num">${money0(c.actual)}</td>
+      <td class="r num ${c.deficit >= 0 ? "def" : "sur"}">${c.deficit >= 0 ? "" : "+"}${money0(Math.abs(c.deficit))}</td>
+      <td class="r num ${c.drift < 0 ? "def" : "sur"}">${pp(c.drift)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function allocationPanel({ link = true, compact = false } = {}) {
+  const a = F.portfolio.allocation;
+  const rows = compact
+    ? a.classes.map((c) => {
+        const actualPct = (c.actual / a.capital) * 100;
+        return `
+        <tr class="click alloc-row" data-go="portfolio/allocation">
+          <td>
+            <span class="chip ${classChip[c.asset_class]}">${classLabel[c.asset_class]}</span>
+          </td>
+          <td class="r" style="width:38px">${pct(c.target, 0)}</td>
+          <td><span class="bar" style="display:block;min-width:64px"><i style="width:${Math.min(100, actualPct)}%"></i><u style="left:${c.target}%"></u></span></td>
+          <td class="r num">${money0(c.actual)}<div class="faint" style="font-size:10px">${c.deficit >= 0 ? "−" : "+"}${money0(Math.abs(c.deficit))} ${c.deficit >= 0 ? "de déficit" : "de superávit"}</div></td>
+          <td class="r num ${c.drift < 0 ? "def" : "sur"}">${pp(c.drift)}</td>
+        </tr>`;
+      }).join("")
+    : allocationRows();
+  return `
+  <section class="panel">
+    <header>
+      <h2>Alocação · ${monthLabel(a.period)}</h2>
+      <span class="sp"></span>
+      ${link ? '<span class="hint">a barra mostra o real; o traço, o alvo</span>' : ""}
+    </header>
+    <div class="body flush">
+      <table class="t">
+        <thead>${compact
+          ? '<tr><th>Classe</th><th class="r">Alvo</th><th></th><th class="r">Real</th><th class="r">Drift</th></tr>'
+          : '<tr><th>Classe</th><th class="r">Alvo</th><th></th><th class="r">Ideal</th><th class="r">Real</th><th class="r">Déficit / superávit</th><th class="r">Drift</th></tr>'}</thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </section>`;
+}
+
+function planSnapshot() {
+  const p = F.plan.orderPlan;
+  const f = p.funding;
+  const orders = F.plan.orderList.orders.length;
+  const transfers = F.plan.orderList.transfers.filter((t) => t.status === "PENDING").length;
+  return `
+  <section class="panel">
+    <header>
+      <h2>Plano de ${monthLabel(p.period)}</h2>
+      <span class="chip green">completo</span>
+      <span class="sp"></span>
+      <span class="hint">fase ${p.phase.toLowerCase()}</span>
+    </header>
+    <div class="body">
+      <div class="plan-eq">
+        <span class="k">compras</span><span class="box">${money0(f.buy_amount)}</span>
+        <span class="op">−</span>
+        <span class="k">caixa deployável</span><span class="box">${money0(10859.9)}</span>
+        <span class="op">=</span>
+        <span class="k">vendas</span><span class="box">${money0(f.sell_amount)}</span>
+        <span class="op">+</span>
+        <span class="k">não financiado</span><span class="box">${money0(f.unfunded_amount)}</span>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-top:12px">
+        <div class="mini-list">
+          <div class="mini-row"><span class="chip grey">${orders} ordens sugeridas</span><span class="sp"></span><a href="#/plan/orders">Ver ordens →</a></div>
+          <div class="mini-row"><span class="chip ${transfers ? "red" : "grey"}">${transfers} transferência pendente</span><span class="sp"></span><a href="#/plan/transfers">Decidir →</a></div>
+        </div>
+        <div class="mini-list">
+          ${p.candidates.slice(0, 2).map((c) => `<div class="mini-row"><b class="ticker">${c.ticker}</b><span class="chip blue plain">${c.side}</span><span class="dim">${c.quantity} un</span><span class="sp"></span><span class="num">${money0(c.amount)}</span></div>`).join("")}
+          <div class="mini-row"><b class="ticker">KNCR11</b><span class="chip amber plain">SELL</span><span class="dim">227 un</span><span class="sp"></span><span class="num">${money0(23676.1)}</span></div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function resultsPanel() {
+  const m = F.analysis.monthPerformance;
+  const oct = F.analysis.performanceSeries.months.at(-1);
+  const incomeNext = F.analysis.income.filter((i) => i.status !== "RECEIVED" && i.status !== "RECONCILED");
+  const nextTotal = incomeNext.reduce((s, i) => s + i.net_amount, 0);
+  return `
+  <section class="panel">
+    <header><h2>Resultados · ${monthLabel(m.period)}</h2><span class="sp"></span><span class="hint">outubro fechado</span></header>
+    <div class="body">
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+        <div class="mini-list">
+          <div class="mini-row"><span class="dim">Rentabilidade do mês</span><span class="sp"></span><b class="num ${m.decomposition.return_percentage < 0 ? "loss" : "gain"}">${pct(m.decomposition.return_percentage)}</b></div>
+          <div class="mini-row"><span class="dim">Benchmark</span><span class="sp"></span><b class="num ${m.benchmark.return_percentage < 0 ? "loss" : "gain"}">${pct(m.benchmark.return_percentage)}</b></div>
+          <div class="mini-row"><span class="dim">XIRR</span><span class="sp"></span><b class="num">${pct(F.analysis.performanceSeries.xirr, 1)}</b></div>
+        </div>
+        <div class="mini-list">
+          <div class="mini-row"><span class="dim">Proventos a receber</span><span class="sp"></span><b class="num gain">${money0(nextTotal)}</b></div>
+          <div class="mini-row"><span class="dim">DARF de outubro</span><span class="sp"></span><b class="num loss">${money0(F.analysis.tax.meter.tax)}</b></div>
+          <div class="mini-row"><span class="dim">Vence</span><span class="sp"></span><b class="num">30/11</b></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px;margin-top:10px">
+        <div class="spark" style="flex:1">
+          ${F.analysis.performanceSeries.months.slice(-10).map((mm) => {
+            const r = mm.decomposition.return_percentage ?? 0;
+            const h = Math.max(3, Math.min(42, Math.abs(r) * 12));
+            return `<i class="${r < 0 ? "neg" : ""}" style="height:${h}px" title="${monthLabel(mm.period)} · ${r ? pct(r) : "—"}"></i>`;
+          }).join("")}
+        </div>
+        <span class="faint" style="font-size:10px">10 meses</span>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* ============================ landing ============================ */
+
+function portfolioOverview() {
+  return head(
+    "Carteira",
+    "Novembro aberto · outubro fechado · consolidado há 2 h · todos os valores em BRL",
+    '<button class="chip blue" data-go="plan/month" style="cursor:pointer;border-color:#cfdcfb">Abrir plano de novembro →</button>',
+  );
+}
+
+function landingA() {
+  return `
+  ${portfolioOverview()}
+  <div class="grid" style="gap:14px">
+    ${kpiStrip()}
+    <div class="grid landing-a" style="grid-template-columns:minmax(0,1fr) 360px;align-items:start">
+      <div class="grid" style="gap:14px">
+        ${allocationPanel()}
+        ${planSnapshot()}
+        ${resultsPanel()}
+      </div>
+      <div class="grid" style="gap:14px">
+        ${attentionPanel()}
+      </div>
+    </div>
+  </div>`;
+}
+
+function landingB() {
+  // Same landing composition as A: portfolio status above the fold, attention in the right rail.
+  return landingA();
+}
+
+function landingC() {
+  return `
+  ${portfolioOverview()}
+  ${kpiStrip()}
+  <div class="c-grid" style="margin-top:14px">
+    <div class="c-col">
+      ${allocationPanel({ compact: true })}
+    </div>
+    <div class="c-col">
+      ${attentionPanel()}
+    </div>
+    <div class="c-col">
+      ${planSnapshot()}
+      ${resultsPanel()}
+    </div>
+  </div>`;
+}
+
+/* ============================ object pages (shell depth) ============================ */
+
+function head(title, sub, extra = "") {
+  return `<div class="page-head"><div><h1>${title}</h1><p>${sub}</p></div><span class="sp"></span>${extra}</div><!--HEAD-->`;
+}
+function tabsHTML(obj) {
+  return `<div class="tabs">${obj.subs.map((s) => `<button class="${s.key === state.sub ? "active" : ""}" data-go="${obj.key}/${s.key}">${s.label}</button>`).join("")}</div>`;
+}
+function segmentedHTML(obj) {
+  return `<div class="segmented">${obj.subs.map((s) => `<button class="${s.key === state.sub ? "active" : ""}" data-go="${obj.key}/${s.key}">${s.label}</button>`).join("")}</div>`;
+}
+function ticketNote(id, text) {
+  return `<div class="callout" style="margin-top:14px"><b>Shell-only.</b> ${text} O desenho completo desta tela é decidido no <a href="https://github.com/luiznaac/portfolio-2/issues/${id}">ticket #${id}</a>.</div>`;
+}
+
+function pagePortfolio() {
+  if (state.sub === "history") {
+    return `${head("Histórico", "Fechamentos guardados como snapshot; a evolução é construída a partir deles.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Mês</th><th class="r">Capital</th><th class="r">Investido</th><th class="r">Caixa</th><th class="r">Rentabilidade</th></tr></thead>
+        <tbody>${F.snapshots.map((s) => { const st = s.state; return `<tr><td>${monthLabel(st.period)}</td><td class="r num">${money0(st.capital)}</td><td class="r num">${money0(st.capital - st.caixa)}</td><td class="r num">${money0(st.caixa)}</td><td class="r num">—</td></tr>`; }).join("")}</tbody>
+      </table></div></section>
+      <div class="callout" style="margin-top:14px"><b>Shell-only.</b> Esta é a rota de histórico do objeto Carteira; o detalhe do mês fica no <a href="https://github.com/luiznaac/portfolio-2/issues/352">ticket #352</a>.</div>`;
+  }
+  if (state.sub === "allocation") {
+    const a = F.portfolio.allocation;
+    return `${head("Alocação", "A cadeia de alvos de novembro: classes, estratégias e tickers.")}
+      ${allocationPanel({ link: false })}
+      <section class="panel" style="margin-top:14px">
+        <header><h2>Por estratégia</h2><span class="sp"></span><span class="hint">${a.period}</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Classe</th><th>Estratégia</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Real</th><th class="r">Drift</th></tr></thead>
+          <tbody>${a.classes.flatMap((c) => c.strategies.map((s) => `<tr><td><span class="chip ${classChip[c.asset_class]}">${classLabel[c.asset_class]}</span></td><td>${esc(s.strategy)}</td><td class="r num">${s.target ? pct(s.target, 0) : "—"}</td><td class="r num">${money0(s.ideal)}</td><td class="r num">${money0(s.actual)}</td><td class="r num ${s.drift < 0 ? "def" : "sur"}">${pp(s.drift)}</td></tr>`)).join("")}
+          </tbody>
+        </table></div>
+      </section>
+      ${ticketNote(351, "O recorte multi-estratégia e os filtros de carteira são a pergunta central de lá.")}`;
+  }
+  return landingA();
+}
+
+function strategyValue(name) {
+  const fromAllocation = F.portfolio.allocation.classes.flatMap((c) => (c.strategies || []).map((s) => ({ ...s, cls: c.asset_class }))).find((s) => s.strategy === name);
+  if (fromAllocation) return { actual: fromAllocation.actual, drift: fromAllocation.drift, cls: fromAllocation.cls };
+  const manual = F.strategies.holdings.find((h) => h.strategy_name === name);
+  const row = F.strategies.rows.find((r) => r.name === name);
+  return { actual: manual?.total_value ?? 0, drift: null, cls: row?.asset_class };
+}
+
+function pageStrategies() {
+  const rows = F.strategies.rows.map((r) => {
+    const v = strategyValue(r.name);
+    const staged = F.strategies.editions.filter((e) => e.strategy_id === r.id && e.status === "STAGED");
+    return { ...r, ...v, staged };
+  });
+  if (state.sub === "editions") {
+    return `${head("Estratégias · Edições", "Uma edição por estratégia de relatório; o staged é um diff contra a ativa.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Edição</th><th>Estratégia</th><th>Mês</th><th>Status</th><th class="r">Mudanças</th></tr></thead>
+        <tbody>${F.strategies.editions.slice().sort((a, b) => b.reference_month.localeCompare(a.reference_month)).slice(0, 10).map((e) => {
+          const st = F.strategies.rows.find((r) => r.id === e.strategy_id);
+          const d = e.diff_from_previous;
+          const changes = d ? (d.entered.length + d.exited.length + d.changed.length) : 0;
+          return `<tr><td class="mono">#${e.id}</td><td>${esc(st?.name || "—")}</td><td>${monthLabel(e.reference_month)}</td><td><span class="chip ${e.status === "STAGED" ? "amber" : e.status === "ACTIVE" ? "green" : "grey"}">${e.status}</span></td><td class="r num">${changes}</td></tr>`;
+        }).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(351, "Edições e a promoção stage→active pertencem ao detalhe da estratégia.")}`;
+  }
+  return `${head("Estratégias", "Três estratégias com relatório e dois buckets manuais (legado). O detalhe de cada uma é uma página tabulada.")}
+    <section class="panel"><div class="body flush"><table class="t">
+      <thead><tr><th>Estratégia</th><th>Classe</th><th>Tipo</th><th class="r">Valor</th><th class="r">Drift</th><th>Edição</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr class="click" data-go="strategies/editions">
+        <td><b>${esc(r.name)}</b></td>
+        <td><span class="chip ${classChip[r.cls]}">${classLabel[r.cls]}</span></td>
+        <td><span class="chip ${r.kind === "MANUAL" ? "grey" : "blue"} plain">${r.kind === "MANUAL" ? "Manual (legado)" : "Com relatório"}</span></td>
+        <td class="r num">${money0(r.actual)}</td>
+        <td class="r num ${r.drift == null ? "" : r.drift < 0 ? "def" : "sur"}">${r.drift == null ? "—" : pp(r.drift)}</td>
+        <td>${r.staged.length ? '<span class="chip amber">staged ' + monthLabel(r.staged[0].reference_month) + "</span>" : '<span class="chip grey plain">—</span>'}</td>
+      </tr>`).join("")}</tbody>
+    </table></div></section>
+    ${ticketNote(351, "Surfacing multi-estratégia, abas do detalhe e lentes da carteira.")}`;
+}
+
+function pageAssets() {
+  if (state.sub === "fixed") {
+    const bonds = F.assets.fixedIncome.bonds || [];
+    const accounts = F.assets.fixedIncome.accounts || [];
+    return `${head("Ativos · Renda fixa", "Títulos e contas na mesma tabela; o valor é por accrual.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Produto</th><th>Indexador</th><th class="r">Valor</th></tr></thead>
+        <tbody>${[...bonds.map((b) => [b.name, b.index ?? "—", b.value]), ...accounts.map((a) => [a.name, a.index ?? "—", a.value])].map(([n, i, v]) => `<tr><td>${esc(n)}</td><td class="dim">${esc(i)}</td><td class="r num">${money0(v)}</td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(351, "A posição de renda fixa e o detalhe do produto pertencem ao objeto Ativos.")}`;
+  }
+  if (state.sub === "quotes") {
+    return `${head("Ativos · Cotações", "Último fechamento por ticker e a idade da cotação.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th>Data</th><th class="r">Fechamento</th><th>Fonte</th><th>Estado</th></tr></thead>
+        <tbody>${F.assets.quotes.map((q) => `<tr><td><b class="ticker">${q.ticker}</b></td><td class="mono">${q.date.split("-").reverse().join("/")}</td><td class="r num">${money(q.close)}</td><td class="dim">${q.source}</td><td>${q.date < "2026-10-30" ? '<span class="chip amber">desatualizada</span>' : '<span class="chip green plain">ok</span>'}</td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(351, "Cotações e refresh de catálogo pertencem ao objeto Ativos.")}`;
+  }
+  if (state.sub === "gaps") {
+    return `${head("Ativos · Lacunas", "Deltas de custódia que o livro não explica; nunca alimentam o imposto.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th>Data</th><th class="r">Quantidade</th><th>Resultado</th><th>Estado</th></tr></thead>
+        <tbody>${F.assets.gaps.map((g) => `<tr><td><b class="ticker">${g.ticker}</b></td><td class="mono">${g.date.split("-").reverse().join("/")}</td><td class="r num">${g.quantity}</td><td>${g.realized_pending ? '<span class="chip amber">pendente</span>' : '<span class="chip green plain">resolvido</span>'}</td><td><span class="chip ${g.status === "OPEN" ? "red" : "grey"}">${g.status}</span></td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(354, "A resolução de lacuna e o vínculo com a importação ficam no fluxo de importação.")}`;
+  }
+  const pos = F.assets.positions.map((p) => {
+    const q = F.assets.quotes.find((x) => x.ticker === p.ticker);
+    const cat = F.assets.catalog.find((x) => x.ticker === p.ticker);
+    return { ...p, close: q?.close, cls: cat?.asset_class, stale: q && q.date < "2026-10-30" };
+  });
+  const total = pos.reduce((s, p) => s + p.quantity * (p.close || 0), 0);
+  return `${head("Ativos · Posições", "Custódia real e preço médio fiscal; a atribuição por estratégia vem em segundo plano.")}
+    <section class="panel"><div class="body flush"><table class="t">
+      <thead><tr><th>Ticker</th><th>Classe</th><th class="r">Quantidade</th><th class="r">Preço médio</th><th class="r">Fechamento</th><th class="r">Valor</th></tr></thead>
+      <tbody>${pos.map((p) => `<tr><td><b class="ticker">${p.ticker}</b>${p.stale ? ' <span class="chip amber plain">cotação velha</span>' : ""}${p.ticker === "AAPL34" ? ' <span class="chip red plain">lacuna</span>' : ""}</td><td><span class="chip ${classChip[p.cls]}">${classLabel[p.cls]}</span></td><td class="r num">${p.quantity.toLocaleString("pt-BR")}</td><td class="r num">${money(p.average_price)}</td><td class="r num">${p.close ? money(p.close) : "—"}</td><td class="r num">${p.close ? money0(p.quantity * p.close) : "—"}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="5" class="dim" style="border-top:1px solid var(--line)">Total listado</td><td class="r num" style="border-top:1px solid var(--line)"><b>${money0(total)}</b></td></tr></tfoot>
+    </table></div></section>
+    ${ticketNote(351, "O detalhe do ativo (lotes, atribuição, proventos) é desenhado no ticket 351.")}`;
+}
+
+function pageImports() {
+  if (state.sub === "corporate") {
+    return `${head("Importações · Ações corporativas", "Eventos que mudam quantidade ou preço médio, sempre com revisão humana.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Evento</th><th>Ticker</th><th>Tipo</th><th>Ex</th><th>Estado</th></tr></thead>
+        <tbody>${F.imports.corporateActions.map((c) => `<tr><td class="mono">#${c.id}</td><td><b class="ticker">${c.ticker}</b></td><td>${esc(c.kind || c.action_type || "—")}</td><td class="mono">${(c.ex_date || "").split("-").reverse().join("/")}</td><td><span class="chip ${c.status === "NEEDS_REVIEW" ? "red" : "green"}">${c.status}</span></td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(354, "A revisão de ação corporativa é parte do fluxo de importação.")}`;
+  }
+  if (state.sub === "history") {
+    return `${head("Importações · Histórico", "Tudo que já foi staged, revisado, aplicado ou falhou.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>#</th><th>Fonte</th><th>Arquivo</th><th>Criado</th><th>Estado</th></tr></thead>
+        <tbody>${F.imports.items.map((i) => `<tr><td class="mono">#${i.id}</td><td><span class="chip grey">${i.source}</span></td><td class="dim">${esc(i.file_name)}</td><td class="mono">${i.created_at.slice(0, 10).split("-").reverse().join("/")}</td><td><span class="chip ${i.status === "STAGED" ? "amber" : i.status === "FAILED" ? "red" : i.status === "APPLIED" ? "green" : "blue"}">${i.status}</span></td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(354, "Status por fonte e retomada de importação são do fluxo de importação.")}`;
+  }
+  return `${head("Importações · Caixa de entrada", "Um só lugar para todo arquivo em revisão — movimentação, custódia, negócios e relatório.", '<button class="chip blue" style="cursor:pointer;border-color:#cfdcfb">Enviar arquivo</button>')}
+    <section class="panel"><div class="body flush"><table class="t">
+      <thead><tr><th>#</th><th>Fonte</th><th>Arquivo</th><th>Estado</th><th class="r">Ação</th></tr></thead>
+      <tbody>${F.imports.items.map((i) => {
+        const stateChip = { STAGED: "amber", REVIEWED: "blue", APPLIED: "green", FAILED: "red" }[i.status] || "grey";
+        return `<tr class="click" data-route="imports/${i.id}"><td class="mono">#${i.id}</td><td><span class="chip grey">${i.source}</span></td><td class="dim">${esc(i.file_name)}</td><td><span class="chip ${stateChip}">${i.status}</span></td><td class="r">${i.status === "STAGED" || i.status === "REVIEWED" ? "Revisar →" : i.status === "FAILED" ? "Reenviar →" : "Ver →"}</td></tr>`;
+      }).join("")}</tbody>
+    </table></div></section>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+      <section class="panel"><header><h2>Próximo passo</h2></header><div class="body" style="font-size:12px;color:var(--ink-2)">
+        A importação 101 tem 4 linhas, 1 erro e 1 duplicata. A 102 está revisada e pronta para aplicar.
+      </div></section>
+      <section class="panel"><header><h2>Fonte com falha</h2></header><div class="body" style="font-size:12px;color:var(--ink-2)">
+        A tentativa XP em PDF falhou; o CSV reexportado virou a edição staged de Dividendos BR.
+      </div></section>
+    </div>
+    ${ticketNote(354, "O fluxo de upload, mapeamento, preview linha a linha e aplicação é dessa tela.")}`;
+}
+
+function pagePlan() {
+  if (state.sub === "orders") {
+    return `${head("Plano · Ordens", "A lista persistida do mês, com o ciclo de vida sugerida → executada → importada.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>#</th><th>Ticker</th><th>Lado</th><th class="r">Quantidade</th><th class="r">Preço sugerido</th><th class="r">Valor</th><th>Estado</th></tr></thead>
+        <tbody>${F.plan.orderList.orders.map((o) => `<tr><td class="mono">${o.id}</td><td><b class="ticker">${o.ticker}</b></td><td><span class="chip ${o.side === "BUY" ? "blue" : "amber"} plain">${o.side}</span></td><td class="r num">${o.quantity}</td><td class="r num">${money(o.suggested_price)}</td><td class="r num">${money0(o.quantity * o.suggested_price)}</td><td><span class="chip grey">${o.status}</span></td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(352, "O plano como ferramenta — fases, recálculo e execução — é a pergunta central de lá.")}`;
+  }
+  if (state.sub === "transfers") {
+    const t = F.plan.orderList.transfers[0];
+    return `${head("Plano · Transferências", "Mover atribuição sem tocar custódia; o bucket manual doador sempre espera decisão humana.")}
+      <section class="panel"><div class="body">
+        ${t ? `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <b class="ticker" style="font-size:15px">${t.ticker}</b>
+          <span class="chip grey">${t.from_strategy} → ${t.to_strategy}</span>
+          <span class="num">${t.quantity} cotas</span>
+          <span class="sp" style="flex:1"></span>
+          <b class="num">${money0(t.quantity * t.price)}</b>
+          <span class="chip ${t.status === "PENDING" ? "red" : "green"}">${t.status}</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="chip blue" style="cursor:pointer;border-color:#cfdcfb">Aceitar</button>
+          <button class="chip grey" style="cursor:pointer">Adiar</button>
+          <button class="chip grey" style="cursor:pointer">Recusar</button>
+        </div>` : "Sem transferências pendentes."}
+      </div></section>
+      ${ticketNote(352, "A decisão de transferência e o seu efeito no plano são desenhados lá.")}`;
+  }
+  if (state.sub === "close") {
+    return `${head("Plano · Fechamentos", "Um mês por vez; o fechamento congela o snapshot.")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Mês</th><th>Capital</th><th>Investido</th><th>Caixa</th><th>Estado</th></tr></thead>
+        <tbody>${F.plan.months.map((m) => `<tr><td>${monthLabel(m.period)}</td><td class="r num">${money0(m.capital)}</td><td class="r num">—</td><td class="r num">—</td><td><span class="chip ${m.status === "OPEN" ? "blue" : "green"}">${m.status}</span></td></tr>`).join("")}</tbody>
+      </table></div></section>
+      ${ticketNote(352, "O fechamento e a trava de transferências pendentes pertencem ao plano.")}`;
+  }
+  return `${head("Plano · Mês atual", "Novembro está aberto e o plano já foi calculado; outubro está fechado.")}
+    ${planSnapshot()}
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
+      <section class="panel"><header><h2>Atribuição do plano</h2></header><div class="body"><div class="mini-list">
+        ${F.plan.orderPlan.attribution.map((a) => `<div class="mini-row"><b class="ticker">${a.ticker}</b><span class="chip ${a.side === "ALLOCATE" ? "blue" : "amber"} plain">${a.side}</span><span class="sp"></span><span class="num">${a.quantity} un · ${esc(a.strategy)}</span></div>`).join("")}
+      </div></div></section>
+      <section class="panel"><header><h2>Fase e escala</h2></header><div class="body"><div class="mini-list">
+        <div class="mini-row"><span class="dim">Fase do plano</span><span class="sp"></span><b>${F.plan.orderPlan.phase}</b></div>
+        <div class="mini-row"><span class="dim">Fator pro-rata</span><span class="sp"></span><b class="num">${F.plan.orderPlan.pro_rata.factor.toFixed(2)}</b></div>
+        <div class="mini-row"><span class="dim">Não financiado</span><span class="sp"></span><b class="num">${money0(F.plan.orderPlan.pro_rata.unfunded_amount)}</b></div>
+      </div></div></section>
+    </div>
+    ${ticketNote(352, "A pergunta de lá é o plano como ferramenta, não como espinha do app.")}`;
+}
+
+function incomePreview() {
+  const upcoming = F.analysis.income.filter((i) => i.status !== "RECEIVED" && i.status !== "RECONCILED");
+  const received = F.analysis.income.filter((i) => i.status === "RECEIVED" || i.status === "RECONCILED");
+  const total = received.reduce((s, i) => s + i.net_amount, 0);
+  return `${head("Análise · Proventos", "Um livro de 13 meses; as linhas de novembro ainda estão a receber.")}
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
+      <div class="kpi"><div class="k">Recebidos (12 m)</div><div class="v">${money0(total)}</div><div class="s">${received.length} lançamentos</div></div>
+      <div class="kpi"><div class="k">A receber</div><div class="v">${money0(upcoming.reduce((s, i) => s + i.net_amount, 0))}</div><div class="s">${upcoming.length} linhas em novembro</div></div>
+      <div class="kpi"><div class="k">Próximo</div><div class="v" style="font-size:15px">${upcoming[0] ? esc(upcoming[0].ticker) : "—"}</div><div class="s">${upcoming[0] ? money(upcoming[0].net_amount) : ""}</div></div>
+    </div>
+    <section class="panel"><div class="body flush"><table class="t">
+      <thead><tr><th>Ticker</th><th>Tipo</th><th>Data</th><th>Estado</th><th class="r">Líquido</th></tr></thead>
+      <tbody>${[...upcoming, ...received.slice(-8).reverse()].map((i) => `<tr><td><b class="ticker">${i.ticker}</b></td><td class="dim">${i.type}</td><td class="mono">${i.date.split("-").reverse().join("/")}</td><td><span class="chip ${i.status === "PAYABLE" ? "amber" : i.status === "ANNOUNCED" ? "blue" : "green"} plain">${i.status}</span></td><td class="r num">${money(i.net_amount)}</td></tr>`).join("")}</tbody>
+    </table></div></section>
+    ${ticketNote(353, "O agrupamento da Análise (Performance / Proventos / Impostos) é o que esse ticket decide.")}`;
+}
+
+function taxPreview() {
+  const t = F.analysis.tax.meter;
+  return `${head("Análise · Impostos", "Livro mensal de ganho de capital, com ações e FIIs em baldes separados.")}
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div class="kpi"><div class="k">Vendas de ações</div><div class="v">${money0(t.gross_sales)}</div><div class="s">limite ${money0(t.exemption_limit)} <b class="loss">${t.exceeded ? "estourado" : "ok"}</b></div></div>
+      <div class="kpi"><div class="k">Ganho realizado</div><div class="v">${money0(t.realized_gain)}</div><div class="s">tributável ${money0(t.taxable_gain)}</div></div>
+      <div class="kpi"><div class="k">DARF</div><div class="v loss">${money0(t.tax)}</div><div class="s">15% sobre o ganho</div></div>
+      <div class="kpi"><div class="k">Vencimento</div><div class="v" style="font-size:16px">30/11/2026</div><div class="s">outubro fechado</div></div>
+    </div>
+    <section class="panel"><header><h2>Realizado por tipo</h2></header><div class="body flush"><table class="t">
+      <thead><tr><th>Tipo</th><th class="r">Vendas brutas</th><th class="r">Ganhos</th><th class="r">Perdas</th><th class="r">Resultado</th></tr></thead>
+      <tbody>${F.analysis.tax.realized.map((r) => `<tr><td><span class="chip grey">${r.kind}</span></td><td class="r num">${money0(r.gross_sales)}</td><td class="r num gain">${money0(r.gains)}</td><td class="r num loss">${money0(r.losses)}</td><td class="r num">${money0(r.result)}</td></tr>`).join("")}</tbody>
+    </table></div></section>
+    ${ticketNote(353, "O agrupamento da Análise e o lugar do imposto são decididos lá.")}`;
+}
+
+function performancePreview() {
+  const m = F.analysis.monthPerformance;
+  return `${head("Análise · Performance", "Rentabilidade decomposta por classe e por estratégia, contra o benchmark blend.")}
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div class="kpi"><div class="k">Outubro</div><div class="v ${m.decomposition.return_percentage < 0 ? "loss" : "gain"}">${pct(m.decomposition.return_percentage)}</div><div class="s">benchmark ${pct(m.benchmark.return_percentage)}</div></div>
+      <div class="kpi"><div class="k">XIRR</div><div class="v">${pct(F.analysis.performanceSeries.xirr, 1)}</div><div class="s">desde o início</div></div>
+      <div class="kpi"><div class="k">Melhor classe</div><div class="v" style="font-size:16px">—</div><div class="s">detalhe no ticket 353</div></div>
+      <div class="kpi"><div class="k">Meses</div><div class="v">${F.analysis.performanceSeries.months.length}</div><div class="s">série fechada</div></div>
+    </div>
+    <section class="panel"><header><h2>Série mensal</h2><span class="sp"></span><span class="hint">últimos 12 meses</span></header><div class="body flush"><table class="t">
+      <thead><tr><th>Mês</th><th class="r">Rentabilidade</th><th class="r">Benchmark</th><th class="r">Aportes</th><th class="r">Proventos</th></tr></thead>
+      <tbody>${F.analysis.performanceSeries.months.slice().reverse().map((mm) => `<tr><td>${monthLabel(mm.period)}</td><td class="r num ${(mm.decomposition.return_percentage ?? 0) < 0 ? "loss" : "gain"}">${mm.decomposition.return_percentage == null ? "—" : pct(mm.decomposition.return_percentage)}</td><td class="r num ${mm.benchmark_return == null ? "faint" : mm.benchmark_return < 0 ? "loss" : "gain"}">${mm.benchmark_return == null ? "—" : pct(mm.benchmark_return)}</td><td class="r num">${money0(mm.decomposition.net_aportes ?? 0)}</td><td class="r num">${money0(mm.decomposition.net_income ?? 0)}</td></tr>`).join("")}</tbody>
+    </table></div></section>
+    ${ticketNote(353, "O agrupamento da Análise e a rail de período compartilhada são decididos lá.")}`;
+}
+
+function pageAnalysis() {
+  if (state.sub === "income") return incomePreview();
+  if (state.sub === "tax") return taxPreview();
+  return performancePreview();
+}
+
+const PAGES = {
+  portfolio: pagePortfolio, strategies: pageStrategies, assets: pageAssets,
+  imports: pageImports, plan: pagePlan, analysis: pageAnalysis,
+};
+
+/* ============================ chrome ============================ */
+
+function sidebarLink(o) {
+  const active = o.key === state.obj;
+  const b = o.badge();
+  return `
+    <button class="nav-item ${active ? "active" : ""}" data-go="${o.key}/${o.subs[0].key}">
+      ${o.icon}<span>${o.label}</span>${b ? `<span class="cnt ${active ? "" : "action"}">${b}</span>` : ""}
+    </button>
+    ${active && state.placement === "sidebar" ? `<div class="subnav">${o.subs.map((s) => `<button class="${s.key === state.sub ? "active" : ""}" data-go="${o.key}/${s.key}">${s.label}</button>`).join("")}</div>` : ""}`;
+}
+
+function sidebar() {
+  if (state.variant === "a") {
+    return `<aside class="side">
+      <div class="brand"><b>Carteira Ideal</b><span>console</span></div>
+      <nav>${OBJECTS.map(sidebarLink).join("")}</nav>
+      <div class="foot"><span><b>Nov 2026</b> · plano completo</span><span>out 2026 fechado</span><span>consolidado há 2 h</span></div>
+    </aside>`;
+  }
+  const groups = ["Posição", "Operações", "Resultados"];
+  return `<aside class="side">
+    <div class="brand"><b>Carteira Ideal</b><span>console</span></div>
+    <nav>${groups.map((g) => `<div class="group-label">${g}</div>${OBJECTS.filter((o) => o.group === g).map(sidebarLink).join("")}`).join("")}</nav>
+    <div class="foot"><span><b>Nov 2026</b> · plano completo</span><span>out 2026 fechado</span><span>consolidado há 2 h</span></div>
+  </aside>`;
+}
+
+function topbar() {
+  const o = objByKey[state.obj];
+  const s = o.subs.find((x) => x.key === state.sub);
+  return `<div class="topbar">
+    <div class="crumb"><b>${o.label}</b>${s && s.key !== o.subs[0].key ? " · " + s.label : ""}</div>
+    <span class="sp"></span>
+    <span class="month-pill"><span class="dot"></span> Nov 2026 aberto · 3/7</span>
+    <span class="age">consolidado há 2 h</span>
+    <span class="kbd">Ctrl K</span>
+  </div>`;
+}
+
+function toprail() {
+  return `<div class="toprail"><div class="inner">
+    <div class="brand">Carteira Ideal<span>console</span></div>
+    <div class="objrail">${OBJECTS.map((o) => `<button class="${o.key === state.obj ? "active" : ""}" data-go="${o.key}/${o.subs[0].key}">${o.label}${o.badge() ? `<span class="cnt">${o.badge()}</span>` : ""}</button>`).join("")}</div>
+    <span class="month-pill"><span class="dot"></span> Nov 2026</span>
+  </div></div>`;
+}
+
+function contentForVariant() {
+  if (state.obj === "portfolio" && state.sub === "overview") {
+    const landing = state.variant === "a" ? landingA() : state.variant === "b" ? landingB() : landingC();
+    return banner() + landing;
+  }
+  const o = objByKey[state.obj];
+  const body = (PAGES[state.obj] || pagePortfolio)();
+  if (state.placement === "sidebar") return body;
+  const control = state.placement === "segment" ? segmentedHTML(o) : tabsHTML(o);
+  return body.replace("<!--HEAD-->", "<!--HEAD-->" + control);
+}
+
+function banner() {
+  const v = VARIANTS[state.variant];
+  const tests = {
+    a: "Sidebar plano: os seis objetos sozinhos e os sub-itens só no objeto ativo. Landing com a atenção na coluna à direita.",
+    b: "Escolhida: sidebar em três grupos, carteira + atenção acima da dobra e sub-views em abas. A e C ficam para comparação; use os botões Sub-views na barra de baixo para rever os outros placements numa página de objeto.",
+    c: "Sem sidebar permanente: trilho superior e cockpit de três colunas. A atenção é uma coluna central.",
+  };
+  return `<div class="banner-tests"><b>${v.name}</b><span class="q">${tests[state.variant]}</span></div>`;
+}
+
+function pbar() {
+  const isLanding = state.obj === "portfolio" && state.sub === "overview";
+  const subctl = isLanding ? "" : `
+    <div class="sep"></div>
+    <div class="subctl">
+      <span class="lbl">Sub-views</span>
+      ${Object.entries(PLACEMENTS).map(([k, v]) => `<button class="pv ${k === state.placement ? "active" : ""}" data-placement="${k}">${v.label}</button>`).join("")}
+    </div>`;
+  return `
+    <div class="title"><b>Protótipo de shell</b>ticket #350 · dados fictícios</div>
+    <div class="sep"></div>
+    ${Object.entries(VARIANTS).map(([k, v]) => `<button class="v ${k === state.variant ? "active" : ""}" data-variant="${k}">${v.name.split(" · ")[0]} · ${v.short}<small>${v === VARIANTS[state.variant] ? "variante atual" : "ver variante"}</small></button>`).join("")}
+    ${subctl}
+    <div class="sp"></div>
+    <div class="note">Visual neutro: <b>a direção visual é o #355</b>.</div>
+    <button class="ghost" data-drawer="1">O que estou vendo?</button>`;
+}
+
+function drawer() {
+  const v = VARIANTS[state.variant];
+  const q = {
+    a: ["Os seis objetos sozinhos bastam, ou falta um agrupamento?", "O subnav no sidebar aguenta objetos com quatro sub-itens?", "A atenção na coluna à direita é encontrada sem competir com a alocação?"],
+    b: ["Os grupos Posição / Operações / Resultados são os nomes certos?", "Com a mesma landing, o agrupamento paga o custo de mais chrome?", "Qual placement de sub-views funciona melhor: abas, sidebar ou segmentado?"],
+    c: ["Sem sidebar, o trilho superior escala para seis objetos?", "O cockpit de três colunas é melhor que a página que rola?", "A atenção no centro merece o espaço mais nobre da tela?"],
+  }[state.variant];
+  const placement = PLACEMENTS[state.placement];
+  return `
+    <button class="close" data-drawer="0">✕</button>
+    <div class="k">Variante ${state.variant.toUpperCase()}</div>
+    <h3>${v.name}</h3>
+    <p>${v.thesis}</p>
+    <div class="k">O que julgar</div>
+    <ul>${q.map((x) => `<li>${x}</li>`).join("")}</ul>
+    <div class="k">Placement atual: ${placement.long}</div>
+    <p style="margin-bottom:0">${state.placement === "tabs" ? "As sub-views ficam em abas logo abaixo do título da página; o sidebar nunca cresce." : state.placement === "sidebar" ? "As sub-views abrem sob o objeto ativo no sidebar; a página não repete a navegação." : "As sub-views viram um controle segmentado no topo do corpo da página, entre o título e o conteúdo."} Troque na barra de baixo quando estiver numa página de objeto.</p>
+    <div class="k" style="margin-top:8px">Fora deste protótipo</div>
+    <p style="margin-bottom:0">Direção visual (#355), o desenho de cada tela (#351–#354) e a implementação no SPA (fora do escopo do mapa).</p>`;
+}
+
+/* ============================ render / events ============================ */
+
+function render() {
+  const app = document.getElementById("app");
+  const chrome = state.variant === "c"
+    ? `<div class="shell c">${toprail()}<div class="content">${contentForVariant()}</div></div>`
+    : `<div class="shell ${state.variant}">${sidebar()}<div class="main">${topbar()}<div class="content">${contentForVariant()}</div></div></div>`;
+  app.innerHTML = `<div class="proto-banner"><b>Protótipo descartável</b><span>ticket #350 · shell, navegação e landing</span><span class="sp"></span><span class="tag">dados fictícios · fixture #356</span><span class="tag">visual neutro · decisão no #355</span></div>${chrome}`;
+  document.getElementById("pbar").innerHTML = pbar();
+  document.getElementById("drawer").innerHTML = drawer();
+  document.getElementById("drawer").className = "drawer" + (drawerOpen ? " open" : "");
+  window.scrollTo(0, 0);
+}
+
+let drawerOpen = false;
+let toastTimer;
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+document.addEventListener("click", (e) => {
+  const variant = e.target.closest("[data-variant]");
+  if (variant) { setVariant(variant.dataset.variant); return; }
+
+  const placement = e.target.closest("[data-placement]");
+  if (placement) { setQueryParam("p", placement.dataset.placement); return; }
+
+  const drawerBtn = e.target.closest("[data-drawer]");
+  if (drawerBtn) { drawerOpen = drawerBtn.dataset.drawer === "1"; render(); return; }
+
+  const go = e.target.closest("[data-go]");
+  if (go) { navigate(...go.dataset.go.split("/")); return; }
+
+  const route = e.target.closest("[data-route]");
+  if (route) {
+    const t = routeTarget(route.dataset.route);
+    navigate(t.obj, t.sub);
+    toast(`Destino real: ${route.dataset.route} — o desenho desta tela é o ticket #${ownerTicket[t.obj]}.`);
+    return;
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && drawerOpen) { drawerOpen = false; render(); }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    toast("Busca global / paleta de comandos: ainda não especificada no mapa (#347, Not yet specified).");
+  }
+});
+
+// Correct a landing detail that depends on the snapshot shape.
+render();
+</script>
+</body>
+</html>
