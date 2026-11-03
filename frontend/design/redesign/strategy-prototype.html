@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<!--
+  THROWAWAY PROTOTYPE — wayfinder ticket #351, map #347.
+  Question: how should multiple strategies surface — first-class objects, or a lens over one portfolio?
+  Two treatments, switchable in the bottom bar and in the URL (?v=a|b).
+  Data: ./fixture.js (ticket #356). No build step, no persistence.
+  Visual direction is NOT decided here — that is ticket #355.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Protótipo multi-estratégia — Carteira Ideal (ticket #351)</title>
+<style>
+  :root {
+    --bg: #f3f5f7;
+    --panel: #ffffff;
+    --panel-2: #f8fafb;
+    --ink: #14181d;
+    --ink-2: #5a6572;
+    --ink-3: #8b95a1;
+    --line: #dfe4e9;
+    --line-2: #edf0f3;
+    --accent: #1d4ed8;
+    --accent-bg: #e8eefc;
+    --deficit: #1d4ed8;
+    --surplus: #a16207;
+    --gain: #15803d;
+    --loss: #b91c1c;
+    --warn: #b45309;
+    --warn-bg: #fdf3e3;
+    --action-bg: #fdeaea;
+    --action: #b91c1c;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --bar: 56px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.45 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: calc(var(--bar) + 30px);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  button { font: inherit; color: inherit; }
+  .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .num { text-align: right; white-space: nowrap; }
+  .dim { color: var(--ink-2); }
+  .faint { color: var(--ink-3); }
+  .gain { color: var(--gain); }
+  .loss { color: var(--loss); }
+  .def { color: var(--deficit); }
+  .sur { color: var(--surplus); }
+
+  .proto-banner {
+    background: #101826; color: #c7d2e3; font-size: 11px; letter-spacing: .01em;
+    padding: 5px 16px; display: flex; gap: 14px; align-items: center; position: relative; z-index: 40;
+  }
+  .proto-banner b { color: #fff; font-weight: 600; }
+  .proto-banner .sp { flex: 1; }
+  .proto-banner .tag { border: 1px solid #33415a; padding: 0 6px; border-radius: 3px; color: #93a4bd; }
+
+  /* ---------- shell ---------- */
+  .shell { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: calc(100vh - 27px); }
+  .side {
+    background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; position: sticky; top: 27px;
+    height: calc(100vh - 27px - var(--bar));
+  }
+  .side .brand { padding: 16px 16px 10px; display: flex; align-items: baseline; gap: 7px; }
+  .side .brand b { font-size: 14px; letter-spacing: -.01em; }
+  .side .brand span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; }
+  .side nav { padding: 6px 8px; overflow: auto; }
+  .side .group-label {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3);
+    padding: 13px 8px 4px; font-weight: 600;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 7px 8px; border: 0; border-radius: 5px; background: none; cursor: pointer;
+    color: var(--ink-2); text-align: left; font-size: 12.5px;
+  }
+  .nav-item:hover { background: var(--panel-2); color: var(--ink); }
+  .nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .nav-item .ico { width: 15px; height: 15px; flex: none; color: currentColor; opacity: .85; }
+  .nav-item .cnt {
+    margin-left: auto; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    font: 600 10px/17px var(--mono); text-align: center; background: var(--line); color: var(--ink-2);
+  }
+  .side .foot {
+    margin-top: auto; border-top: 1px solid var(--line-2); padding: 11px 16px;
+    font-size: 11px; color: var(--ink-3); display: grid; gap: 3px;
+  }
+  .side .foot b { color: var(--ink-2); font-weight: 600; }
+
+  .main { min-width: 0; }
+  .topbar {
+    min-height: 52px; border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; align-items: center; gap: 14px; padding: 0 22px;
+    position: sticky; top: 27px; z-index: 20;
+  }
+  .crumb { color: var(--ink-2); font-size: 12px; }
+  .crumb b { color: var(--ink); }
+  .topbar .sp { flex: 1; }
+  .month-pill {
+    display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line);
+    background: var(--panel-2); border-radius: 16px; padding: 4px 11px; font-size: 11.5px; color: var(--ink-2);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gain); display: inline-block; }
+  .topbar .age { font-size: 11px; color: var(--ink-3); }
+
+  .content { padding: 20px 22px 40px; max-width: 1420px; }
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .page-head h1 { font-size: 21px; line-height: 1.15; letter-spacing: -.025em; margin: 0 0 3px; font-weight: 650; }
+  .page-head p { margin: 0; color: var(--ink-2); font-size: 12px; }
+  .page-head .sp { flex: 1; }
+  .backlink { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; margin-bottom: 8px; color: var(--ink-2); }
+  .backlink:hover { color: var(--accent); }
+
+  .thesis {
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;
+    font-size: 11.5px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 5px; padding: 7px 11px;
+  }
+  .thesis b { color: var(--ink); }
+  .thesis .q { color: var(--ink-3); }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 16px; }
+  .tabs button {
+    border: 0; background: none; cursor: pointer; padding: 7px 11px; color: var(--ink-2);
+    font-size: 12.5px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabs button:disabled { opacity: .45; cursor: default; }
+
+  .grid { display: grid; gap: 14px; }
+  .grid > * { min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; }
+  .panel > header {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2);
+  }
+  .panel > header h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; margin: 0; color: var(--ink-2); font-weight: 650; }
+  .panel > header .sp { flex: 1; }
+  .panel > header .hint { font-size: 11px; color: var(--ink-3); }
+  .panel .body { padding: 13px 14px; }
+  .panel .body.flush { padding: 0; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; }
+  .kpi .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; }
+  .kpi .v { font: 600 19px/1.25 var(--mono); margin-top: 3px; letter-spacing: -.03em; }
+  .kpi .s { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
+  .kpi .s b { font-weight: 600; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.t th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--ink-3); font-weight: 600; padding: 7px 12px; border-bottom: 1px solid var(--line-2);
+    background: var(--panel-2);
+  }
+  table.t td { padding: 7px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t th.r, table.t td.r { text-align: right; }
+  table.t tr.click { cursor: pointer; }
+  table.t tr.click:hover td { background: var(--panel-2); }
+  table.t tr.class-row td { background: var(--panel-2); font-weight: 650; }
+  table.t tr.class-row:hover td { background: var(--panel-2); }
+  table.t tr.sub-row td:first-child { padding-left: 28px; }
+  table.t tr.manual-row td { color: var(--ink-2); }
+  .ticker { font: 600 12px/1 var(--mono); letter-spacing: -.01em; }
+  .name { font-weight: 600; }
+
+  .chip {
+    display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 9.5px; font-weight: 650;
+    letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--line); color: var(--ink-2);
+    background: var(--panel-2); line-height: 15px; white-space: nowrap;
+  }
+  .chip.blue { color: var(--accent); background: var(--accent-bg); border-color: #cfdcfb; }
+  .chip.amber { color: var(--warn); background: var(--warn-bg); border-color: #f3e0bd; }
+  .chip.red { color: var(--action); background: var(--action-bg); border-color: #f5cfcf; }
+  .chip.green { color: var(--gain); background: #e9f6ee; border-color: #cce9d7; }
+  .chip.grey { color: var(--ink-3); }
+  .chip.plain { background: none; }
+  .chip.tiny { font-size: 9px; line-height: 13px; }
+
+  .bar { display: inline-block; vertical-align: middle; height: 5px; border-radius: 3px; background: var(--line-2); position: relative; overflow: visible; min-width: 80px; width: 100%; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); display: block; }
+  .bar u {
+    position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .55;
+    text-decoration: none; transform: translateX(-1px);
+  }
+  .class-bar { display: flex; align-items: center; gap: 8px; }
+  .class-bar .bar { flex: 1; max-width: 160px; }
+
+  .mini-list { display: grid; }
+  .mini-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 12px; flex-wrap: wrap; }
+  .mini-row:last-child { border-bottom: 0; }
+  .mini-row .sp { flex: 1; }
+
+  .callout {
+    border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; font-size: 11px;
+    color: var(--ink-3); background: var(--panel-2);
+  }
+  .callout b { color: var(--ink-2); font-weight: 600; }
+  .callout.warn { border-color: #f3e0bd; background: var(--warn-bg); color: #7c5a1c; }
+  .callout.warn b { color: #5f4412; }
+
+  .empty { padding: 18px 14px; color: var(--ink-3); font-size: 12px; text-align: center; }
+
+  /* ---------- treatment A: strategy list ---------- */
+  .legend { display: flex; gap: 16px; align-items: center; font-size: 11px; color: var(--ink-3); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .sgroup { display: flex; align-items: center; gap: 8px; padding: 9px 14px 4px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 650; }
+  .sgroup .sp { flex: 1; }
+  .sgroup .cnt { font: 500 10px var(--mono); color: var(--ink-3); letter-spacing: 0; text-transform: none; }
+
+  .cmp-head { display: grid; grid-template-columns: 1.6fr .8fr 1.2fr .9fr .9fr; gap: 10px; align-items: center; padding: 9px 14px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; background: var(--panel-2); border-bottom: 1px solid var(--line-2); }
+  .cmp-row { display: grid; grid-template-columns: 1.6fr .8fr 1.2fr .9fr .9fr; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--line-2); cursor: pointer; }
+  .cmp-row:last-child { border-bottom: 0; }
+  .cmp-row:hover { background: var(--panel-2); }
+  .cmp-row .nm { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .cmp-row .nm b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmp-row .nm .bar { max-width: 120px; }
+
+  /* ---------- treatment A: detail ---------- */
+  .strat-head { display: flex; align-items: flex-start; gap: 12px; }
+  .strat-head h1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .strat-head .actions { margin-left: auto; display: flex; gap: 7px; }
+  .btn {
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); border-radius: 5px;
+    padding: 5px 10px; cursor: pointer; font-size: 11.5px; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--ink-3); color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #1a45c0; }
+
+  .timeline { display: grid; }
+  .tl-item {
+    display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 10px; align-items: start;
+    padding: 10px 14px; border-bottom: 1px solid var(--line-2); background: none; border-left: 0;
+    border-right: 0; border-top: 0; text-align: left; cursor: pointer; width: 100%;
+  }
+  .tl-item:last-child { border-bottom: 0; }
+  .tl-item:hover { background: var(--panel-2); }
+  .tl-item.active { background: var(--accent-bg); }
+  .tl-item .mth { font: 600 11px/1.5 var(--mono); color: var(--ink-2); }
+  .tl-item.active .mth { color: var(--accent); }
+  .tl-item .ttl { display: block; font-size: 12px; font-weight: 600; }
+  .tl-item .det { display: block; font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+
+  .diff-rows { display: grid; }
+  .diff-row {
+    display: grid; grid-template-columns: 86px 1fr auto auto; gap: 10px; align-items: center;
+    padding: 8px 14px; border-bottom: 1px solid var(--line-2); font-size: 12px;
+  }
+  .diff-row:last-child { border-bottom: 0; }
+  .diff-row .arrow { color: var(--ink-3); font-family: var(--mono); }
+  .dlt { font: 600 11px var(--mono); }
+  .dlt.up { color: var(--gain); }
+  .dlt.down { color: var(--loss); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat { border: 1px solid var(--line-2); border-radius: 6px; padding: 9px 10px; background: var(--panel-2); }
+  .stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; }
+  .stat .v { font: 600 15px/1.3 var(--mono); margin-top: 2px; }
+
+  .share { display: flex; height: 12px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+  .share i { display: block; height: 100%; }
+  .share-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--ink-2); }
+  .share-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .share-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  /* ---------- treatment B: lens ---------- */
+  .lens {
+    display: flex; align-items: stretch; gap: 4px; flex-wrap: wrap; padding: 8px 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 7px; margin-bottom: 14px;
+  }
+  .lens .divider { width: 1px; background: var(--line); margin: 2px 5px; }
+  .lens .lbl { display: flex; align-items: center; font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 650; padding: 0 4px; }
+  .lens button {
+    border: 1px solid transparent; background: none; border-radius: 5px; cursor: pointer;
+    padding: 5px 9px; display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12px;
+  }
+  .lens button:hover { background: var(--panel-2); color: var(--ink); }
+  .lens button.active { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
+  .lens button .dr { font: 600 10px var(--mono); color: var(--surplus); }
+  .lens button .dr.neg { color: var(--deficit); }
+  .lens button.active .dr { color: #fdf0c8; }
+  .lens button .dr.zero { color: var(--ink-3); }
+  .lens button.active .dr.zero { color: #b9c2cf; }
+
+  .b-grid { display: grid; grid-template-columns: minmax(0, 1fr) 352px; gap: 14px; align-items: start; }
+  .rail { display: grid; gap: 14px; position: sticky; top: 92px; }
+  .rail .panel > header { padding: 9px 12px; }
+  .rail .panel .body { padding: 11px 12px; }
+  .rail .panel .body.flush { padding: 0; }
+
+  details.diffbox { border-top: 1px solid var(--line-2); }
+  details.diffbox summary {
+    cursor: pointer; padding: 9px 12px; font-size: 11.5px; color: var(--accent); list-style: none;
+    display: flex; align-items: center; gap: 6px;
+  }
+  details.diffbox summary::-webkit-details-marker { display: none; }
+  details.diffbox[open] summary { border-bottom: 1px solid var(--line-2); }
+
+  .evidence-row { display: flex; align-items: baseline; gap: 7px; }
+  .evidence-row b { font: 600 12px var(--mono); }
+
+  /* ---------- bottom prototype bar ---------- */
+  .pbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: #0f1722; color: #dbe3ee; border-top: 1px solid #263242;
+    display: flex; align-items: center; gap: 8px; padding: 8px 14px; min-height: var(--bar);
+    box-shadow: 0 -6px 24px rgba(9, 15, 25, .18); flex-wrap: wrap;
+  }
+  .pbar .title { font-size: 11px; color: #8fa0b8; line-height: 1.25; max-width: 205px; }
+  .pbar .title b { color: #fff; display: block; font-size: 11.5px; }
+  .pbar .sep { width: 1px; align-self: stretch; background: #263242; margin: 2px 6px; }
+  .pbar button.v {
+    border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 5px;
+    padding: 5px 9px; cursor: pointer; font-size: 11.5px; text-align: left; line-height: 1.2;
+  }
+  .pbar button.v small { display: block; color: #8092aa; font-size: 9.5px; margin-top: 1px; }
+  .pbar button.v:hover { border-color: #4b5d7a; }
+  .pbar button.v.active { background: #e8eefc; border-color: #e8eefc; color: #14306b; }
+  .pbar button.v.active small { color: #3d5a8f; }
+  .pbar .sp { flex: 1; }
+  .pbar .subctl { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .pbar .subctl .lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: #8092aa; margin-right: 3px; white-space: nowrap; }
+  .pbar button.pv {
+    border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 4px;
+    padding: 4px 7px; cursor: pointer; font-size: 11px; white-space: nowrap;
+  }
+  .pbar button.pv:hover { border-color: #4b5d7a; }
+  .pbar button.pv.active { background: #e8eefc; color: #14306b; border-color: #e8eefc; font-weight: 600; }
+  .pbar .ghost {
+    border: 1px solid #33415a; background: none; color: #c8d4e5; border-radius: 5px;
+    padding: 5px 8px; cursor: pointer; font-size: 11px;
+  }
+  .pbar .ghost:hover { border-color: #4b5d7a; }
+
+  .drawer {
+    position: fixed; right: 12px; bottom: calc(var(--bar) + 10px); z-index: 70; width: 620px; max-width: calc(100vw - 24px);
+    max-height: calc(100vh - var(--bar) - 34px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 40px rgba(15, 23, 34, .22);
+    padding: 14px 16px; font-size: 12px; display: none;
+  }
+  .drawer.open { display: block; }
+  .drawer h3 { margin: 0 0 4px; font-size: 13px; }
+  .drawer p { margin: 0 0 9px; color: var(--ink-2); }
+  .drawer table.t th, .drawer table.t td { padding: 6px 8px; }
+  .drawer .close { position: absolute; top: 8px; right: 10px; border: 0; background: none; cursor: pointer; color: var(--ink-3); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(var(--bar) + 16px); transform: translateX(-50%) translateY(10px);
+    background: #111a27; color: #e6edf7; font-size: 11.5px; padding: 7px 12px; border-radius: 6px;
+    opacity: 0; pointer-events: none; transition: .18s ease; z-index: 80; max-width: 90vw;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 1180px) {
+    .b-grid { grid-template-columns: 1fr; }
+    .rail { position: static; grid-template-columns: 1fr 1fr; }
+    .rail > .panel:first-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 980px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .rail { grid-template-columns: 1fr; }
+    .pbar .title { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="proto-banner">
+  <b>Protótipo descartável</b>
+  <span>ticket #351 · mapa #347</span>
+  <span class="sp"></span>
+  <span class="tag">dados fictícios · nov/2026</span>
+</div>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="drawer" id="drawer"></div>
+<div class="pbar" id="pbar"></div>
+
+<script type="module">
+import F from "./fixture.js";
+
+/* ============================ helpers ============================ */
+
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl0 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const money = (n) => brl.format(n);
+const money0 = (n) => brl0.format(n);
+const pct = (n, digits = 2) => `${Number(n).toFixed(digits).replace(".", ",")}%`;
+const pp = (n) => `${n > 0 ? "+" : ""}${Number(n).toFixed(2).replace(".", ",")} pp`;
+const classLabel = { ACOES: "Ações", FIIS: "FIIs", RENDA_FIXA: "Renda fixa" };
+const classChip = { ACOES: "blue", FIIS: "amber", RENDA_FIXA: "green" };
+const monthLabel = (period) => {
+  const [y, m] = period.split("-");
+  return `${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(m) - 1]}/${y.slice(2)}`;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ratingChip = (r) => `<span class="chip ${r === "BUY" ? "green" : r === "SELL" ? "red" : "grey"}">${r}</span>`;
+const kindChip = (kind) => kind === "MANUAL"
+  ? '<span class="chip grey plain">manual</span>'
+  : '<span class="chip blue plain">relatório</span>';
+const kindLabel = (kind) => kind === "MANUAL" ? "Manual" : "Relatório";
+
+/* ============================ IA model ============================ */
+
+const OBJECTS = [
+  { key: "portfolio", label: "Carteira", group: "Posição" },
+  { key: "strategies", label: "Estratégias", group: "Posição" },
+  { key: "assets", label: "Ativos", group: "Posição" },
+  { key: "imports", label: "Importações", group: "Operações" },
+  { key: "plan", label: "Plano / Mês", group: "Operações" },
+  { key: "analysis", label: "Análise", group: "Resultados" },
+];
+
+/* ============================ strategy view models ============================ */
+
+const quote = (ticker) => F.assets.quotes.find((q) => q.ticker === ticker)?.close ?? 0;
+const editionFor = (id) => F.strategies.editions.filter((e) => e.strategy_id === id)
+  .sort((a, b) => a.reference_month.localeCompare(b.reference_month));
+const latestEdition = (id) => editionFor(id).at(-1) ?? null;
+const stagedEdition = (id) => editionFor(id).find((e) => e.status === "STAGED") ?? null;
+const perfFor = (id) => F.analysis.monthPerformance.classes
+  .flatMap((c) => c.strategies ?? []).find((s) => s.strategy_id === id) ?? null;
+const classAllocFor = (assetClass) => F.portfolio.allocation.classes.find((c) => c.asset_class === assetClass);
+
+const STRATEGIES = F.strategies.rows.map((row) => {
+  const cls = classAllocFor(row.asset_class);
+  const report = (cls.strategies ?? []).find((s) => s.strategy === row.name) ?? null;
+  const manual = cls.manual && cls.manual.strategy === row.name ? cls.manual : null;
+  const actual = report ? report.actual : manual.actual;
+  const target = report ? report.target : null;
+  const ideal = report ? report.ideal : null;
+  const deficit = report ? report.deficit : null;
+  const drift = report ? report.drift : null;
+  const tickers = report ? report.tickers : manual.tickers.map((t) => ({ ...t, target: null, ideal: null, deficit: null, drift: null }));
+  const editions = editionFor(row.id);
+  const staged = stagedEdition(row.id);
+  const latest = latestEdition(row.id);
+  const perf = perfFor(row.id);
+  return {
+    ...row, cls, tickers, actual, target, ideal, deficit, drift, editions, staged, latest, perf,
+    classActual: cls.actual, classTarget: cls.target,
+  };
+});
+const stratById = Object.fromEntries(STRATEGIES.map((s) => [s.id, s]));
+const REPORT = STRATEGIES.filter((s) => s.kind === "REPORT_DRIVEN");
+const MANUAL = STRATEGIES.filter((s) => s.kind === "MANUAL");
+const STRAT_TOTAL = STRATEGIES.reduce((sum, s) => sum + s.actual, 0);
+const STAGED = STRATEGIES.filter((s) => s.staged);
+const portfolioTotal = F.portfolio.allocation.actual;
+
+function attributionRowsFor(name) {
+  return F.assets.attribution.filter((r) => r.slices.some((s) => s.strategy_name === name));
+}
+function attributionQty(name) {
+  return F.assets.attribution.reduce((sum, r) => sum + r.slices
+    .filter((s) => s.strategy_name === name)
+    .reduce((n, s) => n + s.quantity, 0), 0);
+}
+function attributionValue(name) {
+  return F.assets.attribution.reduce((sum, r) => sum + r.slices
+    .filter((s) => s.strategy_name === name)
+    .reduce((n, s) => n + s.quantity * quote(r.ticker), 0), 0);
+}
+function attributionCoverage() {
+  const attributed = MANUAL.reduce((n, s) => n + attributionValue(s.name), 0) + REPORT.reduce((n, s) => n + attributionValue(s.name), 0);
+  const custody = F.assets.attribution.reduce((n, r) => n + r.custody_quantity * quote(r.ticker), 0);
+  return { attributed, custody, ratio: custody ? attributed / custody : 1 };
+}
+
+/* ============================ state / routing ============================ */
+
+function parseRoute() {
+  const q = new URLSearchParams(location.search);
+  const variant = q.get("v") === "b" ? "b" : "a";
+  const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  if (variant === "a") {
+    if (parts[0] !== "a") return { variant, view: "a-list", id: null, tab: null, editionId: null };
+    if (parts[1] === "list" || !parts[1]) return { variant, view: "a-list", id: null, tab: null, editionId: null };
+    const id = Number(parts[1]);
+    const strat = stratById[id] ? id : REPORT[0].id;
+    const tab = ["carteira", "edicoes", "atribuicao", "fatia"].includes(parts[2]) ? parts[2] : "carteira";
+    const editionId = parts[3] ? Number(parts[3]) : null;
+    return { variant, view: "a-detail", id: strat, tab, editionId };
+  }
+  const lens = parts[0] === "b" ? (parts[1] ?? "todas") : "todas";
+  const ctx = ["edicao", "atribuicao"].includes(parts[2]) ? parts[2] : null;
+  const lensId = lens === "todas" ? "todas" : (stratById[Number(lens)] ? Number(lens) : "todas");
+  return { variant, view: "b", lens: lensId, ctx };
+}
+let route = parseRoute();
+
+function go(hash) { location.hash = hash; }
+function setVariant(v) {
+  const q = new URLSearchParams(location.search);
+  q.set("v", v);
+  location.search = q.toString();
+}
+const routeHash = (r) => {
+  if (r.view === "a-list" || r.variant === "a" && !r.id) return "#/a/list";
+  if (r.variant === "a") return `#/a/${r.id}/${r.tab}${r.tab === "edicoes" && r.editionId ? `/${r.editionId}` : ""}`;
+  return `#/b/${r.lens}${r.ctx ? `/${r.ctx}` : ""}`;
+};
+
+window.addEventListener("hashchange", () => { route = parseRoute(); render(); });
+
+let toastTimer = null;
+function toast(message) {
+  const el = document.getElementById("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+/* ============================ shell ============================ */
+
+function shell(activeObject, sub, body) {
+  const groups = ["Posição", "Operações", "Resultados"];
+  const nav = groups.map((group) => {
+    const items = OBJECTS.filter((o) => o.group === group);
+    return `
+      <div class="group-label">${group}</div>
+      ${items.map((o) => `
+        <button class="nav-item ${o.key === activeObject ? "active" : ""}" data-obj="${o.key}">
+          ${o.label}
+          ${o.key === "strategies" ? `<span class="cnt">${STRATEGIES.length}</span>` : ""}
+        </button>`).join("")}`;
+  }).join("");
+  return `
+  <div class="shell">
+    <aside class="side">
+      <div class="brand"><b>Carteira Ideal</b><span>v2</span></div>
+      <nav>${nav}</nav>
+      <div class="foot">
+        <span><b>nov/2026</b> aberto</span>
+        <span>out/2026 fechado</span>
+        <span>consolidado há 2 h</span>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="topbar">
+        <span class="crumb">${sub}</span>
+        <span class="sp"></span>
+        <span class="month-pill"><span class="dot"></span> nov/26 aberto · out/26 fechado</span>
+        <span class="age">${money0(F.portfolio.summary.holdings_value)} investido</span>
+      </div>
+      <div class="content">${body}</div>
+    </main>
+  </div>`;
+}
+
+/* ============================ shared pieces ============================ */
+
+function kpiStrip(items) {
+  return `<div class="kpis">${items.map((it) => `
+    <div class="kpi">
+      <div class="k">${it.k}</div>
+      <div class="v ${it.tone ?? ""}">${it.v}</div>
+      <div class="s">${it.s ?? ""}</div>
+    </div>`).join("")}</div>`;
+}
+
+function driftCell(drift) {
+  if (drift === null || drift === undefined) return '<span class="faint">—</span>';
+  return `<span class="${drift < 0 ? "def" : "sur"}">${pp(drift)}</span>`;
+}
+function deficitCell(deficit) {
+  if (deficit === null || deficit === undefined) return '<span class="faint">—</span>';
+  return `<span class="${deficit >= 0 ? "def" : "sur"}">${deficit < 0 ? "+" : ""}${money0(Math.abs(deficit))}</span>`;
+}
+function bar(actualPct, targetPct) {
+  const width = Math.max(0, Math.min(100, actualPct));
+  return `<span class="bar"><i style="width:${width}%"></i>${targetPct != null ? `<u style="left:${Math.max(0, Math.min(100, targetPct))}%"></u>` : ""}</span>`;
+}
+function progressBar(actual, ideal) {
+  return bar(ideal ? (actual / ideal) * 100 : 0, null);
+}
+
+function editionStatusChip(edition) {
+  if (!edition) return '<span class="chip grey plain">sem edição</span>';
+  return edition.status === "STAGED"
+    ? `<span class="chip amber">${monthLabel(edition.reference_month)} · preparada</span>`
+    : `<span class="chip green">${monthLabel(edition.reference_month)} · ativa</span>`;
+}
+
+function diffSummary(edition) {
+  if (!edition) return "Sem edições importadas";
+  const d = edition.diff_from_previous;
+  if (!d) return "Primeira edição";
+  const bits = [];
+  if (d.entered?.length) bits.push(`entra ${d.entered.map((e) => e.ticker).join(", ")}`);
+  if (d.exited?.length) bits.push(`sai ${d.exited.map((e) => e.ticker).join(", ")}`);
+  if (d.changed?.length) bits.push(`${d.changed.length} ${d.changed.length === 1 ? "peso alterado" : "pesos alterados"}`);
+  return bits.length ? bits.join(" · ") : "sem mudanças";
+}
+
+function diffRows(edition, { compact = false } = {}) {
+  if (!edition) return '<div class="empty">Nenhuma edição para mostrar.</div>';
+  const d = edition.diff_from_previous;
+  if (!d) return '<div class="empty">Primeira edição desta estratégia — nada a comparar.</div>';
+  const rows = [];
+  for (const e of d.entered ?? []) {
+    rows.push(`<div class="diff-row">
+      <span class="chip green">entrou</span>
+      <span><b class="ticker">${esc(e.ticker)}</b></span>
+      <span class="faint">— → ${e.weight}%</span>
+      <span class="dlt up">+${e.weight}%</span>
+    </div>`);
+  }
+  for (const e of d.exited ?? []) {
+    rows.push(`<div class="diff-row">
+      <span class="chip red">saiu</span>
+      <span><b class="ticker">${esc(e.ticker)}</b></span>
+      <span class="faint">${e.weight}% → —</span>
+      <span class="dlt down">−${e.weight}%</span>
+    </div>`);
+  }
+  for (const c of d.changed ?? []) {
+    const delta = c.weight_after - c.weight_before;
+    const rating = c.rating_before !== c.rating_after
+      ? `<span class="faint" style="font-size:10px"> · ${c.rating_before} → ${c.rating_after}</span>` : "";
+    rows.push(`<div class="diff-row">
+      <span class="chip grey">peso</span>
+      <span><b class="ticker">${esc(c.ticker)}</b>${rating}</span>
+      <span class="faint">${c.weight_before}% <span class="arrow">→</span> ${c.weight_after}%</span>
+      <span class="dlt ${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "+" : ""}${delta.toFixed(0)}%</span>
+    </div>`);
+  }
+  return rows.length ? `<div class="diff-rows">${rows.join("")}</div>` : '<div class="empty">Sem mudanças desde a edição anterior.</div>';
+}
+
+function entriesTable(edition) {
+  if (!edition) return '<div class="empty">Nenhuma edição para mostrar.</div>';
+  return `<table class="t">
+    <thead><tr><th>Ativo</th><th class="r">Peso</th><th>Rating</th><th class="r">Preço-alvo</th><th class="r">Não operar</th></tr></thead>
+    <tbody>${edition.entries.map((e) => `
+      <tr>
+        <td><b class="ticker">${esc(e.ticker)}</b></td>
+        <td class="r num">${e.weight}%</td>
+        <td>${ratingChip(e.rating)}</td>
+        <td class="r num">${e.target_price != null ? money(e.target_price) : "—"}</td>
+        <td class="r">${e.do_not_trade ? '<span class="chip red plain">sim</span>' : '<span class="faint">—</span>'}</td>
+      </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+function attributionTable(rows, strategyName) {
+  if (!rows.length) return '<div class="empty">Nenhuma custódia atribuída a esta estratégia.</div>';
+  return `<table class="t">
+    <thead><tr><th>Ativo</th><th class="r">Custódia</th><th class="r">Desta estratégia</th><th class="r">Não atribuído</th><th class="r">Valor</th></tr></thead>
+    <tbody>${rows.map((r) => {
+      const mine = r.slices.filter((s) => s.strategy_name === strategyName).reduce((n, s) => n + s.quantity, 0);
+      return `<tr>
+        <td><b class="ticker">${esc(r.ticker)}</b></td>
+        <td class="r num">${r.custody_quantity.toLocaleString("pt-BR")}</td>
+        <td class="r num">${mine.toLocaleString("pt-BR")}</td>
+        <td class="r num ${r.unattributed_quantity ? "loss" : "faint"}">${r.unattributed_quantity ? r.unattributed_quantity.toLocaleString("pt-BR") : "—"}</td>
+        <td class="r num">${money(mine * quote(r.ticker))}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+}
+
+function attributionMatrix() {
+  return `<table class="t">
+    <thead><tr><th>Ativo</th><th class="r">Custódia</th><th>Fatias por estratégia</th><th class="r">Não atribuído</th></tr></thead>
+    <tbody>${F.assets.attribution.map((r) => `
+      <tr>
+        <td><b class="ticker">${esc(r.ticker)}</b></td>
+        <td class="r num">${r.custody_quantity.toLocaleString("pt-BR")}</td>
+        <td>${r.slices.map((s) => `<span class="chip ${stratById[s.strategy_id]?.kind === "MANUAL" ? "grey" : "blue"} tiny">${esc(s.strategy_name)} · ${s.quantity.toLocaleString("pt-BR")}</span>`).join(" ")}</td>
+        <td class="r num ${r.unattributed_quantity ? "loss" : "faint"}">${r.unattributed_quantity || "—"}</td>
+      </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+function transferCallout() {
+  return `<div class="callout warn">
+    <b>Transferência de atribuição pendente.</b> 372 WEGE3 (${money(372 * 52.4)}) de
+    <b>Legado Ações</b> para <b>Dividendos BR</b>. A decisão é humana porque o bucket doador é manual.
+  </div>`;
+}
+
+/* ============================ treatment A: list ============================ */
+
+function strategyListPage() {
+  const compareGroups = [
+    { label: "Orientadas por relatório", items: REPORT },
+    { label: "Buckets manuais (legado)", items: MANUAL },
+  ];
+  const rows = compareGroups.map((g) => `
+    <div class="sgroup">
+      <span>${g.label}</span>
+      <span class="sp"></span>
+      <span class="cnt">${g.items.length} · ${money0(g.items.reduce((n, s) => n + s.actual, 0))}</span>
+    </div>
+    <div class="cmp-head">
+      <span>Estratégia</span><span>Classe</span><span>Real vs. alvo</span><span class="r">Drift</span><span class="r">Edição</span>
+    </div>
+    ${g.items.map((s) => `
+      <div class="cmp-row" data-go="#/a/${s.id}/carteira">
+        <span class="nm"><b>${esc(s.name)}</b>${kindChip(s.kind)}</span>
+        <span><span class="chip ${classChip[s.asset_class]}">${classLabel[s.asset_class]}</span></span>
+        <span class="class-bar">
+          ${s.ideal != null
+            ? `${progressBar(s.actual, s.ideal)}<span class="num faint" style="font-size:10.5px">${money0(s.actual)} / ${money0(s.ideal)}</span>`
+            : `<span class="faint" style="font-size:10.5px">${money0(s.actual)} · sem alvo</span>`}
+        </span>
+        <span class="r num">${driftCell(s.drift)}</span>
+        <span class="r">${editionStatusChip(s.latest)}</span>
+      </div>`).join("")}
+  `).join("");
+
+  const body = `
+    <div class="page-head">
+      <div>
+        <h1>Estratégias</h1>
+        <p>${STRATEGIES.length} estratégias · ${REPORT.length} orientadas por relatório · ${MANUAL.length} buckets manuais · ${money0(STRAT_TOTAL)} em ações e FIIs</p>
+      </div>
+      <span class="sp"></span>
+      <div class="strat-head"><div class="actions">
+        <button class="btn" data-toast="O fluxo de importação é o protótipo do ticket #354.">Importar edição</button>
+        <button class="btn primary" data-go="#/a/${REPORT[0].id}/carteira">Abrir uma estratégia →</button>
+      </div></div>
+    </div>
+    <div class="thesis"><b>A · Estratégias como objetos de primeira classe.</b> Lista comparável → detalhe com Carteira, Edições, Atribuição e Fatia no portfólio. <span class="q">Cada estratégia tem endereço próprio; os buckets manuais aparecem, mas são um tipo diferente de objeto.</span></div>
+
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) 330px;align-items:start">
+      <section class="panel">
+        <header>
+          <h2>Comparação entre estratégias</h2>
+          <span class="sp"></span>
+          <span class="hint">barra = real / ideal · ${money0(portfolioTotal)} no portfólio</span>
+        </header>
+        <div class="body flush">${rows}</div>
+      </section>
+
+      <div class="grid">
+        <section class="panel">
+          <header><h2>Edições preparadas</h2><span class="sp"></span><span class="chip amber plain">${STAGED.length}</span></header>
+          <div class="body flush">
+            ${STAGED.map((s) => `
+              <button class="tl-item" data-go="#/a/${s.id}/edicoes/${s.staged.id}">
+                <span class="mth">${monthLabel(s.staged.reference_month)}</span>
+                <span><span class="ttl">${esc(s.name)}</span><span class="det">${diffSummary(s.staged)}</span></span>
+                <span class="chip amber">promover</span>
+              </button>`).join("")}
+          </div>
+        </section>
+        <section class="panel">
+          <header><h2>Atribuição na carteira</h2></header>
+          <div class="body">
+            <div class="stat-grid">
+              <div class="stat"><div class="k">Atribuído</div><div class="v">${money0(attributionCoverage().attributed)}</div></div>
+              <div class="stat"><div class="k">Custódia</div><div class="v">${money0(attributionCoverage().custody)}</div></div>
+            </div>
+            <div class="callout" style="margin-top:10px">
+              <b>${pct(attributionCoverage().ratio * 100, 0)}</b> da custódia de ações e FIIs está atribuída a uma das ${STRATEGIES.length} estratégias; 0 cotas estão fora.
+            </div>
+            ${transferCallout()}
+          </div>
+        </section>
+      </div>
+    </div>`;
+  return shell("strategies", "Posição / Estratégias", body);
+}
+
+/* ============================ treatment A: detail ============================ */
+
+function strategyDetailPage({ id, tab, editionId }) {
+  const s = stratById[id];
+  const isManual = s.kind === "MANUAL";
+  const tabs = isManual
+    ? [["carteira", "Carteira"], ["atribuicao", "Atribuição"], ["fatia", "Fatia no portfólio"], ["edicoes", "Edições"]]
+    : [["carteira", "Carteira"], ["edicoes", "Edições"], ["atribuicao", "Atribuição"], ["fatia", "Fatia no portfólio"]];
+  const activeTab = tabs.some(([k]) => k === tab) ? tab : "carteira";
+
+  const body = `
+    <a class="backlink" href="#/a/list">← Estratégias</a>
+    <div class="page-head strat-head">
+      <div>
+        <h1>${esc(s.name)} ${kindChip(s.kind)} <span class="chip ${classChip[s.asset_class]}">${classLabel[s.asset_class]}</span></h1>
+        <p>${isManual
+          ? "Bucket de custódia sem alvo · não tem edições · pode doar cotas para uma estratégia de relatório"
+          : `Orientada por relatório · alvo de ${s.target}% da classe · última edição ${s.latest ? monthLabel(s.latest.reference_month) : "—"}`}</p>
+      </div>
+      <span class="sp"></span>
+      <div class="actions">
+        ${!isManual && s.staged ? `<button class="btn primary" data-toast="Promover a edição é o fluxo do ticket #354; aqui só a vemos.">Promover ${monthLabel(s.staged.reference_month)}</button>` : ""}
+        <button class="btn" data-toast="Atribuição seria um formulário de transferência (ticket #352).">Atribuir cotas</button>
+      </div>
+    </div>
+
+    ${kpiStrip([
+      { k: "Real", v: money0(s.actual), s: `${pct((s.actual / portfolioTotal) * 100)} do portfólio` },
+      { k: "Alvo na classe", v: s.ideal != null ? money0(s.ideal) : "sem alvo", s: s.target != null ? `${s.target}% de ${classLabel[s.asset_class]}` : "bucket manual" },
+      { k: "Drift", v: s.drift != null ? pp(s.drift) : "—", tone: s.drift != null ? (s.drift < 0 ? "def" : "sur") : "", s: s.deficit != null ? `${s.deficit >= 0 ? "déficit" : "superávit"} ${money0(Math.abs(s.deficit))}` : "sem alvo para comparar" },
+      { k: "Edição", v: s.staged ? monthLabel(s.staged.reference_month) : (s.latest ? monthLabel(s.latest.reference_month) : "—"), s: s.staged ? "preparada para promover" : isManual ? "não se aplica" : "ativa" },
+    ])}
+
+    <div class="tabs">
+      ${tabs.map(([k, label]) => `<button class="${activeTab === k ? "active" : ""}" data-go="#/a/${s.id}/${k}">${label}${k === "edicoes" && !isManual && s.editions.length ? ` <span class="faint">${s.editions.length}</span>` : ""}</button>`).join("")}
+    </div>
+
+    ${activeTab === "carteira" ? carteiraTabA(s) : ""}
+    ${activeTab === "edicoes" ? edicoesTabA(s, editionId) : ""}
+    ${activeTab === "atribuicao" ? atribuicaoTabA(s) : ""}
+    ${activeTab === "fatia" ? fatiaTabA(s) : ""}
+  `;
+  return shell("strategies", `Posição / Estratégias / <b>${esc(s.name)}</b>`, body);
+}
+
+function carteiraTabA(s) {
+  if (s.kind === "MANUAL") {
+    return `
+      <div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start">
+        <section class="panel">
+          <header><h2>Custódia do bucket</h2><span class="sp"></span><span class="hint">sem alvo por ativo</span></header>
+          <div class="body flush">
+            <table class="t">
+              <thead><tr><th>Ativo</th><th class="r">Quantidade</th><th class="r">Preço</th><th class="r">Valor</th><th class="r">Fatia</th></tr></thead>
+              <tbody>${s.tickers.map((t) => `
+                <tr>
+                  <td><b class="ticker">${esc(t.ticker)}</b> ${t.stale ? '<span class="chip amber plain">cotação velha</span>' : ""}</td>
+                  <td class="r num">${t.quantity.toLocaleString("pt-BR")}</td>
+                  <td class="r num">${money(t.price)}</td>
+                  <td class="r num">${money(t.actual)}</td>
+                  <td class="r num">${pct((t.actual / s.actual) * 100)}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+          </div>
+        </section>
+        <div class="grid">
+          <section class="panel"><header><h2>Por que é manual</h2></header><div class="body">
+            <p style="margin:0 0 9px;color:var(--ink-2)">A estratégia não tem relatório, peso-alvo nem edições. Ela existe para dar dono à custódia que ainda não foi atribuída.</p>
+            <div class="stat-grid">
+              <div class="stat"><div class="k">Ativos</div><div class="v">${s.tickers.length}</div></div>
+              <div class="stat"><div class="k">Na classe</div><div class="v">${pct((s.actual / s.classActual) * 100, 0)}</div></div>
+            </div>
+          </div></section>
+          <section class="panel"><header><h2>Ação sugerida</h2></header><div class="body">${transferCallout()}</div></section>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start">
+      <section class="panel">
+        <header>
+          <h2>Ativos e alvos</h2>
+          <span class="sp"></span>
+          <span class="hint">pesos da edição ativa${s.latest && s.latest.status === "ACTIVE" ? ` (${monthLabel(s.latest.reference_month)})` : ""}</span>
+        </header>
+        <div class="body flush">
+          <table class="t">
+            <thead><tr><th>Ativo</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Real</th><th class="r">Déficit / superávit</th><th class="r">Drift</th><th></th></tr></thead>
+            <tbody>${s.tickers.map((t) => `
+              <tr>
+                <td><b class="ticker">${esc(t.ticker)}</b> ${t.stale ? '<span class="chip amber plain">cotação velha</span>' : ""}</td>
+                <td class="r num">${t.target != null ? `${t.target}%` : "—"}</td>
+                <td class="r num">${t.ideal != null ? money0(t.ideal) : "—"}</td>
+                <td class="r num">${money0(t.actual)}</td>
+                <td class="r num">${deficitCell(t.deficit)}</td>
+                <td class="r num">${driftCell(t.drift)}</td>
+                <td style="width:110px">${t.target != null ? progressBar(t.actual, t.ideal) : ""}</td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </section>
+      <div class="grid">
+        <section class="panel"><header><h2>Edição em vigor</h2><span class="sp"></span>${editionStatusChip(s.latest)}</header><div class="body">
+          ${s.latest ? `<div class="stat-grid">
+            <div class="stat"><div class="k">Mês</div><div class="v">${monthLabel(s.latest.reference_month)}</div></div>
+            <div class="stat"><div class="k">Ativos</div><div class="v">${s.latest.entries.length}</div></div>
+          </div>
+          <button class="btn" style="margin-top:10px" data-go="#/a/${s.id}/edicoes/${s.latest.id}">Ver edição e diff →</button>` : '<div class="empty">Sem edição.</div>'}
+        </div></section>
+        <section class="panel"><header><h2>Atribuição</h2></header><div class="body">
+          <div class="stat-grid">
+            <div class="stat"><div class="k">Cotas</div><div class="v">${attributionQty(s.name).toLocaleString("pt-BR")}</div></div>
+            <div class="stat"><div class="k">Valor</div><div class="v">${money0(attributionValue(s.name))}</div></div>
+          </div>
+          <button class="btn" style="margin-top:10px" data-go="#/a/${s.id}/atribuicao">Abrir atribuição →</button>
+        </div></section>
+      </div>
+    </div>`;
+}
+
+function edicoesTabA(s, editionId) {
+  if (s.kind === "MANUAL") {
+    return `<section class="panel"><div class="empty">
+      Estratégias manuais não têm edições.<br />
+      A custódia só muda por importação ou transferência de atribuição.
+    </div></section>`;
+  }
+  const selected = s.editions.find((e) => e.id === editionId) ?? s.staged ?? s.latest;
+  return `
+    <div class="grid" style="grid-template-columns:300px minmax(0,1fr);align-items:start">
+      <section class="panel">
+        <header><h2>Edições</h2><span class="sp"></span><span class="hint">${s.editions.length}</span></header>
+        <div class="body flush">
+          ${s.editions.slice().reverse().map((e) => `
+            <button class="tl-item ${selected && e.id === selected.id ? "active" : ""}" data-go="#/a/${s.id}/edicoes/${e.id}">
+              <span class="mth">${monthLabel(e.reference_month)}</span>
+              <span><span class="ttl">${e.status === "STAGED" ? "Preparada" : "Ativa"}</span><span class="det">${diffSummary(e)}</span></span>
+              <span class="chip ${e.status === "STAGED" ? "amber" : "green"}">${e.status === "STAGED" ? "preparada" : "ativa"}</span>
+            </button>`).join("")}
+        </div>
+      </section>
+      <div class="grid">
+        <section class="panel">
+          <header>
+            <h2>Diff · ${selected ? monthLabel(selected.reference_month) : "—"}</h2>
+            <span class="sp"></span>
+            ${selected && selected.status === "STAGED" ? '<button class="btn primary" data-toast="Promover a edição é o fluxo do ticket #354.">Promover edição</button>' : ""}
+          </header>
+          ${selected ? diffRows(selected) : '<div class="empty">Nenhuma edição.</div>'}
+        </section>
+        <section class="panel">
+          <header><h2>Ativos da edição</h2><span class="sp"></span><span class="hint">${selected ? monthLabel(selected.reference_month) : ""}</span></header>
+          <div class="body flush">${entriesTable(selected)}</div>
+        </section>
+      </div>
+    </div>`;
+}
+
+function atribuicaoTabA(s) {
+  const rows = attributionRowsFor(s.name);
+  const qty = attributionQty(s.name);
+  const value = attributionValue(s.name);
+  return `
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start">
+      <div class="grid">
+        <section class="panel">
+          <header><h2>Atribuição desta estratégia</h2><span class="sp"></span><span class="hint">custódia × fatias</span></header>
+          <div class="body flush">${attributionTable(rows, s.name)}</div>
+        </section>
+        <section class="panel">
+          <header><h2>Atribuição na carteira</h2><span class="sp"></span><span class="hint">todas as estratégias</span></header>
+          <div class="body flush">${attributionMatrix()}</div>
+        </section>
+      </div>
+      <div class="grid">
+        <section class="panel"><header><h2>Resumo</h2></header><div class="body">
+          <div class="stat-grid">
+            <div class="stat"><div class="k">Cotas</div><div class="v">${qty.toLocaleString("pt-BR")}</div></div>
+            <div class="stat"><div class="k">Valor</div><div class="v">${money0(value)}</div></div>
+            <div class="stat"><div class="k">Ativos</div><div class="v">${rows.length}</div></div>
+            <div class="stat"><div class="k">Não atribuído</div><div class="v">${rows.reduce((n, r) => n + r.unattributed_quantity, 0)}</div></div>
+          </div>
+        </div></section>
+        ${s.kind === "MANUAL" ? `<section class="panel"><header><h2>Doação sugerida</h2></header><div class="body">${transferCallout()}</div></section>` : ""}
+        ${s.kind !== "MANUAL" ? `<section class="panel"><header><h2>Recebe cotas</h2></header><div class="body">${transferCallout()}</div></section>` : ""}
+      </div>
+    </div>`;
+}
+
+function fatiaTabA(s) {
+  const classRest = s.classActual - s.actual;
+  const total = portfolioTotal;
+  const sharePct = (s.actual / total) * 100;
+  const classRestPct = (classRest / total) * 100;
+  const restPct = ((total - s.classActual) / total) * 100;
+  const perf = s.perf;
+  const clsPerf = F.analysis.monthPerformance.classes.find((c) => c.asset_class === s.asset_class);
+  return `
+    <div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start">
+      <div class="grid">
+        <section class="panel"><header><h2>Fatia no portfólio</h2><span class="sp"></span><span class="hint">${money0(total)} investidos</span></header><div class="body">
+          <div class="share">
+            <i style="width:${sharePct}%;background:var(--accent)"></i>
+            <i style="width:${classRestPct}%;background:#a9bde9"></i>
+            <i style="width:${restPct}%;background:var(--line)"></i>
+          </div>
+          <div class="share-legend">
+            <span><i style="background:var(--accent)"></i>${esc(s.name)} · ${pct(sharePct)}</span>
+            <span><i style="background:#a9bde9"></i>resto de ${classLabel[s.asset_class]} · ${pct(classRestPct)}</span>
+            <span><i style="background:var(--line)"></i>outras classes · ${pct(restPct)}</span>
+          </div>
+          <div class="stat-grid" style="margin-top:14px">
+            <div class="stat"><div class="k">Da classe</div><div class="v">${pct((s.actual / s.classActual) * 100)}</div></div>
+            <div class="stat"><div class="k">Do portfólio</div><div class="v">${pct(sharePct)}</div></div>
+            <div class="stat"><div class="k">Real</div><div class="v">${money0(s.actual)}</div></div>
+            <div class="stat"><div class="k">Alvo</div><div class="v">${s.ideal != null ? money0(s.ideal) : "sem alvo"}</div></div>
+          </div>
+        </div></section>
+        <section class="panel"><header><h2>Performance em outubro</h2><span class="sp"></span><span class="hint">${perf ? "decomposição do mês" : "sem série"}</span></header><div class="body flush">
+          ${perf ? `<table class="t">
+            <thead><tr><th>Início</th><th class="r">Fim</th><th class="r">Aportes</th><th class="r">Proventos</th><th class="r">Retorno</th></tr></thead>
+            <tbody><tr>
+              <td class="num">${money0(perf.decomposition.value_start)}</td>
+              <td class="r num">${money0(perf.decomposition.value_end)}</td>
+              <td class="r num">${money0(perf.decomposition.net_aportes)}</td>
+              <td class="r num">${money0(perf.decomposition.net_income)}</td>
+              <td class="r num ${perf.decomposition.return_percentage < 0 ? "loss" : "gain"}"><b>${pct(perf.decomposition.return_percentage)}</b></td>
+            </tr></tbody>
+          </table>` : '<div class="empty">Sem série de performance.</div>'}
+        </div></section>
+      </div>
+      <div class="grid">
+        <section class="panel"><header><h2>Contra a classe</h2></header><div class="body">
+          ${perf && clsPerf ? `
+            <div class="mini-list">
+              <div class="mini-row"><span class="dim">Retorno da estratégia</span><span class="sp"></span><b class="num ${perf.decomposition.return_percentage < 0 ? "loss" : "gain"}">${pct(perf.decomposition.return_percentage)}</b></div>
+              <div class="mini-row"><span class="dim">Retorno da classe</span><span class="sp"></span><b class="num ${clsPerf.decomposition.return_percentage < 0 ? "loss" : "gain"}">${pct(clsPerf.decomposition.return_percentage)}</b></div>
+              <div class="mini-row"><span class="dim">Benchmark da classe</span><span class="sp"></span><b class="num">${pct(clsPerf.benchmark_return)}</b></div>
+            </div>` : '<div class="faint">Sem comparação.</div>'}
+        </div></section>
+        <section class="panel"><header><h2>Edição</h2></header><div class="body">
+          ${editionStatusChip(s.latest)}
+          <p style="margin:9px 0 0;color:var(--ink-2);font-size:11.5px">${diffSummary(s.latest)}</p>
+          <button class="btn" style="margin-top:9px" data-go="#/a/${s.id}/edicoes">Abrir edições →</button>
+        </div></section>
+      </div>
+    </div>`;
+}
+
+/* ============================ treatment B: lens ============================ */
+
+function lensBar(activeLens) {
+  const lensButton = (lens, dash) => {
+    const s = typeof lens === "number" ? stratById[lens] : null;
+    return `<button class="${String(activeLens) === String(lens) ? "active" : ""}" data-go="#/b/${lens}">
+      ${dash ? esc(dash) : esc(s.name)}
+      ${s ? `<span class="dr ${s.drift == null ? "zero" : s.drift < 0 ? "neg" : ""}">${s.drift == null ? "sem alvo" : pp(s.drift)}</span>` : ""}
+    </button>`;
+  };
+  return `<div class="lens">
+    ${lensButton("todas", "Todas as estratégias")}
+    <span class="divider"></span>
+    <span class="lbl">Relatório</span>
+    ${REPORT.map((s) => lensButton(s.id)).join("")}
+    <span class="divider"></span>
+    <span class="lbl">Manual</span>
+    ${MANUAL.map((s) => lensButton(s.id)).join("")}
+  </div>`;
+}
+
+function lensKpis(lens) {
+  if (lens === "todas") {
+    const s = F.portfolio.summary;
+    return kpiStrip([
+      { k: "Capital", v: money0(s.capital), s: "patrimônio-alvo de nov/26" },
+      { k: "Investido", v: money0(s.holdings_value), s: `${pct((s.holdings_value / s.capital) * 100)} do Capital` },
+      { k: "Caixa não investido", v: money0(s.uninvested_balance), s: `piso ${money0(F.portfolio.currentMonth.month.floor)}` },
+      { k: "Drift da carteira", v: pp(s.drift), tone: s.drift < 0 ? "def" : "sur", s: `déficit ${money0(s.deficit)}` },
+    ]);
+  }
+  const s = stratById[lens];
+  return kpiStrip([
+    { k: "Real", v: money0(s.actual), s: `${pct((s.actual / portfolioTotal) * 100)} do portfólio` },
+    { k: s.kind === "MANUAL" ? "Alvo" : "Alvo na classe", v: s.ideal != null ? money0(s.ideal) : "sem alvo", s: s.target != null ? `${s.target}% de ${classLabel[s.asset_class]}` : "bucket manual" },
+    { k: "Drift", v: s.drift != null ? pp(s.drift) : "—", tone: s.drift != null ? (s.drift < 0 ? "def" : "sur") : "", s: s.deficit != null ? `${s.deficit >= 0 ? "déficit" : "superávit"} ${money0(Math.abs(s.deficit))}` : "sem alvo para comparar" },
+    { k: "Edição", v: s.staged ? monthLabel(s.staged.reference_month) : (s.latest ? monthLabel(s.latest.reference_month) : "—"), s: s.staged ? "preparada" : s.kind === "MANUAL" ? "não se aplica" : "ativa" },
+  ]);
+}
+
+function allocationTableB(lens) {
+  if (lens === "todas") {
+    return `<table class="t">
+      <thead><tr><th>Nível</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Real</th><th class="r">Déficit / superávit</th><th class="r">Drift</th><th style="width:140px"></th></tr></thead>
+      <tbody>
+        ${F.portfolio.allocation.classes.map((c) => {
+          const classRows = `
+            <tr class="class-row">
+              <td><span class="chip ${classChip[c.asset_class]}">${classLabel[c.asset_class]}</span></td>
+              <td class="r num">${c.target}%</td>
+              <td class="r num">${money0(c.ideal)}</td>
+              <td class="r num">${money0(c.actual)}</td>
+              <td class="r num ${c.deficit >= 0 ? "def" : "sur"}">${c.deficit < 0 ? "+" : ""}${money0(Math.abs(c.deficit))}</td>
+              <td class="r num ${c.drift < 0 ? "def" : "sur"}">${pp(c.drift)}</td>
+              <td>${bar((c.actual / F.portfolio.allocation.capital) * 100, c.target)}</td>
+            </tr>`;
+          const reportRows = (c.strategies ?? []).map((s) => `
+            <tr class="sub-row click" data-go="#/b/${s.strategy === "Dividendos BR" ? 1 : s.strategy === "Qualidade Global" ? 2 : 3}">
+              <td><span class="dim">↳</span> <b>${esc(s.strategy)}</b> <span class="chip blue tiny">relatório</span></td>
+              <td class="r num faint">${s.target}% da classe</td>
+              <td class="r num">${money0(s.ideal)}</td>
+              <td class="r num">${money0(s.actual)}</td>
+              <td class="r num ${s.deficit >= 0 ? "def" : "sur"}">${s.deficit < 0 ? "+" : ""}${money0(Math.abs(s.deficit))}</td>
+              <td class="r num ${s.drift < 0 ? "def" : "sur"}">${pp(s.drift)}</td>
+              <td>${bar((s.actual / F.portfolio.allocation.capital) * 100, (s.ideal / F.portfolio.allocation.capital) * 100)}</td>
+            </tr>`).join("");
+          const manualRow = c.manual ? `
+            <tr class="sub-row manual-row click" data-go="#/b/${c.manual.strategy === "Legado Ações" ? 4 : 5}">
+              <td><span class="dim">↳</span> <b>${esc(c.manual.strategy)}</b> <span class="chip grey tiny">manual</span></td>
+              <td class="r faint">sem alvo</td>
+              <td class="r num faint">—</td>
+              <td class="r num">${money0(c.manual.actual)}</td>
+              <td class="r num faint">—</td>
+              <td class="r num faint">—</td>
+              <td><span class="faint" style="font-size:10.5px">custódia sem alvo</span></td>
+            </tr>` : "";
+          return classRows + reportRows + manualRow;
+        }).join("")}
+      </tbody>
+    </table>`;
+  }
+
+  const s = stratById[lens];
+  const cls = classAllocFor(s.asset_class);
+  const header = `<div class="sgroup" style="padding-left:14px">
+    <span>${classLabel[s.asset_class]}</span>
+    <span class="chip ${classChip[s.asset_class]}">${pct((cls.actual / portfolioTotal) * 100, 0)} do portfólio</span>
+    <span class="sp"></span>
+    <span class="cnt">lente: ${esc(s.name)} · ${kindLabel(s.kind).toLowerCase()}</span>
+  </div>`;
+  if (s.kind === "MANUAL") {
+    return `${header}<table class="t">
+      <thead><tr><th>Ativo</th><th class="r">Quantidade</th><th class="r">Preço</th><th class="r">Real</th><th class="r">Alvo</th><th class="r">Drift</th><th></th></tr></thead>
+      <tbody>${s.tickers.map((t) => `
+        <tr>
+          <td><b class="ticker">${esc(t.ticker)}</b> ${t.stale ? '<span class="chip amber plain">cotação velha</span>' : ""}</td>
+          <td class="r num">${t.quantity.toLocaleString("pt-BR")}</td>
+          <td class="r num">${money(t.price)}</td>
+          <td class="r num">${money(t.actual)}</td>
+          <td class="r faint">sem alvo</td>
+          <td class="r faint">—</td>
+          <td style="width:130px"><span class="chip grey plain">legado</span></td>
+        </tr>`).join("")}</tbody>
+    </table>`;
+  }
+  return `${header}<table class="t">
+    <thead><tr><th>Ativo</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Real</th><th class="r">Déficit / superávit</th><th class="r">Drift</th><th style="width:140px"></th></tr></thead>
+    <tbody>${s.tickers.map((t) => `
+      <tr>
+        <td><b class="ticker">${esc(t.ticker)}</b> ${t.stale ? '<span class="chip amber plain">cotação velha</span>' : ""}</td>
+        <td class="r num">${t.target}%</td>
+        <td class="r num">${money0(t.ideal)}</td>
+        <td class="r num">${money0(t.actual)}</td>
+        <td class="r num ${t.deficit >= 0 ? "def" : "sur"}">${t.deficit < 0 ? "+" : ""}${money0(Math.abs(t.deficit))}</td>
+        <td class="r num ${t.drift < 0 ? "def" : "sur"}">${pp(t.drift)}</td>
+        <td>${progressBar(t.actual, t.ideal)}</td>
+      </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+function railTodas() {
+  const coverage = attributionCoverage();
+  return `
+    <section class="panel">
+      <header><h2>Por estratégia</h2><span class="sp"></span><span class="faint" style="font-size:10.5px">${STRATEGIES.length}</span></header>
+      <div class="body flush">
+        ${STRATEGIES.map((s) => `
+          <button class="tl-item" data-go="#/b/${s.id}">
+            <span class="mth" style="font-size:10px">${s.kind === "MANUAL" ? "manual" : "relat."}</span>
+            <span><span class="ttl">${esc(s.name)}</span><span class="det">${money0(s.actual)} · ${s.ideal != null ? `alvo ${money0(s.ideal)}` : "sem alvo"}</span></span>
+            <span class="num ${s.drift == null ? "faint" : s.drift < 0 ? "def" : "sur"}">${s.drift == null ? "—" : pp(s.drift)}</span>
+          </button>`).join("")}
+      </div>
+    </section>
+    <section class="panel">
+      <header><h2>Edições preparadas</h2><span class="sp"></span><span class="chip amber plain">${STAGED.length}</span></header>
+      <div class="body flush">
+        ${STAGED.map((s) => `
+          <button class="tl-item" data-go="#/b/${s.id}/edicao">
+            <span class="mth">${monthLabel(s.staged.reference_month)}</span>
+            <span><span class="ttl">${esc(s.name)}</span><span class="det">${diffSummary(s.staged)}</span></span>
+            <span class="chip amber">diff</span>
+          </button>`).join("")}
+      </div>
+    </section>
+    <section class="panel">
+      <header><h2>Atribuição</h2><span class="sp"></span><span class="hint">custódia de ações e FIIs</span></header>
+      <div class="body">
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Atribuído</div><div class="v">${money0(coverage.attributed)}</div></div>
+          <div class="stat"><div class="k">Cobertura</div><div class="v">${pct(coverage.ratio * 100, 0)}</div></div>
+        </div>
+        ${transferCallout()}
+      </div>
+    </section>`;
+}
+
+function railLens(lens, ctx) {
+  const s = stratById[lens];
+  const rows = attributionRowsFor(s.name);
+  const perf = s.perf;
+  const clsPerf = F.analysis.monthPerformance.classes.find((c) => c.asset_class === s.asset_class);
+  const sharePct = (s.actual / portfolioTotal) * 100;
+  const classRestPct = ((s.classActual - s.actual) / portfolioTotal) * 100;
+  const restPct = ((portfolioTotal - s.classActual) / portfolioTotal) * 100;
+
+  const editionCard = s.kind === "MANUAL"
+    ? `<section class="panel">
+        <header><h2>Edição</h2><span class="sp"></span><span class="chip grey plain">manual</span></header>
+        <div class="body"><p style="margin:0;color:var(--ink-2);font-size:11.5px">Bucket manual não tem relatório, pesos-alvo nem edições. A custódia só muda por importação ou transferência.</p></div>
+      </section>`
+    : `<section class="panel">
+        <header><h2>Edição</h2><span class="sp"></span>${editionStatusChip(s.staged ?? s.latest)}</header>
+        <div class="body">
+          <div class="evidence-row"><b>${s.staged ? monthLabel(s.staged.reference_month) : monthLabel(s.latest.reference_month)}</b><span class="faint"> · ${diffSummary(s.staged ?? s.latest)}</span></div>
+          <div class="mini-list" style="margin-top:6px">
+            <div class="mini-row"><span class="dim">Ativos</span><span class="sp"></span><b>${(s.staged ?? s.latest)?.entries.length ?? 0}</b></div>
+            <div class="mini-row"><span class="dim">Promover</span><span class="sp"></span><span class="faint">o fluxo fica no ticket #354</span></div>
+          </div>
+        </div>
+        <details class="diffbox" ${ctx === "edicao" ? "open" : ""}>
+          <summary>Ver diff da edição ${(s.staged ?? s.latest) ? monthLabel((s.staged ?? s.latest).reference_month) : ""}</summary>
+          ${diffRows(s.staged ?? s.latest)}
+        </details>
+      </section>`;
+
+  const attributionCard = `<section class="panel">
+    <header><h2>Atribuição</h2><span class="sp"></span><span class="hint">${rows.length} ativos</span></header>
+    <div class="body flush">
+      ${rows.length ? `<table class="t">
+        <thead><tr><th>Ativo</th><th class="r">Desta</th><th class="r">Custódia</th><th class="r">Não atr.</th></tr></thead>
+        <tbody>${rows.map((r) => {
+          const mine = r.slices.filter((x) => x.strategy_name === s.name).reduce((n, x) => n + x.quantity, 0);
+          return `<tr>
+            <td><b class="ticker">${esc(r.ticker)}</b></td>
+            <td class="r num">${mine.toLocaleString("pt-BR")}</td>
+            <td class="r num">${r.custody_quantity.toLocaleString("pt-BR")}</td>
+            <td class="r num faint">${r.unattributed_quantity || "—"}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>` : '<div class="empty">Sem atribuição.</div>'}
+    </div>
+    ${ctx === "atribuicao" ? `<div class="body" style="padding-top:0">${transferCallout()}</div>` : ""}
+  </section>`;
+
+  const perfCard = `<section class="panel">
+    <header><h2>Performance · outubro</h2></header>
+    <div class="body">
+      ${perf ? `
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Retorno</div><div class="v ${perf.decomposition.return_percentage < 0 ? "loss" : "gain"}">${pct(perf.decomposition.return_percentage)}</div></div>
+          <div class="stat"><div class="k">Classe</div><div class="v ${clsPerf && clsPerf.decomposition.return_percentage < 0 ? "loss" : "gain"}">${clsPerf ? pct(clsPerf.decomposition.return_percentage) : "—"}</div></div>
+        </div>
+        <div class="mini-list" style="margin-top:8px">
+          <div class="mini-row"><span class="dim">Início</span><span class="sp"></span><span class="num">${money0(perf.decomposition.value_start)}</span></div>
+          <div class="mini-row"><span class="dim">Fim</span><span class="sp"></span><span class="num">${money0(perf.decomposition.value_end)}</span></div>
+          <div class="mini-row"><span class="dim">Aportes + proventos</span><span class="sp"></span><span class="num">${money0(perf.decomposition.net_aportes + perf.decomposition.net_income)}</span></div>
+        </div>` : '<div class="faint">Sem série de performance.</div>'}
+    </div>
+  </section>`;
+
+  const shareCard = `<section class="panel">
+    <header><h2>Fatia no portfólio</h2><span class="sp"></span><span class="hint">${pct(sharePct)}</span></header>
+    <div class="body">
+      <div class="share">
+        <i style="width:${sharePct}%;background:var(--accent)"></i>
+        <i style="width:${classRestPct}%;background:#a9bde9"></i>
+        <i style="width:${restPct}%;background:var(--line)"></i>
+      </div>
+      <div class="share-legend">
+        <span><i style="background:var(--accent)"></i>${esc(s.name)}</span>
+        <span><i style="background:#a9bde9"></i>resto de ${classLabel[s.asset_class]}</span>
+        <span><i style="background:var(--line)"></i>outras classes</span>
+      </div>
+    </div>
+  </section>`;
+
+  return `${editionCard}${attributionCard}${perfCard}${shareCard}`;
+}
+
+function lensPage({ lens, ctx }) {
+  const active = lens === "todas" ? "todas" : lens;
+  const title = lens === "todas" ? "Carteira · Alocação" : `Carteira · ${stratById[lens].name}`;
+  const sub = lens === "todas"
+    ? "Novembro aberto · 5 estratégias · Renda Fixa alocada por subclasse"
+    : `Lente aplicada à carteira · ${stratById[lens].kind === "MANUAL" ? "bucket manual, sem alvo" : `alvo de ${stratById[lens].target}% da classe ${classLabel[stratById[lens].asset_class]}`}`;
+
+  const body = `
+    <div class="page-head">
+      <div>
+        <h1>${esc(title)}</h1>
+        <p>${esc(sub)}</p>
+      </div>
+      <span class="sp"></span>
+      <div class="actions"><button class="btn" data-toast="O fluxo de importação é o protótipo do ticket #354.">Importar edição</button></div>
+    </div>
+    <div class="thesis"><b>B · Estratégias como lente sobre uma carteira.</b> Não existe página de estratégia: a lente filtra a mesma tabela de alocação e o painel de contexto acompanha. <span class="q">Os buckets manuais são lentes de custódia, não objetos.</span></div>
+
+    ${lensBar(active)}
+    ${lensKpis(active)}
+
+    <div class="b-grid">
+      <div class="grid">
+        <section class="panel">
+          <header>
+            <h2>${lens === "todas" ? "Alocação por classe e estratégia" : `Alocação · ${esc(stratById[lens].name)}`}</h2>
+            <span class="sp"></span>
+            <span class="hint">${lens === "todas" ? "a barra mostra o real; o traço, o alvo" : "recorte da mesma tabela de alocação"}</span>
+          </header>
+          <div class="body flush">${allocationTableB(active)}</div>
+        </section>
+        ${lens !== "todas" ? `
+        <section class="panel">
+          <header><h2>Como a lente se relaciona com a carteira</h2><span class="sp"></span><span class="hint">mesma leitura, recortada</span></header>
+          <div class="body">
+            <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px">
+              <div class="stat"><div class="k">Classe</div><div class="v" style="font-size:13px">${classLabel[stratById[lens].asset_class]}</div><div class="faint" style="font-size:11px">${money0(stratById[lens].classActual)} na classe</div></div>
+              <div class="stat"><div class="k">Na classe</div><div class="v">${pct((stratById[lens].actual / stratById[lens].classActual) * 100)}</div><div class="faint" style="font-size:11px">${stratById[lens].ideal != null ? `alvo ${stratById[lens].target}%` : "sem alvo"}</div></div>
+              <div class="stat"><div class="k">No portfólio</div><div class="v">${pct((stratById[lens].actual / portfolioTotal) * 100)}</div><div class="faint" style="font-size:11px">${money0(stratById[lens].actual)}</div></div>
+            </div>
+            <div class="callout" style="margin-top:10px">
+              ${stratById[lens].kind === "MANUAL"
+                ? "Esta lente é custódia pura: não há edição nem alvo; a sugestão é atribuir as cotas a uma estratégia de relatório."
+                : "A edição preparada e a atribuição vivem no painel à direita, sem sair desta página."}
+            </div>
+          </div>
+        </section>` : ""}
+      </div>
+      <aside class="rail">${active === "todas" ? railTodas() : railLens(lens, ctx)}</aside>
+    </div>`;
+  return shell("portfolio", lens === "todas" ? "Posição / <b>Carteira</b> / Alocação" : `Posição / <b>Carteira</b> / Alocação / ${esc(stratById[lens].name)}`, body);
+}
+
+/* ============================ bottom bar + compare drawer ============================ */
+
+function bottomBar() {
+  const a = route.variant === "a";
+  const aScenarios = [
+    ["#/a/list", "Lista"],
+    [`#/a/${REPORT[0].id}/carteira`, "Detalhe"],
+    [`#/a/${REPORT[0].id}/edicoes/${REPORT[0].staged?.id ?? ""}`, "Diff de edição"],
+    [`#/a/${REPORT[0].id}/atribuicao`, "Atribuição"],
+    [`#/a/${MANUAL[0].id}/carteira`, "Bucket manual"],
+  ];
+  const bScenarios = [
+    ["#/b/todas", "Todas"],
+    [`#/b/${REPORT[0].id}`, "Lente"],
+    [`#/b/${REPORT[0].id}/edicao`, "Diff de edição"],
+    [`#/b/${REPORT[0].id}/atribuicao`, "Atribuição"],
+    [`#/b/${MANUAL[0].id}`, "Bucket manual"],
+  ];
+  const scenarios = a ? aScenarios : bScenarios;
+  const currentHash = location.hash || (a ? "#/a/list" : "#/b/todas");
+  return `
+    <div class="title"><b>Protótipo #351</b>superfície multi-estratégia</div>
+    <button class="v ${a ? "active" : ""}" data-variant="a">A · Objetos<small>estratégia tem página</small></button>
+    <button class="v ${!a ? "active" : ""}" data-variant="b">B · Lente<small>estratégia filtra a carteira</small></button>
+    <span class="sep"></span>
+    <div class="subctl">
+      <span class="lbl">cenários</span>
+      ${scenarios.map(([hash, label]) => `<button class="pv ${currentHash === hash ? "active" : ""}" data-go="${hash}">${label}</button>`).join("")}
+    </div>
+    <span class="sp"></span>
+    <button class="ghost" data-drawer="compare">Comparar tratamentos</button>
+  `;
+}
+
+function compareDrawer() {
+  return `
+    <button class="close" data-close-drawer="1">✕</button>
+    <h3>Comparar A e B</h3>
+    <p>Os dois usam a mesma fixture e os mesmos reads. A diferença é onde a estratégia mora na IA.</p>
+    <table class="t">
+      <thead><tr><th>Dimensão</th><th>A · Objetos</th><th>B · Lente</th></tr></thead>
+      <tbody>
+        <tr><td><b>Navegação</b></td><td>Estratégias é objeto no sidebar; lista → detalhe</td><td>Carteira → Alocação; lente filtra a tabela</td></tr>
+        <tr><td><b>Endereço</b></td><td>Cada estratégia tem URL própria</td><td>Uma página; a lente é query/hash</td></tr>
+        <tr><td><b>Edição</b></td><td>Aba Edições com timeline e diff</td><td>Card de contexto com diff expansível</td></tr>
+        <tr><td><b>Atribuição</b></td><td>Aba dedicada + matriz da carteira</td><td>Card no painel da lente + aviso de transferência</td></tr>
+        <tr><td><b>Comparação entre estratégias</b></td><td>Tabela-lista ordenada por classe</td><td>Sub-linhas na alocação + card "por estratégia"</td></tr>
+        <tr><td><b>Bucket manual</b></td><td>Mesmo objeto, com abas reduzidas</td><td>Lente "sem alvo" sobre a carteira</td></tr>
+        <tr><td><b>Custo de implementação</b></td><td>Mais rotas e uma tela de detalhe por aba</td><td>Uma tela, estado de lente e painel condicional</td></tr>
+        <tr><td><b>Risco</b></td><td>Objeto pode competir com a Carteira</td><td>Estratégia pode sumir atrás de um filtro</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:10px"><b>Backend:</b> os dois cabem nos reads atuais (<code>allocation</code>, <code>strategies.editions</code>, <code>attribution</code>, <code>monthPerformance</code>). Nenhum endpoint novo é necessário para escolher.</p>
+    <p><b>Decisão do ticket #351:</b> escolher A, B ou um híbrido (por exemplo, B como padrão com deep-link para A).</p>
+  `;
+}
+
+/* ============================ render ============================ */
+
+function render() {
+  const app = document.getElementById("app");
+  if (route.variant === "a") {
+    app.innerHTML = route.view === "a-list" ? strategyListPage() : strategyDetailPage(route);
+  } else {
+    app.innerHTML = lensPage(route);
+  }
+  document.getElementById("pbar").innerHTML = bottomBar();
+  wire();
+}
+
+function openCompare() {
+  const d = document.getElementById("drawer");
+  d.innerHTML = compareDrawer();
+  d.classList.add("open");
+  d.querySelectorAll("[data-close-drawer]").forEach((b) => b.addEventListener("click", () => d.classList.remove("open")));
+}
+
+function wire() {
+  document.querySelectorAll("[data-go]").forEach((el) => {
+    el.addEventListener("click", () => go(el.dataset.go));
+  });
+  document.querySelectorAll("[data-variant]").forEach((el) => {
+    el.addEventListener("click", () => setVariant(el.dataset.variant));
+  });
+  document.querySelectorAll("[data-toast]").forEach((el) => {
+    el.addEventListener("click", () => toast(el.dataset.toast));
+  });
+  document.querySelectorAll("[data-obj]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.dataset.obj === "strategies") go("#/a/list");
+      else toast(`Fora do escopo do #351 — objeto ${el.dataset.obj} já tem protótipo ou não é desta decisão.`);
+    });
+  });
+  document.querySelectorAll("[data-drawer]").forEach((el) => {
+    el.addEventListener("click", openCompare);
+  });
+}
+
+if (!location.hash) location.hash = location.search.includes("v=b") ? "#/b/todas" : "#/a/list";
+render();
+if (new URLSearchParams(location.search).get("d") === "compare") openCompare();
+</script>
+</body>
+</html>

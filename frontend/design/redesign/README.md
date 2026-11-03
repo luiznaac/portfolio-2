@@ -237,3 +237,27 @@ Everything is switchable from the bottom bar and preserved in the URL:
 The landing decisions carried forward: portfolio status (Capital, invested, cash, drift) and the
 attention queue above the fold, attention in the right rail grouped **Ação → Acompanhar**, and the
 allocation table showing classes only — strategy drift lives on the Alocação page, not the landing.
+
+## Strategy prototype (wayfinder ticket #351)
+
+[`strategy-prototype.html`](strategy-prototype.html) compares two treatments for surfacing multiple
+strategies on the same fixture. Serve the folder as above and open
+`http://localhost:8765/strategy-prototype.html` or `...?v=a&d=compare` to open the comparison drawer
+on load.
+
+- `?v=a` — **treatment A**: strategies as first-class objects. A comparable list, then a detail page
+  with tabs **Carteira / Edições / Atribuição / Fatia no portfólio**. Manual strategies are the same
+  object with a reduced tab set and a "sem alvo" treatment.
+- `?v=b` — **treatment B**: strategies as a lens on the Alocação page. The lens rail filters the same
+  allocation table; a context rail carries edition diff, attribution, performance and portfolio share.
+  Manual strategies become "sem alvo" lenses.
+- `d=compare` — opens the A/B comparison drawer on load.
+
+Both treatments carry the same material: the **Relatório vs Manual** distinction, the staged
+**edition diff** (`104`, `203`, `303`), **attribution across strategies**, the portfolio-slice and
+performance reads, and the WEGE3 transfer suggestion. The bottom bar's scenario buttons jump to the
+list, a detail/lens, the diff, attribution and a manual bucket, so the owner can compare like for
+like.
+
+The decision (A, B, or a hybrid) is recorded in ticket #351; the losing treatment is discarded when
+the redesign spec (#358) and the assembled prototype (#357) are written.
