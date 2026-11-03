@@ -24,6 +24,10 @@ server {
         proxy_set_header   X-Real-IP         $remote_addr;
         proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
+        # The combined catalog/quotes refresh reads B3's year-to-date COTAHIST file, which can take
+        # over a minute cold; the 60 s default would answer the SPA with a 504 mid-refresh.
+        proxy_read_timeout 330s;
+        proxy_send_timeout 330s;
     }
 
     # Everything else is the SPA; let the client router handle unknown paths.

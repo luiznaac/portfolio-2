@@ -196,9 +196,10 @@ export function useTicker(ticker: string) {
   });
 }
 
-// A classification changes the allocation tree, the funding pass and the asset detail at once, so
-// every read that groups by class is invalidated.
-function invalidateClassReads(queryClient: QueryClient) {
+// The reads derived from the ledger, catalog and quotes. A classification, a catalog refresh or an
+// import apply changes at least one of them, so they share one invalidation instead of each caller
+// spelling out the set.
+function invalidateLedgerReads(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["tickers"] });
   queryClient.invalidateQueries({ queryKey: ["month"] });
   queryClient.invalidateQueries({ queryKey: ["months"] });
@@ -211,7 +212,7 @@ export function useClassifyTicker(ticker: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (assetClass: AssetClass) => api.classifyTicker(ticker, assetClass),
-    onSuccess: () => invalidateClassReads(queryClient),
+    onSuccess: () => invalidateLedgerReads(queryClient),
   });
 }
 
@@ -219,7 +220,7 @@ export function useRevertTickerClassification(ticker: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.revertTickerClassification(ticker),
-    onSuccess: () => invalidateClassReads(queryClient),
+    onSuccess: () => invalidateLedgerReads(queryClient),
   });
 }
 
@@ -227,7 +228,7 @@ export function useRefreshCatalog() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: api.refreshCatalog,
-    onSuccess: () => invalidateClassReads(queryClient),
+    onSuccess: () => invalidateLedgerReads(queryClient),
   });
 }
 
@@ -247,7 +248,7 @@ export function useClassifyTickers() {
   return useMutation({
     mutationFn: (classifications: Record<string, AssetClass>) =>
       api.classifyTickers(classifications),
-    onSuccess: () => invalidateClassReads(queryClient),
+    onSuccess: () => invalidateLedgerReads(queryClient),
   });
 }
 
@@ -528,9 +529,12 @@ export function useApplyImport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (importId: number) => api.applyImport(importId),
+    // Apply writes the ledger and auto-enters unknown tickers into the catalog, so the result's
+    // custody and data-quality counts must refresh alongside the import and trade lists.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
       queryClient.invalidateQueries({ queryKey: ["trades"] });
+      invalidateLedgerReads(queryClient);
     },
   });
 }
