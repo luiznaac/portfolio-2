@@ -485,3 +485,15 @@ from the document — the month's written standfirst on the landing, the worded 
 "sobram") beside the colour in allocation tables, and prose captions under the Análise charts that
 state the benchmark's partial coverage. If long daily reading outweighs dense comparison, B is the
 defensible alternative; the two are complete languages, not themes on one layout.
+
+**Decided in #355: A · Console, with three borrowings from the document.** The redesign's single visual
+language is the dark, dense console: 12,5 px sans body, 11,5 px tabular mono numerals, 9,5 px
+uppercase mono labels, 26 px table rows, 1 px hairlines, 3 px panel radius. Palette: background
+`#0b0e12`, panel `#11161c`, line `#232c37`, text `#e7edf4`, action `#78a9ff`, return+ `#54c98c`,
+return− `#f0736a`, attention `#d9a45e`; deficit is blue, surplus amber, and every number keeps its
+sign. From the document direction, three things travel into A: the month standfirst on the Carteira
+landing (text, not a card), the worded distance beside the colour in allocation tables
+("faltam" / "sobram"), and prose captions under the Análise charts that state the benchmark's partial
+coverage. B's serif display scale, statement cards and text-only nav are dropped; B stays in this
+file as comparison evidence only. The assembled prototype (#357) and the spec (#358) take A plus the
+three borrowings.
