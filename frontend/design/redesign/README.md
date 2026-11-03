@@ -265,3 +265,48 @@ Edição card left the *Fatia no portfólio* tab, and the cross-strategy table i
 **Reconciliação custódia × atribuição** (its job is spotting split or unattributed custody, not
 repeating the strategy's own attribution). The losing treatment stays in this file as comparison
 evidence only; the assembled prototype (#357) and the spec (#358) take A.
+
+## Plan prototype (wayfinder ticket #352)
+
+[`plan-prototype.html`](plan-prototype.html) treats Plan / Month as a tool you open when you act, on
+the same fixture. Serve the folder as above and open
+`http://localhost:8765/plan-prototype.html`; append `?v=a|b|c&l=quiet|card|attention&s=fresh|mid|ready|closed`
+to reproduce any state.
+
+Three plan surfaces (bottom bar **Plano**):
+
+- `?v=a` — **flow**: the whole month on one scrolling page (capital, target chain, plan with funding
+  and attribution, execution, checks, close), with a sticky progress rail and "resume at the open
+  step".
+- `?v=b` — **steps**: six numbered steps, only the active one on screen; opening the plan lands on the
+  first unfinished step and concluded steps collapse to one-line summaries.
+- `?v=c` — **next action**: the plan opens on the single thing that needs the owner — the pending
+  transfer decision, the unexecuted orders, or the close gate — with the whole month behind "ver o
+  mês inteiro".
+
+Three ways the open month reaches the landing (bottom bar **Na carteira**):
+
+- `l=quiet` — one status line under the KPI strip; no card, no extra badge.
+- `l=card` — a compact month card below the allocation: progress, next action, "continuar de onde parei".
+- `l=attention` — nothing new: the pending transfer is an attention action and unexecuted orders join
+  the queue; the plan has no CTA of its own.
+
+Four month states (bottom bar **Cenário**): `fresh` (0/3 executed), `mid` (1/3), `ready` (3/3, transfer
+decided), `closed` (snapshot frozen). Approving/rejecting the WEGE3 transfer and closing the month
+update the gate and the landing card live; switching scenario resets the decisions.
+
+Domain behaviour the prototype encodes, from the backend rather than invented:
+
+- One open month at a time, by calendar; opening another month closes the one still open.
+- The close recomputes the plan first — which is what finalises attribution transfers, auto-approving
+  those below R$ 500 — then refuses while a `PENDING` transfer remains, and otherwise locks the month
+  and writes the immutable Snapshot.
+- Only a transfer blocks the close. Open gaps, a corporate-action review, a stale quote and unexecuted
+  orders are frozen as they are, and the closing screen says so.
+- The transfer is attribution-only (custody untouched) and a manual bucket donor always waits for a
+  human, whatever the amount.
+- The target chain is Capital × Target at every level; a plan in the store is a snapshot of its last
+  computation, so editing Capital previews the chain but only a refresh moves the orders.
+
+Not modelled: editing the target chain (POST /month/current/targets), opening the next month, the
+manual order-match override, and the visual direction (#355).
