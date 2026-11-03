@@ -74,6 +74,13 @@ Renaming an enum whose values are persisted as strings (an Exposed `enumerationB
 
 Kotest `StringSpec`, MockK, `kotest-extensions-spring`. Reuse `testFixtures` builders rather than hand-rolling fixture objects per test. Existing unit test coverage worth using as a style reference: `BondCalculatorTest`, `BondConsolidationServiceTest`, `BondContributionConsolidatorTest`, `YieldRateServiceTest`, `CheckingAccountConsolidatorTest`, `IndexValueServiceTest`, `TaxServiceTest`, `IOFIncidenceCalculatorTest`, `RendaIncidenceCalculatorTest`.
 
+**Import tests have two patterns, and neither needs a workbook library:**
+
+- **HTTP-level import specs** upload the committed two-row B3 Negociação fixture, `http-api/src/test/resources/b3-negociacao.xlsx` — the same bytes `B3NegotiationParserTest` pins. Read it through `helpers/B3NegociacaoFixture.kt`'s `b3NegociacaoFixture()` (Gradle runs this module's tests from `backend/integrationTest`, so the sibling resource resolves one directory up); `ImportResumeTest` shows the multipart upload.
+- **When the rows must hit exact situations** (a duplicate, a missing date, a specific ticker), skip the file and stage typed rows through `ImportService`: `getBean<ImportService>().stage(ImportSource.B3_TRADES, fileName, hash, listOf(ImportRowPayload(...)))`, then `review`/`apply`. `ImportService` is the seam, so staged rows reach the same situations the upload would. `PositionProjectionTest` and `TradeReconciliationTest` use this pattern.
+
+**Never add Apache POI to `integrationTest`.** Adding it in the [issue #302](https://github.com/luiznaac/portfolio-2/issues/302) session pushed the Kotlin test compile into `Not enough memory to run compilation` on CI, costing two backend runs and a full test rewrite. The `:integrationTest:noApachePoi` task fails the build before `compileTestKotlin` when `org.apache.poi` reaches this module's compile classpath; the two patterns above cover every import-test need without it.
+
 Two speeds of verification, two lanes:
 
 ```bash
