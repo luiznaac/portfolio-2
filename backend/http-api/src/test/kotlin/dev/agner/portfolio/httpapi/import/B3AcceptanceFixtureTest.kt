@@ -4,7 +4,6 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.plain
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
-import java.io.File
 import java.math.BigDecimal
 
 // The curated acceptance artifact committed at docs/acceptance/fixtures/ is the file the runbook's
@@ -15,7 +14,7 @@ class B3AcceptanceFixtureTest : DescribeSpec({
 
     describe("the committed 2020 acceptance fixture") {
 
-        val fixture = acceptanceFixture()
+        val fixture = acceptanceDocsFixture("b3-negociacao-2020.xlsx")
         val parser = B3NegotiationParser()
         val bytes = fixture.readBytes()
         val rows = parser.parse(fixture.name, bytes)
@@ -80,11 +79,3 @@ private val FIXTURE_ROWS = listOf(
     FixtureRow("2020-12-01", TradeSide.BUY, "VISC11", "5", "85"),
     FixtureRow("2020-12-01", TradeSide.BUY, "XPML11", "2", "90"),
 )
-
-private fun acceptanceFixture(): File {
-    val docsDir = File(
-        System.getProperty("docsDir")
-            ?: error("docsDir system property is not set; see http-api/build.gradle.kts"),
-    )
-    return docsDir.resolve("acceptance/fixtures/b3-negociacao-2020.xlsx")
-}
