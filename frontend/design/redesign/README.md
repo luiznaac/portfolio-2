@@ -259,5 +259,9 @@ performance reads, and the WEGE3 transfer suggestion. The bottom bar's scenario 
 list, a detail/lens, the diff, attribution and a manual bucket, so the owner can compare like for
 like.
 
-The decision (A, B, or a hybrid) is recorded in ticket #351; the losing treatment is discarded when
-the redesign spec (#358) and the assembled prototype (#357) are written.
+**Decided in #351: treatment A.** Strategies stay first-class objects with list → detail → tabs; B's
+lens is not carried forward. Two follow-ups from the click-through are already in the prototype: the
+Edição card left the *Fatia no portfólio* tab, and the cross-strategy table is now labelled
+**Reconciliação custódia × atribuição** (its job is spotting split or unattributed custody, not
+repeating the strategy's own attribution). The losing treatment stays in this file as comparison
+evidence only; the assembled prototype (#357) and the spec (#358) take A.

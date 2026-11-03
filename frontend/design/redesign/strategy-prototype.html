@@ -948,8 +948,11 @@ function atribuicaoTabA(s) {
           <div class="body flush">${attributionTable(rows, s.name)}</div>
         </section>
         <section class="panel">
-          <header><h2>Atribuição na carteira</h2><span class="sp"></span><span class="hint">todas as estratégias</span></header>
-          <div class="body flush">${attributionMatrix()}</div>
+          <header><h2>Reconciliação custódia × atribuição</h2><span class="sp"></span><span class="hint">todas as estratégias</span></header>
+          <div class="body flush">
+            <div class="callout" style="margin:10px 14px">Confere a custódia de cada ativo contra as fatias das estratégias. Serve para achar cotas divididas entre estratégias ou ainda não atribuídas — com um dono único por ativo, a soma de cada linha bate na custódia.</div>
+            ${attributionMatrix()}
+          </div>
         </section>
       </div>
       <div class="grid">
@@ -1017,11 +1020,6 @@ function fatiaTabA(s) {
               <div class="mini-row"><span class="dim">Retorno da classe</span><span class="sp"></span><b class="num ${clsPerf.decomposition.return_percentage < 0 ? "loss" : "gain"}">${pct(clsPerf.decomposition.return_percentage)}</b></div>
               <div class="mini-row"><span class="dim">Benchmark da classe</span><span class="sp"></span><b class="num">${pct(clsPerf.benchmark_return)}</b></div>
             </div>` : '<div class="faint">Sem comparação.</div>'}
-        </div></section>
-        <section class="panel"><header><h2>Edição</h2></header><div class="body">
-          ${editionStatusChip(s.latest)}
-          <p style="margin:9px 0 0;color:var(--ink-2);font-size:11.5px">${diffSummary(s.latest)}</p>
-          <button class="btn" style="margin-top:9px" data-go="#/a/${s.id}/edicoes">Abrir edições →</button>
         </div></section>
       </div>
     </div>`;
@@ -1373,7 +1371,7 @@ function compareDrawer() {
       </tbody>
     </table>
     <p style="margin-top:10px"><b>Backend:</b> os dois cabem nos reads atuais (<code>allocation</code>, <code>strategies.editions</code>, <code>attribution</code>, <code>monthPerformance</code>). Nenhum endpoint novo é necessário para escolher.</p>
-    <p><b>Decisão do ticket #351:</b> escolher A, B ou um híbrido (por exemplo, B como padrão com deep-link para A).</p>
+    <p><b>Decisão do ticket #351:</b> <b>A</b> — estratégias como objetos de primeira classe. O tratamento B fica neste arquivo apenas como referência da comparação.</p>
   `;
 }
 
