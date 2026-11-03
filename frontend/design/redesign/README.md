@@ -390,3 +390,49 @@ What the decision drops, and why:
 
 The losing treatments stay in this file as comparison evidence only; the assembled prototype (#357)
 and the spec (#358) take A.
+
+## Imports prototype (wayfinder ticket #354)
+
+[`imports-prototype.html`](imports-prototype.html) compares where report and extract uploads are
+reviewed, on the same fixture. Serve the folder as above and open
+`http://localhost:8765/imports-prototype.html`; append `?v=a|b|c` to switch treatment. The default
+is **A**, the global review workshop.
+
+Three treatments (bottom bar **tratamento**):
+
+- `?v=a` — **curadoria central**: every upload becomes a record in Importações, and mapping, rows and
+  edition diff are reviewed in the import detail. The contextual entry only pre-fills the destination;
+  the detail carries an **O que esta importação muda** card with links to the object.
+- `?v=b` — **revisão no destino**: the file is reviewed where the data lives — the edition diff in the
+  strategy's Edições tab, the B3 rows in the Ativos · Posições page. The inbox is a router: every row
+  opens the destination's review, and the report never re-renders its own review surface.
+- `?v=c` — **assistente em tela cheia**: every upload opens the same four-step wizard (arquivo,
+  destino e mapeamento, linhas/diff, aplicar). The context pre-fills destination and parser, and
+  leaving early parks the session in the inbox to resume.
+
+Scenarios in the bottom bar: **Relatório XP** (contextual upload from Dividendos BR), **Extrato B3**
+(contextual upload from Ativos · Posições), **Caixa de entrada** (the global queue), **Erro de linha**
+(row 504 — unknown COTAHIST ticker) and **Fonte com falha** (the per-source status surface, with the
+failed XP PDF and the re-exported CSV that produced edition 104).
+
+Flow behaviour the prototype encodes, from the fixture and the ingestion research (#349):
+
+- Upload never applies anything: the file is read, hashed and staged; applying is a separate decision.
+- The B3 movement file maps six columns, then shows four rows: 3 valid, 1 in-file duplicate, 1 already
+  in the ledger, 1 unknown-ticker error. Row-level errors are inline; **3 valid rows apply and the
+  rejected row stays as a retry batch** (a deliberate improvement over the all-or-nothing peers).
+- The custody snapshot is state-like: positions overwrite in place; the AAPL34 +50 divergence is shown
+  but does not block applying, and it opens a gap with a pending realised result.
+- The XP report is stage-diff-promote: the CSV is compared with the active edition — 2 weight changes,
+  5 target prices, and the VALE3 **não operar** flip as the alert. Promoting replaces the active
+  edition; the note that the November plan only picks the new weights up on its next recompute is shown.
+- Provenance (file name, sha256 prefix, retained original) is on every staged record; the XP source
+  keeps the failed PDF attempt beside the CSV that succeeded.
+- The per-source status surface (Importações · Fontes) is where attention lives, not on each row.
+
+Not modelled: real parsers and file reading, per-row error containers in the backend (today's error
+body is file-level), a persisted import → destination link, resumability beyond the parked wizard
+session, authentication, and the visual direction (#355).
+
+**Decision pending in #354**: which treatment (or which parts of each) the assembled prototype (#357)
+and the spec (#358) carry.

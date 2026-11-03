@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<!--
+  THROWAWAY PROTOTYPE — wayfinder ticket #354, map #347.
+  Question: how should report and extract uploads work when uploads are both
+  contextual and global? Entry points, staging/diff review, warnings and
+  row-level errors, and the way back from an inbox item to the object it changes.
+  Three treatments, switchable in the bottom bar and in the URL (?v=a|b|c).
+  Data: ./fixture.js (ticket #356). No build step, no persistence.
+  Visual direction is NOT decided here — that is ticket #355.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Protótipo de importações — Carteira Ideal (ticket #354)</title>
+<style>
+  :root {
+    --bg: #f3f5f7; --panel: #ffffff; --panel-2: #f8fafb;
+    --ink: #14181d; --ink-2: #5a6572; --ink-3: #8b95a1;
+    --line: #dfe4e9; --line-2: #edf0f3;
+    --accent: #1d4ed8; --accent-bg: #e8eefc;
+    --gain: #15803d; --loss: #b91c1c; --warn: #b45309; --warn-bg: #fdf3e3;
+    --action: #b91c1c; --action-bg: #fdeaea; --surplus: #a16207;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --bar: 58px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 13px/1.45 var(--sans); -webkit-font-smoothing: antialiased; padding-bottom: calc(var(--bar) + 26px); }
+  a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  button, select, input { font: inherit; color: inherit; }
+  .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .num { text-align: right; white-space: nowrap; }
+  .dim { color: var(--ink-2); } .faint { color: var(--ink-3); }
+  .gain { color: var(--gain); } .loss { color: var(--loss); }
+  .def { color: #1d4ed8; } .sur { color: var(--surplus); }
+  .sp { flex: 1; }
+
+  .proto-banner { background: #101826; color: #c7d2e3; font-size: 11px; padding: 5px 16px; display: flex; gap: 14px; align-items: center; }
+  .proto-banner b { color: #fff; font-weight: 600; }
+  .proto-banner .tag { border: 1px solid #33415a; padding: 0 6px; border-radius: 3px; color: #93a4bd; }
+
+  .shell { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
+  .side { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; position: sticky; top: 27px; height: calc(100vh - 27px - var(--bar)); }
+  .side .brand { padding: 16px 16px 10px; display: flex; align-items: baseline; gap: 7px; }
+  .side .brand b { font-size: 14px; letter-spacing: -.01em; }
+  .side .brand span { font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; }
+  .side nav { padding: 6px 8px; overflow: auto; }
+  .side .group-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); padding: 13px 8px 4px; font-weight: 600; }
+  .nav-item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border: 0; border-radius: 5px; background: none; cursor: pointer; color: var(--ink-2); text-align: left; font-size: 12.5px; }
+  .nav-item:hover { background: var(--panel-2); color: var(--ink); }
+  .nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .nav-item .ico { width: 15px; height: 15px; flex: none; opacity: .85; }
+  .nav-item .cnt { margin-left: auto; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; font: 600 10px/17px var(--mono); text-align: center; background: var(--line); color: var(--ink-2); }
+  .nav-item .cnt.action { background: var(--action); color: #fff; }
+  .side .foot { margin-top: auto; border-top: 1px solid var(--line-2); padding: 11px 16px; font-size: 11px; color: var(--ink-3); display: grid; gap: 3px; }
+  .side .foot b { color: var(--ink-2); font-weight: 600; }
+
+  .main { min-width: 0; }
+  .topbar { min-height: 52px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; align-items: center; gap: 14px; padding: 0 22px; position: sticky; top: 27px; z-index: 20; }
+  .crumb { color: var(--ink-2); font-size: 12px; } .crumb b { color: var(--ink); }
+  .month-pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--panel-2); border-radius: 16px; padding: 4px 11px; font-size: 11.5px; color: var(--ink-2); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gain); display: inline-block; }
+  .topbar .age { font-size: 11px; color: var(--ink-3); }
+  .kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font: 10px/14px var(--mono); color: var(--ink-3); background: var(--panel); }
+  .content { padding: 20px 22px 40px; max-width: 1400px; }
+
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .page-head h1 { font-size: 21px; line-height: 1.15; letter-spacing: -.025em; margin: 0 0 3px; font-weight: 650; }
+  .page-head p { margin: 0; color: var(--ink-2); font-size: 12px; }
+  .page-head .actions { display: flex; gap: 8px; align-items: center; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 2px 0 16px; }
+  .tabs button { border: 0; background: none; cursor: pointer; padding: 7px 11px; color: var(--ink-2); font-size: 12.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabs button .b { margin-left: 5px; font: 600 9.5px/15px var(--mono); background: var(--action); color: #fff; border-radius: 8px; padding: 0 4px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; }
+  .panel > header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
+  .panel > header h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; margin: 0; color: var(--ink-2); font-weight: 650; }
+  .panel > header .hint { font-size: 11px; color: var(--ink-3); }
+  .panel .body { padding: 13px 14px; }
+  .panel .body.flush { padding: 0; }
+  .grid { display: grid; gap: 14px; } .grid > * { min-width: 0; }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+  .stack { display: grid; gap: 14px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; }
+  .kpi .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; }
+  .kpi .v { font: 600 19px/1.25 var(--mono); margin-top: 3px; letter-spacing: -.03em; }
+  .kpi .s { font-size: 11px; color: var(--ink-2); margin-top: 1px; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.t th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 600; padding: 7px 12px; border-bottom: 1px solid var(--line-2); background: var(--panel-2); white-space: nowrap; }
+  table.t td { padding: 7px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t th.r, table.t td.r { text-align: right; }
+  table.t tr.click { cursor: pointer; }
+  table.t tr.click:hover td { background: var(--panel-2); }
+  table.t tr.muted td { color: var(--ink-3); background: #fbfcfd; }
+  table.t tr.muted .ticker { color: var(--ink-3); text-decoration: line-through; }
+  table.t tr.changed td { background: #f8fbff; }
+  table.t tr.changed td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+  .ticker { font: 600 12px/1 var(--mono); letter-spacing: -.01em; }
+
+  .chip { display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 9.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--line); color: var(--ink-2); background: var(--panel-2); line-height: 15px; white-space: nowrap; }
+  .chip.blue { color: var(--accent); background: var(--accent-bg); border-color: #cfdcfb; }
+  .chip.amber { color: var(--warn); background: var(--warn-bg); border-color: #f3e0bd; }
+  .chip.red { color: var(--action); background: var(--action-bg); border-color: #f5cfcf; }
+  .chip.green { color: var(--gain); background: #e9f6ee; border-color: #cce9d7; }
+  .chip.grey { color: var(--ink-3); } .chip.plain { background: none; }
+
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+  .btn:hover { border-color: #c7d0d9; background: var(--panel-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: #1743bb; }
+  .btn.ghost { border-color: transparent; background: none; color: var(--ink-2); }
+  .btn.ghost:hover { background: var(--panel-2); color: var(--ink); }
+  .btn.danger { color: var(--action); border-color: #f0cccc; }
+  .btn.sm { padding: 3px 7px; font-size: 11px; }
+
+  .callout { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--ink-3); background: var(--panel-2); }
+  .callout b { color: var(--ink-2); font-weight: 600; }
+  .banner-tests { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; font-size: 11.5px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 5px; padding: 7px 11px; }
+  .banner-tests b { color: var(--ink); }
+
+  .source-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .source-card { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 11px 12px; display: grid; gap: 3px; cursor: pointer; }
+  .source-card:hover { border-color: #c7d0d9; }
+  .source-card .lbl { font-size: 12px; font-weight: 650; display: flex; align-items: center; gap: 7px; }
+  .source-card .meta { font-size: 11px; color: var(--ink-3); }
+  .source-card .st { font-size: 11px; color: var(--ink-2); }
+
+  .queue { display: grid; }
+  .qitem { display: grid; grid-template-columns: minmax(190px, 1.1fr) minmax(160px, 1fr) auto 190px; gap: 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line-2); background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; width: 100%; cursor: pointer; }
+  .qitem:hover { background: var(--panel-2); }
+  .qitem:last-child { border-bottom: 0; }
+  .qitem .src { font-size: 11px; color: var(--ink-3); }
+  .qitem .file { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qitem .what { font-size: 11px; color: var(--ink-2); }
+  .qitem .dest { font-size: 11px; }
+  .qitem .right { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+
+  .dest-rows { display: grid; }
+  .dest-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-2); font-size: 12px; }
+  .dest-row:last-child { border-bottom: 0; }
+  .dest-row .d { color: var(--ink-2); }
+
+  .mapping { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 14px; font-size: 11.5px; }
+  .map-cell { display: flex; align-items: baseline; gap: 6px; border-bottom: 1px solid var(--line-2); padding-bottom: 5px; }
+  .map-cell .from { color: var(--ink-3); font: 10.5px var(--mono); }
+  .map-cell .to { font-weight: 600; }
+  .map-cell .ok { color: var(--gain); font-size: 10px; margin-left: auto; }
+
+  .applybar { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-top: 1px solid var(--line); background: var(--panel-2); border-radius: 0 0 7px 7px; flex-wrap: wrap; }
+  .applybar .sum { font-size: 12px; }
+  .okbanner { display: flex; align-items: center; gap: 10px; background: #eef8f1; border: 1px solid #cce9d7; color: #14532d; border-radius: 6px; padding: 9px 12px; font-size: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .okbanner a { color: #14532d; text-decoration: underline; }
+  .warnbanner { display: flex; align-items: flex-start; gap: 10px; background: var(--warn-bg); border: 1px solid #f3e0bd; color: #7c4a03; border-radius: 6px; padding: 9px 12px; font-size: 11.5px; margin-bottom: 10px; }
+  .infobanner { display: flex; align-items: center; gap: 10px; background: var(--accent-bg); border: 1px solid #cfdcfb; color: #1e3a8a; border-radius: 6px; padding: 9px 12px; font-size: 11.5px; margin-bottom: 12px; flex-wrap: wrap; }
+  .infobanner a { color: #1e3a8a; text-decoration: underline; }
+
+  .row-error td { background: #fff6f6; }
+  .error-edit { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .error-edit input { border: 1px solid #e7b7b7; border-radius: 4px; padding: 2px 6px; width: 92px; font: 11.5px var(--mono); background: #fff; }
+  .error-edit .hint { font-size: 10.5px; color: var(--action); }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .diff-legend { display: flex; gap: 12px; font-size: 10.5px; color: var(--ink-3); flex-wrap: wrap; }
+  .legend { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+  .modal-back { position: fixed; inset: 0; background: rgba(15, 23, 34, .45); z-index: 140; display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 40px; }
+  .modal { background: var(--panel); border-radius: 9px; width: 560px; max-width: 100%; box-shadow: 0 24px 70px rgba(9, 15, 25, .35); overflow: hidden; }
+  .modal .mhead { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+  .modal .mhead h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+  .modal .mbody { padding: 14px 16px; display: grid; gap: 12px; }
+  .modal .mfoot { display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-top: 1px solid var(--line); background: var(--panel-2); }
+  .field { display: grid; gap: 4px; }
+  .field .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 650; }
+  .field select { border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; background: var(--panel); font-size: 12px; }
+  .drop { border: 1.5px dashed #c7d0d9; border-radius: 7px; background: var(--panel-2); padding: 20px 14px; text-align: center; }
+  .drop b { display: block; font-size: 12.5px; }
+  .drop span { font-size: 11px; color: var(--ink-3); }
+  .sample { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font-size: 11.5px; background: var(--panel); }
+  .segmented { display: inline-flex; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .segmented button { border: 0; background: none; cursor: pointer; padding: 4px 11px; border-radius: 4px; color: var(--ink-2); font-size: 12px; }
+  .segmented button.active { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 34, .10); }
+
+  .wiz { min-height: calc(100vh - var(--bar) - 26px); display: grid; grid-template-rows: auto auto 1fr auto; background: var(--bg); }
+  .wiz-top { background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 14px; padding: 0 22px; min-height: 54px; position: sticky; top: 27px; z-index: 30; flex-wrap: wrap; }
+  .wiz-brand { font-weight: 650; font-size: 14px; letter-spacing: -.01em; white-space: nowrap; }
+  .wiz-brand span { color: var(--ink-3); font-weight: 400; }
+  .wiz-dest { font-size: 11.5px; color: var(--ink-2); border: 1px solid var(--line); background: var(--panel-2); border-radius: 14px; padding: 3px 10px; white-space: nowrap; }
+  .wiz-close { border: 0; background: none; cursor: pointer; color: var(--ink-3); font-size: 16px; padding: 2px 6px; }
+  .wiz-close:hover { color: var(--ink); }
+  .steps-rail { max-width: 1080px; margin: 0 auto; padding: 16px 22px 0; width: 100%; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .step { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-3); }
+  .step .n { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 600 10px/1 var(--mono); background: var(--panel); }
+  .step.active { color: var(--ink); font-weight: 600; }
+  .step.active .n { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .step.done { color: var(--ink-2); }
+  .step.done .n { background: #e9f6ee; color: var(--gain); border-color: #cce9d7; }
+  .step-rule { flex: 1; height: 1px; background: var(--line); max-width: 60px; }
+  .wiz-body { max-width: 1080px; width: 100%; margin: 0 auto; padding: 18px 22px 30px; }
+  .wiz-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .wiz-panel > header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
+  .wiz-panel > header h2 { margin: 0; font-size: 13px; }
+  .wiz-panel .pad { padding: 14px 16px; }
+  .wiz-foot { position: sticky; bottom: var(--bar); background: var(--panel); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 10px 22px; z-index: 25; flex-wrap: wrap; }
+  .wiz-foot .note { font-size: 11px; color: var(--ink-3); }
+
+  .attn { display: grid; }
+  .attn-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 9px; padding: 9px 12px; border-bottom: 1px solid var(--line-2); align-items: start; background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; cursor: pointer; width: 100%; }
+  .attn-item:hover { background: var(--panel-2); }
+  .attn-item:last-child { border-bottom: 0; }
+  .attn-item .mark { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; background: var(--ink-3); }
+  .attn-item .mark.action { background: var(--action); }
+  .attn-item .mark.watch { background: var(--surplus); }
+  .attn-item .ttl { display: block; font-size: 12px; font-weight: 550; }
+  .attn-item .det { display: block; font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+  .attn-item .go { font-size: 11px; color: var(--accent); margin-top: 1px; white-space: nowrap; }
+
+  .pbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 150; background: #0f1722; color: #dbe3ee; border-top: 1px solid #263242; display: flex; align-items: center; gap: 8px; padding: 8px 14px; min-height: var(--bar); box-shadow: 0 -6px 24px rgba(9, 15, 25, .18); flex-wrap: wrap; }
+  .pbar .title { font-size: 11px; color: #8fa0b8; line-height: 1.25; max-width: 150px; }
+  .pbar .title b { color: #fff; display: block; font-size: 11.5px; }
+  .pbar .sep { width: 1px; align-self: stretch; background: #263242; margin: 2px 4px; }
+  .pbar button.v { border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 5px; padding: 5px 9px; cursor: pointer; font-size: 11.5px; text-align: left; line-height: 1.2; }
+  .pbar button.v small { display: block; color: #8092aa; font-size: 9.5px; margin-top: 1px; }
+  .pbar button.v.active { background: #e8eefc; border-color: #e8eefc; color: #14306b; }
+  .pbar button.v.active small { color: #3d5a8f; }
+  .pbar .scen { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .pbar .scen .lbl { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: #8092aa; margin-right: 3px; white-space: nowrap; }
+  .pbar button.pv { border: 1px solid #33415a; background: #172437; color: #c8d4e5; border-radius: 4px; padding: 4px 7px; cursor: pointer; font-size: 11px; white-space: nowrap; }
+  .pbar button.pv:hover { border-color: #4b5d7a; }
+  .pbar .note { font-size: 10.5px; color: #8092aa; max-width: 240px; text-align: right; }
+  .pbar .note b { color: #c8d4e5; font-weight: 600; }
+  .pbar .ghost { border: 1px solid #33415a; background: none; color: #c8d4e5; border-radius: 5px; padding: 5px 8px; cursor: pointer; font-size: 11px; }
+
+  .drawer { position: fixed; right: 12px; bottom: calc(var(--bar) + 10px); z-index: 160; width: 470px; max-width: calc(100vw - 24px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 40px rgba(15, 23, 34, .22); padding: 14px 16px; font-size: 12px; display: none; }
+  .drawer.open { display: block; }
+  .drawer h3 { margin: 0 0 6px; font-size: 13px; }
+  .drawer p { margin: 0 0 8px; color: var(--ink-2); }
+  .drawer ul { margin: 0 0 8px; padding-left: 16px; color: var(--ink-2); }
+  .drawer li { margin-bottom: 3px; }
+  .drawer .k { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 650; margin-bottom: 3px; }
+  .drawer .close { position: absolute; top: 8px; right: 10px; border: 0; background: none; cursor: pointer; color: var(--ink-3); }
+
+  .toast { position: fixed; left: 50%; bottom: calc(var(--bar) + 16px); transform: translateX(-50%) translateY(10px); background: #111a27; color: #e6edf7; font-size: 11.5px; padding: 7px 12px; border-radius: 6px; opacity: 0; pointer-events: none; transition: .18s ease; z-index: 170; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 1100px) {
+    .source-grid { grid-template-columns: 1fr 1fr; }
+    .qitem { grid-template-columns: 1fr auto; }
+    .qitem .what, .qitem .dest { display: none; }
+    .split { grid-template-columns: 1fr; }
+    .side { display: none; }
+    .shell { grid-template-columns: 1fr; }
+    .pbar .note, .pbar .title { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="drawer" id="drawer"></div>
+<div class="pbar" id="pbar"></div>
+
+<script type="module">
+import F from "./fixture.js";
+
+/* ============================ helpers ============================ */
+
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl0 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const money = (n) => brl.format(n);
+const money0 = (n) => brl0.format(n);
+const pct = (n, digits = 2) => `${n.toFixed(digits).replace(".", ",")}%`;
+const pp = (n) => `${n > 0 ? "+" : ""}${n.toFixed(2).replace(".", ",")} pp`;
+const classLabel = { ACOES: "Ações", FIIS: "FIIs", RENDA_FIXA: "Renda fixa" };
+const classChip = { ACOES: "blue", FIIS: "amber", RENDA_FIXA: "green" };
+const dateBR = (iso) => (iso || "").split("-").reverse().join("/");
+const monthLabel = (period) => {
+  const [y, m] = period.split("-");
+  return `${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(m) - 1]}/${y.slice(2)}`;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const IMPORT = Object.fromEntries(F.imports.items.map((i) => [i.id, i]));
+const XP_IMPORT = F.imports.items.find((i) => i.source === "XP_REPORT");
+const ED = (id) => F.strategies.editions.find((e) => e.id === id);
+const ED104 = ED(104);
+const ED103 = ED(103);
+
+/* Runtime the click-through mutates. Nothing persists. */
+const rt = { b3: null, custody: null, edition: null };
+const ui = { drawer: false, upload: null, rejected504: false, parked: null, wizardKind: "b3" };
+
+/* ============================ IA model ============================ */
+
+const OBJECTS = [
+  {
+    key: "portfolio", label: "Carteira", group: "Posição", first: "portfolio/overview",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 6h12M5 10h3" stroke="currentColor" stroke-width="1.3"/></svg>',
+    badge: () => 0,
+  },
+  {
+    key: "strategies", label: "Estratégias", group: "Posição", first: "strategies/list",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M8 2l6 3-6 3-6-3 6-3Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 8l6 3 6-3M2 11l6 3 6-3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+    badge: () => F.attention.filter((a) => a.route.startsWith("strategies")).length,
+  },
+  {
+    key: "assets", label: "Ativos", group: "Posição", first: "assets/positions",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 5v6M5.5 8h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    badge: () => F.attention.filter((a) => a.route.startsWith("assets")).length,
+  },
+  {
+    key: "imports", label: "Importações", group: "Operações", first: "imports/inbox",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M8 10V3M5 6l3-3 3 3M3 12h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    badge: () => F.attention.filter((a) => a.route.startsWith("imports")).length,
+  },
+  {
+    key: "plan", label: "Plano / Mês", group: "Operações", first: "plan/month",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3" width="11" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 6h11M5 2v2M11 2v2M5.5 9h2M5.5 11h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    badge: () => F.attention.filter((a) => a.route.startsWith("plan")).length,
+  },
+  {
+    key: "analysis", label: "Análise", group: "Resultados", first: "analysis/performance",
+    icon: '<svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M3 13V9M8 13V3M13 13V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    badge: () => F.attention.filter((a) => a.route.startsWith("analysis")).length,
+  },
+];
+
+/* ============================ treatments / routing ============================ */
+
+const VARIANTS = {
+  a: {
+    name: "A · Curadoria central", short: "revisão em Importações",
+    thesis: "Todo upload vira um registro em Importações; mapeamento, linhas e diff são revisados no detalhe da importação. O contexto só pré-define o destino, e o detalhe carrega o que a importação muda, com link para o objeto.",
+    judge: ["A caixa de entrada como oficina única basta, ou revisar longe do dado perde contexto?", "O cartão de destino no detalhe responde 'o que isto muda?'", "O upload contextual sem revisão embutida é um desvio curto o bastante?"],
+  },
+  b: {
+    name: "B · Revisão no destino", short: "revisão onde o dado vive",
+    thesis: "O arquivo é revisado onde o dado vai viver: a edição na aba Edições da estratégia, o extrato na página Posições do ativo. A caixa de entrada é uma fila que roteia para o destino e nunca revisa por conta própria.",
+    judge: ["Revisar dentro do objeto ganha contexto suficiente para pagar dois lugares de revisão?", "A caixa de entrada como roteador ainda parece uma caixa de entrada?", "O retorno ao objeto deixa de existir porque você nunca saiu dele — isso é bom ou confuso?"],
+  },
+  c: {
+    name: "C · Assistente em tela cheia", short: "wizard de 4 etapas",
+    thesis: "Todo upload abre o mesmo assistente de quatro etapas em tela cheia; o contexto pré-preenche destino e parser, e a sessão pode ser abandonada e retomada pela caixa de entrada.",
+    judge: ["O assistente justifica sair do shell para um arquivo que aparece todo mês?", "Quatro etapas é cerimônia demais para o relatório, ou disciplina útil para o extrato?", "Sessão retomável na caixa de entrada é o park state que o fluxo precisa?"],
+  },
+};
+
+function parseURL() {
+  const q = new URLSearchParams(location.search);
+  const v = ["a", "b", "c"].includes(q.get("v")) ? q.get("v") : "a";
+  const parts = (location.hash.replace(/^#\/?/, "") || "imports/inbox").split("/").filter(Boolean);
+  return { v, parts };
+}
+let state = parseURL();
+if (!location.hash) history.replaceState(null, "", "#/imports/inbox");
+state = parseURL();
+
+function go(route) { location.hash = `#/${route}`; }
+function setQuery(key, value) {
+  const q = new URLSearchParams(location.search);
+  q.set(key, value);
+  location.search = q.toString();
+}
+window.addEventListener("hashchange", () => { state = parseURL(); window.scrollTo(0, 0); render(); });
+
+/* ============================ data ============================ */
+
+function b3Status() { return rt.b3 ? "APPLIED" : "STAGED"; }
+function custodyStatus() { return rt.custody ? "APPLIED" : "REVIEWED"; }
+function editionStatus() {
+  if (rt.edition === "promoted") return "ACTIVE";
+  if (rt.edition === "discarded") return "DISCARDED";
+  return "STAGED";
+}
+
+const statusTone = { STAGED: "amber", REVIEWED: "blue", APPLIED: "green", FAILED: "red", ACTIVE: "green", DISCARDED: "grey" };
+const statusLabel = { STAGED: "Em revisão", REVIEWED: "Pronto para aplicar", APPLIED: "Aplicado", FAILED: "Falhou", ACTIVE: "Ativa", DISCARDED: "Descartada" };
+
+const SOURCES = [
+  {
+    key: "mov", label: "B3 · Movimentações", detail: "Negócios, proventos e eventos",
+    status: () => b3Status(),
+    statusText: () => rt.b3 ? "3 linhas aplicadas · 1 no lote de reenvio" : "4 linhas · 1 erro · 2 duplicatas",
+    last: "01/11 · 18:42",
+  },
+  {
+    key: "pos", label: "B3 · Custódia", detail: "Snapshot de posição",
+    status: () => custodyStatus(),
+    statusText: () => rt.custody ? "Aplicado · 1 lacuna aberta" : "11 posições · 1 divergência",
+    last: "31/10 · 19:05",
+  },
+  {
+    key: "trades", label: "B3 · Negócios", detail: "Extrato de negócios fechados",
+    status: () => "APPLIED", statusText: () => "3 trades em 31/10", last: "31/10 · 18:20",
+  },
+  {
+    key: "xp", label: "XP · Relatórios", detail: "Relatório mensal por estratégia",
+    status: () => rt.edition === "promoted" ? "APPLIED" : rt.edition === "discarded" ? "DISCARDED" : "STAGED",
+    statusText: () => rt.edition === "promoted" ? "Edição 104 promovida a ativa" : "PDF falhou · CSV gerou a edição 104",
+    last: "01/11 · 09:10",
+  },
+];
+
+function queueItems() {
+  return [
+    {
+      key: "101", kind: "b3", source: "B3 · Movimentações", file: IMPORT[101].file_name,
+      status: b3Status(), statusText: rt.b3 ? "Aplicada · 1 linha no lote de reenvio" : "1 trade novo · 2 duplicatas · 1 erro",
+      dest: "Ativos · Posições",
+      a: "imports/101", b: "assets/positions/review/101", c: "import/wizard/b3/3",
+    },
+    {
+      key: "102", kind: "custody", source: "B3 · Custódia", file: IMPORT[102].file_name,
+      status: custodyStatus(), statusText: rt.custody ? "Aplicado · lacuna AAPL34 aberta" : "11 posições · 1 divergência",
+      dest: "Ativos · Posições",
+      a: "imports/102", b: "assets/positions/review/102", c: "import/wizard/custody/3",
+    },
+    {
+      key: "ed104", kind: "xp", source: "XP · Relatório", file: "XP_Relatorio_Novembro_2026.csv",
+      status: editionStatus(), statusText: rt.edition === "promoted" ? "Promovida a ativa" : rt.edition === "discarded" ? "Descartada" : "2 pesos · 5 preços-alvo · 1 alerta",
+      dest: "Estratégias · Dividendos BR",
+      a: "imports/xp", b: "strategies/edicoes/review", c: "import/wizard/xp/3",
+    },
+  ];
+}
+function targetFor(item) {
+  return state.v === "a" ? item.a : state.v === "b" ? item.b : item.c;
+}
+
+/* ============================ shell chrome ============================ */
+
+function topbar(crumb) {
+  return `<div class="topbar">
+    <div class="crumb">${crumb}</div>
+    <span class="sp"></span>
+    <span class="month-pill"><span class="dot"></span> Nov 2026 aberto · 3 de 6</span>
+    <span class="age">consolidado há 2 h</span>
+    <span class="kbd">Ctrl K</span>
+  </div>`;
+}
+
+function sidebar() {
+  const obj = state.parts[0] || "imports";
+  return `<aside class="side">
+    <div class="brand"><b>Carteira Ideal</b><span>console</span></div>
+    <nav>
+      ${["Posição", "Operações", "Resultados"].map((g) => `<div class="group-label">${g}</div>${OBJECTS.filter((o) => o.group === g).map((o) => {
+        const b = o.badge();
+        return `<button class="nav-item ${o.key === obj ? "active" : ""}" data-go="${o.first}">
+          ${o.icon}<span>${o.label}</span>${b ? `<span class="cnt ${o.key === obj ? "" : "action"}">${b}</span>` : ""}
+        </button>`;
+      }).join("")}`).join("")}
+    </nav>
+    <div class="foot"><span><b>Nov 2026</b> · plano completo</span><span>out 2026 fechado</span><span>consolidado há 2 h</span></div>
+  </aside>`;
+}
+
+function head(title, sub, actions = "") {
+  return `<div class="page-head"><div><h1>${title}</h1><p>${sub}</p></div><span class="sp"></span><div class="actions">${actions}</div></div>`;
+}
+function tabs(items, active) {
+  return `<div class="tabs">${items.map((t) => `<button class="${t.key === active ? "active" : ""}" data-go="${t.route}">${t.label}${t.badge ? `<span class="b">${t.badge}</span>` : ""}</button>`).join("")}</div>`;
+}
+function banner() {
+  const v = VARIANTS[state.v];
+  return `<div class="banner-tests"><b>${v.name}</b><span class="q">${v.thesis}</span></div>`;
+}
+
+/* ============================ shared review pieces ============================ */
+
+function mappingPanel(kind) {
+  const cells = kind === "xp"
+    ? [["ticker", "Código"], ["peso", "Peso alvo"], ["preço-alvo", "Preço-alvo"], ["rating", "Recomendação"], ["não operar", "Não operar"]]
+    : [["Data", "Data do negócio"], ["Tipo de mercado", "Compra / venda"], ["Código de negociação", "Ticker"], ["Quantidade", "Quantidade"], ["Preço unitário", "Preço"], ["Instituição", "Corretora"]];
+  return `<section class="panel">
+    <header>
+      <h2>Mapeamento</h2><span class="sp"></span>
+      <span class="chip blue plain">template lembrado</span>
+      <span class="hint">${kind === "xp" ? "XP · layout 2026-07" : "B3 · movimentação (xlsx)"}</span>
+    </header>
+    <div class="body">
+      <div class="mapping">
+        ${cells.map(([from, to]) => `<div class="map-cell"><span class="from">${from}</span><span class="to">${to}</span><span class="ok">✓</span></div>`).join("")}
+      </div>
+      <div class="callout" style="margin-top:10px"><b>Sem auto-mapa cego.</b> O template reconhecido preenche as colunas, mas nada entra sem esta revisão. O mapeamento fica ligado à fonte para o próximo arquivo.</div>
+    </div>
+  </section>`;
+}
+
+function destinationsPanel(kind) {
+  const rows = kind === "b3"
+    ? [
+        ["Ativos · Posições", "+500 ITSA4 em 27/10 · preço médio recalculado", "assets/positions"],
+        ["Plano · Ordens", "1 ordem de novembro passa a coberta pelo negócio importado", "plan/orders"],
+      ]
+    : kind === "custody"
+    ? [
+        ["Ativos · Posições", "AAPL34 2.000 → 2.050; as outras 10 posições conferem", "assets/positions"],
+        ["Ativos · Lacunas", "abre a lacuna de 50 cotas em AAPL34, com resultado pendente", "assets/gaps"],
+      ]
+    : [
+        ["Estratégias · Dividendos BR", "nova edição ativa: 2 pesos e 5 preços-alvo", "strategies/edicoes"],
+        ["Carteira · Alocação", "os alvos da estratégia entram no próximo recálculo do plano", "portfolio/allocation"],
+      ];
+  return `<section class="panel">
+    <header><h2>O que esta importação muda</h2><span class="sp"></span><span class="hint">destino do dado</span></header>
+    <div class="body"><div class="dest-rows">
+      ${rows.map(([d, what, route]) => `<div class="dest-row">
+        <span class="chip blue plain">${d}</span><span class="d">${what}</span><span class="sp"></span>
+        <a data-go="${route}">Abrir no destino →</a>
+      </div>`).join("")}
+    </div></div>
+  </section>`;
+}
+
+function b3RowsTable() {
+  const rows = F.imports.rows[101];
+  const rejected = ui.rejected504;
+  const situation = (r) => {
+    if (r.id === 504 && rejected) return `<span class="chip grey">rejeitada · lote de reenvio</span>`;
+    if (r.situation === "new") return `<span class="chip green">aceita</span>`;
+    if (r.situation === "duplicate_in_file") return `<span class="chip grey">duplicata no arquivo</span>`;
+    if (r.situation === "duplicate_in_ledger") return `<span class="chip grey">já lançada em 28/10</span>`;
+    return `<span class="chip red">erro · linha 7</span>`;
+  };
+  const rowClass = (r) => r.id === 504 ? (rejected ? "muted" : "row-error") : (r.situation === "new" ? "" : "muted");
+  const errorCell = (r) => {
+    if (r.id !== 504) return "";
+    if (rejected) return `<div class="faint" style="font-size:10.5px">fora do lote aplicado · pode ser reenviada depois</div>`;
+    return `<div class="error-edit"><input value="XPTO3" aria-label="código corrigido"><button class="btn sm" data-act="noop">Buscar</button></div>
+      <div class="hint">Código de negociação desconhecido no COTAHIST (BDI 99). Corrija o código ou ignore a linha.</div>
+      <div class="row-actions"><button class="btn sm danger" data-act="reject-row">Ignorar linha</button></div>`;
+  };
+  return `<section class="panel">
+    <header>
+      <h2>Linhas</h2>
+      <span class="chip green plain">3 aceitas</span>
+      <span class="chip grey plain">2 duplicatas</span>
+      <span class="chip ${rejected ? "grey" : "red"} plain">${rejected ? "1 rejeitada" : "1 erro"}</span>
+      <span class="sp"></span><span class="hint">4 linhas no arquivo</span>
+    </header>
+    <div class="body flush">
+      <table class="t">
+        <thead><tr><th>#</th><th>Data</th><th>Tipo</th><th>Código</th><th class="r">Qtd.</th><th class="r">Preço</th><th>Instituição</th><th>Situação</th></tr></thead>
+        <tbody>
+          ${rows.map((r) => `<tr class="${rowClass(r)}">
+            <td class="mono">${r.id}</td>
+            <td class="mono">${dateBR(r.date)}</td>
+            <td><span class="chip ${r.side === "BUY" ? "blue" : "amber"} plain">${r.side === "BUY" ? "Compra" : "Venda"}</span></td>
+            <td><b class="ticker">${r.ticker}</b></td>
+            <td class="r num">${r.quantity.toLocaleString("pt-BR")}</td>
+            <td class="r num">${money(r.unit_price)}</td>
+            <td class="dim">${r.institution_name}</td>
+            <td>${situation(r)}${errorCell(r)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${reviewOnly ? "" : `<div class="applybar">
+      <div class="sum"><b>3 de 4 linhas válidas</b><span class="dim"> · duplicatas ignoradas automaticamente</span></div>
+      <span class="sp"></span>
+      <button class="btn ghost" data-act="discard-b3">Descartar</button>
+      ${rt.b3 ? `<span class="chip green">aplicada</span>` : `<button class="btn primary" data-act="apply-b3">Aplicar 3 linhas válidas</button>`}
+    </div>`}
+    ${rt.b3 ? `<div class="body" style="padding-top:0"><div class="okbanner" style="margin:10px 0 0">
+      <b>3 linhas aplicadas.</b><span>1 linha rejeitada ficou guardada no lote de reenvio.</span>
+      <span class="sp"></span><a data-go="assets/positions">Ver Ativos · Posições →</a><a data-go="plan/orders">Ver Plano · Ordens →</a>
+    </div></div>` : ""}
+  </section>`;
+}
+
+function custodyDiffTable() {
+  const custody = F.assets.positions.map((p) => ({ ticker: p.ticker, book: p.quantity, custody: p.ticker === "AAPL34" ? p.quantity + 50 : p.quantity }));
+  return `<section class="panel">
+    <header>
+      <h2>Snapshot de custódia</h2>
+      <span class="chip blue plain">11 posições</span>
+      <span class="chip amber plain">1 divergência</span>
+      <span class="sp"></span><span class="hint">31/10/2026</span>
+    </header>
+    <div class="body flush">
+      <table class="t">
+        <thead><tr><th>Ticker</th><th class="r">Livro</th><th class="r">Custódia</th><th class="r">Delta</th><th>Efeito</th></tr></thead>
+        <tbody>
+          ${custody.map((c) => {
+            const delta = c.custody - c.book;
+            return `<tr class="${delta ? "changed" : ""}">
+              <td><b class="ticker">${c.ticker}</b></td>
+              <td class="r num">${c.book.toLocaleString("pt-BR")}</td>
+              <td class="r num">${c.custody.toLocaleString("pt-BR")}</td>
+              <td class="r num ${delta ? "sur" : "faint"}">${delta ? `+${delta}` : "—"}</td>
+              <td>${delta ? '<span class="chip amber">abre lacuna · resultado pendente</span>' : '<span class="chip green plain">confere</span>'}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${reviewOnly ? "" : `<div class="applybar">
+      <div class="sum"><b>Estado como snapshot.</b><span class="dim"> posições se sobrescrevem; a divergência não bloqueia a aplicação.</span></div>
+      <span class="sp"></span>
+      <button class="btn ghost" data-act="discard-custody">Descartar</button>
+      ${rt.custody ? `<span class="chip green">aplicado</span>` : `<button class="btn primary" data-act="apply-custody">Aplicar snapshot</button>`}
+    </div>`}
+    ${rt.custody ? `<div class="body" style="padding-top:0"><div class="okbanner" style="margin:10px 0 0">
+      <b>Snapshot aplicado.</b><span>1 lacuna de 50 AAPL34 foi aberta com resultado pendente.</span>
+      <span class="sp"></span><a data-go="assets/positions">Ver Posições →</a><a data-go="assets/gaps">Ver Lacunas →</a>
+    </div></div>` : ""}
+  </section>`;
+}
+
+function editionDiffTable() {
+  const before = Object.fromEntries(ED103.entries.map((e) => [e.ticker, e]));
+  const changedWeight = new Set(ED104.diff_from_previous.changed.map((c) => c.ticker));
+  const rows = ED104.entries.map((e) => {
+    const b = before[e.ticker];
+    return { e, b, wChanged: changedWeight.has(e.ticker), doNotTradeFlip: b && !b.do_not_trade && e.do_not_trade };
+  });
+  return `<section class="panel">
+    <header>
+      <h2>Diff contra a edição ativa</h2>
+      <span class="chip amber plain">2 pesos alterados</span>
+      <span class="chip grey plain">5 preços-alvo</span>
+      <span class="chip red plain">1 alerta</span>
+      <span class="sp"></span><span class="hint">edição 103 → 104</span>
+    </header>
+    <div class="body flush">
+      <table class="t">
+        <thead><tr><th>Ticker</th><th class="r">Peso</th><th class="r">Preço-alvo</th><th>Recomendação</th><th>Não operar</th></tr></thead>
+        <tbody>
+          ${rows.map(({ e, b, wChanged, doNotTradeFlip }) => `<tr class="${wChanged || doNotTradeFlip ? "changed" : ""}">
+            <td><b class="ticker">${e.ticker}</b></td>
+            <td class="r num">${b ? `${b.weight}% → <b>${e.weight}%</b>` : `<b>${e.weight}%</b>`}${wChanged ? ` <span class="chip blue plain">${e.weight > b.weight ? "+" : ""}${e.weight - b.weight} pp</span>` : ""}</td>
+            <td class="r num">${b ? `${money(b.target_price)} → <b>${money(e.target_price)}</b>` : money(e.target_price)}</td>
+            <td>${b && b.rating !== e.rating ? `<span class="chip amber plain">${b.rating} → ${e.rating}</span>` : `<span class="chip grey plain">${e.rating}</span>`}</td>
+            <td>${doNotTradeFlip ? '<span class="chip red">novo: não operar</span>' : e.do_not_trade ? '<span class="chip amber plain">sim</span>' : '<span class="chip grey plain">—</span>'}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="diff-legend" style="padding:8px 14px 10px">
+        <span class="legend"><i style="background:var(--accent)"></i>mudança material</span>
+        <span class="legend"><i style="background:#fdf3e3"></i>alerta de política</span>
+        <span>Entradas: nenhuma · Saídas: nenhuma · Soma dos pesos: 100%</span>
+      </div>
+    </div>
+    <div class="body" style="padding-top:0">
+      <div class="warnbanner"><b>Alerta.</b><span>VALE3 passa a <b>não operar</b> nesta edição: o plano não sugere compra nem venda do ativo enquanto ela estiver ativa.</span></div>
+      <div class="callout"><b>O que o diff não diz.</b> Esta edição muda alvos de estratégia, não custódia. O plano de novembro já está calculado; os novos pesos entram no próximo recálculo, não retroativamente.</div>
+    </div>
+    ${reviewOnly ? "" : `<div class="applybar">
+      <div class="sum"><b>Edição staged.</b><span class="dim"> promover substitui a 103 como ativa; descartar mantém a atual.</span></div>
+      <span class="sp"></span>
+      ${rt.edition === "promoted"
+        ? `<span class="chip green">promovida a ativa</span>`
+        : rt.edition === "discarded"
+        ? `<span class="chip grey">descartada</span>`
+        : `<button class="btn ghost" data-act="discard-edition">Descartar</button><button class="btn primary" data-act="promote-edition">Promover a ativa</button>`}
+    </div>`}
+    ${rt.edition === "promoted" ? `<div class="body" style="padding-top:0"><div class="okbanner" style="margin:10px 0 0">
+      <b>Edição 104 é a ativa.</b><span>Os alvos de Dividendos BR já valem para o próximo recálculo do plano.</span>
+      <span class="sp"></span><a data-go="strategies/edicoes">Ver Estratégias →</a><a data-go="portfolio/allocation">Ver Alocação →</a>
+    </div></div>` : ""}
+  </section>`;
+}
+
+function provenance(fileName, hash, extra = "") {
+  return `<div class="callout" style="margin-top:10px">
+    <b>Proveniência.</b> ${esc(fileName)} · sha256 ${hash.slice(0, 12)}… · original retido. ${extra}
+  </div>`;
+}
+
+/* ============================ pages: portfolio ============================ */
+
+function pagePortfolio() {
+  const s = F.portfolio.summary;
+  const attention = F.attention;
+  return `${head("Carteira", "Novembro aberto · outubro fechado · todos os valores em BRL")}
+    <div class="kpis" style="margin-bottom:14px">
+      <div class="kpi"><div class="k">Capital</div><div class="v">${money0(s.capital)}</div><div class="s">patrimônio-alvo de nov/26</div></div>
+      <div class="kpi"><div class="k">Investido</div><div class="v">${money0(s.holdings_value)}</div><div class="s">${pct((s.holdings_value / s.capital) * 100)} do Capital</div></div>
+      <div class="kpi"><div class="k">Caixa não investido</div><div class="v">${money0(s.uninvested_balance)}</div><div class="s">piso ${money0(F.portfolio.currentMonth.month.floor)}</div></div>
+      <div class="kpi"><div class="k">Drift da carteira</div><div class="v ${s.drift < 0 ? "def" : "sur"}">${pp(s.drift)}</div><div class="s">déficit ${money0(s.deficit)}</div></div>
+    </div>
+    <div class="split">
+      <section class="panel">
+        <header><h2>Alocação · out/26</h2><span class="sp"></span><span class="hint">classes; estratégias na página de Alocação</span></header>
+        <div class="body flush"><table class="t">
+          <thead><tr><th>Classe</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Real</th><th class="r">Drift</th></tr></thead>
+          <tbody>${F.portfolio.allocation.classes.map((c) => `<tr>
+            <td><span class="chip ${classChip[c.asset_class]}">${classLabel[c.asset_class]}</span></td>
+            <td class="r num">${pct(c.target, 0)}</td><td class="r num">${money0(c.ideal)}</td><td class="r num">${money0(c.actual)}</td>
+            <td class="r num ${c.drift < 0 ? "def" : "sur"}">${pp(c.drift)}</td>
+          </tr>`).join("")}</tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <header><h2>Precisa de atenção</h2><span class="sp"></span><span class="chip red plain">${attention.filter((a) => a.severity === "action").length} ações</span></header>
+        <div class="body flush"><div class="attn">
+          ${attention.map((a) => `<button class="attn-item" data-attn="${esc(a.route)}">
+            <span class="mark ${a.severity}"></span>
+            <span><span class="ttl">${esc(a.title)}</span><span class="det">${esc(a.detail)}</span></span>
+            <span class="go">Abrir →</span>
+          </button>`).join("")}
+        </div></div>
+      </section>
+    </div>`;
+}
+
+/* ============================ pages: strategies ============================ */
+
+const STRATEGY_TABS = [
+  { key: "carteira", label: "Carteira", route: "strategies/carteira" },
+  { key: "edicoes", label: "Edições", route: "strategies/edicoes" },
+  { key: "atribuicao", label: "Atribuição", route: "strategies/atribuicao" },
+  { key: "fatia", label: "Fatia no portfólio", route: "strategies/fatia" },
+];
+
+function strategyHeader() {
+  return head("Dividendos BR",
+    `Relatório · Ações · edição ativa ${monthLabel(ED103.reference_month)} · valor na carteira ${money0(439300)}`,
+    `<button class="btn" data-act="upload-xp">Enviar relatório</button>`);
+}
+function strategyTabs(active) {
+  const pending = editionStatus() === "STAGED" ? 1 : 0;
+  return tabs(STRATEGY_TABS.map((t) => (t.key === "edicoes" ? { ...t, badge: pending } : t)), active);
+}
+
+function pageStrategies(parts) {
+  const sub = parts[1] || "list";
+  if (sub === "list") {
+    const value = { 1: 439300, 2: 190400, 3: 358850, 4: 101720, 5: 48840 };
+    return `${head("Estratégias", "Três estratégias com relatório e dois buckets manuais (legado).")}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Estratégia</th><th>Classe</th><th>Tipo</th><th>Edição</th><th class="r">Valor</th></tr></thead>
+        <tbody>${F.strategies.rows.map((r) => `<tr class="click" data-go="strategies/edicoes">
+          <td><b>${esc(r.name)}</b></td>
+          <td><span class="chip ${classChip[r.asset_class]}">${classLabel[r.asset_class]}</span></td>
+          <td><span class="chip ${r.kind === "MANUAL" ? "grey" : "blue"} plain">${r.kind === "MANUAL" ? "Manual (legado)" : "Com relatório"}</span></td>
+          <td>${r.id === 1 && editionStatus() === "STAGED" ? '<span class="chip amber">staged nov/26</span>' : '<span class="chip grey plain">—</span>'}</td>
+          <td class="r num">${money0(value[r.id])}</td>
+        </tr>`).join("")}</tbody>
+      </table></div></section>`;
+  }
+  const active = ["carteira", "edicoes", "atribuicao", "fatia"].includes(sub) ? sub : "edicoes";
+  const reviewOpen = parts[2] === "review";
+  let body = "";
+  if (active === "carteira") {
+    body = `<section class="panel"><header><h2>Edição ativa · ${monthLabel(ED103.reference_month)}</h2><span class="sp"></span><span class="hint">pesos e preços-alvo</span></header>
+      <div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th class="r">Peso</th><th class="r">Preço-alvo</th><th>Recomendação</th><th>Não operar</th></tr></thead>
+        <tbody>${ED103.entries.map((e) => `<tr><td><b class="ticker">${e.ticker}</b></td><td class="r num">${e.weight}%</td><td class="r num">${money(e.target_price)}</td><td><span class="chip grey plain">${e.rating}</span></td><td>${e.do_not_trade ? '<span class="chip amber plain">sim</span>' : '<span class="chip grey plain">—</span>'}</td></tr>`).join("")}</tbody>
+      </table></div></section>`;
+  } else if (active === "atribuicao") {
+    const rows = F.strategies.attribution.flatMap((h) => h.slices.filter((s) => s.strategy_id === 1).map((s) => ({ ticker: h.ticker, quantity: s.quantity })));
+    body = `<section class="panel"><header><h2>Atribuição da custódia · Dividendos BR</h2><span class="sp"></span><span class="hint">quantidades por ticker</span></header>
+      <div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th class="r">Quantidade atribuída</th></tr></thead>
+        <tbody>${rows.map((a) => `<tr><td><b class="ticker">${a.ticker}</b></td><td class="r num">${a.quantity.toLocaleString("pt-BR")}</td></tr>`).join("")}</tbody>
+      </table></div></section>
+      <div class="callout" style="margin-top:12px"><b>Estratégias.</b> A atribuição completa e a reconciliação custódia × atribuição foram desenhadas no protótipo do ticket #351.</div>`;
+  } else if (active === "fatia") {
+    body = `<section class="panel"><header><h2>Fatia no portfólio</h2></header><div class="body">
+      <div class="dest-rows">
+        <div class="dest-row"><span class="dim">Valor da estratégia</span><span class="sp"></span><b class="num">${money0(439300)}</b></div>
+        <div class="dest-row"><span class="dim">Fatia do portfólio</span><span class="sp"></span><b class="num">${pct((439300 / 1489140.1) * 100)}</b></div>
+        <div class="dest-row"><span class="dim">Alvo da estratégia na classe</span><span class="sp"></span><b class="num">52,00%</b></div>
+        <div class="dest-row"><span class="dim">Drift</span><span class="sp"></span><b class="num sur">+3,09 pp</b></div>
+      </div>
+    </div></section>`;
+  } else {
+    body = `${reviewOpen && state.v === "b" ? inlineReview("xp") : ""}
+      ${editionCards(reviewOpen && state.v === "b")}
+      ${!reviewOpen && state.v === "b" && editionStatus() === "STAGED" ? `<div class="callout" style="margin-top:12px"><b>Revisão no destino.</b> Nesta variante o arquivo enviado por <b>Enviar relatório</b> é lido e revisado aqui mesmo; a caixa de entrada só aponta para esta tela.</div>` : ""}`;
+  }
+  return `${strategyHeader()}${strategyTabs(active)}${body}`;
+}
+
+function editionCards(hideStaged = false) {
+  const staged = editionStatus() === "STAGED";
+  const nextRoute = state.v === "a" ? "imports/xp" : state.v === "c" ? "import/wizard/xp/3" : "strategies/edicoes/review";
+  return `
+    ${hideStaged ? "" : `<section class="panel">
+      <header><h2>Edição 104 · ${monthLabel(ED104.reference_month)}</h2>
+        <span class="chip ${statusTone[editionStatus()] || "grey"}">${statusLabel[editionStatus()] || editionStatus()}</span>
+        <span class="sp"></span><span class="hint">XP · relatório de carteira recomendada</span></header>
+      <div class="body">
+        <div class="dest-rows">
+          <div class="dest-row"><span class="chip blue plain">Origem</span><span class="d">XP_Relatorio_Novembro_2026.csv</span><span class="sp"></span><span class="faint">01/11 · 09:10</span></div>
+          <div class="dest-row"><span class="chip grey plain">Tentativas</span><span class="d">PDF de outubro falhou (sem texto) · CSV reexportado aceito</span><span class="sp"></span><a data-go="imports/sources">Ver fonte →</a></div>
+          <div class="dest-row"><span class="chip amber plain">Muda</span><span class="d">2 pesos · 5 preços-alvo · VALE3 passa a não operar</span><span class="sp"></span><span class="faint">${staged ? "aguarda decisão" : statusLabel[editionStatus()] || editionStatus()}</span></div>
+        </div>
+        ${staged ? `<div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn primary" data-go="${nextRoute}">${state.v === "b" ? "Revisar diff aqui" : state.v === "a" ? "Revisar na importação" : "Revisar no assistente"} →</button>
+          ${state.v !== "a" ? `<button class="btn ghost" data-go="imports/xp">Ver a importação que gerou esta edição →</button>` : ""}
+        </div>` : ""}
+      </div>
+    </section>`}
+    <section class="panel" style="${hideStaged ? "" : "margin-top:14px"}">
+      <header><h2>Edição ativa · ${monthLabel(ED103.reference_month)}</h2><span class="sp"></span><span class="hint">substituída quando a 104 for promovida</span></header>
+      <div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th class="r">Peso</th><th class="r">Preço-alvo</th><th>Recomendação</th></tr></thead>
+        <tbody>${ED103.entries.map((e) => `<tr><td><b class="ticker">${e.ticker}</b></td><td class="r num">${e.weight}%</td><td class="r num">${money(e.target_price)}</td><td><span class="chip grey plain">${e.rating}</span></td></tr>`).join("")}</tbody>
+      </table></div>
+    </section>`;
+}
+
+/* ============================ pages: assets ============================ */
+
+const ASSET_TABS = [
+  { key: "positions", label: "Posições", route: "assets/positions" },
+  { key: "fixed", label: "Renda fixa", route: "assets/fixed" },
+  { key: "quotes", label: "Cotações", route: "assets/quotes" },
+  { key: "gaps", label: "Lacunas", route: "assets/gaps" },
+];
+
+function positionsTable() {
+  const rows = F.assets.positions.map((p) => {
+    const q = F.assets.quotes.find((x) => x.ticker === p.ticker);
+    const cat = F.assets.catalog.find((x) => x.ticker === p.ticker);
+    return { ...p, close: q?.close, cls: cat?.asset_class, stale: q && q.date < "2026-10-30" };
+  });
+  const total = rows.reduce((s, p) => s + p.quantity * (p.close || 0), 0);
+  return `<section class="panel"><div class="body flush"><table class="t">
+    <thead><tr><th>Ticker</th><th>Classe</th><th class="r">Quantidade</th><th class="r">Preço médio</th><th class="r">Fechamento</th><th class="r">Valor</th></tr></thead>
+    <tbody>${rows.map((p) => `<tr><td><b class="ticker">${p.ticker}</b>${p.stale ? ' <span class="chip amber plain">cotação velha</span>' : ""}${p.ticker === "AAPL34" ? ' <span class="chip red plain">lacuna</span>' : ""}</td><td><span class="chip ${classChip[p.cls]}">${classLabel[p.cls]}</span></td><td class="r num">${p.quantity.toLocaleString("pt-BR")}</td><td class="r num">${money(p.average_price)}</td><td class="r num">${p.close ? money(p.close) : "—"}</td><td class="r num">${p.close ? money0(p.quantity * p.close) : "—"}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><td colspan="5" class="dim" style="border-top:1px solid var(--line)">Total listado</td><td class="r num" style="border-top:1px solid var(--line)"><b>${money0(total)}</b></td></tr></tfoot>
+  </table></div></section>`;
+}
+
+function pageAssets(parts) {
+  const sub = ["positions", "fixed", "quotes", "gaps"].includes(parts[1]) ? parts[1] : "positions";
+  const reviewKind = parts[2] === "review" ? (parts[3] === "102" ? "custody" : "b3") : null;
+  const actions = `<button class="btn" data-act="upload-b3">Importar extrato</button><button class="btn ghost" data-act="upload-custody">Reconciliar custódia</button>`;
+  const tabBar = tabs(ASSET_TABS, sub);
+  if (sub === "quotes") {
+    return `${head("Ativos · Cotações", "Último fechamento por ticker e a idade da cotação.", actions)}${tabBar}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th>Data</th><th class="r">Fechamento</th><th>Fonte</th><th>Estado</th></tr></thead>
+        <tbody>${F.assets.quotes.map((q) => `<tr><td><b class="ticker">${q.ticker}</b></td><td class="mono">${dateBR(q.date)}</td><td class="r num">${money(q.close)}</td><td class="dim">${q.source}</td><td>${q.date < "2026-10-30" ? '<span class="chip amber">desatualizada</span>' : '<span class="chip green plain">ok</span>'}</td></tr>`).join("")}</tbody>
+      </table></div></section>`;
+  }
+  if (sub === "fixed") {
+    const rf = F.assets.fixedIncome.positions || [];
+    const subLabel = { INFLATION_LINKED: "IPCA+", FIXED_RATE: "Prefixado", FLOATING_RATE: "CDI" };
+    return `${head("Ativos · Renda fixa", "Títulos e contas na mesma tabela; o valor é por accrual.", actions)}${tabBar}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Produto</th><th>Indexador</th><th class="r">Valor</th></tr></thead>
+        <tbody>${rf.map((p) => `<tr><td>${esc(p.product)}</td><td class="dim">${subLabel[p.sub_class] || p.sub_class}</td><td class="r num">${money0(p.value)}</td></tr>`).join("")}</tbody>
+      </table></div></section>
+      <div class="callout" style="margin-top:12px"><b>Renda fixa fora do B3.</b> Extratos B3 não cobrem renda fixa; ela tem o próprio caminho de entrada, sem este fluxo.</div>`;
+  }
+  if (sub === "gaps") {
+    return `${head("Ativos · Lacunas", "Deltas de custódia que o livro não explica; nunca alimentam o imposto.", actions)}${tabBar}
+      <section class="panel"><div class="body flush"><table class="t">
+        <thead><tr><th>Ticker</th><th>Data</th><th class="r">Quantidade</th><th>Resultado</th><th>Estado</th></tr></thead>
+        <tbody>${F.assets.gaps.map((g) => `<tr><td><b class="ticker">${g.ticker}</b></td><td class="mono">${dateBR(g.date)}</td><td class="r num">${g.quantity}</td><td>${g.realized_pending ? '<span class="chip amber">pendente</span>' : '<span class="chip green plain">resolvido</span>'}</td><td><span class="chip ${g.status === "OPEN" ? "red" : "grey"}">${g.status}</span></td></tr>`).join("")}</tbody>
+      </table></div></section>`;
+  }
+  const pendingStrip = state.v === "a"
+    ? `<div class="infobanner"><b>2 importações aguardam.</b><span>Extrato B3 (101) em revisão e custódia (102) pronta para aplicar — ambas na Caixa de entrada.</span><span class="sp"></span><a data-go="imports/inbox">Abrir Importações →</a></div>`
+    : state.v === "b"
+    ? `<div class="infobanner"><b>Revisão no destino.</b><span>O extrato B3 e o snapshot de custódia são revisados e aplicados aqui, sem sair de Ativos.</span><span class="sp"></span><a data-go="assets/positions/review/101">Revisar extrato (101) →</a><a data-go="assets/positions/review/102">Revisar custódia (102) →</a></div>`
+    : `<div class="infobanner"><b>Fluxo de importação à parte.</b><span>Nesta variante a revisão abre no assistente em tela cheia, e a caixa de entrada lista a sessão.</span><span class="sp"></span><a data-go="import/wizard/b3/1">Abrir assistente →</a></div>`;
+  return `${head("Ativos · Posições", "Custódia real e preço médio fiscal; a atribuição por estratégia vem em segundo plano.", actions)}${tabBar}
+    ${reviewKind && state.v === "b" ? inlineReview(reviewKind) : ""}
+    ${pendingStrip}
+    ${positionsTable()}`;
+}
+
+/* ============================ pages: imports ============================ */
+
+const IMPORT_TABS = [
+  { key: "inbox", label: "Caixa de entrada", route: "imports/inbox" },
+  { key: "sources", label: "Fontes", route: "imports/sources" },
+  { key: "corporate", label: "Ações corporativas", route: "imports/corporate" },
+  { key: "history", label: "Histórico", route: "imports/history" },
+];
+
+let reviewOnly = false;
+
+function sourceStrip() {
+  return `<div class="source-grid" style="margin-bottom:14px">
+    ${SOURCES.map((s) => {
+      const st = s.status();
+      return `<div class="source-card" data-go="imports/sources">
+        <div class="lbl">${s.label}<span class="sp"></span><span class="chip ${statusTone[st] || "grey"}">${statusLabel[st] || st}</span></div>
+        <div class="meta">${s.detail} · última ${s.last}</div>
+        <div class="st">${s.statusText()}</div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function queueRow(item) {
+  return `<button class="qitem" data-go="${targetFor(item)}">
+    <div>
+      <div class="src">${item.source}</div>
+      <div class="file mono">${esc(item.file)}</div>
+    </div>
+    <div class="what">${item.statusText}</div>
+    <div class="dest"><span class="chip blue plain">${item.dest}</span></div>
+    <div class="right">
+      <span class="chip ${statusTone[item.status] || "grey"}">${statusLabel[item.status] || item.status}</span>
+      <span style="font-size:11px;color:var(--accent);white-space:nowrap">${state.v === "a" ? "Revisar →" : state.v === "b" ? "Abrir no destino →" : item.status === "APPLIED" ? "Ver →" : "Retomar →"}</span>
+    </div>
+  </button>`;
+}
+
+function inboxPage() {
+  const queued = queueItems();
+  const pending = queued.filter((q) => q.status !== "APPLIED" && q.status !== "DISCARDED");
+  const note = state.v === "a"
+    ? `<div class="infobanner"><b>Uma oficina de revisão.</b><span>Tudo que entra — contextual ou não — revisa aqui no mesmo detalhe. O cartão de destino leva ao objeto.</span></div>`
+    : state.v === "b"
+    ? `<div class="infobanner"><b>Uma fila, não uma oficina.</b><span>Cada item abre a tela onde o dado vai viver: a edição na estratégia, o extrato em Ativos. A caixa de entrada só roteia.</span></div>`
+    : `<div class="infobanner"><b>Sessões, não linhas.</b><span>Cada upload vira uma sessão de assistente; abandonar guarda a sessão aqui para retomar.</span></div>`;
+  const parked = ui.parked && state.v === "c" ? `<section class="panel" style="margin-bottom:14px">
+    <header><h2>Sessão aberta</h2><span class="chip amber plain">retomável</span><span class="sp"></span><span class="hint">saiu sem concluir</span></header>
+    <div class="body"><div class="dest-row">
+      <span class="chip blue plain">${ui.parked.kind === "xp" ? "Relatório XP" : ui.parked.kind === "custody" ? "Custódia B3" : "Extrato B3"}</span>
+      <span class="d">etapa ${ui.parked.step} de 4 · arquivo lido, nada aplicado</span><span class="sp"></span>
+      <a data-go="import/wizard/${ui.parked.kind}/${ui.parked.step}">Retomar →</a>
+    </div></div>
+  </section>` : "";
+  return `${head("Importações", "Um só lugar para arquivos em revisão — movimentação, custódia, negócios e relatório.", '<button class="btn primary" data-act="upload-global">Enviar arquivo</button>')}
+    ${tabs(IMPORT_TABS, "inbox")}
+    ${sourceStrip()}
+    ${note}
+    ${parked}
+    <section class="panel">
+      <header><h2>Na fila</h2><span class="sp"></span><span class="hint">${pending.length} ${pending.length === 1 ? "item" : "itens"} · os aplicados continuam no histórico</span></header>
+      <div class="body flush"><div class="queue">${queued.map(queueRow).join("")}</div></div>
+    </section>
+    <section class="panel" style="margin-top:14px">
+      <header><h2>Falhas e reenvios</h2><span class="sp"></span><span class="hint">a fonte guarda a última tentativa</span></header>
+      <div class="body flush"><table class="t">
+        <thead><tr><th>Fonte</th><th>Arquivo</th><th>Motivo</th><th>Quando</th><th class="r">Ação</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip grey">XP · Relatório</span></td><td class="mono dim">${esc(XP_IMPORT.file_name)}</td><td class="dim">PDF sem camada de texto · o CSV reexportado gerou a edição 104</td><td class="mono">30/10</td><td class="r"><button class="btn sm" data-act="retry-xp">Reenviar →</button></td></tr>
+        </tbody>
+      </table></div>
+    </section>`;
+}
+
+function sourcesPage() {
+  return `${head("Importações · Fontes", "Estado por fonte; a atenção mora aqui, não item a item.", '<button class="btn" data-act="refresh-sources">Verificar fontes</button>')}
+    ${tabs(IMPORT_TABS, "sources")}
+    <div class="split">
+      <div class="stack">
+        ${SOURCES.map((s) => {
+          const st = s.status();
+          const actions = s.key === "xp"
+            ? `<button class="btn sm" data-act="retry-xp">Reenviar relatório</button><button class="btn sm ghost" data-go="${state.v === "a" ? "imports/xp" : state.v === "b" ? "strategies/edicoes/review" : "import/wizard/xp/3"}">Revisar edição →</button>`
+            : s.key === "mov"
+            ? `<button class="btn sm" data-go="${state.v === "a" ? "imports/101" : state.v === "b" ? "assets/positions/review/101" : "import/wizard/b3/3"}">Revisar linhas →</button>`
+            : s.key === "pos"
+            ? `<button class="btn sm" data-go="${state.v === "a" ? "imports/102" : state.v === "b" ? "assets/positions/review/102" : "import/wizard/custody/3"}">Revisar snapshot →</button>`
+            : `<button class="btn sm ghost" data-go="imports/history">Ver no histórico →</button>`;
+          return `<section class="panel">
+            <header><h2>${s.label}</h2><span class="chip ${statusTone[st] || "grey"}">${statusLabel[st] || st}</span><span class="sp"></span><span class="hint">última leitura ${s.last}</span></header>
+            <div class="body">
+              <div class="dest-rows">
+                <div class="dest-row"><span class="dim">${s.detail}</span><span class="sp"></span><b>${s.statusText()}</b></div>
+                <div class="dest-row"><span class="chip ${s.key === "xp" ? "red" : "grey"} plain">${s.key === "xp" ? "2 tentativas" : "1 arquivo"}</span><span class="d">${s.key === "xp" ? "PDF falhou · CSV aceito" : "última leitura dentro do esperado"}</span><span class="sp"></span>${actions}</div>
+              </div>
+            </div>
+          </section>`;
+        }).join("")}
+      </div>
+      <div class="stack">
+        <section class="panel"><header><h2>Regras da fonte</h2></header><div class="body">
+          <div class="dest-rows">
+            <div class="dest-row"><span class="dim">Extrato B3</span><span class="sp"></span><span class="chip blue plain">não cobre RF</span></div>
+            <div class="dest-row"><span class="dim">Reenvio</span><span class="sp"></span><span class="chip grey plain">hash + original</span></div>
+            <div class="dest-row"><span class="dim">Atenção</span><span class="sp"></span><span class="chip amber plain">na fonte</span></div>
+          </div>
+          <div class="callout" style="margin-top:10px"><b>Uma fonte falha, não a caixa.</b> O histórico do arquivo fica na fonte; a caixa de entrada só mostra o que ainda precisa de decisão.</div>
+        </div></section>
+        <section class="panel"><header><h2>Próximo passo</h2></header><div class="body" style="font-size:12px;color:var(--ink-2)">
+          ${rt.b3 && rt.custody && rt.edition ? "Nada pendente: as três importações foram resolvidas." : "A edição 104 é o item mais antigo com decisão pendente."}
+        </div></section>
+      </div>
+    </div>`;
+}
+
+function corporatePage() {
+  return `${head("Importações · Ações corporativas", "Eventos que mudam quantidade ou preço médio, sempre com revisão humana.")}
+    ${tabs(IMPORT_TABS, "corporate")}
+    <section class="panel"><div class="body flush"><table class="t">
+      <thead><tr><th>Evento</th><th>Ticker</th><th>Tipo</th><th>Ex</th><th>Fonte</th><th>Estado</th></tr></thead>
+      <tbody>${F.imports.corporateActions.map((c) => `<tr class="${c.status === "NEEDS_REVIEW" ? "click" : ""}" ${c.status === "NEEDS_REVIEW" ? 'data-go="imports/101"' : ""}>
+        <td class="mono">#${c.id}</td><td><b class="ticker">${c.ticker}</b></td><td>${esc(c.kind || "—")}</td><td class="mono">${dateBR(c.ex_date)}</td><td class="dim">${c.source}</td>
+        <td><span class="chip ${c.status === "NEEDS_REVIEW" ? "red" : "green"}">${c.status === "NEEDS_REVIEW" ? "Revisar" : "Aplicada"}</span></td>
+      </tr>`).join("")}</tbody>
+    </table></div></section>
+    ${F.imports.corporateActions.filter((c) => c.status === "NEEDS_REVIEW").map((c) => `<div class="warnbanner" style="margin-top:12px"><b>Desdobramento 1:${c.ratio} em revisão.</b><span>${c.ticker} com ex em ${dateBR(c.ex_date)}. Aplicar muda quantidade e preço médio; nunca o caixa. <a data-go="${state.v === "a" ? "imports/101" : state.v === "b" ? "assets/positions/review/101" : "import/wizard/b3/3"}">Abrir revisão →</a></span></div>`).join("")}`;
+}
+
+function historyPage() {
+  return `${head("Importações · Histórico", "Tudo que já foi staged, revisado, aplicado ou falhou.")}
+    ${tabs(IMPORT_TABS, "history")}
+    <section class="panel"><div class="body flush"><table class="t">
+      <thead><tr><th>#</th><th>Fonte</th><th>Arquivo</th><th>Criado</th><th>Estado</th></tr></thead>
+      <tbody>${F.imports.items.map((i) => `<tr><td class="mono">#${i.id}</td><td><span class="chip grey">${i.source}</span></td><td class="dim">${esc(i.file_name)}</td><td class="mono">${dateBR(i.created_at.slice(0, 10))}</td><td><span class="chip ${statusTone[i.status] || "grey"}">${statusLabel[i.status] || i.status}</span></td></tr>`).join("")}
+        <tr><td class="mono">ed. 104</td><td><span class="chip grey">XP · Relatório</span></td><td class="dim">XP_Relatorio_Novembro_2026.csv</td><td class="mono">01/11</td><td><span class="chip ${statusTone[editionStatus()]}">${statusLabel[editionStatus()] || editionStatus()}</span></td></tr>
+      </tbody>
+    </table></div></section>`;
+}
+
+function importDetail(id) {
+  if (state.v === "b") {
+    const kind = id === "102" ? "custody" : id === "xp" ? "xp" : "b3";
+    const dest = kind === "xp" ? "strategies/edicoes/review" : kind === "custody" ? "assets/positions/review/102" : "assets/positions/review/101";
+    return `${head("Importação · registro", "Nesta variante o registro é só um índice; a revisão acontece no destino.", '<button class="btn ghost" data-go="imports/inbox">← Caixa de entrada</button>')}
+      ${tabs(IMPORT_TABS, "inbox")}
+      <div class="infobanner"><b>Revisão no destino.</b><span>O arquivo e o estado ficam neste registro, mas as linhas, o diff e a aplicação abrem onde o dado vive.</span><span class="sp"></span><a data-go="${dest}">Abrir a revisão no destino →</a></div>
+      ${destinationsPanel(kind)}
+      <div style="margin-top:14px">${kind === "xp" ? provenance("XP_Relatorio_Novembro_2026.csv", "c4e8a2d6f0b4c8e2a6d0f4b8c2e6a0d4", "A primeira tentativa em PDF falhou.") : provenance(IMPORT[id === "102" ? 102 : 101].file_name, IMPORT[id === "102" ? 102 : 101].file_hash)}</div>`;
+  }
+  if (state.v === "c") {
+    const kind = id === "102" ? "custody" : id === "xp" ? "xp" : "b3";
+    return `${head("Importação · registro", "No assistente, a importação é uma sessão; o registro guarda a proveniência.")}
+      ${tabs(IMPORT_TABS, "inbox")}
+      <div class="infobanner"><b>Revisão no assistente.</b><span>Abrir o registro aqui só mostra de onde ele veio; a decisão fica na sessão.</span><span class="sp"></span><a data-go="import/wizard/${kind}/3">Retomar a sessão →</a></div>`;
+  }
+  if (id === "xp") {
+    return `${head("Edição 104 · Dividendos BR", "Relatório XP · novembro de 2026 · nada foi aplicado ainda.", '<button class="btn ghost" data-go="imports/inbox">← Caixa de entrada</button>')}
+      ${tabs(IMPORT_TABS, "inbox")}
+      <div class="stack">
+        ${destinationsPanel("xp")}
+        <div>${provenance("XP_Relatorio_Novembro_2026.csv", "c4e8a2d6f0b4c8e2a6d0f4b8c2e6a0d4", "A primeira tentativa (PDF de outubro) falhou: sem camada de texto. O CSV reexportado gerou esta edição.")}</div>
+        ${editionDiffTable()}
+      </div>`;
+  }
+  const isCustody = id === "102";
+  const imp = IMPORT[isCustody ? 102 : 101];
+  return `${head(isCustody ? "Importação #102 · B3 custódia" : "Importação #101 · B3 movimentações", isCustody ? "Snapshot de posição · 11 posições listadas." : "Extrato de movimentações · 4 linhas lidas.", '<button class="btn ghost" data-go="imports/inbox">← Caixa de entrada</button>')}
+    ${tabs(IMPORT_TABS, "inbox")}
+    <div class="stack">
+      ${destinationsPanel(isCustody ? "custody" : "b3")}
+      <div>${provenance(imp.file_name, imp.file_hash)}</div>
+      ${isCustody ? custodyDiffTable() : `${mappingPanel("b3")}${b3RowsTable()}`}
+    </div>`;
+}
+
+function pageImports(parts) {
+  const sub = parts[1] || "inbox";
+  if (["101", "102", "xp"].includes(sub)) return importDetail(sub);
+  if (sub === "sources") return sourcesPage();
+  if (sub === "corporate") return corporatePage();
+  if (sub === "history") return historyPage();
+  return inboxPage();
+}
+
+/* ============================ review in place (treatment B) ============================ */
+
+function inlineReview(kind) {
+  const label = kind === "xp" ? "Edição 104 · Dividendos BR" : kind === "custody" ? "Snapshot de custódia · 31/10" : "Extrato B3 · movimentação";
+  return `<div class="stack" style="margin-bottom:14px">
+    <div class="infobanner" style="margin-bottom:0"><b>Revisão no destino.</b><span>${label} — aberta onde o dado vai viver. <a data-go="imports/inbox">Voltar à caixa de entrada →</a></span></div>
+    ${kind === "xp" ? editionDiffTable() : ""}
+    ${kind === "b3" ? `${mappingPanel("b3")}${b3RowsTable()}` : ""}
+    ${kind === "custody" ? custodyDiffTable() : ""}
+    <div>${kind === "xp" ? provenance("XP_Relatorio_Novembro_2026.csv", "c4e8a2d6f0b4c8e2a6d0f4b8c2e6a0d4", "A primeira tentativa em PDF falhou; o CSV gerado virou esta edição.") : provenance(kind === "custody" ? IMPORT[102].file_name : IMPORT[101].file_name, kind === "custody" ? IMPORT[102].file_hash : IMPORT[101].file_hash)}</div>
+  </div>`;
+}
+
+/* ============================ upload sheet ============================ */
+
+function uploadSheetHTML() {
+  const u = ui.upload;
+  const contextual = u.contextual;
+  const kind = u.kind;
+  const meta = {
+    xp: { dest: "Dividendos BR · edição nov/2026", parser: "XP — relatório de carteira recomendada (layout 2026-07)", file: "XP_Relatorio_Novembro_2026.csv", accept: ".csv · .pdf · .xlsx" },
+    b3: { dest: "Ativos · Posições · extrato B3", parser: "B3 — movimentação (xlsx 2026-01)", file: "movimentacao-2026-11-01.xlsx", accept: ".xlsx · .csv" },
+    custody: { dest: "Ativos · Posições · snapshot de custódia", parser: "B3 — posição em custódia (xlsx 2026-01)", file: "posicao-2026-11-01.xlsx", accept: ".xlsx · .csv" },
+  }[kind];
+  return `<div class="modal-back" data-act="upload-cancel-bg">
+    <div class="modal" data-stop="1">
+      <div class="mhead"><h2>Enviar arquivo</h2><span class="sp"></span><button class="btn ghost sm" data-act="upload-cancel">✕</button></div>
+      <div class="mbody">
+        ${contextual
+          ? `<div class="field"><span class="lbl">Destino (definido pelo contexto)</span><div class="sample"><span class="chip blue">${kind === "xp" ? "Estratégia" : "Dados"}</span><b>${meta.dest}</b><span class="sp"></span><a data-act="upload-context-off">trocar</a></div></div>`
+          : `<div class="field"><span class="lbl">O que você está enviando</span>
+              <div class="segmented">
+                <button class="${kind === "xp" ? "active" : ""}" data-act="upload-kind" data-kind="xp">Relatório de estratégia</button>
+                <button class="${kind === "b3" ? "active" : ""}" data-act="upload-kind" data-kind="b3">Extrato B3</button>
+                <button class="${kind === "custody" ? "active" : ""}" data-act="upload-kind" data-kind="custody">Custódia</button>
+              </div>
+            </div>
+            <div class="field"><span class="lbl">Destino</span><select aria-label="destino"><option>${meta.dest}</option></select></div>`}
+        <div class="drop"><b>Arraste o arquivo aqui</b><span>ou clique para escolher · ${meta.accept}</span></div>
+        <div class="sample"><span class="mono">${meta.file}</span><span class="sp"></span><span class="chip green plain">exemplo</span></div>
+        <div class="field"><span class="lbl">Parser</span><div class="sample"><span>${meta.parser}</span><span class="sp"></span><span class="chip blue plain">detectado</span></div></div>
+        <div class="callout"><b>Nada é aplicado no upload.</b> O arquivo é lido e vai para revisão; a aplicação é uma decisão separada.</div>
+      </div>
+      <div class="mfoot"><span class="faint" style="font-size:11px">sha256 calculado ao ler · original retido</span><span class="sp"></span><button class="btn ghost" data-act="upload-cancel">Cancelar</button><button class="btn primary" data-act="upload-submit">Enviar e revisar</button></div>
+    </div>
+  </div>`;
+}
+
+/* ============================ wizard (treatment C) ============================ */
+
+const WIZ_LABELS = {
+  b3: ["Arquivo", "Destino e mapeamento", "Linhas", "Aplicar"],
+  custody: ["Arquivo", "Destino e mapeamento", "Divergências", "Aplicar"],
+  xp: ["Arquivo", "Destino e mapeamento", "Diff da edição", "Promover"],
+};
+
+function wizardApplied(kind) {
+  return kind === "xp" ? rt.edition === "promoted" : kind === "custody" ? !!rt.custody : !!rt.b3;
+}
+
+function wizardHTML(kind, stepInput) {
+  const labels = WIZ_LABELS[kind] ? WIZ_LABELS[kind] : WIZ_LABELS.b3;
+  const step = Math.max(1, Math.min(4, Number(stepInput) || 1));
+  const dest = kind === "xp" ? "Dividendos BR · nov/2026" : kind === "custody" ? "Ativos · Posições · 31/10" : "Ativos · Posições · extrato B3";
+  const meta = kind === "xp" ? "XP · layout 2026-07" : kind === "custody" ? "B3 · posição em custódia" : "B3 · movimentação";
+  const stepBody = () => {
+    if (step === 1) {
+      return `<section class="wiz-panel"><header><h2>Arquivo</h2><span class="sp"></span><span class="hint">aberto de: ${kind === "xp" ? "Estratégias · Dividendos BR" : "Ativos · Posições"}</span></header>
+        <div class="pad" style="display:grid;gap:12px">
+          <div class="segmented">
+            <button class="${kind === "xp" ? "active" : ""}" data-wiz-kind="xp">Relatório XP</button>
+            <button class="${kind === "b3" ? "active" : ""}" data-wiz-kind="b3">Extrato B3</button>
+            <button class="${kind === "custody" ? "active" : ""}" data-wiz-kind="custody">Custódia B3</button>
+          </div>
+          <div class="drop"><b>Arraste o arquivo aqui</b><span>o contexto já escolheu o parser: ${meta}</span></div>
+          <div class="sample"><span class="mono">${kind === "xp" ? "XP_Relatorio_Novembro_2026.csv" : kind === "custody" ? "posicao-2026-10-31.xlsx" : "movimentacao-2026-10-31.xlsx"}</span><span class="sp"></span><span class="chip green plain">arquivo escolhido</span></div>
+          <div class="callout"><b>Contexto sem cerimônia.</b> O destino ${dest} veio de onde o assistente foi aberto; trocar é explícito, não um passo a mais.</div>
+        </div>
+      </section>`;
+    }
+    if (step === 2) {
+      return `<div class="stack">
+        <section class="wiz-panel"><header><h2>Destino</h2><span class="sp"></span><span class="chip blue plain">pré-preenchido</span></header>
+          <div class="pad"><div class="dest-rows">
+            <div class="dest-row"><span class="dim">Destino</span><span class="sp"></span><b>${dest}</b><a data-act="noop">trocar</a></div>
+            <div class="dest-row"><span class="dim">Parser</span><span class="sp"></span><b>${meta}</b><span class="chip green plain">reconhecido</span></div>
+            <div class="dest-row"><span class="dim">Aplicação</span><span class="sp"></span><b>${kind === "xp" ? "promover a edição a ativa" : kind === "custody" ? "sobrescrever o snapshot" : "aplicar as linhas válidas"}</b></div>
+          </div></div>
+        </section>
+        ${kind === "custody"
+          ? `<div class="callout">A custódia não passa por mapeamento de colunas de negócio: o parser lê ticker e quantidade, e a revisão é a divergência contra o livro.</div>`
+          : mappingPanel(kind)}
+      </div>`;
+    }
+    if (step === 3) {
+      reviewOnly = true;
+      const body = kind === "xp" ? editionDiffTable() : kind === "custody" ? custodyDiffTable() : b3RowsTable();
+      reviewOnly = false;
+      return `<div class="stack">
+        ${kind === "xp" ? `<div class="callout">O assistente compara o relatório com a edição ativa antes de promover; a promoção acontece na última etapa.</div>` : ""}
+        ${body}
+      </div>`;
+    }
+    const applied = wizardApplied(kind);
+    const counts = kind === "xp"
+      ? ["2 pesos alterados", "5 preços-alvo", "1 alerta: VALE3 não operar"]
+      : kind === "custody"
+      ? ["11 posições", "1 divergência", "1 lacuna ao aplicar"]
+      : ["3 linhas válidas", "1 rejeitada", "1 lote de reenvio"];
+    return `<div class="stack">
+      <section class="wiz-panel"><header><h2>${applied ? "Concluído" : "Resumo"}</h2><span class="sp"></span><span class="chip ${applied ? "green" : "amber"} plain">${applied ? "aplicado" : "nada aplicado ainda"}</span></header>
+        <div class="pad" style="display:grid;gap:12px">
+          <div class="dest-rows">
+            <div class="dest-row"><span class="dim">Destino</span><span class="sp"></span><b>${dest}</b></div>
+            ${counts.map((c) => `<div class="dest-row"><span class="dim">${c}</span><span class="sp"></span></div>`).join("")}
+          </div>
+          ${applied
+            ? `<div class="okbanner" style="margin:0"><b>${kind === "xp" ? "Edição 104 promovida." : kind === "custody" ? "Snapshot aplicado." : "3 linhas aplicadas."}</b><span>${kind === "b3" ? "A linha rejeitada ficou no lote de reenvio." : "O objeto de destino já reflete a mudança."}</span><span class="sp"></span><a data-act="wiz-finish">Concluir →</a></div>`
+            : `<div class="applybar" style="border:1px solid var(--line);border-radius:7px">
+                <div class="sum"><b>${kind === "xp" ? "Promover substitui a edição 103." : kind === "custody" ? "A divergência vira lacuna." : "A rejeitada fica fora do lote."}</b><span class="dim"> a sessão pode ficar aqui até a decisão.</span></div>
+                <span class="sp"></span>
+                <button class="btn primary" data-act="wiz-apply">${kind === "xp" ? "Promover a ativa" : kind === "custody" ? "Aplicar snapshot" : "Aplicar 3 linhas válidas"}</button>
+              </div>`}
+        </div>
+      </section>
+      ${destinationsPanel(kind)}
+    </div>`;
+  };
+  return `<div class="wiz">
+    <div class="wiz-top">
+      <div class="wiz-brand">Carteira Ideal <span>· Importar</span></div>
+      <div class="wiz-dest">${dest}</div>
+      <span class="sp"></span>
+      <span class="hint" style="font-size:11px;color:var(--ink-3)">Ctrl K desligado neste modo</span>
+      <button class="wiz-close" data-act="wiz-close" aria-label="Sair">✕</button>
+    </div>
+    <div class="steps-rail">
+      ${labels.map((l, i) => `<div class="step ${i + 1 === step ? "active" : i + 1 < step ? "done" : ""}"><span class="n">${i + 1 < step ? "✓" : i + 1}</span>${l}</div>${i < 3 ? '<span class="step-rule"></span>' : ""}`).join("")}
+    </div>
+    <div class="wiz-body">${stepBody()}</div>
+    <div class="wiz-foot">
+      ${step > 1 ? `<button class="btn ghost" data-act="wiz-back">← Voltar</button>` : ""}
+      <span class="sp"></span>
+      <span class="note">${step < 4 ? "Sair a qualquer momento guarda a sessão na caixa de entrada." : "Aplicar é a decisão; o registro guarda hash e original."}</span>
+      ${step < 4 ? `<button class="btn primary" data-act="wiz-next">Continuar →</button>` : ""}
+    </div>
+  </div>`;
+}
+
+/* ============================ stub pages ============================ */
+
+function stubPage(title, ticket, detail) {
+  return `${head(title, detail)}
+    <section class="panel"><div class="body">
+      <div class="callout"><b>Fora deste protótipo.</b> O desenho desta tela foi decidido no ticket <a href="https://github.com/luiznaac/portfolio-2/issues/${ticket}">#${ticket}</a>. Esta variante só mostra o shell e a entrada para importações.</div>
+      <div style="margin-top:12px"><button class="btn" data-go="imports/inbox">Ir para Importações →</button></div>
+    </div></section>`;
+}
+
+/* ============================ route table ============================ */
+
+function pageFor(parts) {
+  const root = parts[0] || "imports";
+  if (root === "portfolio") {
+    return { crumb: "<b>Carteira</b>", body: pagePortfolio() };
+  }
+  if (root === "strategies") {
+    const sub = parts[1] || "list";
+    const label = sub === "list" ? "" : " · " + (STRATEGY_TABS.find((t) => t.key === sub)?.label || "Edições") + (parts[2] === "review" ? " · revisão" : "");
+    return { crumb: `<b>Estratégias</b>${label}`, body: pageStrategies(parts) };
+  }
+  if (root === "assets") {
+    const sub = parts[1] || "positions";
+    const label = " · " + (ASSET_TABS.find((t) => t.key === sub)?.label || "Posições") + (parts[2] === "review" ? " · revisão" : "");
+    return { crumb: `<b>Ativos</b>${label}`, body: pageAssets(parts) };
+  }
+  if (root === "imports") {
+    const sub = parts[1] || "inbox";
+    const detail = ["101", "102", "xp"].includes(sub);
+    const label = detail ? " · detalhe" : " · " + (IMPORT_TABS.find((t) => t.key === sub)?.label || "Caixa de entrada");
+    return { crumb: `<b>Importações</b>${label}`, body: pageImports(parts) };
+  }
+  if (root === "plan") {
+    return { crumb: "<b>Plano / Mês</b>", body: stubPage("Plano / Mês", 352, "Aberto como passos; o plano é ferramenta, não a espinha.") };
+  }
+  if (root === "analysis") {
+    return { crumb: "<b>Análise</b>", body: stubPage("Análise", 353, "Performance, Proventos e Impostos sobre uma rail de período compartilhada.") };
+  }
+  return { crumb: "<b>Importações</b>", body: pageImports(["imports", "inbox"]) };
+}
+
+/* ============================ events ============================ */
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+function openUpload(kind, contextual) {
+  ui.drawer = false;
+  if (state.v === "c") { ui.parked = null; go(`import/wizard/${kind}/1`); return; }
+  ui.upload = { kind, contextual };
+  render();
+}
+
+function submitUpload() {
+  if (!ui.upload) return;
+  const kind = ui.upload.kind;
+  ui.upload = null;
+  if (state.v === "a") go(kind === "xp" ? "imports/xp" : kind === "custody" ? "imports/102" : "imports/101");
+  else go(kind === "xp" ? "strategies/edicoes/review" : kind === "custody" ? "assets/positions/review/102" : "assets/positions/review/101");
+  toast("Arquivo lido · revisão aberta · nada aplicado ainda");
+  render();
+}
+
+function scenario(key) {
+  ui.upload = null;
+  ui.drawer = false;
+  if (key === "xp") {
+    if (state.v === "c") go("import/wizard/xp/1");
+    else if (state.v === "b") go("strategies/edicoes/review");
+    else { go("strategies/edicoes"); openUpload("xp", true); }
+  } else if (key === "b3") {
+    if (state.v === "c") go("import/wizard/b3/1");
+    else if (state.v === "b") go("assets/positions/review/101");
+    else { go("assets/positions"); openUpload("b3", true); }
+  } else if (key === "inbox") {
+    go("imports/inbox");
+  } else if (key === "error") {
+    if (state.v === "c") go("import/wizard/b3/3");
+    else if (state.v === "b") go("assets/positions/review/101");
+    else go("imports/101");
+  } else if (key === "fail") {
+    go("imports/sources");
+  }
+  window.scrollTo(0, 0);
+  render();
+}
+
+document.addEventListener("click", (e) => {
+  const treatment = e.target.closest("[data-treatment]");
+  if (treatment) { ui.upload = null; setQuery("v", treatment.dataset.treatment); return; }
+
+  const scen = e.target.closest("[data-scenario]");
+  if (scen) { scenario(scen.dataset.scenario); return; }
+
+  const attn = e.target.closest("[data-attn]");
+  if (attn) {
+    const route = attn.dataset.attn;
+    if (route.startsWith("imports")) go("imports/" + route.split("/")[1]);
+    else if (route.startsWith("strategies")) go("strategies/edicoes");
+    else if (route.startsWith("assets")) go("assets/" + (route.includes("gaps") ? "gaps" : "positions"));
+    else if (route.startsWith("plan")) go("plan/month");
+    else go("analysis/performance");
+    toast(`Destino real: ${route} — o desenho desta tela é de outro ticket do mapa.`);
+    return;
+  }
+
+  const wizKind = e.target.closest("[data-wiz-kind]");
+  if (wizKind) { go(`import/wizard/${wizKind.dataset.wizKind}/1`); return; }
+
+  const goEl = e.target.closest("[data-go]");
+  if (goEl) { go(goEl.dataset.go); return; }
+
+  const act = e.target.closest("[data-act]");
+  if (!act) {
+    if (e.target.classList.contains("modal-back")) { ui.upload = null; render(); }
+    return;
+  }
+  const a = act.dataset.act;
+  if (a === "noop") { toast("Simulação de protótipo: esta ação não está ligada a um parser real."); return; }
+  if (a === "upload-xp") { openUpload("xp", true); return; }
+  if (a === "upload-b3") { openUpload("b3", true); return; }
+  if (a === "upload-custody") { openUpload("custody", true); return; }
+  if (a === "upload-global") { openUpload("xp", false); return; }
+  if (a === "retry-xp") { openUpload("xp", true); return; }
+  if (a === "upload-kind") { if (ui.upload) { ui.upload.kind = act.dataset.kind; render(); } return; }
+  if (a === "upload-context-off") { if (ui.upload) { ui.upload.contextual = false; render(); } return; }
+  if (a === "upload-submit") { submitUpload(); return; }
+  if (a === "upload-cancel" || a === "upload-cancel-bg") { ui.upload = null; render(); return; }
+  if (a === "apply-b3") { rt.b3 = "partial"; toast("3 linhas aplicadas · 1 linha no lote de reenvio"); render(); return; }
+  if (a === "discard-b3") { rt.b3 = null; toast("Importação mantida em revisão"); render(); return; }
+  if (a === "reject-row") { ui.rejected504 = true; toast("Linha 504 rejeitada · fica no lote de reenvio"); render(); return; }
+  if (a === "apply-custody") { rt.custody = "applied"; toast("Snapshot aplicado · 1 lacuna aberta"); render(); return; }
+  if (a === "discard-custody") { rt.custody = null; toast("Snapshot mantido em revisão"); render(); return; }
+  if (a === "promote-edition") { rt.edition = "promoted"; toast("Edição 104 promovida a ativa"); render(); return; }
+  if (a === "discard-edition") { rt.edition = "discarded"; toast("Edição 104 descartada"); render(); return; }
+  if (a === "refresh-sources") { toast("Fontes verificadas · nada novo"); return; }
+  if (a === "wiz-next") {
+    const p = state.parts;
+    const next = Math.min(4, Number(p[3] || 1) + 1);
+    go(`import/wizard/${p[2]}/${next}`);
+    return;
+  }
+  if (a === "wiz-back") {
+    const p = state.parts;
+    const prev = Math.max(1, Number(p[3] || 1) - 1);
+    go(`import/wizard/${p[2]}/${prev}`);
+    return;
+  }
+  if (a === "wiz-close") {
+    const p = state.parts;
+    ui.parked = { kind: p[2] || "b3", step: Number(p[3] || 1) };
+    go("imports/inbox");
+    toast("Sessão guardada na caixa de entrada · nada aplicado");
+    return;
+  }
+  if (a === "wiz-apply") {
+    const kind = state.parts[2] || "b3";
+    if (kind === "xp") rt.edition = "promoted";
+    else if (kind === "custody") rt.custody = "applied";
+    else rt.b3 = "partial";
+    toast(kind === "xp" ? "Edição 104 promovida a ativa" : kind === "custody" ? "Snapshot aplicado · 1 lacuna aberta" : "3 linhas aplicadas · 1 no lote de reenvio");
+    render();
+    return;
+  }
+  if (a === "wiz-finish") {
+    ui.parked = null;
+    go("imports/inbox");
+    toast("Importação concluída");
+    return;
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (ui.upload) { ui.upload = null; render(); }
+    else if (ui.drawer) { ui.drawer = false; render(); }
+  }
+});
+
+/* ============================ bottom bar / drawer / render ============================ */
+
+function pbar() {
+  return `
+    <div class="title"><b>Protótipo de importações</b>ticket #354 · dados fictícios</div>
+    <div class="sep"></div>
+    ${Object.entries(VARIANTS).map(([k, v]) => `<button class="v ${k === state.v ? "active" : ""}" data-treatment="${k}">${v.name.split(" · ")[0]} · ${v.short}<small>${k === state.v ? "tratamento atual" : "ver tratamento"}</small></button>`).join("")}
+    <div class="sep"></div>
+    <div class="scen">
+      <span class="lbl">Cenários</span>
+      <button class="pv" data-scenario="xp">Relatório XP</button>
+      <button class="pv" data-scenario="b3">Extrato B3</button>
+      <button class="pv" data-scenario="inbox">Caixa de entrada</button>
+      <button class="pv" data-scenario="error">Erro de linha</button>
+      <button class="pv" data-scenario="fail">Fonte com falha</button>
+    </div>
+    <div class="sp"></div>
+    <button class="ghost" data-act="drawer">O que estou vendo?</button>`;
+}
+
+function drawerHTML() {
+  const v = VARIANTS[state.v];
+  return `<button class="close" data-act="drawer-close">✕</button>
+    <div class="k">Pergunta do ticket #354</div>
+    <h3>Upload contextual × global</h3>
+    <p>Como relatórios e extratos entram, onde são revisados, como erros de linha e alertas aparecem, e como se volta da caixa de entrada ao objeto que a importação muda.</p>
+    <div class="k">${v.name}</div>
+    <p>${v.thesis}</p>
+    <div class="k">O que julgar</div>
+    <ul>${v.judge.map((x) => `<li>${x}</li>`).join("")}</ul>
+    <div class="k">Como dirigir</div>
+    <p style="margin-bottom:8px">Use os cenários da barra inferior: <b>Relatório XP</b> abre o fluxo da estratégia, <b>Extrato B3</b> o fluxo dos dados, <b>Erro de linha</b> a linha 504, <b>Fonte com falha</b> o estado por fonte. Trocar de tratamento mantém a rota.</p>
+    <div class="k">Fora deste protótipo</div>
+    <ul>
+      <li>Parers reais: o arquivo é simulado; nada é lido de verdade.</li>
+      <li>Containers por linha no backend: hoje o erro é do arquivo, não da linha — é o read model que o fluxo pede.</li>
+      <li>Leitura por fonte (status ladder) e vínculo importação → destino como campos persistidos.</li>
+      <li>Direção visual (#355) e implementação no SPA (fora do escopo do mapa).</li>
+    </ul>`;
+}
+
+function protoTop() {
+  return `<div class="proto-banner"><b>Protótipo descartável</b><span>ticket #354 · upload e revisão de relatórios e extratos</span><span class="sp"></span><span class="tag">dados fictícios · fixture #356</span><span class="tag">visual neutro · decisão no #355</span></div>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const wizardRoute = state.parts[0] === "import" && state.parts[1] === "wizard";
+  if (wizardRoute) {
+    const kind = WIZ_LABELS[state.parts[2]] ? state.parts[2] : "b3";
+    app.innerHTML = protoTop() + wizardHTML(kind, state.parts[3]);
+  } else {
+    const page = pageFor(state.parts);
+    app.innerHTML = `${protoTop()}<div class="shell">${sidebar()}<div class="main">${topbar(page.crumb)}<div class="content">${banner()}${page.body}</div></div></div>${ui.upload ? uploadSheetHTML() : ""}`;
+  }
+  document.getElementById("pbar").innerHTML = pbar();
+  document.getElementById("drawer").innerHTML = drawerHTML();
+  document.getElementById("drawer").className = "drawer" + (ui.drawer ? " open" : "");
+  if (ui.drawer) document.getElementById("drawer").style.display = "block";
+}
+document.addEventListener("click", (e) => {
+  const act = e.target.closest("[data-act='drawer'], [data-act='drawer-close']");
+  if (act) { ui.drawer = !ui.drawer; render(); }
+});
+
+render();
+</script>
+</body>
+</html>
