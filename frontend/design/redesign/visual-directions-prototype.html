@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<!--
+  THROWAWAY PROTOTYPE — wayfinder ticket #355, map #347.
+  Question: which visual language should the redesign adopt?
+  Two directions on the same key screens — Carteira overview, Alocação, a strategy detail and Análise —
+  plus a token board. Switch in the bottom bar or in the URL:
+    ?v=dark|light|both   ?s=overview|allocation|strategy|analysis|tokens   ?t=<tab>
+  Data: ./fixture.js (ticket #356). No build step, no persistence.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Protótipo de direção visual — Carteira Ideal (ticket #355)</title>
+<style>
+  :root {
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #0b0e12; color: #e7edf4; font: 13px/1.45 var(--sans); padding-bottom: 96px; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  a { color: inherit; text-decoration: none; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; background: #1c1f23; }
+  .pane { min-width: 0; border-right: 1px solid #000; }
+  .pane:last-child { border-right: 0; }
+  .pane-label { background: #000; color: #c9cfd6; font: 600 9.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+  .pane-label b { color: #fff; }
+  .pane-label .tag { border: 1px solid #34393f; color: #8d959e; padding: 2px 5px; border-radius: 2px; letter-spacing: .08em; }
+  .split .dk { grid-template-columns: 172px minmax(0, 1fr); }
+  .split .dk-brand .c, .split .dk-side-foot { display: none; }
+  .split .dk-body { padding: 12px 12px 40px; }
+  .split .dk-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .split .dk-cell:nth-child(3n) { border-right: 0; }
+  .split .dk-cell:nth-child(n+4) { border-top: 1px solid var(--line2); }
+  .split .dk-cell .v { font-size: 15px; }
+  .split .dk-cols { grid-template-columns: minmax(0, 1fr); }
+  .split .dk-table .barcol { display: none; }
+  .split .dk-table td, .split .dk-table th { padding: 5px 7px; }
+  .split .dk-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .split .dk-kv > div:nth-child(3n) { border-right: 0; }
+  .split .dk-kv > div:nth-child(n+4) { border-top: 1px solid var(--line2); }
+  .split .dk-pagehead { flex-wrap: wrap; }
+  .split .dk-chips span { padding: 5px 7px; }
+  .split .dk-attn-item .d { font-size: 9.5px; }
+  .split .lt-page { padding: 26px 22px 50px; }
+  .split .lt h1 { font-size: 32px; }
+  .split .lt-split { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+  .split .lt-top-inner { padding: 0 22px; gap: 16px; }
+  .split .lt-table td, .split .lt-table th { padding: 8px 6px; }
+  .split .lt-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .split .lt-kv > div:nth-child(2n) { border-right: 0; }
+  .split .lt-kv > div:nth-child(n+3) { border-top: 1px solid var(--line2); }
+
+  /* A · CONSOLE */
+  .dk {
+    --bg: #0b0e12; --sur: #11161c; --sur2: #161d25; --sur3: #1b232c;
+    --line: #232c37; --line2: #19212a;
+    --ink: #e7edf4; --ink2: #9ba8b7; --ink3: #64707f;
+    --accent: #78a9ff; --accent-bg: #14243d;
+    --gain: #54c98c; --loss: #f0736a; --warn: #d9a45e; --warn-bg: #2a2115;
+    --short: #78a9ff; --over: #d9a45e;
+    background: var(--bg); color: var(--ink); font: 12.5px/1.38 var(--sans);
+    display: grid; grid-template-columns: 198px minmax(0, 1fr); min-height: 100vh;
+  }
+  .dk-side { background: #0d1117; border-right: 1px solid var(--line); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow: auto; }
+  .dk-brand { padding: 15px 14px 11px; display: flex; align-items: baseline; gap: 5px; }
+  .dk-brand .a, .dk-brand .b { font: 600 13.5px/1 var(--mono); letter-spacing: -.03em; }
+  .dk-brand .b { color: var(--accent); }
+  .dk-brand .c { margin-left: auto; font: 9px/1 var(--mono); letter-spacing: .12em; color: var(--ink3); text-transform: uppercase; }
+  .dk-group { font: 600 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); padding: 13px 14px 5px; }
+  .dk-nav { padding: 0 7px; }
+  .dk-nav a { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; color: var(--ink2); font-size: 12px; line-height: 1.2; }
+  .dk-nav a:hover { background: var(--sur2); color: var(--ink); }
+  .dk-nav a.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .dk-nav a .cnt { margin-left: auto; min-width: 16px; padding: 1px 4px; border-radius: 8px; font: 600 9.5px/1.2 var(--mono); text-align: center; background: var(--line); color: var(--ink2); }
+  .dk-nav a .cnt.action { background: var(--loss); color: #16090a; }
+  .dk-side-foot { margin-top: auto; border-top: 1px solid var(--line2); padding: 10px 14px; font: 10.5px/1.5 var(--mono); color: var(--ink3); }
+  .dk-side-foot b { color: var(--ink2); font-weight: 600; }
+  .dk-main { min-width: 0; display: flex; flex-direction: column; }
+  .dk-top { min-height: 44px; border-bottom: 1px solid var(--line); background: #0d1117; display: flex; align-items: center; gap: 12px; padding: 0 16px; position: sticky; top: 0; z-index: 20; }
+  .dk-crumb { color: var(--ink3); font: 11px/1 var(--mono); letter-spacing: .02em; }
+  .dk-crumb b { color: var(--ink); font-weight: 600; }
+  .dk-top .sp { flex: 1; }
+  .dk-live { display: inline-flex; align-items: center; gap: 6px; font: 10.5px/1 var(--mono); color: var(--ink2); }
+  .dk-live i { width: 5px; height: 5px; border-radius: 50%; background: var(--gain); display: block; }
+  .dk-pill { border: 1px solid var(--line); background: var(--sur2); color: var(--ink2); font: 10.5px/1 var(--mono); padding: 5px 9px; border-radius: 2px; }
+  .dk-body { padding: 16px 18px 44px; max-width: 1620px; width: 100%; }
+  .dk-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--sur); margin-bottom: 12px; }
+  .dk-cell { padding: 9px 11px; border-right: 1px solid var(--line2); min-width: 0; }
+  .dk-cell:last-child { border-right: 0; }
+  .dk-cell .k { font: 600 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .dk-cell .v { font: 600 18px/1.25 var(--mono); letter-spacing: -.04em; margin-top: 3px; }
+  .dk-cell .s { font: 10px/1.3 var(--mono); color: var(--ink3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dk-monthline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 7px 0; margin-bottom: 14px; font-size: 11.5px; color: var(--ink2); }
+  .dk-monthline .k { font: 600 9px/1 var(--mono); letter-spacing: .14em; color: var(--ink3); }
+  .dk-monthline b { color: var(--ink); font-weight: 600; }
+  .dk-monthline .sep { color: #39434f; }
+  .dk-monthline .sp { flex: 1; }
+  .dk-link { color: var(--accent); font-size: 11.5px; cursor: pointer; }
+  .dk-cols { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+  .dk-stack { display: grid; gap: 14px; min-width: 0; }
+  .dk-panel { background: var(--sur); border: 1px solid var(--line); border-radius: 3px; min-width: 0; }
+  .dk-panel > h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 11px; font: 600 9.5px/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--ink2); border-bottom: 1px solid var(--line2); }
+  .dk-panel > h2 .sp { flex: 1; }
+  .dk-panel > h2 .hint { font: 9.5px/1.2 var(--mono); letter-spacing: .02em; text-transform: none; color: var(--ink3); }
+  .dk-panel > h2 .badge { font: 600 9.5px/1 var(--mono); color: #16090a; background: var(--loss); padding: 3px 5px; border-radius: 2px; }
+  .dk-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .dk-table th { text-align: left; font: 600 8.5px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); padding: 6px 10px; border-bottom: 1px solid var(--line2); background: var(--sur2); white-space: nowrap; }
+  .dk-table td { padding: 6px 10px; border-bottom: 1px solid var(--line2); vertical-align: middle; }
+  .dk-table tr:last-child td { border-bottom: 0; }
+  .dk-table .r { text-align: right; }
+  .dk-table .r .num { font-size: 11.5px; }
+  .dk-table tr.total td { background: var(--sur2); border-top: 1px solid var(--line); font-weight: 600; }
+  .dk-table tr.ind td:first-child { padding-left: 24px; color: var(--ink2); }
+  .dk-table tr.semi td { color: var(--ink3); }
+  .dk-sw { width: 6px; height: 6px; border-radius: 1px; display: inline-block; margin-right: 7px; vertical-align: 1px; }
+  .dk-bar { height: 4px; background: var(--line2); position: relative; min-width: 74px; border-radius: 1px; }
+  .dk-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 1px; }
+  .dk-bar u { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink); opacity: .65; }
+  .dk-bar.over i { background: var(--warn); }
+  .short { color: var(--short); }
+  .over { color: var(--over); }
+  .up { color: var(--gain); }
+  .down { color: var(--loss); }
+  .dim { color: var(--ink2); }
+  .faint { color: var(--ink3); }
+  .dk-note { font: 10px/1.5 var(--mono); color: var(--ink3); padding: 2px 2px 0; }
+  .dk-note b { color: var(--ink2); font-weight: 500; }
+  .dk-attn-group { font: 600 8.5px/1 var(--mono); letter-spacing: .14em; color: var(--ink3); padding: 8px 11px 4px; border-bottom: 1px solid var(--line2); background: var(--sur2); }
+  .dk-attn { display: grid; }
+  .dk-attn-item { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; padding: 7px 11px; border-bottom: 1px solid var(--line2); cursor: pointer; }
+  .dk-attn-item:last-child { border-bottom: 0; }
+  .dk-attn-item:hover { background: var(--sur2); }
+  .dk-attn-item .dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 5px; }
+  .dk-attn-item .dot.a { background: var(--loss); }
+  .dk-attn-item .dot.w { background: var(--warn); }
+  .dk-attn-item .t { font-size: 11.5px; line-height: 1.3; }
+  .dk-attn-item .d { font: 10px/1.35 var(--mono); color: var(--ink3); margin-top: 2px; }
+  .dk-attn-item .r { grid-column: 2; font: 9.5px/1 var(--mono); color: var(--accent); margin-top: 3px; }
+  .dk-pagehead { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+  .dk-pagehead h1 { margin: 0; font: 600 17px/1.2 var(--sans); letter-spacing: -.02em; }
+  .dk-pagehead p { margin: 3px 0 0; font: 10.5px/1.4 var(--mono); color: var(--ink3); }
+  .dk-pagehead .sp { flex: 1; }
+  .dk-chips { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .dk-chips span { font: 600 9.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); padding: 6px 9px; border-right: 1px solid var(--line); background: var(--sur); }
+  .dk-chips span:last-child { border-right: 0; }
+  .dk-chips span.on { background: var(--sur3); color: var(--ink); }
+  .dk-tabs { display: flex; gap: 1px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .dk-tabs button { border: 0; background: none; cursor: pointer; color: var(--ink3); font: 11.5px/1 var(--mono); padding: 8px 11px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .dk-tabs button:hover { color: var(--ink); }
+  .dk-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .dk-tabs .sp { flex: 1; }
+  .dk-tabs .ctx { font: 10px/1 var(--mono); color: var(--ink3); align-self: center; }
+  .dk-kv { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--sur); margin-bottom: 14px; }
+  .dk-kv > div { padding: 9px 11px; border-right: 1px solid var(--line2); min-width: 0; }
+  .dk-kv > div:last-child { border-right: 0; }
+  .dk-kv .k { font: 600 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .dk-kv .v { font: 600 16px/1.3 var(--mono); letter-spacing: -.03em; margin-top: 3px; }
+  .dk-kv .s { font: 10px/1.3 var(--mono); color: var(--ink3); margin-top: 1px; }
+  .dk-chart { padding: 10px 11px 6px; }
+  .dk-chart svg { display: block; width: 100%; height: auto; }
+  .dk-legend { display: flex; gap: 14px; font: 10px/1 var(--mono); color: var(--ink3); padding: 2px 11px 10px; flex-wrap: wrap; }
+  .dk-legend i { display: inline-block; width: 12px; height: 2px; vertical-align: 3px; margin-right: 5px; }
+  .dk-legend .btn { cursor: pointer; color: var(--accent); }
+  .dk-callout { border-left: 2px solid var(--warn); background: var(--warn-bg); padding: 8px 11px; font-size: 11.5px; color: #e5cfa6; margin: 10px 11px; }
+  .dk-callout b { color: #f1dcb4; }
+  .dk-mini { display: grid; gap: 6px; padding: 9px 11px; }
+  .dk-mini-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .dk-mini-row .sp { flex: 1; }
+  .dk-read { padding: 9px 11px; font-size: 11.5px; line-height: 1.5; color: var(--ink2); }
+  .dk-read p { margin: 0 0 7px; }
+  .dk-read p:last-child { margin: 0; }
+  .dk-read b { color: var(--ink); font-weight: 600; }
+  .dk-spark { display: flex; align-items: flex-end; gap: 3px; height: 46px; padding: 10px 11px 0; }
+  .dk-spark i { flex: 1; min-width: 2px; background: #2f6a52; }
+  .dk-spark i.neg { background: #7a3a35; }
+
+  /* B · DOCUMENTO */
+  .lt {
+    --paper: #faf8f3; --panel: #fffefb; --wash: #f2efe7;
+    --ink: #1b1a17; --ink2: #5f5b52; --ink3: #948e82;
+    --line: #e2dcce; --line2: #efeae0;
+    --accent: #0e5c4a; --gain: #1d7a4f; --loss: #a63a2b; --warn: #8a6417;
+    background: var(--paper); color: var(--ink); font: 14.5px/1.6 var(--serif); min-height: 100vh;
+  }
+  .lt-top { border-bottom: 1px solid var(--line); background: rgba(250,248,243,.93); position: sticky; top: 0; z-index: 20; backdrop-filter: blur(4px); }
+  .lt-top-inner { max-width: 1120px; margin: 0 auto; padding: 0 36px; min-height: 62px; display: flex; align-items: center; gap: 26px; }
+  .lt-mark { font: 600 16px/1 var(--serif); letter-spacing: -.02em; }
+  .lt-mark span { color: var(--accent); }
+  .lt-nav { display: flex; gap: 18px; font: 12px/1 var(--sans); align-items: center; }
+  .lt-nav a { color: var(--ink2); padding: 4px 0; border-bottom: 1px solid transparent; }
+  .lt-nav a:hover { color: var(--ink); }
+  .lt-nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .lt-top .sp { flex: 1; }
+  .lt-top .asof { font: 11px/1 var(--sans); color: var(--ink3); }
+  .lt-page { max-width: 1120px; margin: 0 auto; padding: 34px 36px 64px; }
+  .lt-eyebrow { font: 600 10px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); display: flex; align-items: baseline; gap: 10px; }
+  .lt-eyebrow .sep { color: var(--ink3); font-weight: 400; letter-spacing: .04em; text-transform: none; }
+  .lt h1 { font: 400 38px/1.12 var(--serif); letter-spacing: -.025em; margin: 14px 0 12px; max-width: 760px; }
+  .lt-stand { font: 17px/1.6 var(--serif); color: var(--ink2); max-width: 720px; margin: 0 0 26px; }
+  .lt-stand b { color: var(--ink); font-weight: 600; }
+  .lt-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin: 0 0 38px; }
+  .lt-stat { padding: 18px 22px 18px 0; border-right: 1px solid var(--line2); }
+  .lt-stat:last-child { border-right: 0; }
+  .lt-stat .k { font: 600 10px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .lt-stat .v { font: 400 29px/1.15 var(--serif); letter-spacing: -.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .lt-stat .s { font: 12px/1.4 var(--sans); color: var(--ink2); margin-top: 3px; }
+  .lt-sec { margin: 0 0 40px; }
+  .lt-sec-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--ink); padding-bottom: 7px; margin-bottom: 4px; }
+  .lt-sec-head h2 { font: 400 22px/1.2 var(--serif); letter-spacing: -.015em; margin: 0; }
+  .lt-sec-head .sp { flex: 1; }
+  .lt-sec-head .meta { font: 11px/1 var(--sans); color: var(--ink3); }
+  .lt-table { width: 100%; border-collapse: collapse; font: 13px/1.35 var(--sans); }
+  .lt-table th { text-align: left; font: 600 9.5px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); padding: 10px 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .lt-table th.r, .lt-table td.r { text-align: right; }
+  .lt-table td { padding: 10px 8px; border-bottom: 1px solid var(--line2); vertical-align: baseline; }
+  .lt-table tr:last-child td { border-bottom: 1px solid var(--line); }
+  .lt-table tr.total td { border-top: 1px solid var(--ink); border-bottom: 0; font-weight: 600; padding-top: 12px; }
+  .lt-table tr.ind td:first-child { padding-left: 26px; color: var(--ink2); }
+  .lt-table tr.semi td { color: var(--ink3); }
+  .lt-table .tk { font: 600 12px/1 var(--sans); letter-spacing: .01em; }
+  .lt-table .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .lt-lt { font: 11px/1.4 var(--sans); color: var(--ink3); }
+  .lt-up { color: var(--gain); }
+  .lt-down { color: var(--loss); }
+  .lt-note { font: 12.5px/1.55 var(--sans); color: var(--ink2); margin: 9px 0 0; max-width: 720px; }
+  .lt-note b { color: var(--ink); font-weight: 600; }
+  .lt-list { list-style: none; margin: 0; padding: 0; counter-reset: it; }
+  .lt-list li { counter-increment: it; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--line2); align-items: baseline; }
+  .lt-list li::before { content: counter(it, decimal-leading-zero); font: 400 12px/1 var(--mono); color: var(--ink3); }
+  .lt-list .t { font: 15px/1.4 var(--serif); }
+  .lt-list .d { font: 12px/1.45 var(--sans); color: var(--ink3); margin-top: 2px; }
+  .lt-list .go { font: 11px/1 var(--sans); color: var(--accent); white-space: nowrap; }
+  .lt-month { border-top: 1px solid var(--line); padding-top: 18px; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 18px; align-items: baseline; }
+  .lt-month .k { font: 600 10px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .lt-month p { margin: 0; font: 15px/1.6 var(--serif); color: var(--ink2); }
+  .lt-month b { color: var(--ink); font-weight: 600; }
+  .lt-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--ink); margin: 6px 0 24px; }
+  .lt-tabs button { border: 0; background: none; cursor: pointer; padding: 0 0 8px; font: 12.5px/1 var(--sans); color: var(--ink2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .lt-tabs button:hover { color: var(--ink); }
+  .lt-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .lt-chart { margin: 4px 0 0; }
+  .lt-chart svg { display: block; width: 100%; height: auto; }
+  .lt-cap { font: 12px/1.55 var(--sans); color: var(--ink3); margin: 8px 0 0; max-width: 700px; }
+  .lt-cap b { color: var(--ink2); font-weight: 600; }
+  .lt-kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin: 0 0 28px; }
+  .lt-kv > div { padding: 14px 18px 14px 0; border-right: 1px solid var(--line2); }
+  .lt-kv > div:last-child { border-right: 0; }
+  .lt-kv .k { font: 600 9.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); }
+  .lt-kv .v { font: 400 21px/1.2 var(--serif); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .lt-kv .s { font: 11.5px/1.4 var(--sans); color: var(--ink2); }
+  .lt-quote { border-left: 2px solid var(--accent); padding: 2px 0 2px 16px; margin: 18px 0; font: 15px/1.6 var(--serif); color: var(--ink2); max-width: 720px; }
+  .lt-quote b { color: var(--ink); font-weight: 600; }
+  .lt-bar { height: 7px; background: var(--wash); position: relative; min-width: 90px; }
+  .lt-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); opacity: .8; }
+  .lt-bar u { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--ink); }
+  .lt-split { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+  .lt-side { border-top: 1px solid var(--ink); padding-top: 12px; }
+  .lt-side h3 { font: 600 10px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); margin: 0 0 12px; }
+  .lt-side .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line2); font: 12.5px/1.4 var(--sans); }
+  .lt-side .row:last-child { border-bottom: 0; }
+  .lt-side .row .sp { flex: 1; }
+  .lt-side .row b { font-weight: 600; }
+  .lt-chip { display: inline-block; font: 600 9.5px/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); border: 1px solid #cfe0d8; background: #f0f6f2; padding: 3px 5px; border-radius: 2px; }
+  .lt-chip.grey { color: var(--ink3); border-color: var(--line); background: var(--wash); }
+  .lt-diff { width: 100%; border-collapse: collapse; font: 12.5px/1.4 var(--sans); }
+  .lt-diff th { text-align: left; font: 600 9.5px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); padding: 9px 8px; border-bottom: 1px solid var(--line); }
+  .lt-diff td { padding: 9px 8px; border-bottom: 1px solid var(--line2); }
+  .lt-diff .old { color: var(--ink3); }
+  .lt-diff .new { color: var(--ink); font-weight: 600; }
+  .lt-diff .arrow { color: var(--ink3); padding: 0 5px; }
+  .lt-tag { font: 600 9px/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; padding: 2px 4px; border-radius: 2px; }
+  .lt-tag.changed { color: var(--warn); background: #fbf4e5; }
+  .lt-tag.flag { color: var(--loss); background: #fbeeec; }
+
+  /* TOKEN BOARD */
+  .tk { background: #ecebe5; color: #1c1b18; font: 13px/1.5 var(--sans); min-height: 100vh; padding-bottom: 40px; }
+  .tk-page { max-width: 1280px; margin: 0 auto; padding: 34px 28px 60px; }
+  .tk-head { display: flex; align-items: flex-end; gap: 24px; border-bottom: 1px solid #c9c5b8; padding-bottom: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .tk-head h1 { font: 600 24px/1.15 var(--serif); letter-spacing: -.02em; margin: 0; }
+  .tk-head p { margin: 4px 0 0; font-size: 12.5px; color: #5d594f; max-width: 680px; }
+  .tk-head .sp { flex: 1; }
+  .tk-link { font: 11px/1 var(--mono); color: #0e5c4a; border-bottom: 1px solid #9bbcaf; }
+  .tk-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-bottom: 20px; }
+  .tk-card { background: #fffefb; border: 1px solid #d9d5c8; border-radius: 3px; overflow: hidden; }
+  .tk-card.dark { background: #11161c; border-color: #232c37; color: #e7edf4; }
+  .tk-card-top { padding: 14px 16px 12px; border-bottom: 1px solid #e7e3d8; }
+  .tk-card.dark .tk-card-top { border-bottom-color: #232c37; }
+  .tk-card-top .k { font: 600 9.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #8b8578; }
+  .tk-card.dark .tk-card-top .k { color: #64707f; }
+  .tk-card-top h2 { margin: 6px 0 3px; font: 600 17px/1.2 var(--sans); letter-spacing: -.01em; }
+  .tk-card-top p { margin: 0; font-size: 12px; line-height: 1.5; color: #5d594f; }
+  .tk-card.dark .tk-card-top p { color: #9ba8b7; }
+  .tk-body { padding: 14px 16px 16px; display: grid; gap: 16px; }
+  .tk-row-label { font: 600 9px/1 var(--mono); letter-spacing: .13em; text-transform: uppercase; color: #8b8578; margin-bottom: 7px; }
+  .tk-card.dark .tk-row-label { color: #64707f; }
+  .tk-swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .tk-sw { border: 1px solid #ddd8cb; border-radius: 2px; overflow: hidden; }
+  .tk-card.dark .tk-sw { border-color: #2b3642; }
+  .tk-sw .c { height: 30px; }
+  .tk-sw .l { padding: 4px 5px; font: 9px/1.35 var(--mono); color: #6b665b; background: #fbfaf6; }
+  .tk-card.dark .tk-sw .l { color: #8d99a7; background: #161d25; }
+  .tk-sw .l b { display: block; font-weight: 600; color: #2a2823; }
+  .tk-card.dark .tk-sw .l b { color: #c9d2dd; }
+  .tk-type { display: grid; gap: 5px; }
+  .tk-type .t1 { font: 400 25px/1.1 var(--serif); letter-spacing: -.02em; }
+  .tk-card.dark .tk-type .t1 { font: 600 18px/1.15 var(--sans); letter-spacing: -.02em; }
+  .tk-type .t2 { font-size: 13px; color: #5d594f; }
+  .tk-card.dark .tk-type .t2 { font: 11.5px/1.4 var(--sans); color: #9ba8b7; }
+  .tk-type .t3 { font: 11px/1.4 var(--mono); color: #43403a; }
+  .tk-card.dark .tk-type .t3 { font: 11px/1.4 var(--mono); color: #e7edf4; }
+  .tk-sample { border: 1px solid #e7e3d8; border-radius: 2px; }
+  .tk-card.dark .tk-sample { border-color: #232c37; }
+  .tk-sample .r { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid #efece3; font-size: 11px; }
+  .tk-card.dark .tk-sample .r { border-bottom-color: #19212a; font: 10.5px/1.4 var(--mono); }
+  .tk-sample .r:last-child { border-bottom: 0; }
+  .tk-sample .r .sp { flex: 1; }
+  .tk-sample .bar { height: 6px; background: #eeeade; width: 74px; position: relative; }
+  .tk-sample .bar i { position: absolute; inset: 0 auto 0 0; background: #0e5c4a; opacity: .75; }
+  .tk-card.dark .tk-sample .bar { background: #19212a; height: 4px; }
+  .tk-card.dark .tk-sample .bar i { background: #78a9ff; }
+  .tk-sample .plus { color: #1d7a4f; }
+  .tk-sample .minus { color: #a63a2b; }
+  .tk-card.dark .tk-sample .plus { color: #54c98c; }
+  .tk-card.dark .tk-sample .minus { color: #f0736a; }
+  .tk-matrix { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fffefb; border: 1px solid #d9d5c8; }
+  .tk-matrix th { text-align: left; padding: 10px 12px; font: 600 9.5px/1.2 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: #6b665b; border-bottom: 1px solid #c9c5b8; background: #f7f5ee; }
+  .tk-matrix td { padding: 10px 12px; border-bottom: 1px solid #e7e3d8; vertical-align: top; line-height: 1.45; }
+  .tk-matrix tr:last-child td { border-bottom: 0; }
+  .tk-matrix td:first-child { font-weight: 600; color: #1c1b18; white-space: nowrap; }
+  .tk-matrix .pick { background: #f0f6f2; }
+  .tk-rec { border: 1px solid #cfe0d8; background: #f0f6f2; padding: 16px 18px; margin-top: 18px; }
+  .tk-rec .k { font: 600 9.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #0e5c4a; }
+  .tk-rec h3 { font: 600 18px/1.25 var(--serif); margin: 6px 0 6px; }
+  .tk-rec p { margin: 0 0 8px; font-size: 13px; line-height: 1.55; color: #3f3c35; max-width: 980px; }
+  .tk-rec p:last-child { margin: 0; }
+
+  /* SWITCHER */
+  .pbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; background: #0a0c0f; border-top: 1px solid #2b3037; color: #cdd5de; display: flex; align-items: center; gap: 16px; padding: 9px 16px; font: 11px/1.2 var(--mono); box-shadow: 0 -8px 30px rgba(0,0,0,.35); }
+  .pbar .group { display: flex; align-items: center; gap: 5px; }
+  .pbar .lbl { font: 600 8.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #6f7b89; margin-right: 3px; }
+  .pbar button { border: 1px solid #2f3742; background: #14181e; color: #aab5c2; cursor: pointer; font: 11px/1 var(--mono); padding: 5px 8px; border-radius: 3px; white-space: nowrap; }
+  .pbar button:hover { border-color: #46515f; color: #e7edf4; }
+  .pbar button.on { background: #78a9ff; border-color: #78a9ff; color: #0b0e12; font-weight: 600; }
+  .pbar .sp { flex: 1; }
+  .pbar .hint { color: #6f7b89; font-size: 10px; }
+  .pbar .hint b { color: #aab5c2; font-weight: 500; }
+  @media (max-width: 1180px) {
+    .split { grid-template-columns: 1fr; }
+    .pane { border-right: 0; border-bottom: 1px solid #000; }
+  }
+  @media (max-width: 900px) {
+    .dk { grid-template-columns: 1fr; }
+    .dk-side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .dk-group { display: none; }
+    .dk-nav { display: flex; flex-wrap: wrap; padding: 0 8px 8px; }
+    .dk-side-foot { display: none; }
+    .dk-cols { grid-template-columns: 1fr; }
+    .dk-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .dk-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dk-table .barcol { display: none; }
+    .lt-page { padding: 26px 20px 50px; }
+    .lt-stats, .lt-kv, .tk-grid { grid-template-columns: 1fr; }
+    .lt-split { grid-template-columns: 1fr; gap: 26px; }
+    .lt h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="pbar" id="pbar"></div>
+
+<script type="module">
+import F from "./fixture.js";
+
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const brl0 = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const money = (n) => brl.format(n);
+const money0 = (n) => brl0.format(n);
+const pct = (n, d = 2) => `${n.toFixed(d).replace(".", ",")}%`;
+const spct = (n, d = 2) => `${n > 0 ? "+" : ""}${pct(n, d)}`;
+const pp = (n, d = 2) => `${n > 0 ? "+" : ""}${n.toFixed(d).replace(".", ",")} pp`;
+const num = (n) => new Intl.NumberFormat("pt-BR").format(n);
+const monthLabel = (period) => {
+  const [y, m] = period.split("-");
+  return `${["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"][Number(m) - 1]}/${y.slice(2)}`;
+};
+const longMonth = (period) => {
+  const [y, m] = period.split("-");
+  return `${["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][Number(m) - 1]} de ${y}`;
+};
+const retClass = (n) => (n > 0 ? "up" : n < 0 ? "down" : "dim");
+const ltRetClass = (n) => (n > 0 ? "lt-up" : n < 0 ? "lt-down" : "lt-lt");
+const defClass = (n) => (n > 0 ? "short" : n < 0 ? "over" : "dim");
+
+const SUMMARY = F.portfolio.summary;
+const ALLOC = F.portfolio.allocation;
+const CLASSES = ALLOC.classes;
+const ATTN = F.attention;
+const ACTION = ATTN.filter((a) => a.severity === "action");
+const WATCH = ATTN.filter((a) => a.severity === "watch");
+const DIV = CLASSES.find((c) => c.asset_class === "ACOES").strategies.find((s) => s.strategy === "Dividendos BR");
+const DIV_PERF = F.analysis.monthPerformance.classes
+  .find((c) => c.asset_class === "ACOES").strategies.find((s) => s.strategy === "Dividendos BR").decomposition;
+const ED_ACTIVE = F.strategies.editions.find((e) => e.strategy_id === 1 && e.status === "ACTIVE" && e.reference_month === "2026-10");
+const ED_STAGED = F.strategies.editions.find((e) => e.strategy_id === 1 && e.status === "STAGED");
+const MONTHS = F.analysis.performanceSeries.months;
+const INCOME = F.analysis.income;
+const TAX = F.analysis.tax;
+
+const CLASS_LABEL = { ACOES: "Ações", FIIS: "FIIs", RENDA_FIXA: "Renda fixa" };
+const CLASS_COLOR = { ACOES: "#78a9ff", FIIS: "#d9a45e", RENDA_FIXA: "#54c98c" };
+const RF_LABEL = { FIXED_RATE: "Pré-fixado", FLOATING_RATE: "Pós-fixado", INFLATION_LINKED: "Inflação" };
+
+const RF_ACTUAL_TOTAL = F.assets.fixedIncome.positions.reduce((s, p) => s + p.value, 0);
+const RF_ROWS = F.plan.currentMonth.targets.sub_classes.map((t) => {
+  const actual = F.assets.fixedIncome.positions.filter((p) => p.sub_class === t.sub_class).reduce((s, p) => s + p.value, 0);
+  const ideal = 377500 * (t.percentage / 100);
+  return { label: RF_LABEL[t.sub_class], target: t.percentage, ideal, actual, deficit: ideal - actual, drift: (actual / RF_ACTUAL_TOTAL) * 100 - t.percentage };
+});
+const MANUALS = F.strategies.holdings.map((h) => ({ name: h.strategy_name, value: h.total_value, kind: h.strategy_name.includes("Ações") ? "ACOES" : "FIIS" }));
+const ALL_TICKERS = CLASSES.flatMap((c) => c.strategies.flatMap((s) => s.tickers.map((t) => ({ ...t, strategy: s.strategy, asset_class: c.asset_class }))));
+const BIGGEST_DRIFTS = [...ALL_TICKERS].sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift)).slice(0, 7);
+
+const barMarkup = (actual, ideal, cls = "") => {
+  const max = Math.max(actual, ideal) * 1.04;
+  return `<div class="dk-bar ${cls}"><i style="width:${((actual / max) * 100).toFixed(1)}%"></i><u style="left:${((ideal / max) * 100).toFixed(1)}%"></u></div>`;
+};
+const ltBarMarkup = (actual, ideal) => {
+  const max = Math.max(actual, ideal) * 1.04;
+  return `<div class="lt-bar"><i style="width:${((actual / max) * 100).toFixed(1)}%"></i><u style="left:${((ideal / max) * 100).toFixed(1)}%"></u></div>`;
+};
+
+const SCREENS = { overview: "Visão geral", allocation: "Alocação", strategy: "Estratégia", analysis: "Análise", tokens: "Tokens" };
+const DIRS = { dark: "A · Console", light: "B · Documento", both: "Lado a lado" };
+const STRATEGY_TABS = { carteira: "Carteira", edicoes: "Edições", atribuicao: "Atribuição", fatia: "Fatia no portfólio" };
+const ANALYSIS_TABS = { performance: "Performance", proventos: "Proventos", impostos: "Impostos" };
+
+function parseURL() {
+  const q = new URLSearchParams(location.search);
+  const v = ["dark", "light", "both"].includes(q.get("v")) ? q.get("v") : "both";
+  const s = Object.keys(SCREENS).includes(q.get("s")) ? q.get("s") : "overview";
+  const t = q.get("t") || "";
+  return { v, s, t };
+}
+let state = parseURL();
+const params = (extra = {}) => {
+  const q = new URLSearchParams({ ...state, ...extra });
+  if (!q.get("t")) q.delete("t");
+  return q.toString();
+};
+window.addEventListener("popstate", () => { state = parseURL(); render(); });
+
+/* ============================ A · console ============================ */
+
+function dkNav(screen) {
+  const groups = [
+    ["Posição", [
+      ["portfolio", "Carteira", "overview", 0],
+      ["strategies", "Estratégias", "strategy", ATTN.filter((a) => a.route.startsWith("strategies")).length],
+      ["assets", "Ativos", "allocation", ATTN.filter((a) => a.route.startsWith("assets")).length],
+    ]],
+    ["Operações", [
+      ["imports", "Importações", "allocation", ATTN.filter((a) => a.route.startsWith("imports")).length],
+      ["plan", "Plano / Mês", "allocation", ATTN.filter((a) => a.route.startsWith("plan")).length],
+    ]],
+    ["Resultados", [
+      ["analysis", "Análise", "analysis", ATTN.filter((a) => a.route.startsWith("analysis")).length],
+    ]],
+  ];
+  const active = { overview: "portfolio", allocation: "portfolio", strategy: "strategies", analysis: "analysis", tokens: "" }[screen];
+  return groups.map(([label, items]) => `
+    <div class="dk-group">${label}</div>
+    <div class="dk-nav">
+      ${items.map(([key, name, target, count]) => {
+        const hasAction = ATTN.some((a) => a.route.startsWith(key) && a.severity === "action");
+        return `<a class="${key === active ? "active" : ""}" href="?${params({ v: "dark", s: target })}">${name}${count ? `<span class="cnt ${hasAction ? "action" : ""}">${count}</span>` : ""}</a>`;
+      }).join("")}
+    </div>`).join("");
+}
+
+function dkTop(screen) {
+  const crumb = {
+    overview: "Posição / Carteira / <b>Visão geral</b>",
+    allocation: "Posição / Carteira / <b>Alocação</b>",
+    strategy: "Posição / Estratégias / <b>Dividendos BR</b>",
+    analysis: "Resultados / Análise / <b>Performance</b>",
+    tokens: "Decisão / <b>Direção visual</b>",
+  }[screen];
+  return `<header class="dk-top">
+    <div class="dk-crumb">${crumb}</div>
+    <span class="sp"></span>
+    <span class="dk-live"><i></i>cotações 30/10 · 18:12</span>
+    <span class="dk-pill">nov/26 · aberto</span>
+  </header>`;
+}
+
+function dkShell(screen) {
+  return `<div class="dk">
+    <aside class="dk-side">
+      <div class="dk-brand"><span class="a">carteira</span><span class="b">ideal</span><span class="c">console</span></div>
+      ${dkNav(screen)}
+      <div class="dk-side-foot"><div><b>nov/26</b> · plano aberto</div><div>snapshot out/26 congelado</div><div>dados de 02/11 09:14</div></div>
+    </aside>
+    <div class="dk-main">${dkTop(screen)}<div class="dk-body">${dkScreen(screen)}</div></div>
+  </div>`;
+}
+
+function dkCell(k, v, s, cls = "") {
+  return `<div class="dk-cell"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`;
+}
+
+function dkAttn() {
+  const item = (a) => `<div class="dk-attn-item"><span class="dot ${a.severity === "action" ? "a" : "w"}"></span><div><div class="t">${a.title}</div><div class="d">${a.detail}</div><div class="r">${a.route} →</div></div></div>`;
+  return `<div class="dk-attn-group">AÇÃO · ${ACTION.length}</div>${ACTION.map(item).join("")}
+    <div class="dk-attn-group">ACOMPANHAR · ${WATCH.length}</div>${WATCH.map(item).join("")}`;
+}
+
+function dkTableHead(cols, barLast = false) {
+  return `<tr>${cols.map((c, i) => `<th class="${i === 0 ? "" : "r"}${barLast && i === cols.length - 1 ? " barcol" : ""}">${c}</th>`).join("")}</tr>`;
+}
+
+function dkScreen(screen) {
+  if (screen === "overview") return dkOverview();
+  if (screen === "allocation") return dkAllocation();
+  if (screen === "strategy") return dkStrategy();
+  if (screen === "analysis") return dkAnalysis();
+  return "";
+}
+
+function dkOverview() {
+  const rows = CLASSES.map((c) => `
+    <tr>
+      <td><span class="dk-sw" style="background:${CLASS_COLOR[c.asset_class]}"></span>${CLASS_LABEL[c.asset_class]}</td>
+      <td class="r num">${c.target}%</td>
+      <td class="r num">${money0(c.ideal)}</td>
+      <td class="r num">${money0(c.actual)}</td>
+      <td class="r num ${defClass(c.deficit)}">${c.deficit >= 0 ? "" : "−"}${money0(Math.abs(c.deficit))}</td>
+      <td class="r num ${c.drift > 0 ? "over" : "short"}">${pp(c.drift)}</td>
+      <td class="barcol">${barMarkup(c.actual, c.ideal, c.drift > 0 ? "over" : "")}</td>
+    </tr>`).join("");
+  return `
+  <div class="dk-strip">
+    ${dkCell("Capital", money0(SUMMARY.capital), "alvo de nov/26")}
+    ${dkCell("Investido", money0(SUMMARY.holdings_value), `${pct((SUMMARY.holdings_value / SUMMARY.capital) * 100, 1)} do Capital`)}
+    ${dkCell("Caixa", money0(SUMMARY.uninvested_balance), "acima do piso de 10.000")}
+    ${dkCell("Drift", pp(SUMMARY.drift), "contra os alvos", "short")}
+    ${dkCell("Déficit", money0(SUMMARY.deficit), "a alocar", "short")}
+    ${dkCell("Atenção", String(ATTN.length), `${ACTION.length} para agir`, "over")}
+  </div>
+  <div class="dk-monthline">
+    <span class="k">MÊS</span><b>nov/26</b><span class="sep">/</span>plano aberto<span class="sep">/</span>3 de 6 etapas<span class="sep">/</span>3 ordens sugeridas<span class="sep">/</span><span class="over">1 transferência pendente</span>
+    <span class="sp"></span><span class="dk-link">abrir plano →</span>
+  </div>
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Alocação por classe <span class="sp"></span><span class="hint">Capital × alvo = Ideal</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Classe", "Alvo", "Ideal", "Atual", "Déficit", "Drift", "Distribuição"], true)}
+          ${rows}
+          <tr class="total"><td>Portfolio</td><td class="r num">—</td><td class="r num">${money0(SUMMARY.capital)}</td><td class="r num">${money0(SUMMARY.holdings_value)}</td><td class="r num short">${money0(SUMMARY.deficit)}</td><td class="r num short">${pp(SUMMARY.drift)}</td><td class="barcol">${barMarkup(SUMMARY.holdings_value, SUMMARY.capital)}</td></tr>
+        </table>
+      </section>
+      <div class="dk-note">déficit <b>azul</b> · superávit <b>âmbar</b> · retorno <b>verde</b>/<b class="down">vermelho</b> · a barra compara Atual com o traço do Ideal · cotações de 30/10; VALE3 de 24/10 <b>desatualizada</b></div>
+      <section class="dk-panel">
+        <h2>Resultados · out/26 <span class="sp"></span><span class="hint">12 meses encerrados · barra = retorno do mês</span></h2>
+        <div class="dk-spark">
+          ${MONTHS.map((m) => {
+            const r = m.decomposition.return_percentage;
+            const h = Math.max(3, Math.min(40, Math.pow(Math.abs(r ?? 0), 0.7) * 16));
+            return `<i class="${(r ?? 0) < 0 ? "neg" : ""}" style="height:${h}px" title="${monthLabel(m.period)} · ${r != null ? spct(r) : "—"}"></i>`;
+          }).join("")}
+        </div>
+        <div class="dk-mini" style="border-top:1px solid var(--line2)">
+          <div class="dk-mini-row"><span class="dim">Outubro</span><span class="sp"></span><span class="num up">+0,12%</span><span class="faint">vs +1,75%</span></div>
+          <div class="dk-mini-row"><span class="dim">Proventos do mês</span><span class="sp"></span><span class="num">${money0(3200)}</span></div>
+          <div class="dk-mini-row"><span class="dim">DARF de outubro</span><span class="sp"></span><span class="num over">${money(255)}</span><span class="faint">vence 30/11</span></div>
+          <div class="dk-mini-row"><span class="dim">XIRR desde ago/26</span><span class="sp"></span><span class="num">4,1%</span></div>
+        </div>
+      </section>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Precisa de você <span class="sp"></span><span class="badge">${ACTION.length}</span></h2>
+        <div class="dk-attn">${dkAttn()}</div>
+      </section>
+      <section class="dk-panel">
+        <h2>Estado dos dados</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Cotações</span><span class="sp"></span><span class="num">30/10 · 18:12</span></div>
+          <div class="dk-mini-row"><span class="dim">VALE3</span><span class="sp"></span><span class="num over">24/10 · desatualizada</span></div>
+          <div class="dk-mini-row"><span class="dim">Snapshot</span><span class="sp"></span><span class="num">out/26 · congelado</span></div>
+          <div class="dk-mini-row"><span class="dim">Lacuna AAPL34</span><span class="sp"></span><span class="num over">50 cotas</span></div>
+          <div class="dk-mini-row"><span class="dim">Último fechamento</span><span class="sp"></span><span class="num">${longMonth(SUMMARY.last_close)}</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkAllocation() {
+  let rows = "";
+  for (const c of CLASSES) {
+    rows += `<tr class="classrow"><td><span class="dk-sw" style="background:${CLASS_COLOR[c.asset_class]}"></span><b>${CLASS_LABEL[c.asset_class]}</b></td><td class="r num">${c.target}%</td><td class="r num">${money0(c.ideal)}</td><td class="r num">${money0(c.actual)}</td><td class="r num ${defClass(c.deficit)}">${c.deficit >= 0 ? "" : "−"}${money0(Math.abs(c.deficit))}</td><td class="r num ${c.drift > 0 ? "over" : "short"}">${pp(c.drift)}</td><td class="barcol">${barMarkup(c.actual, c.ideal, c.drift > 0 ? "over" : "")}</td></tr>`;
+    for (const s of c.strategies) {
+      rows += `<tr class="ind"><td>${s.strategy} <span class="faint">· relatório</span></td><td class="r num">${s.target}%</td><td class="r num">${money0(s.ideal)}</td><td class="r num">${money0(s.actual)}</td><td class="r num ${defClass(s.deficit)}">${s.deficit >= 0 ? "" : "−"}${money0(Math.abs(s.deficit))}</td><td class="r num ${s.drift > 0 ? "over" : "short"}">${pp(s.drift)}</td><td class="barcol">${barMarkup(s.actual, s.ideal, s.drift > 0 ? "over" : "")}</td></tr>`;
+    }
+    for (const m of MANUALS.filter((x) => x.kind === c.asset_class)) {
+      rows += `<tr class="ind semi"><td>${m.name} <span class="faint">· manual, sem alvo</span></td><td class="r num">—</td><td class="r num">—</td><td class="r num">${money0(m.value)}</td><td class="r num">—</td><td class="r num">—</td><td class="barcol"></td></tr>`;
+    }
+    if (c.asset_class === "RENDA_FIXA") {
+      for (const r of RF_ROWS) {
+        rows += `<tr class="ind"><td>${r.label} <span class="faint">· sub-classe</span></td><td class="r num">${r.target}%</td><td class="r num">${money0(r.ideal)}</td><td class="r num">${money0(r.actual)}</td><td class="r num ${defClass(r.deficit)}">${r.deficit >= 0 ? "" : "−"}${money0(Math.abs(r.deficit))}</td><td class="r num ${r.drift > 0 ? "over" : "short"}">${pp(r.drift)}</td><td class="barcol">${barMarkup(r.actual, r.ideal, r.drift > 0 ? "over" : "")}</td></tr>`;
+      }
+    }
+  }
+  return `
+  <div class="dk-pagehead">
+    <div><h1>Alocação</h1><p>Capital ${money0(ALLOC.capital)} · piso ${money0(ALLOC.floor)} · ${longMonth(ALLOC.period)}</p></div>
+    <span class="sp"></span>
+    <div class="dk-chips"><span class="on">Árvore</span><span>Por estratégia</span><span>Por ticker</span></div>
+  </div>
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Cadeia de alvos <span class="sp"></span><span class="hint">alvo da classe × alvo da estratégia = fatia</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Nível", "Alvo", "Ideal", "Atual", "Déficit", "Drift", "Atual × Ideal"], true)}
+          ${rows}
+          <tr class="total"><td>Portfolio</td><td class="r num">—</td><td class="r num">${money0(ALLOC.capital)}</td><td class="r num">${money0(ALLOC.actual)}</td><td class="r num short">${money0(ALLOC.deficit)}</td><td class="r num short">${pp(ALLOC.drift)}</td><td class="barcol">${barMarkup(ALLOC.actual, ALLOC.capital)}</td></tr>
+        </table>
+      </section>
+      <div class="dk-note">A classe soma as estratégias de relatório e os buckets manuais. Buckets manuais não têm alvo, então não geram ordem: aparecem só como custódia.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Maiores desvios <span class="sp"></span><span class="hint">por |drift|</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Ativo", "Estratégia", "Drift"])}
+          ${BIGGEST_DRIFTS.map((t) => `<tr><td><span class="num">${t.ticker}</span></td><td class="faint" style="font-size:10.5px">${t.strategy}</td><td class="r num ${t.drift > 0 ? "over" : "short"}">${pp(t.drift)}</td></tr>`).join("")}
+        </table>
+      </section>
+      <section class="dk-panel">
+        <h2>Como ler</h2>
+        <div class="dk-read">
+          <p><b>Alvo</b> é percentual; <b>Ideal</b> é Capital × alvo, em reais. <b>Déficit</b> positivo é dinheiro que falta; negativo é dinheiro sobrando.</p>
+          <p><b>Drift</b> é a distância em pontos percentuais. Azul puxa para baixo do alvo, âmbar puxa para cima.</p>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkStrategy() {
+  const tab = STRATEGY_TABS[state.t] ? state.t : "carteira";
+  const tabs = `<div class="dk-tabs">
+    ${Object.entries(STRATEGY_TABS).map(([k, label]) => `<button class="${k === tab ? "on" : ""}" data-go="t:${k}">${label}</button>`).join("")}
+    <span class="sp"></span><span class="ctx">editada em 02/11 · relatório XP</span>
+  </div>`;
+  const share = (DIV.actual / ALLOC.actual) * 100;
+  return `
+  <div class="dk-pagehead">
+    <div><h1>Dividendos BR</h1><p>Ações · estratégia de relatório · edição ativa out/26</p></div>
+    <span class="sp"></span>
+    <div class="dk-chips"><span class="on">Relatório</span><span class="dim">Manual</span></div>
+  </div>
+  <div class="dk-kv">
+    <div><div class="k">Fatia</div><div class="v">${money0(DIV.actual)}</div><div class="s">${pct(share, 1)} da carteira</div></div>
+    <div><div class="k">Alvo</div><div class="v">${DIV.target}%</div><div class="s">da classe Ações</div></div>
+    <div><div class="k">Ideal</div><div class="v">${money0(DIV.ideal)}</div><div class="s">${DIV.deficit < 0 ? "superávit" : "déficit"} de ${money0(Math.abs(DIV.deficit))}</div></div>
+    <div><div class="k">Drift</div><div class="v ${DIV.drift > 0 ? "over" : "short"}">${pp(DIV.drift)}</div><div class="s">contra o alvo</div></div>
+    <div><div class="k">Retorno out/26</div><div class="v ${retClass(DIV_PERF.return_percentage)}">${spct(DIV_PERF.return_percentage)}</div><div class="s">benchmark +2,10%</div></div>
+  </div>
+  ${tabs}
+  ${tab === "carteira" ? dkStrategyHoldings() : tab === "edicoes" ? dkStrategyEditions() : tab === "atribuicao" ? dkStrategyAttribution() : dkStrategyShare()}`;
+}
+
+function dkStrategyHoldings() {
+  const rows = DIV.tickers.map((t) => `<tr>
+      <td><span class="num" style="font-weight:600">${t.ticker}</span>${t.stale ? ' <span class="over" style="font-size:9.5px">cotação 24/10</span>' : ""}</td>
+      <td class="r num">${num(t.quantity)}</td>
+      <td class="r num">${money(t.price)}</td>
+      <td class="r num">${money0(t.actual)}</td>
+      <td class="r num">${t.target}%</td>
+      <td class="r num">${money0(t.ideal)}</td>
+      <td class="r num ${t.drift > 0 ? "over" : "short"}">${pp(t.drift)}</td>
+      <td class="barcol">${barMarkup(t.actual, t.ideal, t.drift > 0 ? "over" : "")}</td>
+    </tr>`).join("");
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Carteira da estratégia <span class="sp"></span><span class="hint">${DIV.tickers.length} ativos · ${pct(DIV.target)} do alvo de Ações</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Ativo", "Qtd", "Preço", "Atual", "Alvo", "Ideal", "Drift", "Atual × Ideal"], true)}
+          ${rows}
+        </table>
+      </section>
+      <div class="dk-note">A coluna Alvo é o peso dentro da estratégia; o Ideal é a fatia da estratégia × Capital. O traço na barra é o Ideal, não a quantidade-alvo em cotas. WEGE3 aparece com 0 cotas porque está atribuído a Legado Ações; a transferência sugerida moveria 372.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Edição em revisão</h2>
+        <div class="dk-callout"><b>Edição 104 · nov/26</b><br>2 pesos alterados, 5 preços-alvo, VALE3 vira <b>não operar</b>. Promover substitui a edição ativa.</div>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Edição ativa</span><span class="sp"></span><span class="num">103 · out/26</span></div>
+          <div class="dk-mini-row"><span class="dim">Origem</span><span class="sp"></span><span class="num">XP · relatório</span></div>
+          <div class="dk-mini-row"><span class="dim">Sessão</span><span class="sp"></span><span class="num">em revisão</span></div>
+        </div>
+      </section>
+      <section class="dk-panel">
+        <h2>Genética da fatia</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Aporte do mês</span><span class="sp"></span><span class="num">${money0(3003.06)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Proventos</span><span class="sp"></span><span class="num">${money0(1050)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Transferência sugerida</span><span class="sp"></span><span class="num">WEGE3 · 372</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkStrategyEditions() {
+  const rows = ED_STAGED.entries.map((e) => {
+    const before = ED_ACTIVE.entries.find((x) => x.ticker === e.ticker);
+    const w = before.weight !== e.weight;
+    const p = before.target_price !== e.target_price;
+    const f = before.do_not_trade !== e.do_not_trade;
+    return `<tr>
+      <td><span class="num" style="font-weight:600">${e.ticker}</span></td>
+      <td class="r num ${w ? "over" : "faint"}">${before.weight}%${w ? ` → ${e.weight}%` : ""}</td>
+      <td class="r num ${p ? "over" : "faint"}">${money(before.target_price)}${p ? ` → ${money(e.target_price)}` : ""}</td>
+      <td class="r">${e.rating}</td>
+      <td class="r ${f ? "over" : "faint"}">${e.do_not_trade ? "não operar" : "operar"}</td>
+      <td class="r">${w || p || f ? '<span class="short">● alterada</span>' : '<span class="faint">—</span>'}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Edição 104 · nov/26 <span class="sp"></span><span class="hint">staged · comparada com a ativa 103</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Ativo", "Peso", "Preço-alvo", "Rating", "Operar", "Diff"])}
+          ${rows}
+        </table>
+      </section>
+      <div class="dk-note">Promover a edição substitui a ativa. O plano de novembro só pega os novos pesos no próximo recálculo.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Resumo do diff</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Pesos alterados</span><span class="sp"></span><span class="num over">2</span></div>
+          <div class="dk-mini-row"><span class="dim">Preços alterados</span><span class="sp"></span><span class="num over">5</span></div>
+          <div class="dk-mini-row"><span class="dim">Não operar</span><span class="sp"></span><span class="num over">1 · VALE3</span></div>
+          <div class="dk-mini-row"><span class="dim">Ativos</span><span class="sp"></span><span class="num">5</span></div>
+        </div>
+        <div class="dk-callout">VALE3 marcado <b>não operar</b> não vende a posição: o déficit fica visível e sem compra. As cotas só saem para financiar outra compra.</div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkStrategyAttribution() {
+  const attr = DIV.tickers.map((t) => F.strategies.attribution.find((a) => a.ticker === t.ticker)).filter(Boolean);
+  const rows = attr.map((a) => {
+    const own = a.slices.find((s) => s.strategy_name === "Dividendos BR");
+    const other = a.slices.find((s) => s.strategy_name !== "Dividendos BR");
+    return `<tr>
+      <td><span class="num" style="font-weight:600">${a.ticker}</span></td>
+      <td class="r num">${num(a.custody_quantity)}</td>
+      <td class="r num">${num(own ? own.quantity : 0)}</td>
+      <td class="r num ${own ? "faint" : "over"}">${num(a.unattributed_quantity + (other ? other.quantity : 0))}</td>
+      <td class="r faint">${other ? other.strategy_name + " · " + num(other.quantity) : "—"}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Custódia × atribuição <span class="sp"></span><span class="hint">a custódia não se move numa transferência</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Ativo", "Custódia", "Nesta estratégia", "Fora", "Outra estratégia"])}
+          ${rows}
+        </table>
+      </section>
+      <div class="dk-callout"><b>Transferência pendente · WEGE3 · 372 cotas</b><br>Legado Ações → Dividendos BR · ${money(19492.8)} · um bucket manual como doador sempre espera um humano.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Reconciliação</h2>
+        <div class="dk-read">
+          <p>Custódia 12.000 ITSA4; 12.000 atribuídas a Dividendos BR. A coluna <b>Fora</b> mostra o que está na custódia mas não nesta fatia.</p>
+          <p>WEGE3 está inteiro em <b>Legado Ações</b>. A transferência sugerida moveria 372 cotas sem tocar na custódia.</p>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkStrategyShare() {
+  const total = DIV.tickers.reduce((s, t) => s + t.actual, 0);
+  return `<div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Composição da fatia</h2>
+        <table class="dk-table">
+          ${dkTableHead(["Ativo", "Valor", "Peso na estratégia", "Peso dentro do alvo"], true)}
+          ${DIV.tickers.map((t) => `<tr><td><span class="num">${t.ticker}</span></td><td class="r num">${money0(t.actual)}</td><td class="r num">${pct((t.actual / total) * 100, 1)}</td><td class="barcol">${barMarkup(t.actual, t.ideal, t.drift > 0 ? "over" : "")}</td></tr>`).join("")}
+          <tr class="total"><td>Total</td><td class="r num">${money0(total)}</td><td class="r num">100%</td><td class="barcol"></td></tr>
+        </table>
+      </section>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Contexto</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Fatia na carteira</span><span class="sp"></span><span class="num">29,5%</span></div>
+          <div class="dk-mini-row"><span class="dim">Fatia na classe Ações</span><span class="sp"></span><span class="num">60,1%</span></div>
+          <div class="dk-mini-row"><span class="dim">Alvo na classe</span><span class="sp"></span><span class="num">52%</span></div>
+          <div class="dk-mini-row"><span class="dim">Drift</span><span class="sp"></span><span class="num over">+3,09 pp</span></div>
+        </div>
+      </section>
+      <section class="dk-panel">
+        <h2>Retorno do mês</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Início</span><span class="sp"></span><span class="num">${money0(DIV_PERF.value_start)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Fim</span><span class="sp"></span><span class="num">${money0(DIV_PERF.value_end)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Aportes</span><span class="sp"></span><span class="num">${money0(DIV_PERF.net_aportes)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Proventos</span><span class="sp"></span><span class="num">${money0(DIV_PERF.net_income)}</span></div>
+          <div class="dk-mini-row"><span class="dim">Retorno</span><span class="sp"></span><span class="num down">${spct(DIV_PERF.return_percentage)}</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkChartBars() {
+  const W = 620, H = 176, L = 36, R = 10, T = 14, B = 26;
+  const rets = MONTHS.map((m) => m.decomposition.return_percentage).filter((r) => r != null);
+  const max = Math.max(2, ...rets.map((r) => Math.abs(r)));
+  const mid = T + (H - T - B) / 2;
+  const scale = ((H - T - B) / 2) / max;
+  const band = (W - L - R) / MONTHS.length;
+  const y = (v) => mid - v * scale;
+  let grid = "";
+  for (const g of [-2, -1, 0, 1, 2]) {
+    const v = g * (max / 2);
+    grid += `<line x1="${L}" y1="${y(v).toFixed(1)}" x2="${W - R}" y2="${y(v).toFixed(1)}" stroke="#1d2630" stroke-width="1"/>`;
+    grid += `<text x="${L - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end" fill="#64707f" font-size="8" font-family="ui-monospace,monospace">${v.toFixed(0)}</text>`;
+  }
+  const bars = MONTHS.map((m, i) => {
+    const r = m.decomposition.return_percentage;
+    if (r == null) return "";
+    const x = L + i * band + band * 0.24;
+    const w = band * 0.52;
+    const top = Math.min(y(0), y(r));
+    const h = Math.max(1, Math.abs(y(r) - y(0)));
+    const fill = r > 0 ? "#2f6a52" : r < 0 ? "#7a3a35" : "#39434f";
+    return `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${fill}"/>`;
+  }).join("");
+  const benchPts = MONTHS.map((m, i) => (m.benchmark_return != null ? { i, v: m.benchmark_return } : null)).filter(Boolean);
+  let bench = "";
+  if (benchPts.length > 1) {
+    bench = `<polyline points="${benchPts.map((p) => `${(L + p.i * band + band / 2).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ")}" fill="none" stroke="#9ba8b7" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+    bench += benchPts.map((p) => `<circle cx="${(L + p.i * band + band / 2).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="1.8" fill="#9ba8b7"/>`).join("");
+  }
+  const labels = MONTHS.map((m, i) => (i % 2 === 0 || i === MONTHS.length - 1 ? `<text x="${(L + i * band + band / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="#64707f" font-size="8" font-family="ui-monospace,monospace">${monthLabel(m.period)}</text>` : "")).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Retorno mensal da carteira nos últimos 12 meses">${grid}${bars}${bench}${labels}</svg>`;
+}
+
+function dkAnalysis() {
+  const tab = ANALYSIS_TABS[state.t] ? state.t : "performance";
+  const tabs = `<div class="dk-tabs">
+    ${Object.entries(ANALYSIS_TABS).map(([k, label]) => `<button class="${k === tab ? "on" : ""}" data-go="t:${k}">${label}</button>`).join("")}
+    <span class="sp"></span><span class="ctx">rail compartilhado · 12 meses até out/26</span>
+  </div>`;
+  const rail = `<div class="dk-chips" style="margin-bottom:12px"><span>Mês</span><span>3m</span><span>6m</span><span class="on">12m</span><span>Ano</span><span>←</span><span>out/26</span><span>→</span></div>`;
+  return `<div class="dk-pagehead">
+    <div><h1>Análise</h1><p>Resultados · janela de 12 meses encerrada em out/26</p></div>
+    <span class="sp"></span><div class="dk-chips"><span class="on">Período</span><span class="dim">Mês-âncora</span></div>
+  </div>
+  ${tabs}${rail}
+  ${tab === "performance" ? dkPerformance() : tab === "proventos" ? dkIncome() : dkTax()}`;
+}
+
+function dkPerformance() {
+  const rows = [...MONTHS].reverse().map((m) => {
+    const d = m.decomposition;
+    const ret = d.return_percentage;
+    const comparable = m.benchmark_return != null && ret != null;
+    return `<tr>
+      <td class="num dim">${monthLabel(m.period)}</td>
+      <td class="r num">${d.net_aportes ? money0(d.net_aportes) : "—"}</td>
+      <td class="r num">${d.net_income ? money0(d.net_income) : "—"}</td>
+      <td class="r num ${ret != null ? retClass(ret) : "faint"}">${ret != null ? spct(ret) : "—"}</td>
+      <td class="r num faint">${m.benchmark_return != null ? spct(m.benchmark_return) : "—"}</td>
+      <td class="r num ${comparable ? retClass(ret - m.benchmark_return) : "faint"}">${comparable ? pp(ret - m.benchmark_return) : "—"}</td>
+      <td class="r faint">${m.source === "snapshot" ? "snapshot" : "computado"}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="dk-strip">
+    ${dkCell("Retorno 12m", "+4,1%", "XIRR do período", "up")}
+    ${dkCell("Benchmark", "+1,75%", "blend cobre 3 de 12 meses")}
+    ${dkCell("Melhor mês", "+3,41%", "jul/26", "up")}
+    ${dkCell("Pior mês", "+0,04%", "mai/26")}
+    ${dkCell("Proventos 12m", money0(27500), "renda recebida")}
+    ${dkCell("Aportes 12m", money0(215000), "capital novo")}
+  </div>
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Retorno mensal <span class="sp"></span><span class="hint">barra = carteira · tracejado = benchmark onde existe</span></h2>
+        <div class="dk-chart">${dkChartBars()}</div>
+        <div class="dk-legend"><span><i style="background:#2f6a52"></i>mês positivo</span><span><i style="background:#7a3a35"></i>mês negativo</span><span><i style="background:#9ba8b7"></i>benchmark</span><span class="btn" data-go="t:proventos">ver proventos →</span></div>
+      </section>
+      <section class="dk-panel">
+        <h2>Mês a mês</h2>
+        <table class="dk-table">
+          ${dkTableHead(["Mês", "Aportes", "Proventos", "Retorno", "Benchmark", "Delta", "Fonte"])}
+          ${rows}
+        </table>
+      </section>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Como ler</h2>
+        <div class="dk-read">
+          <p><b>Retorno</b> decompõe o mês: valor final menos aportes e proventos sobre o valor inicial. <b>XIRR</b> é anualizado e cobre a era de snapshots.</p>
+          <p>A janela abre em 12 meses encerrados no último fechamento. Trocar de aba mantém a janela.</p>
+          <p>O blend de benchmark só existe desde <b>ago/26</b>; por isso 3 de 12 meses têm comparação.</p>
+        </div>
+      </section>
+      <section class="dk-panel">
+        <h2>Retorno por classe · out/26</h2>
+        <table class="dk-table">
+          ${dkTableHead(["Classe", "Retorno"])}
+          ${F.analysis.monthPerformance.classes.map((c) => `<tr><td>${CLASS_LABEL[c.asset_class]}</td><td class="r num ${retClass(c.decomposition.return_percentage)}">${spct(c.decomposition.return_percentage)}</td></tr>`).join("")}
+        </table>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkIncome() {
+  const rows = [...INCOME].slice(-9).reverse().map((i) => `<tr>
+    <td class="num dim">${i.date.slice(8)}/${i.date.slice(5, 7)}</td>
+    <td><span class="num" style="font-weight:600">${i.ticker}</span></td>
+    <td class="faint">${i.type === "JCP" ? "JCP" : i.type === "FUND_INCOME" ? "Rendimento" : "Dividendo"}</td>
+    <td class="r num">${money(i.gross_amount)}</td>
+    <td class="r num faint">${i.retained_amount ? money(i.retained_amount) : "—"}</td>
+    <td class="r num">${money(i.net_amount)}</td>
+    <td class="r ${i.status === "PAYABLE" || i.status === "ANNOUNCED" ? "over" : "faint"}">${i.status === "PAYABLE" ? "a pagar" : i.status === "ANNOUNCED" ? "anunciado" : "recebido"}</td>
+  </tr>`).join("");
+  return `<div class="dk-strip">
+    ${dkCell("Proventos 12m", money0(27500), "recebidos")}
+    ${dkCell("Nov/26 a receber", money0(2110), "JCP + rendimento")}
+    ${dkCell("Rendimento médio", money0(2292), "por mês")}
+    ${dkCell("Maior fonte", "MXRF11", "FIIs · rendimento")}
+    ${dkCell("Retenção", money0(90), "JCP · 15%")}
+    ${dkCell("Próximo", "15/11", "BBAS3 · R$ 510")}
+  </div>
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Lançamentos recentes <span class="sp"></span><span class="hint">janela de 12 meses</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Data", "Ativo", "Tipo", "Bruto", "Retido", "Líquido", "Status"])}
+          ${rows}
+        </table>
+      </section>
+      <div class="dk-note">A receber é prospectivo: um lançamento <b>anunciado</b> ou <b>a pagar</b> aparece mesmo quando a data cai fora da janela.</div>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>Por ativo · out/26</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">MXRF11</span><span class="sp"></span><span class="num">1.700,00</span></div>
+          <div class="dk-mini-row"><span class="dim">KNCR11</span><span class="sp"></span><span class="num">450,00</span></div>
+          <div class="dk-mini-row"><span class="dim">ITSA4</span><span class="sp"></span><span class="num">1.050,00</span></div>
+          <div class="dk-mini-row"><span class="dim">Total do mês</span><span class="sp"></span><span class="num">3.200,00</span></div>
+        </div>
+      </section>
+      <section class="dk-panel">
+        <h2>Como ler</h2>
+        <div class="dk-read"><p>A janela do rail filtra os lançamentos. O <b>mês-âncora</b> de Impostos não muda aqui.</p></div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+function dkTax() {
+  const m = TAX.meter;
+  return `<div class="dk-strip">
+    ${dkCell("Vendas de ações", money0(m.gross_sales), m.exceeded ? "isenção de 20.000 excedida" : "dentro da isenção", m.exceeded ? "over" : "")}
+    ${dkCell("Ganho realizado", money0(m.realized_gain), "swing trade")}
+    ${dkCell("Ganho tributável", money0(m.taxable_gain), "após prejuízo acumulado")}
+    ${dkCell("DARF", money(m.tax), `vence ${TAX.darf_due_date.slice(8)}/${TAX.darf_due_date.slice(5, 7)}`, "over")}
+    ${dkCell("Prejuízo a compensar", money0(500), "swing · fecha nov/26")}
+    ${dkCell("FII", money0(416), "prejuízo acumulado")}
+  </div>
+  <div class="dk-cols">
+    <div class="dk-stack">
+      <section class="dk-panel">
+        <h2>Apuração de out/26 <span class="sp"></span><span class="hint">fechada · DARF de 30/11</span></h2>
+        <table class="dk-table">
+          ${dkTableHead(["Tipo", "Vendas", "Ganhos", "Prejuízos", "Resultado"])}
+          ${TAX.realized.map((r) => `<tr><td>${r.kind === "SWING" ? "Swing trade" : r.kind === "DAY_TRADE" ? "Day trade" : "FII"}</td><td class="r num">${money(r.gross_sales)}</td><td class="r num">${money(r.gains)}</td><td class="r num">${money(r.losses)}</td><td class="r num ${retClass(r.result)}">${money(r.result)}</td></tr>`).join("")}
+        </table>
+      </section>
+      <section class="dk-panel">
+        <h2>Compensação</h2>
+        <table class="dk-table">
+          ${dkTableHead(["Tipo", "Saldo inicial", "Aplicado", "Saldo final"])}
+          ${TAX.carry.map((c) => `<tr><td>${c.kind === "SWING" ? "Swing trade" : c.kind === "DAY_TRADE" ? "Day trade" : "FII"}</td><td class="r num">${money(c.opening_balance)}</td><td class="r num">${money(c.loss_applied)}</td><td class="r num">${money(c.closing_balance)}</td></tr>`).join("")}
+        </table>
+      </section>
+    </div>
+    <aside class="dk-stack">
+      <section class="dk-panel">
+        <h2>O que explica o DARF</h2>
+        <div class="dk-read">
+          <p>Vendas de ações de <b>${money(m.gross_sales)}</b> cruzaram a isenção de ${money0(m.exemption_limit)}. Todo o ganho do mês vira tributável depois de aplicar <b>${money0(700)}</b> de prejuízo acumulado.</p>
+          <p>${money0(1700)} × 15% = <b>${money(m.tax)}</b>, vencimento em ${TAX.darf_due_date.split("-").reverse().join("/")}.</p>
+          <p>As vendas de FII ficam fora do medidor de ações; o prejuízo de <b>${money0(384)}</b> fecha o saldo em ${money0(416)}.</p>
+        </div>
+      </section>
+      <section class="dk-panel">
+        <h2>Pendências</h2>
+        <div class="dk-mini">
+          <div class="dk-mini-row"><span class="dim">Lacuna AAPL34</span><span class="sp"></span><span class="num over">50 cotas</span></div>
+          <div class="dk-mini-row"><span class="dim">Day trade PETR4</span><span class="sp"></span><span class="num">aviso</span></div>
+          <div class="dk-mini-row"><span class="dim">Nov/26 aberto</span><span class="sp"></span><span class="num">DARF 31/12</span></div>
+        </div>
+      </section>
+    </aside>
+  </div>`;
+}
+
+/* ============================ B · documento ============================ */
+
+function ltNav(screen) {
+  const items = [["overview", "Carteira"], ["allocation", "Alocação"], ["strategy", "Estratégias"], ["analysis", "Análise"]];
+  return `<header class="lt-top"><div class="lt-top-inner">
+    <div class="lt-mark">Carteira <span>Ideal</span></div>
+    <nav class="lt-nav">${items.map(([k, label]) => `<a class="${k === screen ? "active" : ""}" href="?${params({ v: "light", s: k })}">${label}</a>`).join("")}</nav>
+    <span class="sp"></span><span class="asof">dados de 2 de novembro de 2026</span>
+  </div></header>`;
+}
+
+function ltShell(screen) {
+  return `<div class="lt">${ltNav(screen)}<div class="lt-page">${ltScreen(screen)}</div></div>`;
+}
+
+function ltScreen(screen) {
+  if (screen === "overview") return ltOverview();
+  if (screen === "allocation") return ltAllocation();
+  if (screen === "strategy") return ltStrategy();
+  if (screen === "analysis") return ltAnalysis();
+  return "";
+}
+
+function ltOverview() {
+  return `
+  <div class="lt-eyebrow">Carteira <span class="sep">·</span> visão geral <span class="sep">·</span> novembro de 2026</div>
+  <h1>Outubro fechou quase plano. Novembro começa R$ 20,9 mil abaixo do Capital.</h1>
+  <p class="lt-stand">A carteira vale <b>R$ 1.489.140</b> contra um Capital de <b>R$ 1.510.000</b>. Ações e FIIs seguem acima do alvo, o que abre espaço para girar o excesso em renda fixa e nas compras do mês. É um mês de ajuste fino, não de mudança de direção.</p>
+  <div class="lt-stats">
+    <div class="lt-stat"><div class="k">Capital</div><div class="v">R$ 1.510.000</div><div class="s">alvo do mês</div></div>
+    <div class="lt-stat"><div class="k">Drift do portfólio</div><div class="v">−1,38 pp</div><div class="s">abaixo do alvo, dentro da faixa</div></div>
+    <div class="lt-stat"><div class="k">Caixa livre</div><div class="v">R$ 20.860</div><div class="s">R$ 10.860 acima do piso</div></div>
+  </div>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Alocação</h2><span class="sp"></span><span class="meta">Capital × alvo = Ideal</span></div>
+    <table class="lt-table">
+      <tr><th>Classe</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Atual</th><th class="r">Distância</th><th class="r">Drift</th><th style="width:150px"></th></tr>
+      ${CLASSES.map((c) => `<tr>
+        <td>${CLASS_LABEL[c.asset_class]}</td>
+        <td class="r mono">${c.target}%</td>
+        <td class="r mono">${money0(c.ideal)}</td>
+        <td class="r mono">${money0(c.actual)}</td>
+        <td class="r mono">${c.deficit >= 0 ? "faltam " + money0(c.deficit) : "sobram " + money0(Math.abs(c.deficit))}</td>
+        <td class="r mono">${pp(c.drift)}</td>
+        <td>${ltBarMarkup(c.actual, c.ideal)}</td>
+      </tr>`).join("")}
+      <tr class="total"><td>Portfólio</td><td class="r mono">—</td><td class="r mono">${money0(SUMMARY.capital)}</td><td class="r mono">${money0(SUMMARY.holdings_value)}</td><td class="r mono">faltam ${money0(SUMMARY.deficit)}</td><td class="r mono">${pp(SUMMARY.drift)}</td><td></td></tr>
+    </table>
+    <p class="lt-note">FIIs e a cota de dividendos estão acima do alvo; o excesso é o que financia as compras do mês. A barra mostra o Atual contra o traço do Ideal — não a distância até o Capital.</p>
+  </section>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Precisa de você</h2><span class="sp"></span><span class="meta">${ATTN.length} itens · ${ACTION.length} pedem ação</span></div>
+    <ol class="lt-list">
+      ${[...ACTION, ...WATCH.slice(0, 3)].map((a) => `<li><div><div class="t">${a.title}</div><div class="d">${a.detail}</div></div><span class="go">${a.route} →</span></li>`).join("")}
+    </ol>
+    <p class="lt-note">Os três primeiros pedem uma decisão sua. Os demais são acompanhamento: entram no fechamento do mês como estão.</p>
+  </section>
+  <div class="lt-month">
+    <div class="k">O mês em curso</div>
+    <p><b>Novembro está aberto</b>, na terceira de seis etapas. Há três ordens sugeridas e uma transferência de atribuição pendente que precisa da sua decisão. <span style="color:var(--accent)">Abrir o plano →</span></p>
+  </div>`;
+}
+
+function ltAllocation() {
+  let rows = "";
+  for (const c of CLASSES) {
+    rows += `<tr><td><b>${CLASS_LABEL[c.asset_class]}</b></td><td class="r mono">${c.target}%</td><td class="r mono">${money0(c.ideal)}</td><td class="r mono">${money0(c.actual)}</td><td class="r mono">${c.deficit >= 0 ? "faltam " + money0(c.deficit) : "sobram " + money0(Math.abs(c.deficit))}</td><td class="r mono">${pp(c.drift)}</td><td>${ltBarMarkup(c.actual, c.ideal)}</td></tr>`;
+    for (const s of c.strategies) {
+      rows += `<tr class="ind"><td>${s.strategy} <span class="lt-chip">relatório</span></td><td class="r mono">${s.target}%</td><td class="r mono">${money0(s.ideal)}</td><td class="r mono">${money0(s.actual)}</td><td class="r mono">${s.deficit >= 0 ? "faltam " + money0(s.deficit) : "sobram " + money0(Math.abs(s.deficit))}</td><td class="r mono">${pp(s.drift)}</td><td>${ltBarMarkup(s.actual, s.ideal)}</td></tr>`;
+    }
+    for (const m of MANUALS.filter((x) => x.kind === c.asset_class)) {
+      rows += `<tr class="ind semi"><td>${m.name} <span class="lt-chip grey">manual · sem alvo</span></td><td class="r mono">—</td><td class="r mono">—</td><td class="r mono">${money0(m.value)}</td><td class="r mono">—</td><td class="r mono">—</td><td></td></tr>`;
+    }
+    if (c.asset_class === "RENDA_FIXA") {
+      for (const r of RF_ROWS) {
+        rows += `<tr class="ind"><td>${r.label} <span class="lt-chip grey">sub-classe</span></td><td class="r mono">${r.target}%</td><td class="r mono">${money0(r.ideal)}</td><td class="r mono">${money0(r.actual)}</td><td class="r mono">${r.deficit >= 0 ? "faltam " + money0(r.deficit) : "sobram " + money0(Math.abs(r.deficit))}</td><td class="r mono">${pp(r.drift)}</td><td>${ltBarMarkup(r.actual, r.ideal)}</td></tr>`;
+      }
+    }
+  }
+  return `
+  <div class="lt-eyebrow">Carteira <span class="sep">·</span> alocação <span class="sep">·</span> novembro de 2026</div>
+  <h1>A cadeia de alvos do mês</h1>
+  <p class="lt-stand">Cada nível é uma multiplicação: o Capital vira o Ideal da classe, o alvo da classe vira o Ideal da estratégia, e assim por diante. A árvore abaixo é a leitura completa de onde o dinheiro deveria estar.</p>
+  <div class="lt-split">
+    <div>
+      <table class="lt-table">
+        <tr><th>Nível</th><th class="r">Alvo</th><th class="r">Ideal</th><th class="r">Atual</th><th class="r">Distância</th><th class="r">Drift</th><th style="width:120px"></th></tr>
+        ${rows}
+        <tr class="total"><td>Portfólio</td><td class="r mono">—</td><td class="r mono">${money0(ALLOC.capital)}</td><td class="r mono">${money0(ALLOC.actual)}</td><td class="r mono">faltam ${money0(ALLOC.deficit)}</td><td class="r mono">${pp(ALLOC.drift)}</td><td></td></tr>
+      </table>
+      <p class="lt-note">Buckets manuais não têm alvo e não geram ordem: aparecem como custódia, não como nível. A renda fixa desce até a sub-classe porque é ali que a ordem é emitida.</p>
+    </div>
+    <aside class="lt-side">
+      <h3>Maiores desvios</h3>
+      ${BIGGEST_DRIFTS.map((t) => `<div class="row"><span><b>${t.ticker}</b><br><span class="lt-lt">${t.strategy}</span></span><span class="sp"></span><span class="mono">${pp(t.drift)}</span></div>`).join("")}
+      <h3 style="margin-top:24px">Como ler</h3>
+      <p class="lt-note" style="margin-top:0">Alvo é percentual; Ideal é Capital × alvo, em reais. Distância é dinheiro que falta ou sobra. Drift é a mesma distância em pontos percentuais, para comparar níveis de tamanhos diferentes.</p>
+    </aside>
+  </div>`;
+}
+
+function ltStrategy() {
+  const tab = STRATEGY_TABS[state.t] ? state.t : "carteira";
+  const share = (DIV.actual / ALLOC.actual) * 100;
+  return `
+  <div class="lt-eyebrow">Posição <span class="sep">·</span> estratégias <span class="sep">·</span> Dividendos BR</div>
+  <h1>Dividendos BR</h1>
+  <p class="lt-stand">Uma estratégia de relatório dentro de Ações. A edição de novembro está em revisão: dois pesos mudaram, os cinco preços-alvo foram revistos e VALE3 passa a não operar.</p>
+  <div class="lt-kv">
+    <div><div class="k">Fatia</div><div class="v">${money0(DIV.actual)}</div><div class="s">${pct(share, 1)} da carteira</div></div>
+    <div><div class="k">Alvo</div><div class="v">${DIV.target}%</div><div class="s">da classe Ações</div></div>
+    <div><div class="k">Drift</div><div class="v">${pp(DIV.drift)}</div><div class="s">${money0(Math.abs(DIV.deficit))} acima do Ideal</div></div>
+    <div><div class="k">Retorno em outubro</div><div class="v" style="color:var(--loss)">${spct(DIV_PERF.return_percentage)}</div><div class="s">benchmark +2,10%</div></div>
+  </div>
+  <div class="lt-tabs">
+    ${Object.entries(STRATEGY_TABS).map(([k, label]) => `<button class="${k === tab ? "on" : ""}" data-go="t:${k}">${label}</button>`).join("")}
+  </div>
+  ${tab === "carteira" ? ltStrategyHoldings() : tab === "edicoes" ? ltStrategyEditions() : tab === "atribuicao" ? ltStrategyAttribution() : ltStrategyShare()}`;
+}
+
+function ltStrategyHoldings() {
+  return `<div class="lt-split">
+    <div>
+      <table class="lt-table">
+        <tr><th>Ativo</th><th class="r">Posição</th><th class="r">Valor</th><th class="r">Peso atual</th><th class="r">Peso alvo</th><th class="r">Drift</th><th style="width:110px"></th></tr>
+        ${DIV.tickers.map((t) => `<tr>
+          <td><span class="tk">${t.ticker}</span>${t.stale ? '<br><span class="lt-lt">cotação de 24/10</span>' : ""}</td>
+          <td class="r mono">${num(t.quantity)}</td>
+          <td class="r mono">${money0(t.actual)}</td>
+          <td class="r mono">${pct((t.actual / DIV.actual) * 100, 1)}</td>
+          <td class="r mono">${t.target}%</td>
+          <td class="r mono">${pp(t.drift)}</td>
+          <td>${ltBarMarkup(t.actual, t.ideal)}</td>
+        </tr>`).join("")}
+      </table>
+      <p class="lt-note">O peso alvo é relativo dentro da estratégia; o Ideal de cada ativo é a fatia da estratégia × Capital. O traço na barra é esse Ideal. WEGE3 aparece com 0 cotas porque está inteiro em Legado Ações; a transferência sugerida moveria 372.</p>
+    </div>
+    <aside class="lt-side">
+      <h3>Edição ativa</h3>
+      <div class="row"><span>Edição</span><span class="sp"></span><b>103 · out/26</b></div>
+      <div class="row"><span>Origem</span><span class="sp"></span><span>relatório XP</span></div>
+      <div class="row"><span>Em revisão</span><span class="sp"></span><span>104 · nov/26</span></div>
+      <h3 style="margin-top:24px">O mês</h3>
+      <div class="row"><span>Aporte</span><span class="sp"></span><span class="mono">${money0(3003.06)}</span></div>
+      <div class="row"><span>Proventos</span><span class="sp"></span><span class="mono">${money0(1050)}</span></div>
+      <div class="row"><span>Transferência</span><span class="sp"></span><span>WEGE3 · 372</span></div>
+    </aside>
+  </div>`;
+}
+
+function ltStrategyEditions() {
+  const rows = ED_STAGED.entries.map((e) => {
+    const b = ED_ACTIVE.entries.find((x) => x.ticker === e.ticker);
+    const w = b.weight !== e.weight;
+    const p = b.target_price !== e.target_price;
+    const f = b.do_not_trade !== e.do_not_trade;
+    return `<tr>
+      <td><span class="tk">${e.ticker}</span></td>
+      <td>${w ? `<span class="old">${b.weight}%</span><span class="arrow">→</span><span class="new">${e.weight}%</span>` : `<span>${e.weight}%</span>`}</td>
+      <td>${p ? `<span class="old">${money(b.target_price)}</span><span class="arrow">→</span><span class="new">${money(e.target_price)}</span>` : `<span>${money(e.target_price)}</span>`}</td>
+      <td>${e.rating}</td>
+      <td>${f ? `<span class="lt-tag flag">${e.do_not_trade ? "não operar" : "operar"}</span>` : `<span class="lt-lt">${b.do_not_trade ? "não operar" : "operar"}</span>`}</td>
+      <td>${w || p || f ? '<span class="lt-tag changed">alterada</span>' : '<span class="lt-lt">—</span>'}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="lt-split">
+    <div>
+      <table class="lt-diff">
+        <tr><th>Ativo</th><th>Peso</th><th>Preço-alvo</th><th>Rating</th><th>Operar</th><th>Diff</th></tr>
+        ${rows}
+      </table>
+      <p class="lt-note">Promover a edição 104 substitui a ativa. O plano de novembro só pega os novos pesos no próximo recálculo — a edição não reescreve o plano aberto.</p>
+    </div>
+    <aside class="lt-side">
+      <h3>O que mudou</h3>
+      <div class="row"><span>Pesos</span><span class="sp"></span><b>2</b></div>
+      <div class="row"><span>Preços-alvo</span><span class="sp"></span><b>5</b></div>
+      <div class="row"><span>Não operar</span><span class="sp"></span><b>1 · VALE3</b></div>
+      <p class="lt-note" style="margin-top:14px">Não operar não vende a posição: o déficit continua visível, mas a fatia não gera compra. As cotas só saem para financiar outra compra.</p>
+    </aside>
+  </div>`;
+}
+
+function ltStrategyAttribution() {
+  const attr = DIV.tickers.map((t) => F.strategies.attribution.find((a) => a.ticker === t.ticker)).filter(Boolean);
+  return `<div class="lt-split">
+    <div>
+      <table class="lt-table">
+        <tr><th>Ativo</th><th class="r">Custódia</th><th class="r">Nesta estratégia</th><th class="r">Fora</th><th class="r">Outra estratégia</th></tr>
+        ${attr.map((a) => {
+          const own = a.slices.find((s) => s.strategy_name === "Dividendos BR");
+          const other = a.slices.find((s) => s.strategy_name !== "Dividendos BR");
+          return `<tr><td><span class="tk">${a.ticker}</span></td><td class="r mono">${num(a.custody_quantity)}</td><td class="r mono">${num(own ? own.quantity : 0)}</td><td class="r mono">${num(a.unattributed_quantity + (other ? other.quantity : 0))}</td><td class="r">${other ? `${other.strategy_name} · ${num(other.quantity)}` : "—"}</td></tr>`;
+        }).join("")}
+      </table>
+      <p class="lt-note">A custódia não se move numa transferência de atribuição. O que muda é a coluna <b>Nesta estratégia</b>: hoje WEGE3 está inteiro em Legado Ações.</p>
+      <div class="lt-quote"><b>Transferência pendente · WEGE3 · 372 cotas.</b> Legado Ações → Dividendos BR, ${money(19492.8)}. Um bucket manual como doador sempre espera uma decisão humana, qualquer que seja o valor.</div>
+    </div>
+    <aside class="lt-side">
+      <h3>Reconciliação</h3>
+      <p class="lt-note" style="margin-top:0">A coluna Fora mostra o que está na custódia mas não nesta fatia. É ali que aparecem custódias partidas e atribuições pendentes.</p>
+      <div class="row"><span>ITSA4</span><span class="sp"></span><span>12.000 · completa</span></div>
+      <div class="row"><span>WEGE3</span><span class="sp"></span><span>1.000 · Legado</span></div>
+    </aside>
+  </div>`;
+}
+
+function ltStrategyShare() {
+  const total = DIV.tickers.reduce((s, t) => s + t.actual, 0);
+  return `<div class="lt-split">
+    <div>
+      <table class="lt-table">
+        <tr><th>Ativo</th><th class="r">Valor</th><th class="r">Peso na estratégia</th><th class="r">Peso no alvo</th></tr>
+        ${DIV.tickers.map((t) => `<tr><td><span class="tk">${t.ticker}</span></td><td class="r mono">${money0(t.actual)}</td><td class="r mono">${pct((t.actual / total) * 100, 1)}</td><td class="r mono">${t.target}%</td></tr>`).join("")}
+        <tr class="total"><td>Total</td><td class="r mono">${money0(total)}</td><td class="r mono">100%</td><td class="r mono">100%</td></tr>
+      </table>
+      <p class="lt-note">A fatia de Dividendos BR é 29,5% da carteira e 60,1% da classe Ações. É a maior estratégia do portfólio e a que mais se afasta do alvo.</p>
+    </div>
+    <aside class="lt-side">
+      <h3>Contexto</h3>
+      <div class="row"><span>Fatia na carteira</span><span class="sp"></span><span class="mono">29,5%</span></div>
+      <div class="row"><span>Fatia na classe</span><span class="sp"></span><span class="mono">60,1%</span></div>
+      <div class="row"><span>Alvo na classe</span><span class="sp"></span><span class="mono">52%</span></div>
+      <div class="row"><span>Drift</span><span class="sp"></span><span class="mono">+3,09 pp</span></div>
+      <h3 style="margin-top:24px">Outubro</h3>
+      <div class="row"><span>Início</span><span class="sp"></span><span class="mono">${money0(DIV_PERF.value_start)}</span></div>
+      <div class="row"><span>Fim</span><span class="sp"></span><span class="mono">${money0(DIV_PERF.value_end)}</span></div>
+      <div class="row"><span>Retorno</span><span class="sp"></span><span class="mono" style="color:var(--loss)">${spct(DIV_PERF.return_percentage)}</span></div>
+    </aside>
+  </div>`;
+}
+
+function ltChart() {
+  const W = 700, H = 250, L = 48, R = 18, T = 16, B = 34;
+  const idx = [];
+  let acc = 100;
+  for (const m of MONTHS) { acc *= 1 + (m.decomposition.return_percentage ?? 0) / 100; idx.push(acc); }
+  const bench = [];
+  let b = null;
+  for (let i = 0; i < MONTHS.length; i++) {
+    if (MONTHS[i].benchmark_return == null) continue;
+    if (b === null) b = idx[i - 1] ?? 100;
+    b *= 1 + MONTHS[i].benchmark_return / 100;
+    bench.push({ i, v: b });
+  }
+  const vals = [...idx, ...bench.map((p) => p.v)];
+  const lo = Math.min(...vals) - 1.4;
+  const hi = Math.max(...vals) + 1.4;
+  const x = (i) => L + (i / (MONTHS.length - 1)) * (W - L - R);
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const line = idx.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const area = `M${x(0).toFixed(1)} ${y(lo).toFixed(1)} ` + idx.map((v, i) => `L${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ") + ` L${x(MONTHS.length - 1).toFixed(1)} ${y(lo).toFixed(1)} Z`;
+  const benchLine = bench.length ? `M${x(bench[0].i - 1).toFixed(1)} ${y(idx[bench[0].i - 1] ?? 100).toFixed(1)} ` + bench.map((p) => `L${x(p.i).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ") : "";
+  let grid = "";
+  for (let k = 0; k < 4; k++) {
+    const v = lo + (hi - lo) * (k / 3);
+    grid += `<line x1="${L}" y1="${y(v).toFixed(1)}" x2="${W - R}" y2="${y(v).toFixed(1)}" stroke="#e2dcce" stroke-width="1"/>`;
+    grid += `<text x="${L - 8}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" fill="#948e82" font-size="10" font-family="ui-monospace,monospace">${v.toFixed(0)}</text>`;
+  }
+  const labels = MONTHS.map((m, i) => (i % 3 === 0 || i === MONTHS.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" fill="#948e82" font-size="10" font-family="ui-sans-serif,system-ui,sans-serif">${monthLabel(m.period)}</text>` : "")).join("");
+  const last = bench[bench.length - 1];
+  const annot = last ? `<circle cx="${x(last.i).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="3" fill="#8b8578"/><text x="${(x(last.i) - 8).toFixed(1)}" y="${(y(last.v) - 9).toFixed(1)}" text-anchor="end" fill="#5f5b52" font-size="10" font-family="ui-sans-serif,system-ui,sans-serif">benchmark</text>` : "";
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Retorno acumulado da carteira em 12 meses, base 100">${grid}
+    <path d="${area}" fill="#0e5c4a" opacity="0.07"/>
+    <path d="${line}" fill="none" stroke="#0e5c4a" stroke-width="2" stroke-linejoin="round"/>
+    <path d="${benchLine}" fill="none" stroke="#8b8578" stroke-width="1.4" stroke-dasharray="4 4"/>
+    ${annot}${labels}</svg>`;
+}
+
+function ltAnalysis() {
+  const tab = ANALYSIS_TABS[state.t] ? state.t : "performance";
+  return `
+  <div class="lt-eyebrow">Resultados <span class="sep">·</span> análise <span class="sep">·</span> 12 meses até outubro de 2026</div>
+  <h1>Performance</h1>
+  <p class="lt-stand">A carteira acumulou <b>4,1% ao ano</b> na era de snapshots. Outubro ficou praticamente plano e perdeu do blend de benchmark, que só passou a existir em agosto.</p>
+  <div class="lt-tabs">${Object.entries(ANALYSIS_TABS).map(([k, label]) => `<button class="${k === tab ? "on" : ""}" data-go="t:${k}">${label}</button>`).join("")}</div>
+  ${tab === "performance" ? ltPerformance() : tab === "proventos" ? ltIncome() : ltTax()}`;
+}
+
+function ltPerformance() {
+  return `
+  <div class="lt-kv">
+    <div><div class="k">Retorno 12m</div><div class="v">+4,1%</div><div class="s">XIRR do período</div></div>
+    <div><div class="k">Benchmark</div><div class="v">+1,75%</div><div class="s">só em out/26</div></div>
+    <div><div class="k">Proventos</div><div class="v">R$ 27.500</div><div class="s">recebidos em 12 meses</div></div>
+    <div><div class="k">Aportes</div><div class="v">R$ 215.000</div><div class="s">capital novo</div></div>
+  </div>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Doze meses, base 100</h2><span class="sp"></span><span class="meta">a linha tracejada cobre ago–out</span></div>
+    <div class="lt-chart">${ltChart()}</div>
+    <p class="lt-cap">A linha cheia é a carteira; a tracejada é o blend de benchmark, <b>que só cobre 3 dos 12 meses</b>. Comparar o acumulado de 12 meses com o de 3 seria enganoso, então a linha começa em agosto. Ago/26 não tem valor inicial, por isso entra plano no acumulado.</p>
+  </section>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Mês a mês</h2><span class="sp"></span><span class="meta">fonte: snapshot a partir de ago/26</span></div>
+    <table class="lt-table">
+      <tr><th>Mês</th><th class="r">Aportes</th><th class="r">Proventos</th><th class="r">Retorno</th><th class="r">Benchmark</th><th class="r">Delta</th><th class="r">Fonte</th></tr>
+      ${[...MONTHS].reverse().map((m) => {
+        const d = m.decomposition;
+        const ret = d.return_percentage;
+        const comparable = m.benchmark_return != null && ret != null;
+        return `<tr><td>${monthLabel(m.period)}</td><td class="r mono">${d.net_aportes ? money0(d.net_aportes) : "—"}</td><td class="r mono">${d.net_income ? money0(d.net_income) : "—"}</td><td class="r mono ${ret != null ? ltRetClass(ret) : "lt-lt"}">${ret != null ? spct(ret) : "—"}</td><td class="r mono">${m.benchmark_return != null ? spct(m.benchmark_return) : "—"}</td><td class="r mono">${comparable ? pp(ret - m.benchmark_return) : "—"}</td><td class="r lt-lt">${m.source}</td></tr>`;
+      }).join("")}
+    </table>
+  </section>`;
+}
+
+function ltIncome() {
+  return `
+  <div class="lt-kv">
+    <div><div class="k">Proventos 12m</div><div class="v">R$ 27.500</div><div class="s">recebidos</div></div>
+    <div><div class="k">Nov/26 a receber</div><div class="v">R$ 2.110</div><div class="s">JCP + rendimento</div></div>
+    <div><div class="k">Rendimento médio</div><div class="v">R$ 2.292</div><div class="s">por mês</div></div>
+    <div><div class="k">Maior fonte</div><div class="v">MXRF11</div><div class="s">FIIs · rendimento</div></div>
+  </div>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Lançamentos recentes</h2><span class="sp"></span><span class="meta">janela de 12 meses</span></div>
+    <table class="lt-table">
+      <tr><th>Data</th><th>Ativo</th><th>Tipo</th><th class="r">Bruto</th><th class="r">Retido</th><th class="r">Líquido</th><th class="r">Status</th></tr>
+      ${[...INCOME].slice(-9).reverse().map((i) => `<tr><td class="mono">${i.date.slice(8)}/${i.date.slice(5, 7)}</td><td><span class="tk">${i.ticker}</span></td><td>${i.type === "JCP" ? "JCP" : i.type === "FUND_INCOME" ? "Rendimento" : "Dividendo"}</td><td class="r mono">${money(i.gross_amount)}</td><td class="r mono">${i.retained_amount ? money(i.retained_amount) : "—"}</td><td class="r mono">${money(i.net_amount)}</td><td class="r lt-lt">${i.status === "PAYABLE" ? "a pagar" : i.status === "ANNOUNCED" ? "anunciado" : "recebido"}</td></tr>`).join("")}
+    </table>
+    <p class="lt-note">A receber é prospectivo: um lançamento <b>anunciado</b> ou <b>a pagar</b> aparece mesmo quando a data cai fora da janela.</p>
+  </section>`;
+}
+
+function ltTax() {
+  const m = TAX.meter;
+  return `
+  <div class="lt-kv">
+    <div><div class="k">Vendas de ações</div><div class="v">${money0(m.gross_sales)}</div><div class="s">isenção de 20.000 excedida</div></div>
+    <div><div class="k">Ganho realizado</div><div class="v">${money0(m.realized_gain)}</div><div class="s">swing trade</div></div>
+    <div><div class="k">DARF</div><div class="v">${money(m.tax)}</div><div class="s">vence 30/11/2026</div></div>
+    <div><div class="k">Prejuízo a compensar</div><div class="v">${money0(500)}</div><div class="s">swing · fecha nov/26</div></div>
+  </div>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Apuração de outubro</h2><span class="sp"></span><span class="meta">fechada</span></div>
+    <table class="lt-table">
+      <tr><th>Tipo</th><th class="r">Vendas</th><th class="r">Ganhos</th><th class="r">Prejuízos</th><th class="r">Resultado</th></tr>
+      ${TAX.realized.map((r) => `<tr><td>${r.kind === "SWING" ? "Swing trade" : r.kind === "DAY_TRADE" ? "Day trade" : "FII"}</td><td class="r mono">${money(r.gross_sales)}</td><td class="r mono">${money(r.gains)}</td><td class="r mono">${money(r.losses)}</td><td class="r mono">${money(r.result)}</td></tr>`).join("")}
+    </table>
+    <p class="lt-note">Vendas de ações de <b>${money(m.gross_sales)}</b> cruzaram a isenção. O ganho de ${money0(m.realized_gain)} menos ${money0(700)} de prejuízo acumulado dá ${money0(m.taxable_gain)} × 15% = <b>${money(m.tax)}</b>. As vendas de FII ficam fora do medidor de ações.</p>
+  </section>
+  <section class="lt-sec">
+    <div class="lt-sec-head"><h2>Compensação</h2><span class="sp"></span><span class="meta">saldos que atravessam o mês</span></div>
+    <table class="lt-table">
+      <tr><th>Tipo</th><th class="r">Saldo inicial</th><th class="r">Aplicado</th><th class="r">Saldo final</th></tr>
+      ${TAX.carry.map((c) => `<tr><td>${c.kind === "SWING" ? "Swing trade" : c.kind === "DAY_TRADE" ? "Day trade" : "FII"}</td><td class="r mono">${money(c.opening_balance)}</td><td class="r mono">${money(c.loss_applied)}</td><td class="r mono">${money(c.closing_balance)}</td></tr>`).join("")}
+    </table>
+  </section>`;
+}
+
+/* ============================ token board ============================ */
+
+const TK_SWATCHES = {
+  dark: [
+    ["--bg", "#0b0e12", "fundo"], ["--sur", "#11161c", "painel"], ["--line", "#232c37", "linha"], ["--ink", "#e7edf4", "texto"],
+    ["--accent", "#78a9ff", "ação"], ["--gain", "#54c98c", "retorno +"], ["--loss", "#f0736a", "retorno −"], ["--warn", "#d9a45e", "atenção"],
+  ],
+  light: [
+    ["--paper", "#faf8f3", "papel"], ["--panel", "#fffefb", "painel"], ["--line", "#e2dcce", "linha"], ["--ink", "#1b1a17", "texto"],
+    ["--accent", "#0e5c4a", "ação"], ["--gain", "#1d7a4f", "retorno +"], ["--loss", "#a63a2b", "retorno −"], ["--warn", "#8a6417", "atenção"],
+  ],
+};
+
+function tkCard(direction) {
+  const dark = direction === "dark";
+  const sw = (TK_SWATCHES[direction]).map(([t, hex, label]) => `<div class="tk-sw"><div class="c" style="background:${hex}"></div><div class="l"><b>${t}</b>${hex} · ${label}</div></div>`).join("");
+  return `<article class="tk-card ${dark ? "dark" : ""}">
+    <div class="tk-card-top">
+      <div class="k">${dark ? "Direção A" : "Direção B"}</div>
+      <h2>${dark ? "Console" : "Documento"}</h2>
+      <p>${dark
+        ? "Escuro, denso, numerais monoespaçados. Tabelas como superfície principal, cor só onde há significado, gráfico de barras sobre grade fina."
+        : "Claro, editorial, serifada nos títulos. Espaço em branco generoso, cartões de afirmação, linha acumulada com legenda em prosa."}</p>
+    </div>
+    <div class="tk-body">
+      <div>
+        <div class="tk-row-label">Cor</div>
+        <div class="tk-swatches">${sw}</div>
+      </div>
+      <div>
+        <div class="tk-row-label">Tipografia</div>
+        <div class="tk-type">
+          <div class="t1">R$ 1.489.140</div>
+          <div class="t2">${dark ? "Corpo 12,5 px · rótulos 9,5 px em caixa alta · tudo tabular" : "Corpo 14,5 px serif · títulos 38 px · interface em sans 12,5 px"}</div>
+          <div class="t3">${dark ? "11,5 px monoespaçado, alinhado à direita" : "mono apenas para números, dentro de tabelas sans"}</div>
+        </div>
+      </div>
+      <div>
+        <div class="tk-row-label">Densidade</div>
+        <div class="tk-sample">
+          <div class="r"><span>${dark ? "ITSA4" : "Itaúsa"}</span><span class="sp"></span><span>R$ 121.200</span><span class="bar"><i style="width:${dark ? 82 : 64}%"></i></span></div>
+          <div class="r"><span>${dark ? "BBAS3" : "BB Seguridade"}</span><span class="sp"></span><span>R$ 109.600</span><span class="bar"><i style="width:${dark ? 74 : 58}%"></i></span></div>
+          <div class="r"><span>${dark ? "VALE3" : "Vale"}</span><span class="sp"></span><span>R$ 91.800</span><span class="bar"><i style="width:${dark ? 62 : 48}%"></i></span></div>
+        </div>
+      </div>
+      <div>
+        <div class="tk-row-label">Sinal e cor</div>
+        <div class="tk-sample">
+          <div class="r"><span class="${dark ? "" : "plus"}">${dark ? "+0,12%" : "+0,12% acima do alvo"}</span><span class="sp"></span><span class="${dark ? "" : "minus"}">${dark ? "−2,02%" : "−2,02% abaixo do alvo"}</span></div>
+          <div class="r"><span>${dark ? "déficit em azul" : "faltam R$ 23.580"}</span><span class="sp"></span><span>${dark ? "superávit em âmbar" : "sobram R$ 30.190"}</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="tk-row-label">Gráfico</div>
+        <div class="tk-sample">
+          <div class="r" style="height:44px;align-items:flex-end;gap:3px;padding-bottom:4px">
+            ${[38, 52, 30, 62, 44, 56, 70, 48, 60, 36, 54, 42].map((h, i) => `<span style="display:inline-block;width:12px;height:${dark ? Math.round(h * 0.42) : Math.round(h * 0.55)}px;background:${dark ? (i % 4 === 0 ? "#7a3a35" : "#2f6a52") : "#0e5c4a"};opacity:${dark ? 1 : 0.55}"></span>`).join("")}
+            <span class="sp"></span><span style="font-size:9px">${dark ? "barras · benchmark tracejado" : "linha acumulada · área 7%"}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>`;
+}
+
+function tkTokens() {
+  return `<div class="tk"><div class="tk-page">
+    <div class="tk-head">
+      <div>
+        <h1>Duas direções, uma decisão</h1>
+        <p>A mesma informação, os mesmos quatro ecrãs, duas linguagens. O que muda não é a paleta: muda a densidade, a hierarquia, o tratamento do gráfico e a forma de dizer <i>sinal</i>.</p>
+      </div>
+      <span class="sp"></span>
+      <a class="tk-link" href="?${params({ v: "dark", s: "overview" })}">abrir A · Console →</a>
+      <a class="tk-link" href="?${params({ v: "light", s: "overview" })}">abrir B · Documento →</a>
+    </div>
+    <div class="tk-grid">${tkCard("dark")}${tkCard("light")}</div>
+    <table class="tk-matrix">
+      <tr><th style="width:150px">Critério</th><th>A · Console</th><th>B · Documento</th></tr>
+      <tr><td>Densidade</td><td>Alta: 26 px por linha, seis números no topo, tabela sem cartões.</td><td>Média: 10 px de respiro por linha, três cartões de afirmação, seções separadas por fio.</td></tr>
+      <tr><td>Leitura longa</td><td>Fadiga menor em sessão noturna, mas exige disciplina de contraste e cor.</td><td>Mais confortável em leitura diurna e em prosa; perde comparação rápida entre muitas linhas.</td></tr>
+      <tr><td>Gráficos</td><td>Barras mensais sobre grade, benchmark tracejado só onde existe. Densidade de comparação.</td><td>Linha acumulada base 100 com área e legenda em prosa, com a cobertura do benchmark declarada na legenda.</td></tr>
+      <tr><td>Sinal e cor</td><td>Cor com significado fixo (azul = abaixo, âmbar = acima, verde/vermelho = retorno) e sinal numérico.</td><td>Cor restrita ao retorno; a distância é escrita em palavras — "faltam", "sobram".</td></tr>
+      <tr><td>Tabelas × cartões</td><td>Tabela é a unidade; cartão só para exceção e atenção.</td><td>Cartões carregam as três afirmações do mês; tabela é apoio, com mais espaço morto.</td></tr>
+      <tr><td>Navegação</td><td>Sidebar fixa de 198 px com grupos e contagem de atenção.</td><td>Barra superior textual, sem contagem persistente; a atenção vive na página.</td></tr>
+      <tr><td>Risco</td><td>Pode virar ruído se o contraste e a cor não forem disciplinados.</td><td>Empurra o uso diário para scroll e esconde comparação em telas largas.</td></tr>
+    </table>
+    <div class="tk-rec">
+      <div class="k">Recomendação</div>
+      <h3>A · Console como linguagem única, com três empréstimos do documento.</h3>
+      <p>O uso é contínuo, num desktop, por um usuário que compara muitos números por sessão. Tabela, densidade e sinal fixo servem esse uso melhor do que cartões editoriais. A paleta escura também deixa o gráfico e os alertas mais legíveis sem competir com o conteúdo.</p>
+      <p>Três coisas viajam do documento para o console: (1) a frase de abertura do mês na Visão geral, em texto e não em cartão; (2) os rótulos escritos ao lado da cor — "faltam", "sobram" — nas tabelas de alocação, para não depender só de azul e âmbar; (3) as legendas em prosa sob os gráficos de Análise, incluindo a cobertura parcial do benchmark.</p>
+      <p>Tokens que carregam a decisão: fundo <span class="tk-link">#0b0e12</span>, painel <span class="tk-link">#11161c</span>, linha <span class="tk-link">#232c37</span>, texto <span class="tk-link">#e7edf4</span>, ação <span class="tk-link">#78a9ff</span>, retorno+ <span class="tk-link">#54c98c</span>, retorno− <span class="tk-link">#f0736a</span>, atenção <span class="tk-link">#d9a45e</span>; corpo 12,5 px sans, número 11,5 px mono tabular, rótulo 9,5 px mono em caixa alta; linha de tabela 26 px; painel com raio 3 px e fio de 1 px; gráfico de barras sobre grade de 1 px.</p>
+      <p>Se a leitura longa e o hábito diurno pesarem mais que a comparação densa, B é a escolha defensável: a linguagem está inteira nos quatro ecrãs, não é um tema aplicado por cima.</p>
+    </div>
+  </div></div>`;
+}
+
+/* ============================ render / switcher ============================ */
+
+function render() {
+  const app = document.getElementById("app");
+  const { v, s } = state;
+  if (s === "tokens") {
+    app.innerHTML = tkTokens();
+  } else if (v === "both") {
+    app.innerHTML = `<div class="split">
+      <section class="pane"><div class="pane-label"><b>A · Console</b><span class="tag">${SCREENS[s]}</span><span class="sp"></span><span>dark · denso</span></div>${dkShell(s)}</section>
+      <section class="pane"><div class="pane-label"><b>B · Documento</b><span class="tag">${SCREENS[s]}</span><span class="sp"></span><span>light · editorial</span></div>${ltShell(s)}</section>
+    </div>`;
+  } else if (v === "dark") {
+    app.innerHTML = dkShell(s);
+  } else {
+    app.innerHTML = ltShell(s);
+  }
+  renderBar();
+}
+
+function renderBar() {
+  const { v, s } = state;
+  const dir = Object.entries(DIRS).map(([k, label]) => `<button class="${k === v ? "on" : ""}" data-v="${k}">${label}</button>`).join("");
+  const screen = Object.entries(SCREENS).map(([k, label]) => `<button class="${k === s ? "on" : ""}" data-s="${k}">${label}</button>`).join("");
+  document.getElementById("pbar").innerHTML = `
+    <div class="group"><span class="lbl">Direção</span>${dir}</div>
+    <div class="group"><span class="lbl">Tela</span>${screen}</div>
+    <span class="sp"></span>
+    <span class="hint">ticket <b>#355</b> · dados fictícios · <b>lado a lado</b> compara no mesmo scroll</span>`;
+}
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-v],[data-s],[data-go]");
+  if (!el) return;
+  if (el.dataset.v) { state = { ...state, v: el.dataset.v }; go({ v: el.dataset.v }); }
+  else if (el.dataset.s) { state = { ...state, s: el.dataset.s, t: "" }; go({ s: el.dataset.s, t: "" }); }
+  else if (el.dataset.go) {
+    const [key, val] = el.dataset.go.split(":");
+    if (key === "t") go({ t: val });
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  if (document.activeElement.isContentEditable) return;
+  const keys = Object.keys(SCREENS);
+  const i = keys.indexOf(state.s);
+  if (e.key === "ArrowRight") go({ s: keys[(i + 1) % keys.length], t: "" });
+  if (e.key === "ArrowLeft") go({ s: keys[(i - 1 + keys.length) % keys.length], t: "" });
+});
+
+render();
+</script>
+</body>
+</html>

@@ -449,3 +449,39 @@ What is dropped: A's review inside the import detail and B's inline review insid
 pages. A and B stay in this file as comparison evidence only; the assembled prototype (#357) and the
 spec (#358) take C. The apply-lands-on-destination choice also fixes the "back to the object" question
 the ticket asked: the owner arrives there directly, with the record's provenance one link away.
+
+## Visual directions (wayfinder ticket #355)
+
+[`visual-directions-prototype.html`](visual-directions-prototype.html) puts the same four key screens —
+the Carteira landing, Alocação, the Dividendos BR detail and Análise · Performance — in two visual
+languages on the same fixture. Serve the folder as above and open
+`http://localhost:8765/visual-directions-prototype.html`; append
+`?v=dark|light|both&s=overview|allocation|strategy|analysis|tokens&t=<tab>` to reproduce any state.
+The default is **both** (the two directions side by side) on the landing.
+
+- `?v=dark` — **A · Console**: calm dark console. 198 px sidebar with attention counts, six-cell
+  status strip, 26 px table rows, mono numerals, colour with fixed meaning (blue = below target,
+  amber = above, green/red = return), bars over a hairline grid and prose only where it changes the
+  reading.
+- `?v=light` — **B · Documento**: light, document-like analytical surface. Text-only top nav, serif
+  display headings, a written standfirst for the month, statement stat bands, generous table rows,
+  colour only on returns, and a base-100 cumulative line with an annotated benchmark that declares
+  its own partial coverage.
+- `?v=both` — the two panes side by side, each with its own chrome. Each pane reflows at half width
+  (the dark rail narrows, its tables drop the bar column, the document's split sections stack), but
+  the full-screen views are the honest density reading.
+- `?s=tokens` — a direction-agnostic board with both token sets (colour, type, density, chart and
+  sign/colour semantics), the comparison matrix and a recommendation. It links straight into either
+  full-screen direction.
+
+Both directions carry the same decisions already made upstream: the six-object IA and grouped
+sidebar (#350), strategies as first-class objects with the four detail tabs (#351), the plan as a
+six-step tool with one landing status line (#352), one Análise with Performance / Proventos /
+Impostos over a shared 12-month rail (#353), and the import wizard (#354). Tabs and the period rail
+are live in both directions; no mutation and no persistence.
+
+The recommendation the board carries: **A · Console as the single language**, with three borrowings
+from the document — the month's written standfirst on the landing, the worded distance ("faltam" /
+"sobram") beside the colour in allocation tables, and prose captions under the Análise charts that
+state the benchmark's partial coverage. If long daily reading outweighs dense comparison, B is the
+defensible alternative; the two are complete languages, not themes on one layout.
