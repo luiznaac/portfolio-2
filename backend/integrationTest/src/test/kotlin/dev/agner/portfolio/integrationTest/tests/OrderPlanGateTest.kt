@@ -3,6 +3,7 @@ package dev.agner.portfolio.integrationTest.tests
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.listedasset.model.Position
@@ -75,7 +76,7 @@ class OrderPlanGateTest : StringSpec({
     }
 })
 
-private suspend fun orders() = getBean<HttpClient>().get("http://localhost:8080/month/current/orders")
+private suspend fun orders() = getBean<HttpClient>().get("${appBaseUrl()}/month/current/orders")
 
 private suspend fun openMonth() {
     getBean<MonthService>().open(

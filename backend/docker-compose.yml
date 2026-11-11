@@ -9,7 +9,7 @@ services:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
       - MYSQL_DATABASE=portfolio
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-8112}:3306"
     volumes:
       - portfolio-mysql-data:/var/lib/mysql
 

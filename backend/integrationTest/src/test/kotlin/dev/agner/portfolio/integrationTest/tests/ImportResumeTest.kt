@@ -3,6 +3,7 @@ package dev.agner.portfolio.integrationTest.tests
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.b3NegociacaoFixture
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.import.ImportService
@@ -116,7 +117,7 @@ private suspend fun upload(
     fileName: String,
     content: ByteArray,
     source: String = "B3_TRADES",
-): HttpResponse = getBean<HttpClient>().post("http://localhost:8080/imports") {
+): HttpResponse = getBean<HttpClient>().post("${appBaseUrl()}/imports") {
     setBody(
         MultiPartFormDataContent(
             formData {
@@ -147,12 +148,12 @@ private suspend fun reupload(
 }
 
 private suspend fun review(importId: Int) {
-    getBean<HttpClient>().post("http://localhost:8080/imports/$importId/review").status shouldBe
+    getBean<HttpClient>().post("${appBaseUrl()}/imports/$importId/review").status shouldBe
         HttpStatusCode.OK
 }
 
 private suspend fun apply(importId: Int) {
-    getBean<HttpClient>().post("http://localhost:8080/imports/$importId/apply").status shouldBe
+    getBean<HttpClient>().post("${appBaseUrl()}/imports/$importId/apply").status shouldBe
         HttpStatusCode.OK
 }
 
@@ -162,6 +163,6 @@ private suspend fun reviewAndApply(importId: Int) {
 }
 
 private suspend fun rows(importId: Int) =
-    json(getBean<HttpClient>().get("http://localhost:8080/imports/$importId/rows"))
+    json(getBean<HttpClient>().get("${appBaseUrl()}/imports/$importId/rows"))
 
 private suspend fun json(response: HttpResponse) = ObjectMapper().readTree(response.bodyAsText())

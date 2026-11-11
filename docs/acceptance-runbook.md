@@ -8,7 +8,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 |---|---|
 | start | `docker compose up -d mysql` |
 | ready | `docker compose exec mysql mysqladmin ping -h 127.0.0.1` |
-| port  | `3306` |
+| port  | `8112` |
 | stop  | `docker compose down` |
 | build | — |
 | env   | — |
@@ -19,8 +19,8 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 | | |
 |---|---|
 | start | `docker compose up -d app` |
-| ready | `curl -fsS http://localhost:8080/health/internal` |
-| port  | `8080` (API; web UI on `8081` for Browser intents) |
+| ready | `curl -fsS http://localhost:8110/health/internal` |
+| port  | `8110` (API; web UI on `8111` for Browser intents) |
 | stop  | `docker compose down` |
 | build | `docker compose build app` |
 | env   | `CHAMEIDOR_TOKEN=dev-portfolio-fixture-token` |
@@ -39,7 +39,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
   The `env` row above supplies the shell value Compose substitutes. Remove the override file at teardown.
 
-- **Port contention**: ports `3306` / `8080` / `8081` must be free — a running local dev stack (`npm run db`, IntelliJ backend, `npm run dev` frontend) occupies them; stop it before booting.
+- **Port contention**: ports `8112` / `8110` / `8111` must be free — a running local dev stack (`npm run db`, IntelliJ backend, `npm run dev` frontend) occupies them; stop it before booting.
 
 - **DB readiness**: the app section needs no runbook-level DB probe — the mysql section's ready probe plus compose `depends_on: mysql: condition: service_healthy` covers it; the app self-migrates an empty MySQL via Flyway (`bin/migrate` in `deploy/entrypoint.sh`) before serving.
 
@@ -409,12 +409,12 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   The curl reads are then deterministic at ids `9001`/`9002`:
 
   ```
-  curl -s http://localhost:8080/months/9002                   # the closed month's frozen snapshot
-  curl -s http://localhost:8080/months/9002/performance   # decomposition 1.5%, xirr, benchmark
-  curl -s http://localhost:8080/performance/series        # the two monthly points
-  curl -s http://localhost:8080/gaps                      # the seeded missing sale, realized_pending true
-  curl -s -X POST http://localhost:8080/gaps/9003/price -H 'Content-Type: application/json' -d '{"unit_price":18}'
-  curl -s -X POST http://localhost:8080/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
+  curl -s http://localhost:8110/months/9002                   # the closed month's frozen snapshot
+  curl -s http://localhost:8110/months/9002/performance   # decomposition 1.5%, xirr, benchmark
+  curl -s http://localhost:8110/performance/series        # the two monthly points
+  curl -s http://localhost:8110/gaps                      # the seeded missing sale, realized_pending true
+  curl -s -X POST http://localhost:8110/gaps/9003/price -H 'Content-Type: application/json' -d '{"unit_price":18}'
+  curl -s -X POST http://localhost:8110/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
 
 - **Computed performance era seed (#308)**: run this seed alone, immediately before the
@@ -478,7 +478,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   seed it once (there is no scheduler; freshness is lazy gap-fill plus this call):
 
   ```
-  curl -s -X POST 'http://localhost:8080/benchmarks/backfill?from=2018-01-01'
+  curl -s -X POST 'http://localhost:8110/benchmarks/backfill?from=2018-01-01'
   ```
 
   The response is one row per index — `{"indexes":[{"index":"IBOV","from":"2018-01-01","to":"…","points":…}]}`

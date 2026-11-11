@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
@@ -150,5 +151,5 @@ private suspend fun openMonth() {
 
 private suspend fun allocation(): JsonNode =
     ObjectMapper().readTree(
-        getBean<HttpClient>().get("http://localhost:8080/month/current/allocation").bodyAsText(),
+        getBean<HttpClient>().get("${appBaseUrl()}/month/current/allocation").bodyAsText(),
     )

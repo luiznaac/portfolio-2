@@ -1,5 +1,6 @@
 package dev.agner.portfolio.persistence.migration
 
+import dev.agner.portfolio.persistence.configuration.DATABASE_NAME
 import dev.agner.portfolio.persistence.configuration.mysqlJdbcUrl
 import org.flywaydb.core.Flyway
 
@@ -10,9 +11,9 @@ const val MIGRATIONS_LOCATION = "classpath:db/migration"
 // main thread for the process's entire lifetime, so a Spring-context hook would never run before
 // the server starts serving traffic anyway). A failed migration aborts the container instead of
 // leaving a half-migrated app answering requests.
-fun migrate(host: String, user: String, password: String) {
+fun migrate(host: String, port: Int, user: String, password: String) {
     Flyway.configure()
-        .dataSource(mysqlJdbcUrl(host), user, password)
+        .dataSource(mysqlJdbcUrl(host, port, DATABASE_NAME), user, password)
         .locations(MIGRATIONS_LOCATION)
         // A database that predates migrations is stamped at V1 rather than having it re-applied;
         // an empty schema just runs V1 normally.
@@ -24,5 +25,10 @@ fun migrate(host: String, user: String, password: String) {
 
 fun main() {
     val mysql = MysqlEnv.fromEnvironment()
-    migrate(mysql.host, mysql.user, mysql.password)
+    migrate(
+        host = mysql.host,
+        port = mysql.port,
+        user = mysql.user,
+        password = mysql.password,
+    )
 }

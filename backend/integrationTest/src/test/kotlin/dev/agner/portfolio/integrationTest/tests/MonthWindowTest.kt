@@ -3,6 +3,7 @@ package dev.agner.portfolio.integrationTest.tests
 import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.institution.InstitutionService
@@ -53,7 +54,7 @@ class MonthWindowTest : StringSpec({
         buy("2020-03-10", "10")
         buy("2020-12-15", "12")
 
-        val body = json(getBean<HttpClient>().get("http://localhost:8080/month/period-range"))
+        val body = json(getBean<HttpClient>().get("${appBaseUrl()}/month/period-range"))
 
         body.get("min").asText() shouldBe "2020-03"
         body.get("max").asText() shouldBe "2026-10"
@@ -66,7 +67,7 @@ class MonthWindowTest : StringSpec({
         val months = getBean<MonthService>()
         val client = getBean<HttpClient>()
 
-        client.post("http://localhost:8080/month") {
+        client.post("${appBaseUrl()}/month") {
             contentType(ContentType.Application.Json)
             setBody("""{"period":"2019-01","capital":1000.00,"floor":0.00}""")
         }.status shouldBe HttpStatusCode.BadRequest
@@ -116,7 +117,7 @@ class MonthWindowTest : StringSpec({
             loss = BigDecimal("100"),
         )
 
-        val close = client.post("http://localhost:8080/month/current/close")
+        val close = client.post("${appBaseUrl()}/month/current/close")
 
         close.status shouldBe HttpStatusCode.BadRequest
         ObjectMapper().readTree(close.bodyAsText()).get("error").asText() shouldBe "month-close-not-current"
@@ -139,14 +140,14 @@ class MonthWindowTest : StringSpec({
         buy("2026-01-10", "100", ticker = "PETR4")
         val client = getBean<HttpClient>()
 
-        val body = json(client.get("http://localhost:8080/tax/2020-12"))
+        val body = json(client.get("${appBaseUrl()}/tax/2020-12"))
 
         body.get("period").asText() shouldBe "2020-12"
         body.get("average_prices").get(0).get("ticker").asText() shouldBe "PETR4"
         body.get("average_prices").get(0).get("average_price").decimalValue()
             .compareTo(BigDecimal("10")) shouldBe 0
 
-        val outside = client.get("http://localhost:8080/tax/2020-02")
+        val outside = client.get("${appBaseUrl()}/tax/2020-02")
         outside.status shouldBe HttpStatusCode.BadRequest
         ObjectMapper().readTree(outside.bodyAsText()).get("error").asText() shouldBe
             "tax-period-outside-window"

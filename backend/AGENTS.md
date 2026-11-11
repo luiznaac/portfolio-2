@@ -33,7 +33,7 @@ application  →  http-api  →  usecase  ←  persistence
 - **`gateway`** — outbound integrations: `BacenGateway` (BACEN index rates API), `ChameidorGateway` (registers scheduled jobs with chameidor), plus health checks for both.
 - **`http-api`** — Ktor routes as `@Component` classes implementing `ControllerTemplate` (`BondController`, `BondOrderController`, `CheckingAccountController`, `ConsolidationController`, `IndexController`, `IndexValueController`, `UploadController`, `HealthController`), plus `PdfConverter`/`XlsxConverter` for report generation.
 - **`application`** — composition root (`Boot.kt`), `application.yaml`.
-- **`integrationTest`** — full-stack tests via docker-compose.
+- **`integrationTest`** — full-stack tests against a Testcontainers MySQL container and a probed-free app port.
 
 ## Design principles
 
@@ -90,7 +90,7 @@ npm run be:integration             # integration lane — :integrationTest; need
 ./gradlew testCoverageReport --no-daemon  # aggregated JaCoCo report
 ```
 
-The unit lane is the `unitTest` task — the same one the `test (backend, unit)` pre-commit hook runs — so committing never needs Docker; the integration lane stays in CI (`./gradlew clean build`, Docker present). `:integrationTest:dockerPreflight` probes the daemon before any spec starts and fails in seconds with a message that says how to proceed, instead of leaving an opaque Testcontainers error to be found in the HTML report.
+The unit lane is the `unitTest` task — the same one the `test (backend, unit)` pre-commit hook runs — so committing never needs Docker; the integration lane stays in CI (`./gradlew clean build`, Docker present). The harness takes its own ports: one `MySQLContainer` per test JVM (mapped host port), an OS-probed free app port published as the `ktor.port` system property, and a dynamic WireMock port — so two concurrent runs, or a run beside the dev stack, do not contend. `HarnessContractTest` pins that contract. `:integrationTest:dockerPreflight` probes the daemon before any spec starts and fails in seconds with a message that says how to proceed, instead of leaving an opaque Testcontainers error to be found in the HTML report.
 
 The integration lane pins docker-java's `api.version` to `1.44` on the `:integrationTest` test task (`integrationTest/build.gradle.kts`), so it needs **Docker 25 or newer** and no host env var beyond a reachable daemon. Testcontainers 1.21.3 / docker-java 3.4.2 negotiate a 1.32 default that Docker 29 rejects — 29.9 reports a 1.40 minimum, 29.0–29.2 a 1.44 one — failing before any spec with `Could not find a valid Docker environment`. 1.44 is the highest API every Docker 25+ daemon and every Docker 29.x accept; if a future daemon raises its minimum above 1.44, bump it there and rerun the lane.
 
@@ -107,7 +107,7 @@ The schema is versioned SQL under `persistence/src/main/resources/db/migration/V
 
 Changing a table: edit the `Table` object, then `./gradlew :persistence:generateMigrationScript -Pname=V5__add_something` (review the generated SQL — mechanical, won't detect a rename), then `./gradlew :persistence:migrate` locally. Full steps: salgadinhos' `kotlin-db-migration` skill.
 
-`integrationTest/.../tests/MigrationSchemaTest.kt` is the guard: `DockerComposeExtension` migrates the compose-provided MySQL to head before any spec runs, and this test asserts `MigrationUtils.statementsRequiredForDatabaseMigration(*allTables)` is empty. If a `Table` changes without a matching migration (or vice versa), this test fails.
+`integrationTest/.../tests/MigrationSchemaTest.kt` is the guard: `MySqlContainerExtension` migrates its MySQL container to head before any spec runs, and this test asserts `MigrationUtils.statementsRequiredForDatabaseMigration(*allTables)` is empty against the container's mapped port. If a `Table` changes without a matching migration (or vice versa), this test fails.
 
 ## Configuration
 
@@ -115,17 +115,18 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 
 | Key | Source | Notes |
 |---|---|---|
-| `ktor.port` / `ktor.wait` | fixed | `8080` / `true` |
+| `ktor.port` / `ktor.wait` | `KTOR_PORT` / fixed | `${KTOR_PORT:8110}` (portfolio-2's api role) / `true` |
 | `mysql.host` / `mysql.user` / `mysql.password` | `MYSQL_HOST` / `MYSQL_USER` / `MYSQL_PASSWORD` | required |
+| `mysql.port` | `MYSQL_PORT` | `${MYSQL_PORT:8112}` (portfolio-2's mysql role); `DatabaseConfig`, `Migrator` and `MysqlEnv` share the fallback |
 | `gateways.bacen.host` | fixed | `https://api.bcb.gov.br` |
-| `gateways.chameidor.host` | fixed (overridable) | `http://localhost:8081` locally — chameidor must be running separately for scheduling to work end-to-end |
+| `gateways.chameidor.host` | fixed (overridable) | `http://localhost:8100` locally — chameidor's **API** role (its web role only proxies `/api/`, so `/tasks/one-time` would hit the SPA fallback); chameidor must be running separately for scheduling to work end-to-end |
 | `gateways.chameidor.token` | `CHAMEIDOR_TOKEN` | required — portfolio's Bearer token in chameidor's external_systems registry (dev fixture: `dev-portfolio-fixture-token`) |
 | `gateways.cotahist.host` | fixed | `https://bvmf.bmfbovespa.com.br` — B3 COTAHIST daily file (ticker catalog + EOD quotes) |
 | `gateways.sgs.host` | fixed (overridable) | `https://api.bcb.gov.br` — BCB SGS benchmark series for the rate indexes (CDI 12, IPCA 433); `application-test.yaml` points it at WireMock |
 | `gateways.brapi.host` | fixed (overridable) | `https://brapi.dev` — IBOV history; the free plan clamps to three months, so the store falls through to Yahoo |
 | `gateways.brapi.token` | `BRAPI_TOKEN` | optional — a paid token lifts brapi's three-month clamp; absence is the free tier, not a boot failure |
 | `gateways.yahoo.host` | fixed (overridable) | `https://query1.finance.yahoo.com` — IBOV fallback (`^BVSP`) for the years brapi cannot serve |
-| `app-own-host` | fixed | `localhost:8080` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
+| `app-own-host` | fixed | `localhost:8110` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 
 ## Build, run, deploy
 
@@ -135,9 +136,9 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 ./gradlew testCoverageReport --no-daemon
 ```
 
-Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the repo root (or `npm run db`) — MySQL 9.4.0 only, database `portfolio`, empty — run `./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`, `MYSQL_USER=root`, `MYSQL_PASSWORD=`. If you need scheduled-job registration to actually fire, also run chameidor locally on port `8081` and set `CHAMEIDOR_TOKEN` to the token registered for `portfolio` in chameidor (`dev-portfolio-fixture-token` against a local chameidor).
+Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the repo root (or `npm run db`) — MySQL only, database `portfolio`, empty, published on `8112` — run `./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`, `MYSQL_USER=root`, `MYSQL_PASSWORD=`. The app listens on `8110` (`KTOR_PORT`); see the repo README for the full four-row block. If you need scheduled-job registration to actually fire, also run chameidor locally on its API role (`8100`) and set `CHAMEIDOR_TOKEN` to the token registered for `portfolio` in chameidor (`dev-portfolio-fixture-token` against a local chameidor).
 
-Docker: the repo-root `Dockerfile` is a multi-stage build (frontend SPA → `gradle:8.14-jdk21` backend distribution → `eclipse-temurin:21-jre-jammy` runtime) that ships backend + built SPA in one image: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the SPA on `WEB_PORT`/8081, reverse-proxies `/api` → the app). The repo-root `docker-compose.yml` adds MySQL for full-stack runs; `backend/docker-compose.yml` is the MySQL-only file used by `integrationTest` (via Testcontainers) and by plain backend dev.
+Docker: the repo-root `Dockerfile` is a multi-stage build (frontend SPA → `gradle:8.14-jdk21` backend distribution → `eclipse-temurin:21-jre-jammy` runtime) that ships backend + built SPA in one image: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the SPA on `WEB_PORT`/8081, reverse-proxies `/api` → the app). The repo-root `docker-compose.yml` adds MySQL for full-stack runs; `backend/docker-compose.yml` is the MySQL-only file used by plain backend dev (the integration lane starts its own Testcontainers MySQL, not this compose file).
 
 ## Git & CI
 

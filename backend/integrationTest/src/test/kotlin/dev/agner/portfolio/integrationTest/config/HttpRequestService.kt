@@ -15,15 +15,24 @@ class BaseHttpRequestTemplate {
     var body: Any = emptyMap<String, String>()
 }
 
+// The app port is the one MySqlContainerExtension published for this run, so a request follows
+// the server instead of assuming a dev host port.
+fun appBaseUrl(): String {
+    val port = checkNotNull(System.getProperty("ktor.port")) {
+        "the integration harness has not published ktor.port"
+    }
+    return "http://localhost:$port"
+}
+
 suspend inline fun <reified T> getRequest(crossinline configure: BaseHttpRequestTemplate.() -> Unit) =
-    getBean<HttpClient>().get("http://localhost:8080") {
+    getBean<HttpClient>().get(appBaseUrl()) {
         url {
             path(BaseHttpRequestTemplate().apply(configure).path)
         }
     }.body<T>()
 
 suspend inline fun <reified T> postRequest(crossinline configure: BaseHttpRequestTemplate.() -> Unit) =
-    getBean<HttpClient>().post("http://localhost:8080") {
+    getBean<HttpClient>().post(appBaseUrl()) {
         url {
             path(BaseHttpRequestTemplate().apply(configure).path)
         }

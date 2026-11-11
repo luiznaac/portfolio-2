@@ -9,12 +9,16 @@ import dev.agner.portfolio.usecase.configuration.JsonMapper
 object HttpMockService {
 
     // A dynamic port keeps the suite clear of whatever else the machine runs on a fixed one. The app
-    // under test reaches the mocks through this port; DockerComposeExtension publishes it before the
-    // Spring context loads.
+    // under test reaches the mocks through this port; MySqlContainerExtension publishes it before
+    // the Spring context loads.
     private val server = WireMockServer(options().dynamicPort())
     private val mapper = JsonMapper.mapper
 
     val port: Int get() = server.port()
+
+    // The port is whatever the OS handed out for this run, so two concurrent suites never contend
+    // and a busy host port cannot fail the harness.
+    val baseUrl: String get() = server.baseUrl()
 
     init {
         server.start()

@@ -7,21 +7,17 @@ import org.springframework.context.annotation.Configuration
 
 const val DATABASE_NAME = "portfolio"
 
-// Shared by the Exposed connection below and by the Flyway migrator (persistence/migration/), which
-// runs in its own process before the app boots and so cannot read the Spring context. One
-// definition, so the two can't drift apart.
-fun mysqlJdbcUrl(host: String) = "jdbc:mysql://$host:3306/$DATABASE_NAME"
-
 @Configuration
 class DatabaseConfig {
 
     @Bean
     fun databaseConnection(
         @Value("\${mysql.host}") host: String,
+        @Value("\${mysql.port}") port: Int,
         @Value("\${mysql.user}") user: String,
         @Value("\${mysql.password}") password: String,
     ) = Database.connect(
-        url = mysqlJdbcUrl(host),
+        url = mysqlJdbcUrl(host = host, port = port, database = DATABASE_NAME),
         driver = "com.mysql.cj.jdbc.Driver",
         user = user,
         password = password,

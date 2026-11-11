@@ -51,8 +51,13 @@ RUN apt-get update \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log
 
+# The container-internal sides stay canonical: application.yaml's host-side default (8110) and
+# backend's dev mysql default (8112) are for a local run, so the image pins the container ports the
+# publish mapping and nginx/health probes target.
 ENV API_PORT=8080 \
-    WEB_PORT=8081
+    WEB_PORT=8081 \
+    KTOR_PORT=8080 \
+    MYSQL_PORT=3306
 
 COPY --from=builder /home/gradle/project/build/distributions/app/ /opt/app/
 COPY --from=frontend /fe/dist /var/www/portfolio

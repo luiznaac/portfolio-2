@@ -5,6 +5,7 @@ import com.github.tomakehurst.wiremock.http.RequestMethod
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.HttpMockService.configureResponses
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
@@ -71,7 +72,7 @@ class PerformanceTest : StringSpec({
         val february = seedTwoClosedMonths()
 
         val client = getBean<HttpClient>()
-        val response = client.get("http://localhost:8080/months/${february.id}/performance")
+        val response = client.get("${appBaseUrl()}/months/${february.id}/performance")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())
@@ -89,7 +90,7 @@ class PerformanceTest : StringSpec({
         seedTwoClosedMonths()
 
         val client = getBean<HttpClient>()
-        val response = client.get("http://localhost:8080/performance/series")
+        val response = client.get("${appBaseUrl()}/performance/series")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())
@@ -123,7 +124,7 @@ class PerformanceTest : StringSpec({
             listOf(Quote("PETR4", LocalDate.parse("2025-12-31"), BigDecimal("5"), QuoteSource.COTAHIST)),
         )
 
-        val response = getBean<HttpClient>().get("http://localhost:8080/performance/series")
+        val response = getBean<HttpClient>().get("${appBaseUrl()}/performance/series")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())
@@ -141,7 +142,7 @@ class PerformanceTest : StringSpec({
 
     "backfills: an OPENING seed covered by imported history is retired" {
         val client = getBean<HttpClient>()
-        client.post("http://localhost:8080/history/openings") {
+        client.post("${appBaseUrl()}/history/openings") {
             contentType(ContentType.Application.Json)
             setBody("""[{"ticker":"PETR4","quantity":100,"unit_price":10,"date":"2026-03-01"}]""")
         }.status shouldBe HttpStatusCode.OK
@@ -175,7 +176,7 @@ class PerformanceTest : StringSpec({
             ordinal = 1,
         )
 
-        val response = client.post("http://localhost:8080/history/backfill")
+        val response = client.post("${appBaseUrl()}/history/backfill")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())
@@ -191,7 +192,7 @@ class PerformanceTest : StringSpec({
         stubBenchmarks()
 
         val client = getBean<HttpClient>()
-        val response = client.post("http://localhost:8080/benchmarks/backfill?from=2026-01-01")
+        val response = client.post("${appBaseUrl()}/benchmarks/backfill?from=2026-01-01")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())
@@ -223,7 +224,7 @@ class PerformanceTest : StringSpec({
     "reports the benchmark freshness after a manual re-check" {
         stubBenchmarks()
 
-        val response = getBean<HttpClient>().post("http://localhost:8080/benchmarks/refresh")
+        val response = getBean<HttpClient>().post("${appBaseUrl()}/benchmarks/refresh")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())
@@ -233,7 +234,7 @@ class PerformanceTest : StringSpec({
     }
 
     "rejects a malformed backfill start" {
-        val response = getBean<HttpClient>().post("http://localhost:8080/benchmarks/backfill?from=yesterday")
+        val response = getBean<HttpClient>().post("${appBaseUrl()}/benchmarks/backfill?from=yesterday")
 
         response.status shouldBe HttpStatusCode.BadRequest
     }
@@ -248,7 +249,7 @@ class PerformanceTest : StringSpec({
         )
 
         val client = getBean<HttpClient>()
-        val response = client.get("http://localhost:8080/gaps")
+        val response = client.get("${appBaseUrl()}/gaps")
 
         response.status shouldBe HttpStatusCode.OK
         val body = ObjectMapper().readTree(response.bodyAsText())

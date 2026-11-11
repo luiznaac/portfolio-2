@@ -5,6 +5,7 @@ import com.github.tomakehurst.wiremock.http.RequestMethod
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.HttpMockService
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.cotahistRecord
 import dev.agner.portfolio.integrationTest.helpers.cotahistZip
 import dev.agner.portfolio.integrationTest.helpers.getBean
@@ -95,7 +96,7 @@ class CatalogClassificationTest : StringSpec({
         getBean<IPositionRepository>().save(position("MISS3", "5"))
 
         val before = ObjectMapper().readTree(
-            getBean<HttpClient>().get("http://localhost:8080/tickers/unclassified").bodyAsText(),
+            getBean<HttpClient>().get("${appBaseUrl()}/tickers/unclassified").bodyAsText(),
         )
         before.size() shouldBe 2
         before.get(0).get("ticker").asText() shouldBe "MISS3"
@@ -105,7 +106,7 @@ class CatalogClassificationTest : StringSpec({
         before.get(1).get("quantity").decimalValue().compareTo(BigDecimal("10")) shouldBe 0
 
         val written = ObjectMapper().readTree(
-            getBean<HttpClient>().put("http://localhost:8080/tickers/classification") {
+            getBean<HttpClient>().put("${appBaseUrl()}/tickers/classification") {
                 contentType(ContentType.Application.Json)
                 setBody("""{"classifications":{"XPTO3":"ACOES"}}""")
             }.bodyAsText(),
@@ -115,7 +116,7 @@ class CatalogClassificationTest : StringSpec({
         written.get(0).get("asset_class_override").asText() shouldBe "ACOES"
 
         val after = ObjectMapper().readTree(
-            getBean<HttpClient>().get("http://localhost:8080/tickers/unclassified").bodyAsText(),
+            getBean<HttpClient>().get("${appBaseUrl()}/tickers/unclassified").bodyAsText(),
         )
         after.size() shouldBe 1
         after.get(0).get("ticker").asText() shouldBe "MISS3"
@@ -125,7 +126,7 @@ class CatalogClassificationTest : StringSpec({
     "a batch that names a class a listed ticker cannot hold writes nothing" {
         getBean<IPositionRepository>().save(position("XPTO3", "10"))
 
-        val response = getBean<HttpClient>().put("http://localhost:8080/tickers/classification") {
+        val response = getBean<HttpClient>().put("${appBaseUrl()}/tickers/classification") {
             contentType(ContentType.Application.Json)
             setBody("""{"classifications":{"XPTO3":"ACOES","BOND1":"RENDA_FIXA"}}""")
         }
@@ -133,7 +134,7 @@ class CatalogClassificationTest : StringSpec({
         response.status shouldBe HttpStatusCode.BadRequest
 
         val queue = ObjectMapper().readTree(
-            getBean<HttpClient>().get("http://localhost:8080/tickers/unclassified").bodyAsText(),
+            getBean<HttpClient>().get("${appBaseUrl()}/tickers/unclassified").bodyAsText(),
         )
         queue.size() shouldBe 1
         queue.get(0).get("ticker").asText() shouldBe "XPTO3"
@@ -161,7 +162,7 @@ class CatalogClassificationTest : StringSpec({
         )
 
         val preview = ObjectMapper().readTree(
-            getBean<HttpClient>().get("http://localhost:8080/positions/legacy-attribution/preview")
+            getBean<HttpClient>().get("${appBaseUrl()}/positions/legacy-attribution/preview")
                 .bodyAsText(),
         )
 
@@ -173,15 +174,15 @@ class CatalogClassificationTest : StringSpec({
 })
 
 private suspend fun classify(ticker: String, assetClass: AssetClass) =
-    getBean<HttpClient>().put("http://localhost:8080/tickers/$ticker/classification") {
+    getBean<HttpClient>().put("${appBaseUrl()}/tickers/$ticker/classification") {
         contentType(ContentType.Application.Json)
         setBody(mapOf("asset_class" to assetClass.name))
     }
 
 private suspend fun revert(ticker: String) =
-    getBean<HttpClient>().delete("http://localhost:8080/tickers/$ticker/classification")
+    getBean<HttpClient>().delete("${appBaseUrl()}/tickers/$ticker/classification")
 
-private suspend fun refreshCatalog() = getBean<HttpClient>().post("http://localhost:8080/tickers/refresh")
+private suspend fun refreshCatalog() = getBean<HttpClient>().post("${appBaseUrl()}/tickers/refresh")
 
 private fun position(ticker: String, quantity: String) =
     Position(ticker = ticker, quantity = BigDecimal(quantity), averagePrice = BigDecimal("10"))

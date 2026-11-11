@@ -7,6 +7,7 @@ import dev.agner.portfolio.persistence.bond.BondOrderTable
 import dev.agner.portfolio.persistence.bond.BondTable
 import dev.agner.portfolio.persistence.catalog.CatalogTable
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
+import dev.agner.portfolio.persistence.configuration.DATABASE_NAME
 import dev.agner.portfolio.persistence.configuration.mysqlJdbcUrl
 import dev.agner.portfolio.persistence.corporateaction.CorporateActionTable
 import dev.agner.portfolio.persistence.import.ImportRowTable
@@ -87,7 +88,7 @@ fun main() {
 
     val mysql = MysqlEnv.fromEnvironment()
     Database.connect(
-        url = mysqlJdbcUrl(mysql.host),
+        url = mysqlJdbcUrl(host = mysql.host, port = mysql.port, database = DATABASE_NAME),
         driver = "com.mysql.cj.jdbc.Driver",
         user = mysql.user,
         password = mysql.password,
