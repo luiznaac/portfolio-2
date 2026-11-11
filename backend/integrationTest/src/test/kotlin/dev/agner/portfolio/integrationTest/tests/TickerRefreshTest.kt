@@ -5,6 +5,7 @@ import com.github.tomakehurst.wiremock.http.RequestMethod
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.HttpMockService
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.cotahistRecord
 import dev.agner.portfolio.integrationTest.helpers.cotahistZip
 import dev.agner.portfolio.integrationTest.helpers.getBean
@@ -57,7 +58,7 @@ class TickerRefreshTest : StringSpec({
             }
         }
 
-        val response = getBean<HttpClient>().post("http://localhost:8080/tickers/refresh")
+        val response = getBean<HttpClient>().post("${appBaseUrl()}/tickers/refresh")
         val payload = ObjectMapper().readTree(response.bodyAsText())
 
         response.status shouldBe HttpStatusCode.OK
@@ -107,7 +108,7 @@ class TickerRefreshTest : StringSpec({
             }
         }
 
-        val first = getBean<HttpClient>().post("http://localhost:8080/tickers/refresh")
+        val first = getBean<HttpClient>().post("${appBaseUrl()}/tickers/refresh")
         val firstBody = ObjectMapper().readTree(first.bodyAsText())
         val firstQuotes = getBean<IQuoteRepository>().fetchAllBy("PETR4").map { it.date to it.close }
 
@@ -120,7 +121,7 @@ class TickerRefreshTest : StringSpec({
             LocalDate.parse("2026-10-13"),
         )
 
-        val second = getBean<HttpClient>().post("http://localhost:8080/tickers/refresh")
+        val second = getBean<HttpClient>().post("${appBaseUrl()}/tickers/refresh")
 
         second.status shouldBe HttpStatusCode.OK
         getBean<IQuoteRepository>().fetchAllBy("PETR4").map { it.date to it.close } shouldBe firstQuotes
@@ -135,7 +136,7 @@ class TickerRefreshTest : StringSpec({
             }
         }
 
-        val response = getBean<HttpClient>().post("http://localhost:8080/tickers/refresh")
+        val response = getBean<HttpClient>().post("${appBaseUrl()}/tickers/refresh")
         val payload = ObjectMapper().readTree(response.bodyAsText())
 
         response.status shouldBe HttpStatusCode.OK

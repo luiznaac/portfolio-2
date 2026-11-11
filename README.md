@@ -29,14 +29,23 @@ This is a monorepo:
 Requires Docker, JDK 21 and Node 20+.
 
 ```bash
-npm run db          # starts a local MySQL instance (database: portfolio)
-npm run be:run      # runs the backend on :8080 (needs MYSQL_HOST=localhost etc.)
-npm run fe:dev      # runs the SPA on :5273, proxying /api -> :8080
+npm run db          # starts a local MySQL instance on :8112 (database: portfolio)
+npm run be:run      # runs the backend on :8110 (needs MYSQL_HOST=localhost etc.)
+npm run fe:dev      # runs the SPA on :8113, proxying /api -> :8110
 ```
 
-The backend listens on port `8080`. If you want scheduled jobs to actually run, also start [chameidor](../chameidor/README.md) on port `8081` — portfolio-2 talks to it at `http://localhost:8081` by default.
+portfolio-2 holds a committed 10-port block in the family allocation (`.salgadinhos/ports.json`); a fresh clone with no `.env` boots on it:
 
-Full stack in one container: `npm run up` (or `docker compose up --build`) → SPA on `http://localhost:8081`, API on `http://localhost:8080`.
+| Role | Host port | What it is |
+|---|---|---|
+| api | `8110` | the Ktor backend — `http://localhost:8110` |
+| web | `8111` | the combined image's nginx (SPA + `/api` proxy) |
+| mysql | `8112` | the dev database (the container side stays `3306`) |
+| frontend-dev | `8113` | the Vite dev server, strict on its port |
+
+If you want scheduled jobs to actually run, also start [chameidor](../chameidor/README.md) on its **API** role (`8100`) — portfolio-2 talks to it at `http://localhost:8100` by default. (Its web role only proxies `/api/`, so `/tasks/one-time` on the web port would hit the SPA fallback.)
+
+Full stack in one container: `npm run up` (or `docker compose up --build`) → SPA on `http://localhost:8111`, API on `http://localhost:8110`.
 
 ### What you can do through the API
 

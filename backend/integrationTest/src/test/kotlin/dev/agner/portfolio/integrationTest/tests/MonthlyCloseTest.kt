@@ -2,6 +2,7 @@ package dev.agner.portfolio.integrationTest.tests
 
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.config.getRequest
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
@@ -58,7 +59,7 @@ class MonthlyCloseTest : StringSpec({
         )
         val client = getBean<HttpClient>()
 
-        val response = client.post("http://localhost:8080/month/current/close")
+        val response = client.post("${appBaseUrl()}/month/current/close")
 
         response.status shouldBe HttpStatusCode.OK
         val body = response.body<Map<String, Any>>()
@@ -77,7 +78,7 @@ class MonthlyCloseTest : StringSpec({
         closed.single()["period"] shouldBe "2026-10"
         closed.single()["status"] shouldBe "CLOSED"
 
-        client.post("http://localhost:8080/month/current/close").status shouldBe HttpStatusCode.NotFound
+        client.post("${appBaseUrl()}/month/current/close").status shouldBe HttpStatusCode.NotFound
 
         shouldThrow<SnapshotAlreadyExistsException> {
             snapshots.save(month.month.id, persisted.state)
@@ -87,7 +88,7 @@ class MonthlyCloseTest : StringSpec({
     "closing the month freezes a slice per strategy, the bucket included" {
         val (monthId, bucketId) = openMonthWithAttributedHolding()
 
-        val response = getBean<HttpClient>().post("http://localhost:8080/month/current/close")
+        val response = getBean<HttpClient>().post("${appBaseUrl()}/month/current/close")
 
         response.status shouldBe HttpStatusCode.OK
         val persisted = getBean<ISnapshotRepository>().fetchByMonth(monthId)!!
@@ -110,7 +111,7 @@ class MonthlyCloseTest : StringSpec({
         val monthId = openMonthWithPendingTransfer()
         val client = getBean<HttpClient>()
 
-        val response = client.post("http://localhost:8080/month/current/close")
+        val response = client.post("${appBaseUrl()}/month/current/close")
 
         response.status shouldBe HttpStatusCode.Conflict
         val body = response.body<Map<String, Any>>()

@@ -1,9 +1,10 @@
 ktor:
-  port: 8080
+  port: ${KTOR_PORT:8110}
   wait: true
 
 mysql:
   host: ${MYSQL_HOST}
+  port: ${MYSQL_PORT:8112}
   user: ${MYSQL_USER}
   password: ${MYSQL_PASSWORD}
 
@@ -18,11 +19,11 @@ gateways:
   bacen:
     host: 'https://api.bcb.gov.br'
   chameidor:
-    host: 'http://localhost:8081'
+    host: 'http://localhost:8100'
     token: ${CHAMEIDOR_TOKEN}
   b3:
     host: 'https://sistemaswebb3-listados.b3.com.br'
   cotahist:
     host: 'https://bvmf.bmfbovespa.com.br'
 
-app-own-host: 'localhost:8080'
+app-own-host: 'localhost:8110'

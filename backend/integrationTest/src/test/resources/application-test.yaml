@@ -1,11 +1,6 @@
 ktor:
   wait: false
 
-mysql:
-  host: 'localhost'
-  user: 'root'
-  password: ''
-
 gateways:
   sgs:
     host: 'http://localhost:${wiremock.port}'

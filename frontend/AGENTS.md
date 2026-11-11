@@ -31,7 +31,7 @@ New API call: typed function in `api/client.ts` → hook in `api/queries.ts` →
 ## Commands
 
 ```bash
-npm run dev         # vite dev server, port 5273
+npm run dev         # vite dev server, port 8113 (strict)
 npm run typecheck    # tsc -b --noEmit
 npm run lint         # biome check
 npm run lint:fix     # biome check --write
@@ -58,7 +58,7 @@ node <salgadinhos>/adapters/sandbox/run.mjs --stack node --workspace <repo-root>
 
 - **Tailwind v4 config lives in CSS**: `src/index.css` has `@import "tailwindcss";` and an `@theme` block holding the reference palette, sign convention, radii scale and the three IBM Plex families (`src/fonts.css` bundles them via `@fontsource`); there is no `tailwind.config.js`.
 - **Design reference**: [`design/front-prototype.html`](design/front-prototype.html) (issue #205) is the committed styling source — new pages carry its tokens (no `slate-*`/`emerald-*` defaults) and compose the primitive layer rather than hand-rolling Tailwind.
-- **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; the dev server proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8080`) to dodge CORS.
+- **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; `loadEnv` reads the lane's env file (Vite does not inject it into `process.env`), the dev server binds `FRONTEND_DEV_PORT` (default `8113`, strict so a taken port fails loudly) and proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8110`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
 - **Testing scope**: `src/lib/**/*.test.ts` covers the pure helpers in a node environment; a query hook that owns a cache-invalidation contract gets a co-located `src/api/*.test.tsx` with `renderHook` over a `QueryClientProvider`, asserting the read the UI consumes rather than spy call counts; a page that needs a behaviour test adds a co-located `src/**/*.test.tsx` render test that opts into jsdom with a `// @vitest-environment jsdom` docblock (Testing Library + `user-event`, asserting user-observable results such as focus or the rendered DOM — not implementation details). `lib/theme.test.ts` and `lib/dtoMirrorGuard.test.ts` additionally read source files as build-time guards (the `@theme` tokens/scaffold shades; every `api/types.ts` interface against the DTO the backend serialises — its header says where a new DTO is mapped). Don't claim UI coverage beyond what actually exists.
 

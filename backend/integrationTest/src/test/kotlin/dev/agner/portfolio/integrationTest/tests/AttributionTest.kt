@@ -2,6 +2,7 @@ package dev.agner.portfolio.integrationTest.tests
 
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
+import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.config.getRequest
 import dev.agner.portfolio.integrationTest.config.postRequest
 import dev.agner.portfolio.integrationTest.helpers.getBean
@@ -81,7 +82,7 @@ class AttributionTest : StringSpec({
         (read["slices"] as List<*>).size shouldBe 2
 
         val response = getBean<HttpClient>().delete(
-            "http://localhost:8080/positions/PETR4/attribution/${dividends.id}",
+            "${appBaseUrl()}/positions/PETR4/attribution/${dividends.id}",
         )
         response.status shouldBe HttpStatusCode.OK
         val after = response.body<Map<String, Any>>()

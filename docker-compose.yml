@@ -7,8 +7,9 @@
 #
 # The published image (docker.io/luiznaac/portfolio) is the `app` service only —
 # in production the database is a separate, externally provisioned container.
-# `backend/docker-compose.yml` is the DB-only file consumed by the integrationTest
-# module via Testcontainers; keep the two in sync.
+# `backend/docker-compose.yml` is the DB-only file for plain backend dev; the
+# integrationTest module starts its own Testcontainers MySQL on the same image and
+# database. Keep the three MySQL definitions in sync.
 #
 # The schema is NOT seeded here: backend/persistence/src/main/resources/db/migration/V*.sql is
 # applied by Flyway from deploy/entrypoint.sh before the app starts.
@@ -21,7 +22,7 @@ services:
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
       - MYSQL_DATABASE=portfolio
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-8112}:3306"
     volumes:
       - portfolio-mysql-data:/var/lib/mysql
     healthcheck:
@@ -46,8 +47,8 @@ services:
       - MYSQL_USER=root
       - MYSQL_PASSWORD=
     ports:
-      - "8080:8080"   # API      (Ktor)
-      - "8081:8081"   # web / UI  (nginx: SPA + /api proxy)
+      - "${KTOR_PORT:-8110}:8080"   # API      (Ktor)
+      - "${WEB_HOST_PORT:-8111}:8081"   # web / UI  (nginx: SPA + /api proxy)
 
 volumes:
   portfolio-mysql-data:
