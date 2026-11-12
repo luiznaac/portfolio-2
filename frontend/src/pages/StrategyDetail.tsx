@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  useActivateEdition,
   useClosedMonths,
   useCurrentAllocation,
   useEditions,
@@ -10,6 +12,7 @@ import {
 import type { Edition, Strategy } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
+import { EditionDiffPanel } from "../components/EditionDiffPanel.tsx";
 import { Kpi } from "../components/Kpi.tsx";
 import { Num } from "../components/Num.tsx";
 import { PageHead } from "../components/PageHead.tsx";
@@ -22,10 +25,18 @@ import { formatCurrency, formatIsoDate, formatNumber, formatPercent } from "../l
 import { assetClassLabel } from "../lib/month.ts";
 import { ROUTES, strategyDetail, strategyDetailTab } from "../lib/routes.ts";
 import {
+  type EditionEntryChange,
+  type EditionReviewRow,
+  type EditionTimelineRow,
   type StrategyCompositionRow,
   type StrategyFatiaView,
   type StrategyPositionRow,
+  activeEdition,
+  editionDiffSummary,
+  editionReviewRows,
+  editionTimeline,
   isReportDriven,
+  ratingLabel,
   referenceMonthLabel,
   stagedEdition,
   strategyComposition,
@@ -35,9 +46,9 @@ import {
 } from "../lib/strategy.ts";
 import { type Tone, driftTone, toneClass } from "../lib/tones.ts";
 
-// Estratégias · detail (issue #374): the shell the row opens into — a KPI row and its own tab strip
-// over Carteira and Fatia. The later slices add Edições, Atribuição and the Manual variant; here the
-// report strategy reads the allocation tree and the last close's performance decomposition.
+// Estratégias · detail (issues #374, #375): the shell the row opens into — a KPI row and its own tab
+// strip over Carteira, Edições and Fatia. Edições owns the edition timeline, the staged diff and the
+// promote/discard decision; the later slices add Atribuição and the Manual variant.
 export function StrategyDetail() {
   const { id, tab } = useParams();
   const strategyId = Number(id);
@@ -119,12 +130,19 @@ export function StrategyDetail() {
       <PageTabs
         tabs={[
           { to: strategyDetail(strategy.id), label: "Carteira", end: true },
+          ...(report ? [{ to: strategyDetailTab(strategy.id, "edicoes"), label: "Edições" }] : []),
           { to: strategyDetailTab(strategy.id, "fatia"), label: "Fatia no portfólio" },
         ]}
         trailing={report ? "relatório" : "sem alvo"}
       />
 
-      {tab === "fatia" ? (
+      {tab === "edicoes" && report ? (
+        <EdicoesTab
+          editions={editions.data ?? []}
+          loading={editions.isLoading}
+          error={editions.error?.message}
+        />
+      ) : tab === "fatia" ? (
         <FatiaTab strategy={strategy} view={fatia} positions={positions} />
       ) : (
         <CarteiraTab positions={positions} staged={staged} />
@@ -303,6 +321,222 @@ function StagedEditionStrip({ edition }: { edition: Edition }) {
       <span className="text-faint">Promover substitui a edição ativa.</span>
     </div>
   );
+}
+
+// The Edições tab (issue #375): the edition timeline with the current edition marked, the staged
+// report's diff summary and full weight/rating/target-price table, and the promote/discard decision.
+// "Alterada" is reserved for a row whose weight, rating or target price actually moved against the
+// active edition — a target price the fixture merely restates never earns the label.
+type EditionDecision = "promoted" | "discarded";
+
+function EdicoesTab({
+  editions,
+  loading,
+  error,
+}: {
+  editions: Edition[];
+  loading: boolean;
+  error?: string;
+}) {
+  const activate = useActivateEdition();
+  const [decision, setDecision] = useState<EditionDecision>();
+  const timeline = editionTimeline(editions);
+  const staged = stagedEdition(editions);
+  const active = activeEdition(editions);
+
+  function promote(edition: Edition) {
+    activate.mutate(
+      {
+        strategyId: edition.strategy_id,
+        activation: { reference_month: edition.reference_month, entries: edition.entries },
+      },
+      { onSuccess: () => setDecision("promoted") },
+    );
+  }
+
+  const columns: Column<EditionTimelineRow>[] = [
+    {
+      key: "month",
+      header: "Mês",
+      render: (row) => (
+        <span className="font-mono text-text">
+          {referenceMonthLabel(row.edition.reference_month)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Situação",
+      render: (row) => <Chip tone={row.tone}>{row.statusLabel}</Chip>,
+    },
+    {
+      key: "entries",
+      header: "Ativos",
+      align: "right",
+      render: (row) => `${row.edition.entries.length} ativos`,
+    },
+  ];
+
+  return (
+    <div className="space-y-3.5">
+      <Panel title="Linha do tempo">
+        {loading ? (
+          <p className="text-[12.5px] text-muted">Carregando…</p>
+        ) : error !== undefined ? (
+          <p className="text-[12.5px] text-return-down">{error}</p>
+        ) : timeline.length === 0 ? (
+          <p className="text-[12.5px] text-muted">
+            Nenhuma edição importada.{" "}
+            <Link to={ROUTES.strategiesImport} className="text-action hover:underline">
+              Importar relatório
+            </Link>
+          </p>
+        ) : (
+          <div data-testid="edition-timeline">
+            <Table
+              columns={columns}
+              rows={timeline}
+              rowKey={(row) => row.edition.id}
+              rowClassName={(row) => (row.active ? "bg-panel-2" : undefined)}
+            />
+          </div>
+        )}
+      </Panel>
+
+      {decision !== undefined && <EditionDecisionNote decision={decision} />}
+
+      {staged !== undefined && (
+        <StagedEditionReview
+          key={staged.id}
+          edition={staged}
+          active={active}
+          promoting={activate.isPending}
+          error={activate.error?.message}
+          onPromote={() => promote(staged)}
+          // The API has no discard: discarding is the non-destructive "not now" — the staged
+          // edition stays staged and the active edition untouched, and the note states that.
+          onDiscard={() => setDecision("discarded")}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditionDecisionNote({ decision }: { decision: EditionDecision }) {
+  return (
+    <div
+      data-testid="edition-decision-note"
+      className="rounded-panel border border-line-soft bg-panel-2 px-3 py-2 text-[12.5px] text-muted"
+    >
+      {decision === "promoted"
+        ? "Edição promovida · o plano usa os novos pesos no próximo recálculo."
+        : "Edição não promovida · a edição ativa segue valendo até o próximo recálculo."}
+    </div>
+  );
+}
+
+function StagedEditionReview({
+  edition,
+  active,
+  promoting,
+  error,
+  onPromote,
+  onDiscard,
+}: {
+  edition: Edition;
+  active?: Edition;
+  promoting: boolean;
+  error?: string;
+  onPromote: () => void;
+  onDiscard: () => void;
+}) {
+  const rows = editionReviewRows(edition, active);
+
+  const columns: Column<EditionReviewRow>[] = [
+    {
+      key: "ticker",
+      header: "Ativo",
+      render: (row) => <span className="font-mono font-semibold text-text">{row.ticker}</span>,
+    },
+    {
+      key: "weight",
+      header: "Peso",
+      align: "right",
+      render: (row) => <span className="font-mono">{formatTarget(row.weight)}</span>,
+    },
+    {
+      key: "rating",
+      header: "Rating",
+      render: (row) => ratingLabel(row.rating),
+    },
+    {
+      key: "target",
+      header: "Preço-alvo",
+      align: "right",
+      render: (row) =>
+        row.targetPrice === undefined ? (
+          <Unknown />
+        ) : (
+          <span className="font-mono">{formatCurrency(row.targetPrice)}</span>
+        ),
+    },
+    {
+      key: "change",
+      header: "Situação",
+      render: (row) => <EntryChange change={row.change} />,
+    },
+  ];
+
+  return (
+    <div data-testid="staged-edition-review" className="space-y-3.5">
+      {edition.diff_from_previous !== undefined && (
+        <EditionDiffPanel diff={edition.diff_from_previous} />
+      )}
+
+      <Panel
+        title={`Edição em revisão · ${referenceMonthLabel(edition.reference_month)}`}
+        action={
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono text-label text-faint">relatório</span>
+            <Chip tone="neutral">{editionDiffSummary(edition.diff_from_previous)}</Chip>
+          </span>
+        }
+      >
+        <p className="mb-2 text-[12.5px] text-muted">
+          Comparação com a edição ativa{" "}
+          <span className="font-mono text-text">
+            {active === undefined ? "—" : referenceMonthLabel(active.reference_month)}
+          </span>
+          : uma linha só aparece como "alterada" quando peso, rating ou preço-alvo mudam. O resumo
+          acima é o que o relatório declarou.
+        </p>
+        <div data-testid="edition-entries">
+          <Table columns={columns} rows={rows} rowKey={(row) => row.ticker} />
+        </div>
+      </Panel>
+
+      <Panel title="Decisão">
+        <p className="text-[12.5px] text-muted">
+          Promover substitui a edição ativa. Descartar deixa a edição ativa como está.
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <Button variant="primary" onClick={onPromote} disabled={promoting}>
+            {promoting ? "Promovendo…" : "Promover edição"}
+          </Button>
+          <Button variant="ghost" onClick={onDiscard} disabled={promoting}>
+            Descartar
+          </Button>
+        </div>
+        {error !== undefined && <p className="mt-2 text-[12.5px] text-return-down">{error}</p>}
+      </Panel>
+    </div>
+  );
+}
+
+function EntryChange({ change }: { change: EditionEntryChange }) {
+  if (change === "new") return <Chip tone="green">nova</Chip>;
+  if (change === "changed") return <Chip tone="amber">alterada</Chip>;
+  return <Unknown />;
 }
 
 function FatiaTab({

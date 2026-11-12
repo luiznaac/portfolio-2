@@ -17,7 +17,9 @@ src/
                 PageHead/PageTabs — the object head and sub-view tab strip; Panel/Chip/Badge/
                 Button/Table/FilterBar/WizardStepper/Kpi/Num/ClassBadge — the token-based
                 primitive layer; TickerDrawer — the Ativos ticker detail opened from a Posições row
-                or its deep link; PeriodRail — the Análise period rail; icons.tsx; *Chip.tsx
+                or its deep link; EditionDiffPanel — the edition diff chips shared by the report
+                import drawer and the strategy detail's Edições tab; PeriodRail — the Análise
+                period rail; icons.tsx; *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
                 Análise rail's shared window, kept across the three tabs and reset on area re-entry;
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
