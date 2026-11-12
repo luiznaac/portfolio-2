@@ -361,7 +361,7 @@ describe("attentionItems", () => {
     expect(outside?.actionLabel).toBe("Atribuir");
   });
 
-  it("collapses data-quality problems into one critical card that points at the panel", () => {
+  it("points a classification-only data-quality card at Ativos · Posições", () => {
     const items = attentionItems({
       allocation: allocation({ unclassified: unclassifiedHolding(500), unattributed: 500 }),
       plan: null,
@@ -371,6 +371,21 @@ describe("attentionItems", () => {
     expect(quality?.text).toBe(
       "Dados da carteira: 0 sem cotação · 1 sem classe · 0 negativas · 0 lacunas",
     );
+    expect(quality?.to).toBe("/ativos/positions");
+    expect(quality?.actionLabel).toBe("Classificar");
+  });
+
+  it("keeps a mixed data-quality card on the Alocação panel", () => {
+    const items = attentionItems({
+      allocation: allocation({
+        unclassified: unclassifiedHolding(500),
+        unpriced: [{ ticker: "VALE3", quantity: 5 }],
+        unattributed: 500,
+      }),
+      plan: null,
+    });
+    const quality = items.find((item) => item.key === "data-quality");
+
     expect(quality?.to).toBe("/portfolio/allocation");
     expect(quality?.actionLabel).toBe("Revisar");
   });

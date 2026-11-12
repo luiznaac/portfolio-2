@@ -101,6 +101,49 @@ export function unclassifiedTickerRowKey(ticker: string): string {
   return `unclassified-ticker:${ticker}`;
 }
 
+export interface HeldTickerLeaf {
+  ticker: string;
+  assetClass: AssetClass | null;
+  close?: number;
+  closeDate?: string;
+  stale: boolean;
+}
+
+// One flat leaf per held ticker, however many attribution slices the tree splits it across: the
+// class, the close and the staleness merge instead of overwriting, and the unclassified line wins
+// when a ticker is classless. Positions and any other consumer share this one walk, so a new bucket
+// is taught to a single place.
+export function heldTickerLeaves(allocation: Allocation): HeldTickerLeaf[] {
+  const leaves = new Map<string, HeldTickerLeaf>();
+
+  function add(
+    ticker: ActualTickerAllocation | TickerAllocation,
+    assetClass: AssetClass | null,
+  ): void {
+    const current = leaves.get(ticker.ticker);
+    leaves.set(ticker.ticker, {
+      ticker: ticker.ticker,
+      assetClass:
+        current?.assetClass === null || assetClass === null
+          ? null
+          : (current?.assetClass ?? assetClass),
+      close: current?.close ?? ticker.price,
+      closeDate: current?.closeDate ?? ticker.quote_date,
+      stale: (current?.stale ?? false) || ticker.stale === true,
+    });
+  }
+
+  for (const cls of allocation.classes) {
+    for (const strategy of cls.strategies) {
+      for (const ticker of strategy.tickers) add(ticker, cls.asset_class);
+    }
+    if (cls.manual) for (const ticker of cls.manual.tickers) add(ticker, cls.asset_class);
+    for (const ticker of cls.outside.tickers) add(ticker, cls.asset_class);
+  }
+  for (const ticker of allocation.unclassified.tickers) add(ticker, null);
+  return [...leaves.values()];
+}
+
 // The tree as indented rows: the Capital root, then every class; a class's report Strategies (with
 // their tickers), its manual bucket and its outside row appear only while that row is expanded. The
 // unclassified line sits at the root after every class, in no class rung.

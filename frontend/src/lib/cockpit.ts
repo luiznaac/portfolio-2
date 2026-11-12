@@ -238,18 +238,20 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
   const items: AttentionItem[] = [];
   const { allocation, plan, gaps } = input;
 
-  // Every data-quality problem collapses into one card pointing at the "Dados da carteira" panel:
-  // unpriced custody, unclassified tickers, negative positions and open GAPs share one fix
-  // surface, so the Cockpit does not raise one interruption per problem. The bucket never appears:
-  // its units are attributed.
+  // Every data-quality problem collapses into one card, so the Cockpit does not raise one
+  // interruption per problem. When classification is the only issue the card points at the Ativos ·
+  // Posições classification surface; any other problem keeps the broader "Dados da carteira" panel
+  // on Alocação, which links to classification. The bucket never appears: its units are attributed.
   const quality = dataQualityCounts(allocation, gaps);
   if (quality.total > 0) {
+    const classificationOnly =
+      quality.unclassified > 0 && quality.unpriced + quality.negative + quality.lacunas === 0;
     items.push({
       key: "data-quality",
       severity: "critical",
       text: `Dados da carteira: ${dataQualitySummary(quality)}`,
-      to: ROUTES.allocation,
-      actionLabel: "Revisar",
+      to: classificationOnly ? ROUTES.positions : ROUTES.allocation,
+      actionLabel: classificationOnly ? "Classificar" : "Revisar",
     });
   }
 
