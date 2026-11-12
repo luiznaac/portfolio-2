@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  type FilterBarField,
   type FilterField,
   applyFilters,
   clearFilterValues,
@@ -69,6 +70,14 @@ describe("applyFilters", () => {
     expect(
       applyFilters(rows, { ticker: "petr", side: "SELL" }, fields).map((row) => row.ticker),
     ).toEqual(["PETR3"]);
+  });
+
+  it("accepts a control-only field in the bar declaration without a matcher", () => {
+    const barOnly: FilterBarField[] = [
+      { control: { kind: "text", key: "ticker", label: "Ticker" } },
+    ];
+
+    expect(emptyFilterValues(barOnly)).toEqual({ ticker: "" });
   });
 });
 

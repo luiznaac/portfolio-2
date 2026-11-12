@@ -814,3 +814,24 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 ```
 
 On `/strategies` the single table lists four rows in class order with the bucket last: `Small Caps` (Ações · Com relatório · `mai/27 ✓` · R$ 20.000,00 · -4,0 p.p.), `Top Dividendos` (Ações · Com relatório · `jun/27 · revisão` · R$ 10.000,00 · -26,0 p.p.), `Legado Ações` (Ações · Manual (legado) · — · R$ 1.000,00 · —) and `Fundamentalista FII` (Fundos imob. · Com relatório · — · R$ 5.000,00 · -35,0 p.p.). The Fundamentalista FII row proves `kind`, not the presence of an edition, separates the two types: it reads `Com relatório` while its Edição cell is `—`. The Legado Ações row's Drift cell is `—`. Clicking the `Top Dividendos` link opens `/strategies/9001` (the detail placeholder until [#374](https://github.com/luiznaac/portfolio-2/issues/374) lands). `GET /strategies` answers 200 with the additive `latest_edition` (`{id, reference_month, status}`) on each row — Top Dividendos `2027-06` `STAGED`, Small Caps `2027-05` `ACTIVE` — and omits it for the two editionless strategies. A table missing a strategy, a manual row with a drift value, a wrong value or drift, a report strategy hidden because it has no edition, a dead detail link, or a `latest_edition` absent from the HTTP read is an automatic red; the evidence names the first failing intent. The list issuing no per-strategy editions request is pinned by `Strategies.test.tsx`, and the DTO-mirror guard by `dtoMirrorGuard.test.ts`.
+
+- **Trade-ledger seed**: Ativos · Negócios reads `GET /trades/ledger`; seed the ledger after the app is healthy so the page, its filters and its cursor have rows. Run it alone — do **not** apply any other seed section.
+
+  ```bash
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM trade;
+  DELETE FROM institution;
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('PETR4', '2026-10-01', 'VISTA',  100, 10, @inst, NULL, 'MANUAL',    FALSE, 1, NOW()),
+    ('VALE3', '2026-10-02', 'VISTA', -100, 20, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('PETR4', '2026-10-03', 'VISTA',  -50, 12, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+    ('ITUB4', '2026-10-04', 'VISTA',   30, 30, @inst, NULL, 'OPENING',   FALSE, 1, NOW());
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at)
+  SELECT 'PETR4', DATE_ADD('2026-08-01', INTERVAL seq.day DAY), 'VISTA', seq.day, 1, @inst, NULL, 'MANUAL', FALSE, 1, NOW()
+  FROM (SELECT ROW_NUMBER() OVER () AS day FROM information_schema.columns LIMIT 51) seq;
+  SQL
+  ```
+
+  The ledger holds 55 executions: the first page reads `50 de 55` with a next cursor, and the total row covers all 55 (R$ 5.826,00 — the four named rows total R$ 4.500,00 and the generated quantities sum to R$ 1.326,00). `ticker=VALE3` narrows to one row (R$ 2.000,00); `side=SELL` and the window `2026-10-02..2026-10-03` each narrow to the two named rows (R$ 2.600,00).

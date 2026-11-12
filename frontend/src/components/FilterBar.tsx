@@ -1,7 +1,7 @@
 import { type ReactNode, useId } from "react";
 import {
+  type FilterBarField,
   type FilterControl,
-  type FilterField,
   type FilterValues,
   filterCountLabel,
   hasActiveFilter,
@@ -68,7 +68,7 @@ function renderControl(
 // `limpar` only while narrowing, and the narrowing empty state offering the same way out. The page
 // owns the values (page-scoped state, never the URL) and passes the already-filtered host as
 // children, so a keystroke re-renders the host without rebuilding the controls under the caret.
-export function FilterBar<Row>({
+export function FilterBar({
   fields,
   values,
   onChange,
@@ -77,7 +77,7 @@ export function FilterBar<Row>({
   total,
   children,
 }: {
-  fields: readonly FilterField<Row>[];
+  fields: readonly FilterBarField[];
   values: FilterValues;
   onChange: (key: string, value: string) => void;
   onClear: () => void;
@@ -112,7 +112,7 @@ export function FilterBar<Row>({
         )}
       </div>
 
-      {shown === 0 && total > 0 ? (
+      {shown === 0 && (total > 0 || narrowing) ? (
         <p className="rounded-lg border border-line bg-surface px-[18px] py-4 text-[13px] text-ink-dim">
           Nenhuma linha com esse filtro.{" "}
           <button type="button" onClick={onClear} className={CLEAR}>

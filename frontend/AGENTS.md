@@ -17,7 +17,9 @@ src/
                 PageHead/PageTabs — the object head and sub-view tab strip; Panel/Chip/Badge/
                 Button/Table/FilterBar/WizardStepper/Kpi/Num/ClassBadge — the token-based
                 primitive layer; TickerDrawer — the Ativos ticker detail opened from a Posições row
-                or its deep link; PeriodRail — the Análise period rail; icons.tsx; *Chip.tsx
+                or its deep link; RebuildHistory — the Ativos · Negócios reconstruction steps
+                (adoption, backfill, custody check); PeriodRail — the Análise period rail;
+                icons.tsx; *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
                 Análise rail's shared window, kept across the three tabs and reset on area re-entry;
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
@@ -32,9 +34,11 @@ src/
                 the top bar's freshness/month lines; overview.ts derives the landing's status strip,
                 month line, standfirst, class rows, attention queue and data panel; tones.ts is the
                 one meaning→token class map; plan.ts derives the six-step month tool; dates.ts is the
-                shared calendar arithmetic; filters.ts is the shared filter model, with
-                tradeFilters.ts/incomeFilters.ts/positionFilters.ts declaring each list's fields +
-                matcher; position.ts builds the Posições rows and their filtered total;
+                shared calendar arithmetic; filters.ts is the shared filter model — the bar needs
+                controls only, while a locally narrowed list adds its matcher; incomeFilters.ts and
+                positionFilters.ts declare fields + matcher, and tradeFilters.ts declares the
+                server-narrowed ledger's controls plus its request mapping; position.ts builds the
+                Posições rows and their filtered total;
                 analysisWindow.ts is the Análise rail's preset/range/window math)
 ```
 

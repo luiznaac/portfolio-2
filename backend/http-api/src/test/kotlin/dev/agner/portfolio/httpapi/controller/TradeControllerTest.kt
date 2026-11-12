@@ -5,6 +5,9 @@ import dev.agner.portfolio.usecase.listedasset.DuplicateTradeException
 import dev.agner.portfolio.usecase.listedasset.TradeService
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerPage
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import io.kotest.core.spec.style.DescribeSpec
@@ -39,6 +42,71 @@ class TradeControllerTest : DescribeSpec({
                 response.status shouldBe HttpStatusCode.OK
                 ObjectMapper().readTree(response.bodyAsText()).get(0).get("ticker").asText() shouldBe "PETR4"
                 ObjectMapper().readTree(response.bodyAsText()).get(0).get("side").asText() shouldBe "BUY"
+            }
+        }
+    }
+
+    describe("listing the ledger") {
+
+        it("passes the ticker, date window, side and cursor to the service") {
+            val service = mockk<TradeService>()
+            val captured = slot<TradeLedgerFilter>()
+            coEvery { service.fetchLedger(capture(captured)) } returns
+                ledgerPage()
+
+            testApplication {
+                application { installRoutes(TradeController(service)) }
+
+                val response = client.get(
+                    "/trades/ledger?ticker=petr4&from=2026-10-01&to=2026-10-31&side=BUY&cursor=2026-10-02:2",
+                )
+
+                response.status shouldBe HttpStatusCode.OK
+                captured.captured shouldBe TradeLedgerFilter(
+                    ticker = "petr4",
+                    from = LocalDate.parse("2026-10-01"),
+                    to = LocalDate.parse("2026-10-31"),
+                    side = TradeSide.BUY,
+                    after = TradeLedgerCursor(LocalDate.parse("2026-10-02"), 2),
+                )
+            }
+        }
+
+        it("returns the page with its next cursor and the filtered total") {
+            val service = mockk<TradeService>()
+            coEvery { service.fetchLedger(any()) } returns
+                ledgerPage()
+
+            testApplication {
+                application { installRoutes(TradeController(service)) }
+
+                val body = ObjectMapper().readTree(client.get("/trades/ledger").bodyAsText())
+
+                body.get("rows").get(0).get("ticker").asText() shouldBe "PETR4"
+                body.get("next_cursor").asText() shouldBe "2026-10-02:2"
+                body.get("total").asInt() shouldBe 3
+                body.get("financial_total").decimalValue()
+                    .compareTo(BigDecimal("4892.00")) shouldBe 0
+            }
+        }
+
+        it("rejects an unknown side, a malformed date and a malformed cursor with the canonical 400 body") {
+            val service = mockk<TradeService>()
+
+            testApplication {
+                application { installRoutes(TradeController(service)) }
+
+                listOf(
+                    "/trades/ledger?side=HOLD",
+                    "/trades/ledger?from=10-01-2026",
+                    "/trades/ledger?cursor=not-a-cursor",
+                ).forEach { path ->
+                    val response = client.get(path)
+
+                    response.status shouldBe HttpStatusCode.BadRequest
+                    ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                        "invalid-parameter"
+                }
             }
         }
     }
@@ -123,6 +191,13 @@ private fun creation() = TradeCreation(
     quantity = BigDecimal("100"),
     unitPrice = BigDecimal("48.92"),
     institutionId = 3,
+)
+
+private fun ledgerPage() = TradeLedgerPage(
+    listOf(manualTrade),
+    nextCursor = "2026-10-02:2",
+    total = 3,
+    financialTotal = BigDecimal("4892.00"),
 )
 
 private val manualTrade = Trade.Buy(

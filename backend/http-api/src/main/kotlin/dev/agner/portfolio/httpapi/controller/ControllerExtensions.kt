@@ -38,11 +38,15 @@ internal fun ApplicationCall.requiredPeriod(name: String): YearMonth {
 }
 
 // A query date is the ISO `YYYY-MM-DD` the domain speaks; a malformed value is the caller's error.
-internal fun ApplicationCall.requiredDate(name: String): LocalDate {
-    val raw = parameters[name]
-    return raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+internal fun ApplicationCall.requiredDate(name: String): LocalDate = parseDate(name, parameters[name])
+
+// An absent query date is no filter; a present but malformed one is still the caller's error.
+internal fun ApplicationCall.optionalDate(name: String): LocalDate? =
+    request.queryParameters[name]?.let { parseDate(name, it) }
+
+private fun parseDate(name: String, raw: String?): LocalDate =
+    raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         ?: throw InvalidParameterException(name, raw)
-}
 
 // The current-month reads all share one "absent is a 404" contract; the generic keeps a controller
 // from hand-rolling the same branch per shape.

@@ -137,7 +137,7 @@ export function ImportWizard() {
 
   // The result's data-quality summary: what apply wrote, what the book holds now and what still
   // blocks a usable portfolio. The allocation read owns the unpriced/unclassified truth; positions
-  // own the custody count and the negative rows the Histórico screen adopts.
+  // own the custody count and the negative rows Ativos · Negócios adopts.
   const importedEntries = state.step === "result" ? (state.upload.importedEntries ?? 0) : 0;
   const heldPositions = (positions.data ?? []).filter((position) => position.quantity !== 0);
   const negativePositions = heldPositions.filter((position) => position.quantity < 0).length;
