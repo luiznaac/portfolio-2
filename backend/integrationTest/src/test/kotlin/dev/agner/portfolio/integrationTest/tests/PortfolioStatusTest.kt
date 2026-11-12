@@ -1,7 +1,5 @@
 package dev.agner.portfolio.integrationTest.tests
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.integrationTest.config.ClockMock
 import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.helpers.getBean
@@ -22,8 +20,15 @@ import dev.agner.portfolio.usecase.order.model.TransferProposalCreation
 import dev.agner.portfolio.usecase.order.model.TransferStatus
 import dev.agner.portfolio.usecase.order.repository.ITransferProposalRepository
 import dev.agner.portfolio.usecase.portfolio.MonthService
+import dev.agner.portfolio.usecase.portfolio.PortfolioStatusService
+import dev.agner.portfolio.usecase.portfolio.model.AttentionKind
+import dev.agner.portfolio.usecase.portfolio.model.AttentionObject
+import dev.agner.portfolio.usecase.portfolio.model.AttentionSeverity
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
+import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
+import dev.agner.portfolio.usecase.portfolio.model.MonthActionKind
 import dev.agner.portfolio.usecase.portfolio.model.MonthCreation
+import dev.agner.portfolio.usecase.portfolio.model.StatusRefType
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
@@ -35,9 +40,6 @@ import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
 import io.mockk.every
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -46,7 +48,8 @@ import java.time.Instant
 
 // The landing's aggregate over a real MySQL round-trip: the typed status must be composed from the
 // stored month, book, imports, editions, gaps, corporate actions and quotes — and a clean book must
-// raise no attention at all. A mocked composition cannot prove the queue empties on a real read.
+// raise no attention at all. The service seam is deliberate: the test context's Ktor server is
+// stopped between methods, so a direct service read is the deterministic way to assert the aggregate.
 @IntegrationTest
 class PortfolioStatusTest : StringSpec({
 
@@ -60,22 +63,22 @@ class PortfolioStatusTest : StringSpec({
         quote("PETR4", "2026-11-11", "48.92")
         openMonth()
 
-        val body = status()
+        val status = status()
 
-        body.get("as_of").asText() shouldBe "2026-11-12"
-        body.get("open_month").get("period").asText() shouldBe "2026-11"
-        body.has("last_close") shouldBe false
-        body.get("capital").decimalValue().compareTo(BigDecimal("10000")) shouldBe 0
-        body.get("invested").decimalValue().compareTo(BigDecimal("489.20")) shouldBe 0
-        body.get("uninvested_balance").decimalValue().compareTo(BigDecimal("9510.80")) shouldBe 0
-        body.get("month").get("open").asBoolean() shouldBe true
-        body.get("month").get("steps_done").asInt() shouldBe 2
-        body.get("month").get("steps_total").asInt() shouldBe 6
-        body.get("month").get("next_action").get("kind").asText() shouldBe "REFRESH_PLAN"
-        body.get("data").get("quotes_as_of").asText() shouldBe "2026-11-11"
-        body.get("data").get("open_gaps").asInt() shouldBe 0
-        body.get("data").has("last_snapshot") shouldBe false
-        body.get("attention").size() shouldBe 0
+        status.asOf shouldBe LocalDate.parse("2026-11-12")
+        status.openMonth?.period shouldBe YearMonth.parse("2026-11")
+        status.lastClose shouldBe null
+        status.capital.compareTo(BigDecimal("10000")) shouldBe 0
+        status.invested.compareTo(BigDecimal("489.20")) shouldBe 0
+        status.uninvestedBalance!!.compareTo(BigDecimal("9510.80")) shouldBe 0
+        status.month.open shouldBe true
+        status.month.stepsDone shouldBe 2
+        status.month.stepsTotal shouldBe 6
+        status.month.nextAction?.kind shouldBe MonthActionKind.REFRESH_PLAN
+        status.data.quotesAsOf shouldBe LocalDate.parse("2026-11-11")
+        status.data.openGaps shouldBe 0
+        status.data.lastSnapshot shouldBe null
+        status.attention shouldBe emptyList()
     }
 
     "raises every actionable finding from its seeded state" {
@@ -134,43 +137,42 @@ class PortfolioStatusTest : StringSpec({
             ),
         )
 
-        val body = status()
+        val status = status()
 
-        body.get("month").get("pending_transfers").asInt() shouldBe 1
-        body.get("data").get("open_gaps").asInt() shouldBe 1
-        body.get("data").get("stale_quotes").get(0).get("ticker").asText() shouldBe "PETR4"
-        body.get("attention").map { it.get("kind").asText() } shouldBe listOf(
-            "PENDING_TRANSFER",
-            "STAGED_IMPORT",
-            "STAGED_EDITION",
-            "CORPORATE_ACTION_REVIEW",
-            "UNCLASSIFIED_TICKER",
-            "OPEN_GAP",
-            "STALE_QUOTE",
+        status.month.pendingTransfers shouldBe 1
+        status.data.openGaps shouldBe 1
+        status.data.staleQuotes.single().ticker shouldBe "PETR4"
+        status.attention.map { it.kind } shouldBe listOf(
+            AttentionKind.PENDING_TRANSFER,
+            AttentionKind.STAGED_IMPORT,
+            AttentionKind.STAGED_EDITION,
+            AttentionKind.CORPORATE_ACTION_REVIEW,
+            AttentionKind.UNCLASSIFIED_TICKER,
+            AttentionKind.OPEN_GAP,
+            AttentionKind.STALE_QUOTE,
         )
-        body.get("attention").map { it.get("severity").asText() } shouldBe listOf(
-            "ACTION",
-            "ACTION",
-            "ACTION",
-            "ACTION",
-            "ACTION",
-            "ACTION",
-            "WATCH",
+        status.attention.map { it.severity } shouldBe listOf(
+            AttentionSeverity.ACTION,
+            AttentionSeverity.ACTION,
+            AttentionSeverity.ACTION,
+            AttentionSeverity.ACTION,
+            AttentionSeverity.ACTION,
+            AttentionSeverity.ACTION,
+            AttentionSeverity.WATCH,
         )
-        body.get("attention").map { it.get("object").asText() } shouldBe listOf(
-            "MONTH",
-            "IMPORT",
-            "STRATEGY",
-            "CORPORATE_ACTION",
-            "ASSET",
-            "ASSET",
-            "ASSET",
+        status.attention.map { it.`object` } shouldBe listOf(
+            AttentionObject.MONTH,
+            AttentionObject.IMPORT,
+            AttentionObject.STRATEGY,
+            AttentionObject.CORPORATE_ACTION,
+            AttentionObject.ASSET,
+            AttentionObject.ASSET,
+            AttentionObject.ASSET,
         )
-        body.get("attention").get(0).get("ref").get("type").asText() shouldBe "TRANSFER"
-        body.get("attention").get(0).get("params").get("quantity").decimalValue()
-            .compareTo(BigDecimal("50")) shouldBe 0
-        body.get("attention").get(5).get("ref").get("type").asText() shouldBe "GAP"
-        body.get("attention").get(6).get("params").get("days_old").asInt() shouldBe 42
+        status.attention[0].ref.type shouldBe StatusRefType.TRANSFER
+        status.attention[0].params.getValue("quantity").compareTo(BigDecimal("50")) shouldBe 0
+        status.attention[5].ref.type shouldBe StatusRefType.GAP
+        status.attention[6].params.getValue("days_old").toInt() shouldBe 42
     }
 })
 
@@ -227,7 +229,7 @@ private suspend fun quote(ticker: String, date: String, close: String) {
     )
 }
 
-private suspend fun openMonth(): dev.agner.portfolio.usecase.portfolio.model.CurrentMonth {
+private suspend fun openMonth(): CurrentMonth {
     val months = getBean<MonthService>()
     val current = months.open(
         MonthCreation(
@@ -247,7 +249,4 @@ private suspend fun openMonth(): dev.agner.portfolio.usecase.portfolio.model.Cur
     return current
 }
 
-private suspend fun status(): JsonNode =
-    ObjectMapper().readTree(
-        getBean<HttpClient>().get("http://localhost:8080/portfolio/status").bodyAsText(),
-    )
+private suspend fun status() = getBean<PortfolioStatusService>().fetch()
