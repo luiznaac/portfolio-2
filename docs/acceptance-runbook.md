@@ -863,3 +863,41 @@ SQL
 ```
 
 The reads are then deterministic: `GET /strategies` opens the list; `GET /strategies/9001/editions` carries the 2027-06 `STAGED` edition; `GET /months` lists 2027-05 first; `GET /months/9402/performance` carries Top Dividendos' decomposition (`value_start` 9.000, `value_end` 10.000, `return_percentage` 11,1111). On `/strategies` clicking **Top Dividendos** opens `/strategies/9001`: the page head reads `Top Dividendos`, the KPI row reads Fatia R$ 10.000,00 (62,5% da carteira), Alvo 60,0% da classe Ações, Ideal R$ 36.000,00 (faltam R$ 26.000,00), Drift -26,0 p.p. and Retorno mai/27 +11,11%; the tab strip reads `Carteira` and `Fatia no portfólio`. Carteira lists VALE3 with 1.000 units, R$ 10,00, R$ 10.000,00, 100,0% target, R$ 36.000,00 Ideal and -26,0 p.p. drift, and the `Edição em revisão · jun/27` strip sits above the table. Switching to Fatia reads Fatia na carteira 62,5%, Fatia na classe 90,9%, Alvo na classe 60,0%, Drift -26,0 p.p. and the return decomposition Início R$ 9.000,00 / Fim R$ 10.000,00 / Aportes R$ 0,00 / Proventos R$ 0,00 / Retorno +11,11%, with no edition strip. `/strategies/999999` renders `Estratégia não encontrada` instead of crashing. A missing KPI, a Carteira row without its target weight or units, a missing stage strip, a Fatia without the class and portfolio shares or the decomposition, a repeated edition strip on Fatia, a detail that crashes on an unknown id, or a value that disagrees with the seed is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — Carteira · Alocação (issue [#371](https://github.com/luiznaac/portfolio-2/issues/371))
+
+**Scenario**: the run drives the full allocation chain on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents. It resets the allocation tables and seeds an open 2027-05 month (id 9300, Capital R$ 100.000,00) with Ações 40 / Renda fixa 60, one report Strategy (Top Dividendos, id 9001) at 100% of Ações targeting ITUB4 60 / VALE3 40, one manual bucket (Legado Ações, id 9002), a 100% Pós-fixado RF sub-class target, and four R$ 10,00 closes. ITUB4 (100 units) is split 60/40 between the report Strategy and the bucket, VALE3 (40 units) is fully attributed, PETR4 (10 units) is the outside remainder, and ZZZZ9 (5 units) has a quote but no catalog row. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM gap; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+      INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9300, '2027-05', 100000, 0, 'OPEN', NOW()); \
+      INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+        (9300,'CLASS','ACOES',NULL,NULL,NULL,40,NOW()), \
+        (9300,'CLASS','RENDA_FIXA',NULL,NULL,NULL,60,NOW()), \
+        (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+        (9300,'SUB_CLASS','RENDA_FIXA',NULL,'FLOATING_RATE',NULL,100,NOW()), \
+        (9300,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',60,NOW()), \
+        (9300,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',40,NOW()); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES \
+        ('ITUB4',100,8), ('VALE3',40,8), ('PETR4',10,8), ('ZZZZ9',5,8); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('ITUB4',9001,60), ('ITUB4',9002,40), ('VALE3',9001,40); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('ITUB4','2027-05-31',10,'COTAHIST',NOW()), \
+        ('VALE3','2027-05-31',10,'COTAHIST',NOW()), \
+        ('PETR4','2027-05-31',10,'COTAHIST',NOW()), \
+        ('ZZZZ9','2027-05-31',10,'COTAHIST',NOW()); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-31',NOW()), \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-31',NOW()), \
+        ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-31',NOW());"
+```
+
+On `/portfolio/allocation` the tree reads: Capital Actual **R$ 1.550,00** against the R$ 100.000,00 Ideal (worded **faltam R$ 98.450,00**); Ações target 40%, Ideal R$ 40.000,00, Actual R$ 1.500,00, distance **faltam R$ 38.500,00**, split into Top Dividendos R$ 1.000,00 (**faltam R$ 39.000,00**), the Legado Ações bucket R$ 400,00 and Fora da estratégia R$ 100,00 (1.000 + 400 + 100 = 1.500); Fundos imob. with no target and Actual R$ 0,00 (**no alvo**); Renda fixa target 60%, Ideal R$ 60.000,00, Actual R$ 0,00 (**faltam R$ 60.000,00**), whose Pós-fixado sub-class holds the whole R$ 60.000,00 Ideal and the same worded shortfall. The Legado Ações bucket shows **—** in Alvo, Ideal, Déficit / distância and Δ p.p. and no bar in the Atual × Ideal column. Sem classe follows the class rows at R$ 50,00. Top Dividendos and Legado Ações link to `/strategies/9001` and `/strategies/9002`. The legacy banner reads R$ 100,00 outside; its preview lists PETR4 under Ações and skips ZZZZ9, and Confirmar reports **1 posição atribuída ao legado.** (the bucket then holds R$ 500,00 and the banner disappears). Expanding Sem classe exposes ZZZZ9's **Classificar** link to `/ativos/positions/ZZZZ9`. A tree missing the RF sub-class rung, a bucket target/bar, a signed Δ R$ instead of the worded distance, a class whose rows do not sum to its Actual, a dead strategy link, a bulk action that does not preview or apply, or an unreachable classification link is an automatic red; the evidence names the first failing intent.

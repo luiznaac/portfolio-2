@@ -14,10 +14,9 @@ import type {
   StrategyAllocation,
   StrategyPerformance,
 } from "../api/types.ts";
-import { formatPoints, formatTarget } from "./allocation.ts";
+import { distanceText, formatPoints, formatTarget } from "./allocation.ts";
 import { formatCurrency, formatPercent, formatSignedPercent } from "./format.ts";
 import { ASSET_CLASSES, MONTHS, assetClassLabel } from "./month.ts";
-import { distanceText } from "./overview.ts";
 import { type Tone, deficitTone, driftTone, returnTone } from "./tones.ts";
 
 // Pure helpers for the Estratégias screens — no React imports here (see AGENTS.md). The list's
@@ -94,13 +93,24 @@ export interface StrategySlice {
   drift?: number;
 }
 
+// The additive `strategy_id` on both rungs is the preferred join; a chain that names a Strategy the
+// catalog no longer carries falls back to the name the tree still renders.
+function matchesStrategy(
+  rung: { strategy: string; strategy_id?: number },
+  strategy: Strategy,
+): boolean {
+  return rung.strategy_id === undefined
+    ? rung.strategy === strategy.name
+    : rung.strategy_id === strategy.id;
+}
+
 export function strategySlice(strategy: Strategy, allocation?: Allocation): StrategySlice {
   const cls = allocation?.classes.find(
     (candidate) => candidate.asset_class === strategy.asset_class,
   );
   if (cls === undefined) return {};
 
-  const report = cls.strategies.find((candidate) => candidate.strategy === strategy.name);
+  const report = cls.strategies.find((candidate) => matchesStrategy(candidate, strategy));
   if (report !== undefined) {
     return {
       cls,
@@ -113,7 +123,8 @@ export function strategySlice(strategy: Strategy, allocation?: Allocation): Stra
     };
   }
 
-  const manual = cls.manual?.strategy === strategy.name ? cls.manual : undefined;
+  const manual =
+    cls.manual !== undefined && matchesStrategy(cls.manual, strategy) ? cls.manual : undefined;
   return manual === undefined ? { cls } : { cls, manual, actual: manual.actual };
 }
 

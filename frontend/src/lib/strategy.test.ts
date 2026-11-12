@@ -421,6 +421,27 @@ describe("strategySlice", () => {
     expect(slice.actual).toBeUndefined();
     expect(slice.cls?.asset_class).toBe("ACOES");
   });
+
+  it("joins by the additive strategy id when the tree carries one", () => {
+    const [equities] = allocation.classes;
+    const withId: Allocation = {
+      ...allocation,
+      classes: [
+        {
+          ...equities,
+          strategies: equities.strategies.map((rung) =>
+            rung.strategy === "Top Dividendos"
+              ? { ...rung, strategy_id: 1, strategy: "Renomeada" }
+              : rung,
+          ),
+          manual: equities.manual ? { ...equities.manual, strategy_id: 9 } : undefined,
+        },
+      ],
+    };
+
+    expect(strategySlice(strategies[1], withId).actual).toBe(12000);
+    expect(strategySlice(strategies[0], withId).actual).toBe(60000);
+  });
 });
 
 describe("strategyPositionRows", () => {

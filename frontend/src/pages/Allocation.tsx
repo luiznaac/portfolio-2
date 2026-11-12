@@ -24,12 +24,11 @@ import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import {
   type AllocationRow,
+  actualIdealBar,
   allocationRows,
-  barWidth,
+  distanceText,
   formatPoints,
   formatTarget,
-  maxAbsDeficit,
-  maxAbsDrift,
   unattributedShare,
 } from "../lib/allocation.ts";
 import {
@@ -51,16 +50,18 @@ import {
   skipReasonLabel,
 } from "../lib/legacyAttribution.ts";
 import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
-import { ROUTES, positionDetail } from "../lib/routes.ts";
+import { ROUTES, positionDetail, strategyDetail } from "../lib/routes.ts";
+import { deficitTone, driftTone, toneClass } from "../lib/tones.ts";
 
 const HEADER =
-  "sticky top-0 z-[1] bg-surface-2 px-3 py-2.5 font-mono text-[10px] font-medium tracking-[.09em] text-ink-faint uppercase whitespace-nowrap";
-const CELL = "border-t border-line-soft px-3 py-2.5 align-middle";
+  "sticky top-0 z-[1] h-[var(--height-row)] bg-panel-2 px-3 font-mono text-label font-semibold tracking-[.1em] text-faint uppercase whitespace-nowrap";
+const CELL = "h-[var(--height-row)] border-t border-line-soft px-3 align-middle";
 
 // The Alocação tree: the open month's Capital → class → strategy/sub-class → ticker chain, each rung
-// with its Ideal, Actual, Δ R$ (deficit) and Δ p.p. (drift) bar. A class is additive — its report
-// Strategies, its manual bucket and its outside row sum to the class Actual — and the unclassified
-// line sits at the root in no class rung.
+// with its Target, Ideal, Actual, worded distance, Drift and an Actual × Ideal bar. A class is
+// additive — its report Strategies, its manual bucket and its outside row sum to the class Actual —
+// and the unclassified line follows at the root in no class rung. A manual bucket has no target, so
+// its target columns read "—" and it draws no bar.
 export function Allocation() {
   const allocation = useCurrentAllocation();
 
@@ -89,8 +90,6 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [transfer, setTransfer] = useState<TransferTarget | null>(null);
   const rows = allocationRows(allocation, expanded);
-  const maxDeficit = maxAbsDeficit(rows);
-  const maxDrift = maxAbsDrift(rows);
 
   function openTransfer(row: AllocationRow) {
     if (row.kind !== "manual_ticker" || row.assetClass === undefined) return;
@@ -114,50 +113,48 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
 
   return (
     <>
-      {/* `minmax(0,1fr)` lets the table track shrink and scroll instead of forcing the 300px rail
-          past the shell's right edge on a 1280px screen. */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex flex-col gap-4">
-          <LegacyAttributionBanner allocation={allocation} />
+      {/* The tree owns the full page width: seven columns (including the Actual × Ideal bar) do not
+          fit beside a 300 px rail on a 1280 px screen, and a clipped bar is a missing read. The
+          supporting panels sit below, two-up. */}
+      <div className="flex flex-col gap-4">
+        <LegacyAttributionBanner allocation={allocation} />
 
-          <div
-            data-testid="allocation-tree"
-            className="overflow-x-auto rounded-lg border border-line"
-          >
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr>
-                  <th className={cn(HEADER, "text-left")}>Nível</th>
-                  <th className={cn(HEADER, "text-right")}>Alvo</th>
-                  <th className={cn(HEADER, "text-right")}>Ideal</th>
-                  <th className={cn(HEADER, "text-right")}>Atual</th>
-                  <th className={cn(HEADER, "text-center")}>Δ R$</th>
-                  <th className={cn(HEADER, "text-right")}>Δ p.p.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <AllocationTableRow
-                    key={row.key}
-                    row={row}
-                    expanded={expanded.has(row.key)}
-                    maxDeficit={maxDeficit}
-                    maxDrift={maxDrift}
-                    onToggle={toggle}
-                    onTransfer={openTransfer}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <Reconciliation allocation={allocation} />
+        <div
+          data-testid="allocation-tree"
+          className="overflow-x-auto rounded-panel border border-line"
+        >
+          <table className="w-full border-collapse text-num whitespace-nowrap">
+            <thead>
+              <tr>
+                <th className={cn(HEADER, "text-left")}>Nível</th>
+                <th className={cn(HEADER, "text-right")}>Alvo</th>
+                <th className={cn(HEADER, "text-right")}>Ideal</th>
+                <th className={cn(HEADER, "text-right")}>Atual</th>
+                <th className={cn(HEADER, "text-right")}>Déficit / distância</th>
+                <th className={cn(HEADER, "text-right")}>Δ p.p.</th>
+                <th className={cn(HEADER, "text-right")}>Atual × Ideal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <AllocationTableRow
+                  key={row.key}
+                  row={row}
+                  expanded={expanded.has(row.key)}
+                  onToggle={toggle}
+                  onTransfer={openTransfer}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <DataQualityPanel allocation={allocation} />
           <CapitalPanel allocation={allocation} />
         </div>
+
+        <Reconciliation allocation={allocation} />
       </div>
 
       {transfer && (
@@ -176,22 +173,24 @@ const INDENT = ["pl-3", "pl-6", "pl-9", "pl-12"];
 function AllocationTableRow({
   row,
   expanded,
-  maxDeficit,
-  maxDrift,
   onToggle,
   onTransfer,
 }: {
   row: AllocationRow;
   expanded: boolean;
-  maxDeficit: number;
-  maxDrift: number;
   onToggle: (key: string) => void;
   onTransfer: (row: AllocationRow) => void;
 }) {
   const ticker = row.ticker;
+  // Only a Strategy rung (report-driven or manual) has a detail to link; a bucket without a catalog
+  // id stays plain text rather than linking to a guessed route.
+  const detail =
+    (row.kind === "strategy" || row.kind === "manual") && row.strategyId !== undefined
+      ? strategyDetail(row.strategyId)
+      : undefined;
 
   return (
-    <tr className="bg-surface">
+    <tr className="bg-panel">
       <td className={cn(CELL, INDENT[row.depth])}>
         <span className="inline-flex items-center gap-1.5">
           {row.expandable ? (
@@ -200,25 +199,43 @@ function AllocationTableRow({
               aria-expanded={expanded}
               aria-label={`${expanded ? "Recolher" : "Expandir"} ${row.label}`}
               onClick={() => onToggle(row.key)}
-              className="font-mono text-[10px] text-ink-faint hover:text-ink"
+              className="font-mono text-[10px] text-faint hover:text-text"
             >
               {expanded ? "▾" : "▸"}
             </button>
           ) : (
             <span className="inline-block w-[8px]" aria-hidden="true" />
           )}
-          <span
-            className={cn(
-              row.kind === "capital" ? "font-cond font-bold" : "font-mono",
-              row.kind === "class" && "font-cond font-semibold",
-            )}
-          >
-            {row.label}
-          </span>
+          {detail !== undefined ? (
+            <Link
+              to={detail}
+              className={cn(
+                "font-mono hover:text-action hover:underline",
+                row.kind === "manual" && "text-muted",
+              )}
+            >
+              {row.label}
+            </Link>
+          ) : (
+            <span
+              className={cn(
+                row.kind === "capital" ? "font-cond font-bold" : "font-mono",
+                row.kind === "class" && "font-cond font-semibold",
+              )}
+            >
+              {row.label}
+            </span>
+          )}
+          {row.kind === "strategy" && (
+            <span className="font-mono text-label text-faint">· relatório</span>
+          )}
+          {row.kind === "manual" && (
+            <span className="font-mono text-label text-faint">· manual, sem alvo</span>
+          )}
           {row.partial && (
             <span
               data-testid="allocation-partial"
-              className="rounded-sm border border-accent px-1.5 py-0.5 font-mono text-[9.5px] tracking-[.04em] text-accent uppercase"
+              className="rounded-xs border border-surplus px-1.5 py-0.5 font-mono text-[9.5px] tracking-[.04em] text-surplus uppercase"
             >
               parcial
             </span>
@@ -226,7 +243,7 @@ function AllocationTableRow({
           {row.stale && row.quoteDate !== undefined && (
             <span
               data-testid="allocation-stale"
-              className="font-mono text-[10px] text-accent"
+              className="font-mono text-[10px] text-attention"
               title="Cotação desatualizada"
             >
               desatualizada · {formatIsoDate(row.quoteDate)}
@@ -237,7 +254,7 @@ function AllocationTableRow({
               type="button"
               aria-label={`Transferir ${row.label}`}
               onClick={() => onTransfer(row)}
-              className="font-mono text-[10px] text-principal hover:underline"
+              className="font-mono text-[10px] text-action hover:underline"
             >
               Transferir
             </button>
@@ -245,47 +262,44 @@ function AllocationTableRow({
           {row.kind === "unclassified_ticker" && ticker !== undefined && (
             <Link
               to={positionDetail(ticker)}
-              className="rounded-sm border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim hover:border-surface-3 hover:text-ink"
+              className="rounded-xs border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted hover:border-panel-3 hover:text-text"
             >
               Classificar
             </Link>
           )}
         </span>
       </td>
-      <td className={cn(CELL, "text-right text-ink-dim")}>{formatTarget(row.target)}</td>
+      <td className={cn(CELL, "text-right text-muted")}>{formatTarget(row.target)}</td>
       <td className={cn(CELL, "text-right font-mono")}>
         {row.ideal === undefined ? "—" : formatCurrency(row.ideal)}
       </td>
       <td className={cn(CELL, "text-right font-mono")}>
         {row.actual === undefined ? (
-          <span className="text-ink-dim">—</span>
+          <span className="text-muted">—</span>
         ) : (
           formatCurrency(row.actual)
         )}
       </td>
-      <td className={cn(CELL, "text-center")}>
+      <td className={cn(CELL, "text-right")}>
         {row.deficit === undefined ? (
-          <span className="font-mono text-ink-dim">—</span>
+          <span className="font-mono text-muted">—</span>
         ) : (
-          <div className="flex items-center justify-center gap-2">
-            <DivergentBar value={-row.deficit} max={maxDeficit} />
-            <span className={cn("min-w-[84px] text-right font-mono", deviationTone(-row.deficit))}>
-              {formatDeviation(-row.deficit)}
-            </span>
-          </div>
+          <span className={cn("font-mono", toneClass(deficitTone(row.deficit)))}>
+            {distanceText(row.deficit)}
+          </span>
         )}
       </td>
       <td className={cn(CELL, "text-right")}>
         {row.drift === undefined ? (
-          <span className="font-mono text-ink-dim">—</span>
+          <span className="font-mono text-muted">—</span>
         ) : (
-          <div className="flex items-center justify-end gap-2">
-            <DivergentBar value={row.drift} max={maxDrift} />
-            <span className={cn("min-w-[72px] text-right font-mono", deviationTone(row.drift))}>
-              {formatPoints(row.drift)}
-            </span>
-          </div>
+          <span className={cn("font-mono", toneClass(driftTone(row.drift)))}>
+            {formatPoints(row.drift)}
+          </span>
         )}
+      </td>
+      <td className={cn(CELL, "text-right")}>
+        <ActualIdealBar actual={row.actual} ideal={row.ideal} />
       </td>
     </tr>
   );
@@ -455,38 +469,39 @@ function TransferModal({
   );
 }
 
-// A divergent bar fills from a centre axis. `value` is the deviation Actual − Ideal (the reference's
-// Δ): above ideal fills right in the "excesso · vender" amber, below ideal left in the "falta ·
-// comprar" blue — the same reading for the R$ column and the p.p. one.
-function DivergentBar({ value, max }: { value: number; max: number }) {
-  const width = barWidth(value, max);
-  const excess = value >= 0;
+// The console's Actual × Ideal bar: the Actual fills from the left, the Ideal is a hairline marker,
+// and the track scales to the larger of the two — so a short rung reads blue and an excess amber
+// without either leaving the track. The worded distance beside it carries the same meaning in words.
+function ActualIdealBar({
+  actual,
+  ideal,
+}: {
+  actual: number | undefined;
+  ideal: number | undefined;
+}) {
+  if (actual === undefined || ideal === undefined) return null;
+  const bar = actualIdealBar(actual, ideal);
+  if (bar === null) return null;
 
   return (
-    <div className="relative h-3.5 w-[120px]">
-      <div className="absolute top-[-2px] bottom-[-2px] left-1/2 w-px bg-line" />
-      {width > 0 && (
-        <div
-          className={cn(
-            "absolute top-0 bottom-0",
-            excess ? "left-1/2 bg-accent" : "right-1/2 bg-principal",
-          )}
-          style={{ width: `${width}%` }}
-        />
-      )}
-    </div>
+    <span
+      data-testid="actual-ideal-bar"
+      className="relative inline-block h-1 w-[74px] rounded-xs bg-line-soft align-middle"
+    >
+      <span
+        className={cn(
+          "absolute inset-y-0 left-0 rounded-xs",
+          actual > ideal ? "bg-surplus" : actual < ideal ? "bg-deficit" : "bg-muted",
+        )}
+        style={{ width: `${bar.actual}%` }}
+      />
+      <span
+        aria-hidden="true"
+        className="absolute -top-0.5 -bottom-0.5 w-px bg-text opacity-65"
+        style={{ left: `${bar.ideal}%` }}
+      />
+    </span>
   );
-}
-
-function deviationTone(deviation: number): string {
-  if (Math.abs(deviation) < 0.5) return "text-ink-dim";
-  return deviation > 0 ? "text-accent" : "text-principal";
-}
-
-// The reference's Δ R$ renders the signed deviation; near-zero reads as a dash.
-function formatDeviation(deviation: number): string {
-  if (Math.abs(deviation) < 0.5) return "—";
-  return `${deviation > 0 ? "+" : "−"}${formatCurrency(Math.abs(deviation))}`;
 }
 
 // The reconciliation bar's hatched segment is the listed value no strategy claims.
