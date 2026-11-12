@@ -12,6 +12,8 @@ const mock = vi.hoisted(() => ({ trades: [] as Trade[] }));
 vi.mock("../api/client.ts", () => ({
   api: {
     getTrades: () => Promise.resolve(mock.trades),
+    getImports: () => Promise.resolve([]),
+    importOriginalUrl: (id: number) => `/api/imports/${id}/file`,
   },
 }));
 

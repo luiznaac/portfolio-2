@@ -1,14 +1,14 @@
 import type { ImportStatus } from "../api/types.ts";
+import { importStatusLabel } from "../lib/imports.ts";
 import { Badge, type BadgeTone } from "./Badge.tsx";
 
-const STYLES: Record<ImportStatus, { label: string; tone: BadgeTone }> = {
-  STAGED: { label: "Aguardando revisão", tone: "neutral" },
-  REVIEWED: { label: "Revisada", tone: "info" },
-  APPLIED: { label: "Aplicada", tone: "ok" },
-  FAILED: { label: "Falhou", tone: "crit" },
+const TONES: Record<ImportStatus, BadgeTone> = {
+  STAGED: "neutral",
+  REVIEWED: "info",
+  APPLIED: "ok",
+  FAILED: "crit",
 };
 
 export function ImportStatusChip({ status }: { status: ImportStatus }) {
-  const { label, tone } = STYLES[status];
-  return <Badge tone={tone}>{label}</Badge>;
+  return <Badge tone={TONES[status]}>{importStatusLabel(status)}</Badge>;
 }

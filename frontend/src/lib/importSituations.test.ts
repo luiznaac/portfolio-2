@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ImportRow, ImportRowSituation } from "../api/types.ts";
-import { summarizeSituations } from "./importSituations.ts";
+import type { ImportRow, ImportRowOutcome, ImportRowSituation } from "../api/types.ts";
+import { rejectedBatch, summarizeOutcomes } from "./importSituations.ts";
 
-function row(id: number, situation: ImportRowSituation): ImportRow {
+function row(id: number, situation: ImportRowSituation, outcome?: ImportRowOutcome): ImportRow {
   return {
     id,
     import_id: 1,
@@ -14,33 +14,39 @@ function row(id: number, situation: ImportRowSituation): ImportRow {
     unit_price: 48.92,
     institution_name: "XP INVESTIMENTOS",
     situation,
+    outcome,
   };
 }
 
-describe("summarizeSituations", () => {
-  it("counts the four server situations", () => {
+describe("import row outcomes", () => {
+  it("counts the apply-time outcomes the server persisted", () => {
     const rows = [
-      row(1, "new"),
-      row(2, "new"),
-      row(3, "duplicate_in_ledger"),
-      row(4, "duplicate_in_file"),
-      row(5, "error"),
+      row(1, "duplicate_in_ledger", "skipped_duplicate"),
+      row(2, "duplicate_in_ledger", "applied"),
+      row(3, "duplicate_in_ledger", "applied"),
+      row(4, "error", "rejected"),
     ];
 
-    expect(summarizeSituations(rows)).toEqual({
-      new: 2,
-      duplicate_in_file: 1,
-      duplicate_in_ledger: 1,
-      error: 1,
+    expect(summarizeOutcomes(rows)).toEqual({
+      applied: 2,
+      rejected: 1,
+      skipped_duplicate: 1,
     });
   });
 
-  it("returns zeros for an import with no rows", () => {
-    expect(summarizeSituations([])).toEqual({
-      new: 0,
-      duplicate_in_file: 0,
-      duplicate_in_ledger: 0,
-      error: 0,
-    });
+  it("treats a review-time error row as the retry batch before apply runs", () => {
+    const rows = [row(1, "new"), row(2, "error")];
+
+    expect(rejectedBatch(rows).map((entry) => entry.id)).toEqual([2]);
+  });
+
+  it("keeps exactly the rows apply rejected as the retry batch afterwards", () => {
+    const rows = [
+      row(1, "duplicate_in_ledger", "applied"),
+      row(2, "duplicate_in_ledger", "skipped_duplicate"),
+      row(3, "error", "rejected"),
+    ];
+
+    expect(rejectedBatch(rows).map((entry) => entry.id)).toEqual([3]);
   });
 });

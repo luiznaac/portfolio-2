@@ -22,7 +22,10 @@ import type {
   Gap,
   HarvestPairCreation,
   HarvestReport,
+  ImportApplyResult,
+  ImportDestinationObject,
   ImportSource,
+  ImportStatus,
   LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
@@ -72,6 +75,31 @@ export function usePortfolioStatus() {
   return useQuery({
     queryKey: ["portfolio", "status"],
     queryFn: api.getPortfolioStatus,
+  });
+}
+
+export interface ImportFilterInput {
+  status?: ImportStatus;
+  source?: ImportSource;
+}
+
+// The import log, optionally narrowed by the additive server filters. The inbox and the parked
+// session read the same hook.
+export function useImports(filters: ImportFilterInput = {}) {
+  return useQuery({
+    queryKey: ["imports", filters.status ?? null, filters.source ?? null],
+    queryFn: () => api.getImports(filters),
+  });
+}
+
+export function useImport(importId: number | null) {
+  return useQuery({
+    queryKey: ["imports", importId],
+    queryFn: () => {
+      if (importId === null) throw new Error("importId is required to fetch an import");
+      return api.getImport(importId);
+    },
+    enabled: importId !== null,
   });
 }
 
@@ -537,8 +565,17 @@ export function useOverrideOrderMatch() {
 export function useStageImport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ source, file }: { source: ImportSource; file: File }) =>
-      api.stageImport(source, file),
+    mutationFn: ({
+      source,
+      file,
+      destination,
+      destinationEntityId,
+    }: {
+      source: ImportSource;
+      file: File;
+      destination: ImportDestinationObject;
+      destinationEntityId?: number;
+    }) => api.stageImport(source, file, destination, destinationEntityId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
       invalidatePortfolioStatus(queryClient);
@@ -559,7 +596,7 @@ export function useReviewImport() {
 
 export function useApplyImport() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<ImportApplyResult, Error, number>({
     mutationFn: (importId: number) => api.applyImport(importId),
     // Apply writes the ledger and auto-enters unknown tickers into the catalog, so the result's
     // custody and data-quality counts must refresh alongside the import and trade lists.

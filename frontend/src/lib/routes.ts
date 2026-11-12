@@ -26,6 +26,7 @@ export const ROUTES = {
   quotes: "/ativos/quotes",
   gaps: "/ativos/gaps",
   imports: "/imports",
+  importAssistant: "/imports/assistant",
   importSources: "/imports/sources",
   corporateActions: "/imports/corporate",
   importHistory: "/imports/history",

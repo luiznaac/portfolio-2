@@ -21,12 +21,15 @@ enum class ImportStatus {
 }
 
 // One uploaded broker file. Re-importing the identical file is detected by `fileHash` and is a
-// no-op, so the hash is the file's identity.
+// no-op, so the hash is the file's identity. `destination` is where an apply lands; `hasOriginal`
+// says the uploaded bytes are retained for provenance and can be downloaded from the record.
 data class Import(
     val id: Int,
     val source: ImportSource,
     val fileName: String,
     val fileHash: String,
     val status: ImportStatus,
+    val destination: ImportDestination,
+    val hasOriginal: Boolean,
     val createdAt: LocalDateTime,
 )

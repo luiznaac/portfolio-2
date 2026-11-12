@@ -38,6 +38,14 @@ const SAMPLE_PARAM: Record<string, string> = {
   id: "1",
   tab: "carteira",
   period: "2026-10",
+  importId: "7",
+};
+
+// The full-screen flow owns the viewport instead of the shell's page head; the smoke walk asserts
+// its own marker.
+const FULL_SCREEN: Record<string, string> = {
+  [ROUTES.importAssistant]: "import-assistant",
+  [`${ROUTES.importAssistant}/7`]: "import-assistant",
 };
 
 // The routes whose head is not an object label: the off-nav health slice and the strategy detail,
@@ -95,6 +103,13 @@ describe("route table", () => {
           <RouterProvider router={router} />
         </QueryClientProvider>,
       );
+
+      const marker = FULL_SCREEN[path];
+      if (marker !== undefined) {
+        await screen.findByTestId(marker);
+        view.unmount();
+        continue;
+      }
 
       const head = await screen.findByTestId("page-head");
       const expected = expectedHead(path);
