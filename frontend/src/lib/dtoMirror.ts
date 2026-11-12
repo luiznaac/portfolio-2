@@ -234,10 +234,14 @@ function splitTopLevel(text: string, separator = ","): string[] {
   return parts;
 }
 
-/** The `val`/`var` names declared by a primary constructor's parameter list. */
+/**
+ * The `val`/`var` names declared by a primary constructor's parameter list. A property may be
+ * backticked to use a Kotlin keyword as its name (`val \`object\`: …`), so the backticks are
+ * optional around the identifier and are not part of the wire name.
+ */
 function constructorProperties(parameters: string): string[] {
   return splitTopLevel(parameters)
-    .map((parameter) => /\b(?:val|var)\s+([A-Za-z_]\w*)\s*:/.exec(parameter))
+    .map((parameter) => /\b(?:val|var)\s+`?([A-Za-z_]\w*)`?\s*:/.exec(parameter))
     .filter((property): property is RegExpExecArray => property !== null)
     .map((property) => property[1]);
 }
@@ -333,7 +337,7 @@ export function parseKotlinClasses(source: string): KotlinClass[] {
     if (bodyOpen >= 0) {
       bodyClose = matchingDelimiter(masked, bodyOpen, "{", "}");
       const body = masked.slice(bodyOpen + 1, bodyClose);
-      bodyProperties = [...body.matchAll(/\bval\s+([A-Za-z_]\w*)\s*:/g)]
+      bodyProperties = [...body.matchAll(/\bval\s+`?([A-Za-z_]\w*)`?\s*:/g)]
         .filter((property) => depths[bodyOpen + 1 + property.index] === header.depth + 1)
         .map((property) => property[1]);
     }

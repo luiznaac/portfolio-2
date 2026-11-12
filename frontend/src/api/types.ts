@@ -1276,3 +1276,109 @@ export interface BenchmarkBackfillEntry {
   to: string;
   points: number;
 }
+
+// GET /portfolio/status — the landing's single aggregate read. It is the portfolio's standing
+// status, not a screen: the status strip, the month line, the data-state panel and the attention
+// queue all read this one route. Every field is typed (numbers, ids, enum kinds); the frontend
+// owns every sentence.
+export type MonthActionKind =
+  | "OPEN_MONTH"
+  | "SET_CAPITAL"
+  | "SET_TARGETS"
+  | "REFRESH_PLAN"
+  | "IMPORT_STATEMENT"
+  | "DECIDE_TRANSFER"
+  | "CLOSE_MONTH";
+
+export type StatusRefType =
+  | "PORTFOLIO"
+  | "MONTH"
+  | "TRANSFER"
+  | "IMPORT"
+  | "EDITION"
+  | "CORPORATE_ACTION"
+  | "GAP"
+  | "QUOTE"
+  | "TICKER";
+
+export type AttentionKind =
+  | "PENDING_TRANSFER"
+  | "STAGED_IMPORT"
+  | "STAGED_EDITION"
+  | "CORPORATE_ACTION_REVIEW"
+  | "UNCLASSIFIED_TICKER"
+  | "OPEN_GAP"
+  | "STALE_QUOTE";
+
+export type AttentionObject = "MONTH" | "IMPORT" | "STRATEGY" | "CORPORATE_ACTION" | "ASSET";
+
+export type AttentionSeverity = "ACTION" | "WATCH";
+
+export interface MonthRef {
+  id: number;
+  period: string;
+}
+
+export interface StatusRef {
+  type: StatusRefType;
+  id?: number;
+  ticker?: string;
+}
+
+/** The first unfinished of the six plan steps, with the object it acts on. */
+export interface MonthNextAction {
+  kind: MonthActionKind;
+  ref: StatusRef;
+}
+
+export interface MonthBlock {
+  open: boolean;
+  steps_done: number;
+  steps_total: number;
+  suggested_orders: number;
+  pending_transfers: number;
+  next_action?: MonthNextAction;
+}
+
+export interface StaleQuote {
+  ticker: string;
+  date: string;
+  close: number;
+  days_old: number;
+}
+
+export interface SnapshotRef {
+  month_id: number;
+  period: string;
+  created_at: string;
+}
+
+/** One finding the owner acts on (ACTION) or watches (WATCH); `params` are its sentence's numbers. */
+export interface AttentionItem {
+  kind: AttentionKind;
+  object: AttentionObject;
+  severity: AttentionSeverity;
+  ref: StatusRef;
+  params: Record<string, number>;
+}
+
+export interface PortfolioDataBlock {
+  quotes_as_of?: string;
+  stale_quotes: StaleQuote[];
+  open_gaps: number;
+  last_snapshot?: SnapshotRef;
+}
+
+export interface PortfolioStatus {
+  as_of: string;
+  open_month?: MonthRef;
+  last_close?: MonthRef;
+  capital: number;
+  invested: number;
+  uninvested_balance?: number;
+  deficit: number;
+  drift: number;
+  month: MonthBlock;
+  data: PortfolioDataBlock;
+  attention: AttentionItem[];
+}

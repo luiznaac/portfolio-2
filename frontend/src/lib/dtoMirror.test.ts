@@ -104,6 +104,19 @@ data class Income(
     ]);
   });
 
+  it("reads a backticked property named with a Kotlin keyword", () => {
+    const source = `
+data class AttentionItem(
+    val kind: AttentionKind,
+    val \`object\`: AttentionObject,
+    val params: Map<String, BigDecimal>,
+)
+`;
+    const parsed = parseKotlinClasses(source).find((entry) => entry.name === "AttentionItem");
+
+    expect(parsed?.properties).toEqual(["kind", "object", "params"]);
+  });
+
   it("accepts visibility modifiers on a top-level declaration", () => {
     const source = `
 private data class TickerClassification(
