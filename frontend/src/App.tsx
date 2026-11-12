@@ -11,6 +11,7 @@ import { Fechamento } from "./pages/Fechamento.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { History } from "./pages/History.tsx";
 import { ImportAssistant } from "./pages/ImportAssistant.tsx";
+import { ImportHistory } from "./pages/ImportHistory.tsx";
 import { ImportInbox } from "./pages/ImportInbox.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
@@ -77,7 +78,7 @@ export const routes: RouteObject[] = [
           { index: true, element: <ImportInbox /> },
           { path: "sources", element: <PendingSurface /> },
           { path: "corporate", element: <CorporateActions /> },
-          { path: "history", element: <PendingSurface /> },
+          { path: "history", element: <ImportHistory /> },
         ],
       },
       {
