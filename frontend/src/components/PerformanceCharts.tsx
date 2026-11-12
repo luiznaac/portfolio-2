@@ -1,14 +1,14 @@
 import type { AssetClass, BenchmarkIndex, PeriodPerformance } from "../api/types.ts";
 import { cn } from "../lib/cn.ts";
-import { formatCurrency, formatNumber, formatPercent, formatSignedPercent } from "../lib/format.ts";
+import { formatCurrency, formatNumber, formatSignedPercent } from "../lib/format.ts";
 import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
 import {
   BENCHMARK_INDEXES,
+  type WindowCumulative,
   aportesPerformanceRows,
-  benchmarkCoverage,
+  benchmarkIndexCoverage,
   classValueSeries,
   contiguousSegments,
-  cumulativeReturns,
   decompositionResult,
   plotArea,
   projectX,
@@ -18,6 +18,28 @@ import {
   strategyValueSeries,
   valueExtent,
 } from "../lib/performance.ts";
+
+// The series style carries a Tailwind stroke class for the line and a background class for the
+// legend swatch; an SVG marker needs the same token as a fill. This is the one conversion.
+function fillClass(background: string): string {
+  return background.replace("bg-", "fill-");
+}
+
+function SeriesDot({
+  cx,
+  cy,
+  r,
+  className,
+  testId,
+}: {
+  cx: number;
+  cy: number;
+  r: number;
+  className: string;
+  testId?: string;
+}) {
+  return <circle cx={cx} cy={cy} r={r} className={className} data-testid={testId} />;
+}
 
 // The performance history's chart layer, kept out of the page shell so each chart can change without
 // touching the read orchestration or the tables.
@@ -43,103 +65,12 @@ const CLASS_LINES: { assetClass: AssetClass; stroke: string; fill: string }[] = 
   { assetClass: "RENDA_FIXA", stroke: "stroke-yield", fill: "bg-yield" },
 ];
 
-// The monthly return chart: one blue bar for the portfolio and one violet bar for the target-weighted
-// benchmark per closed month, sharing a zero axis so a loss reads below the line.
-export function ReturnChart({ months }: { months: PeriodPerformance[] }) {
-  const width = Math.max(640, months.length * 64);
-  const height = 200;
-  const pad = { top: 14, right: 12, bottom: 32, left: 44 };
-  const area = plotArea(width, height, pad);
-  const values = months.flatMap((month) => {
-    const returns: number[] = [];
-    if (month.decomposition.return_percentage !== undefined) {
-      returns.push(month.decomposition.return_percentage);
-    }
-    if (month.benchmark_return !== undefined) returns.push(month.benchmark_return);
-    return returns;
-  });
-  const extent = valueExtent(values);
-  const y = (value: number) => projectY(value, extent.min, extent.max, area);
-  const zero = y(0);
-  const slot = area.width / months.length;
-  const barWidth = Math.max(4, Math.min(12, slot * 0.26));
-
-  return (
-    <div data-testid="return-chart" className="overflow-x-auto">
-      <svg
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Retorno mensal da carteira e do benchmark"
-      >
-        <line
-          x1={pad.left}
-          y1={zero}
-          x2={width - pad.right}
-          y2={zero}
-          className="stroke-line"
-          strokeWidth={1}
-        />
-        <text x={4} y={pad.top + 4} className="fill-ink-faint font-mono text-[9px]">
-          {formatPercent(extent.max, 1)}
-        </text>
-        <text x={4} y={height - pad.bottom} className="fill-ink-faint font-mono text-[9px]">
-          {formatPercent(extent.min, 1)}
-        </text>
-
-        {months.map((month, index) => {
-          const center = pad.left + slot * (index + 0.5);
-          const portfolio = month.decomposition.return_percentage;
-          const benchmark = month.benchmark_return;
-          return (
-            <g key={month.period}>
-              {portfolio !== undefined && (
-                <rect
-                  x={center - barWidth - 1}
-                  y={Math.min(y(portfolio), zero)}
-                  width={barWidth}
-                  height={Math.max(1, Math.abs(y(portfolio) - zero))}
-                  className="fill-ink"
-                  rx={1.5}
-                />
-              )}
-              {benchmark !== undefined && (
-                <rect
-                  x={center + 1}
-                  y={Math.min(y(benchmark), zero)}
-                  width={barWidth}
-                  height={Math.max(1, Math.abs(y(benchmark) - zero))}
-                  className="fill-blend"
-                  rx={1.5}
-                />
-              )}
-              <text
-                x={center}
-                y={height - 12}
-                textAnchor="middle"
-                className="fill-ink-faint font-mono text-[9px]"
-              >
-                {monthPeriodLabel(month.period)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <Legend
-        items={[
-          { label: "Carteira", className: "bg-ink" },
-          { label: "Benchmark alvo", className: "bg-blend" },
-        ]}
-      />
-    </div>
-  );
-}
-
-// The cumulative lines: both indices start at 100 and compound the monthly returns, so the gap
-// between them is the since-inception out/underperformance.
-export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
-  const points = cumulativeReturns(months);
+// The cumulative window: the portfolio starts at 100 one month before the window and compounds every
+// in-window return; the blend and the policy indexes are dashed and only advance where a return
+// exists, so their coverage is visible as a gap rather than a carried-forward line.
+export function CumulativeChart({ cumulative }: { cumulative: WindowCumulative }) {
+  const { points } = cumulative;
+  const coverage = benchmarkIndexCoverage(cumulative.months);
   const width = 640;
   const height = 200;
   const pad = { top: 14, right: 14, bottom: 32, left: 44 };
@@ -151,8 +82,8 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
       ...BENCHMARK_INDEXES.map((index) => point.indexes[index]),
     ])
     .filter((value): value is number => value !== undefined);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const min = Math.min(...values, 99);
+  const max = Math.max(...values, 101);
   const padding = (max - min) * 0.12 || 1;
   const low = min - padding;
   const high = max + padding;
@@ -166,7 +97,6 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
       points: segment.map((index) => `${x(index)},${y(lineValues[index] ?? low)}`).join(" "),
     }));
   const lastPoint = points.at(-1);
-  const coverage = benchmarkCoverage(months);
 
   return (
     <div data-testid="cumulative-chart">
@@ -197,29 +127,73 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
           lines(points.map((point) => point.indexes[benchmark.index])).map((segment) => (
             <polyline
               key={`${benchmark.key}-${segment.start}`}
+              data-testid={`index-line-${benchmark.index}`}
               points={segment.points}
               fill="none"
               className={benchmark.stroke}
               strokeWidth={1.2}
+              strokeDasharray="3 3"
             />
           )),
         )}
         {lines(points.map((point) => point.benchmark)).map((segment) => (
           <polyline
             key={`blend-${segment.start}`}
+            data-testid="blend-line"
             points={segment.points}
             fill="none"
             className="stroke-blend"
             strokeWidth={1.5}
+            strokeDasharray="4 3"
           />
         ))}
         {lines(points.map((point) => point.portfolio)).map((segment) => (
           <polyline
             key={`portfolio-${segment.start}`}
+            data-testid="portfolio-line"
             points={segment.points}
             fill="none"
             className="stroke-ink"
             strokeWidth={1.9}
+          />
+        ))}
+
+        {/* A one-month window leaves a line with a single point, which a polyline cannot draw; the
+            markers keep each series and the dashed blend visible at every preset. */}
+        {BENCHMARK_LINES.map((benchmark) =>
+          points.map((point, index) => {
+            const value = point.indexes[benchmark.index];
+            if (value === undefined) return null;
+            return (
+              <SeriesDot
+                key={`${benchmark.key}-point-${point.period}`}
+                cx={x(index)}
+                cy={y(value)}
+                r={1.8}
+                className={fillClass(benchmark.fill)}
+              />
+            );
+          }),
+        )}
+        {points.map((point, index) =>
+          point.benchmark === undefined ? null : (
+            <SeriesDot
+              key={`blend-point-${point.period}`}
+              testId={`blend-point-${point.period}`}
+              cx={x(index)}
+              cy={y(point.benchmark)}
+              r={2.2}
+              className="fill-blend"
+            />
+          ),
+        )}
+        {points.map((point, index) => (
+          <SeriesDot
+            key={`portfolio-point-${point.period}`}
+            cx={x(index)}
+            cy={y(point.portfolio)}
+            r={2.2}
+            className="fill-ink"
           />
         ))}
 
@@ -234,7 +208,7 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
               {formatNumber(Math.round(lastPoint.portfolio))}
             </text>
             <text x={pad.left} y={height - 12} className="fill-ink-faint font-mono text-[9px]">
-              {months.length > 0 ? monthPeriodLabel(months[0].period) : ""}
+              início
             </text>
             <text
               x={width - pad.right}
@@ -242,7 +216,7 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
               textAnchor="end"
               className="fill-ink-faint font-mono text-[9px]"
             >
-              {months.length > 0 ? monthPeriodLabel(months[months.length - 1].period) : ""}
+              {lastPoint.period.length > 0 ? monthPeriodLabel(lastPoint.period) : ""}
             </text>
           </>
         )}
@@ -259,11 +233,11 @@ export function CumulativeChart({ months }: { months: PeriodPerformance[] }) {
       />
       {coverage.length > 0 && (
         <div
-          data-testid="benchmark-coverage"
+          data-testid="benchmark-index-coverage"
           className="mt-2 flex flex-wrap gap-3 font-mono text-[10.5px] text-ink-faint"
         >
           {coverage.map((row) => (
-            <span key={row.index} data-testid={`benchmark-coverage-${row.index}`}>
+            <span key={row.index} data-testid={`index-coverage-${row.index}`}>
               {row.index} · {row.missing} {row.missing === 1 ? "mês sem dado" : "meses sem dado"}
             </span>
           ))}
@@ -296,7 +270,13 @@ function ValueLineChart({
   lines: ValueLine[];
 }) {
   if (lines.length === 0) {
-    return <p className="text-[13px] text-ink-dim">{emptyMessage}</p>;
+    // The chart surface stays mounted in its empty state, so a page (and an acceptance intent) can
+    // still address it and read why there is no series rather than seeing a missing element.
+    return (
+      <div data-testid={testId}>
+        <p className="text-[13px] text-ink-dim">{emptyMessage}</p>
+      </div>
+    );
   }
 
   const width = 640;
@@ -339,13 +319,23 @@ function ValueLineChart({
         ))}
 
         {lines.map((line) => (
-          <polyline
-            key={line.key}
-            points={line.points.map((point) => `${x(point.period)},${y(point.value)}`).join(" ")}
-            fill="none"
-            className={line.style.stroke}
-            strokeWidth={1.7}
-          />
+          <g key={line.key}>
+            <polyline
+              points={line.points.map((point) => `${x(point.period)},${y(point.value)}`).join(" ")}
+              fill="none"
+              className={line.style.stroke}
+              strokeWidth={1.7}
+            />
+            {line.points.map((point) => (
+              <SeriesDot
+                key={point.period}
+                cx={x(point.period)}
+                cy={y(point.value)}
+                r={2}
+                className={fillClass(line.style.fill)}
+              />
+            ))}
+          </g>
         ))}
 
         <text x={pad.left} y={height - 12} className="fill-ink-faint font-mono text-[9px]">
