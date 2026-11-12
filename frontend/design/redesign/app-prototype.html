@@ -169,6 +169,17 @@
   .railbar .range small { display: block; color: var(--ink3); font-size: 9.5px; }
   .railbar .sp { flex: 1; }
   .railbar .grain { font: 9.5px/1.3 var(--mono); color: var(--warn); max-width: 330px; }
+  .dk-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--line); background: var(--sur); border-radius: 3px; padding: 7px 10px; margin-bottom: 10px; }
+  .dk-filters label { display: inline-flex; align-items: center; gap: 6px; font: 600 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); }
+  .dk-filters input, .dk-filters select { border: 1px solid var(--line); background: var(--sur2); color: var(--ink); font: 11px/1 var(--mono); padding: 5px 7px; border-radius: 2px; outline: none; }
+  .dk-filters input { width: 150px; }
+  .dk-filters input[type="date"] { width: 124px; }
+  .dk-filters input::placeholder { color: var(--ink3); }
+  .dk-filters input:focus, .dk-filters select:focus { border-color: var(--accent); }
+  .dk-filters .sel { display: inline-flex; }
+  .dk-filters .sp { flex: 1; }
+  .dk-filters .count { font: 10px/1 var(--mono); color: var(--ink3); white-space: nowrap; }
+  .dk-empty { padding: 14px 11px; color: var(--ink3); font-size: 11.5px; }
   .chev { border: 1px solid var(--line); background: var(--sur); color: var(--ink2); font: 12px/1 var(--mono); width: 24px; height: 25px; border-radius: 3px; cursor: pointer; }
   .steps { display: grid; gap: 2px; }
   .step { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border-bottom: 1px solid var(--line2); text-align: left; background: none; border-left: 0; border-right: 0; border-top: 0; cursor: pointer; color: var(--ink2); }
@@ -341,7 +352,7 @@ const barMarkup = (actual, ideal, cls = "") => {
 const OBJECTS = [
   { key: "portfolio", label: "Carteira", group: "Posição", subs: [["overview", "Visão geral"], ["allocation", "Alocação"], ["history", "Histórico"]] },
   { key: "strategies", label: "Estratégias", group: "Posição", subs: [["list", "Todas"]] },
-  { key: "assets", label: "Ativos", group: "Posição", subs: [["positions", "Posições"], ["fixed", "Renda fixa"], ["quotes", "Cotações"], ["gaps", "Lacunas"]] },
+  { key: "assets", label: "Ativos", group: "Posição", subs: [["positions", "Posições"], ["trades", "Negócios"], ["fixed", "Renda fixa"], ["quotes", "Cotações"], ["gaps", "Lacunas"]] },
   { key: "imports", label: "Importações", group: "Operações", subs: [["inbox", "Caixa de entrada"], ["sources", "Fontes"], ["corporate", "Ações corporativas"], ["history", "Histórico"]] },
   { key: "plan", label: "Plano / Mês", group: "Operações", subs: [["month", "Mês atual"], ["orders", "Ordens"], ["transfers", "Transferências"], ["close", "Fechamentos"]] },
   { key: "analysis", label: "Análise", group: "Resultados", subs: [["performance", "Performance"], ["income", "Proventos"], ["tax", "Impostos"]] },
@@ -354,6 +365,64 @@ const STATE = {
   period: { preset: "12m", anchor: LAST },
   guide: false,
 };
+
+// Per-page filters (#359): no global search, so each growing list owns its own narrowing. The state
+// is page-scoped — leaving the page clears it (see render) — and never lands in the URL.
+const FILTERS = {
+  positions: { q: "", cls: "" },
+  trades: { q: "", from: "", to: "", side: "" },
+  imports: { q: "", source: "", status: "" },
+  income: { q: "", status: "" },
+};
+function clearFilters(group) {
+  const groups = group ? [group] : Object.keys(FILTERS);
+  groups.forEach((g) => Object.keys(FILTERS[g] ?? {}).forEach((k) => (FILTERS[g][k] = "")));
+}
+const norm = (s) => String(s ?? "").toLowerCase();
+const matchQ = (q, ...values) => !q || values.some((v) => norm(v).includes(norm(q)));
+const filterActive = (group) => Object.values(FILTERS[group]).some(Boolean);
+
+// One bar shape, reused: text + selects, a live "n de m", and a clear action only when narrowing.
+function filterBar(group, controls, shown, total) {
+  const f = FILTERS[group];
+  return `<div class="dk-filters" data-filterbar="${group}">
+    ${controls.map((c) => c.kind === "select"
+      ? `<label>${c.label}<span class="sel"><select data-flt="${group}.${c.field}">${c.options.map(([value, label]) => `<option value="${value}"${f[c.field] === value ? " selected" : ""}>${label}</option>`).join("")}</select></span></label>`
+      : `<label>${c.label}<input data-flt="${group}.${c.field}" type="${c.kind === "date" ? "date" : "text"}" value="${esc(f[c.field])}" placeholder="${c.placeholder ?? ""}" spellcheck="false" autocomplete="off"></label>`).join("")}
+    <span class="sp"></span>
+    <span class="count">${shown} de ${total}</span>
+    ${filterActive(group) ? `<button class="btn sm ghost" data-act="clear-filters" data-group="${group}">limpar</button>` : ""}
+  </div>`;
+}
+const emptyRows = (group, cols) => `<tr><td colspan="${cols}" class="dk-empty">Nenhuma linha com esse filtro. <button class="btn sm ghost" data-act="clear-filters" data-group="${group}">limpar</button></td></tr>`;
+
+// Typing must not rebuild the bar, or the caret dies mid-keystroke: the page wraps its list in a
+// `data-filtered` host and an input event re-fills only that host, plus the bar's own count.
+const FILTER_VIEWS = {};
+function refreshFiltered(surface) {
+  const host = document.querySelector(`[data-filtered="${surface}"]`);
+  const def = FILTER_VIEWS[surface];
+  if (!host || !def) return;
+  const view = def.view();
+  host.innerHTML = view.html;
+  const bar = document.querySelector(`[data-filterbar="${def.group}"]`);
+  if (!bar) return;
+  bar.querySelector(".count").textContent = `${view.shown} de ${view.total}`;
+  const clear = bar.querySelector('[data-act="clear-filters"]');
+  if (filterActive(def.group) && !clear) {
+    const button = document.createElement("button");
+    button.className = "btn sm ghost";
+    button.dataset.act = "clear-filters";
+    button.dataset.group = def.group;
+    button.textContent = "limpar";
+    bar.appendChild(button);
+  } else if (!filterActive(def.group) && clear) {
+    clear.remove();
+  }
+}
+function resetFilterInputs(group) {
+  document.querySelectorAll(`[data-flt^="${group}."]`).forEach((el) => (el.value = ""));
+}
 
 const editionById = (id) => F.strategies.editions.find((e) => e.id === id);
 const editionStatus = (id) => STATE.imports.editions[id] ?? editionById(id)?.status;
@@ -918,8 +987,69 @@ function strategyDetail(id, tab) {
   </div>
   ${body}`;
 }
+function positionsRows() {
+  return F.assets.positions.map((p) => {
+    const q = F.assets.quotes.find((x) => x.ticker === p.ticker);
+    const cat = F.assets.catalog.find((x) => x.ticker === p.ticker);
+    return { ...p, close: q?.close, cls: cat?.asset_class, stale: q && q.date < "2026-10-30" };
+  });
+}
+function positionsView() {
+  const pos = positionsRows();
+  const f = FILTERS.positions;
+  const shown = pos.filter((p) => matchQ(f.q, p.ticker) && (!f.cls || p.cls === f.cls));
+  const total = shown.reduce((s, p) => s + p.quantity * (p.close || 0), 0);
+  return {
+    shown: shown.length,
+    total: pos.length,
+    html: `<section class="dk-panel"><table class="dk-table">
+      ${tableHead(["Ticker", "Classe", "Quantidade", "Preço médio", "Fechamento", "Valor"])}
+      ${shown.length === 0 ? emptyRows("positions", 6) : shown.map((p) => `<tr><td><b class="num">${p.ticker}</b>${p.stale ? ' <span class="chip amber plain">cotação velha</span>' : ""}${p.ticker === "AAPL34" ? ' <span class="chip red plain">lacuna</span>' : ""}</td><td><span class="chip ${p.cls === "ACOES" ? "blue" : "amber"} plain">${CLASS_LABEL[p.cls] ?? "—"}</span></td><td class="r num">${num(p.quantity)}</td><td class="r num">${money(p.average_price)}</td><td class="r num">${p.close ? money(p.close) : "—"}</td><td class="r num">${p.close ? money0(p.quantity * p.close) : "—"}</td></tr>`).join("")}
+      ${shown.length ? `<tr class="total"><td colspan="5">Total listado</td><td class="r num">${money0(total)}</td></tr>` : ""}
+    </table></section>`,
+  };
+}
+FILTER_VIEWS.positions = { group: "positions", view: positionsView };
+
+function tradesView() {
+  const ledger = F.assets.recentTrades.slice().sort((a, b) => b.date.localeCompare(a.date));
+  const f = FILTERS.trades;
+  const shown = ledger.filter((t) =>
+    matchQ(f.q, t.ticker) &&
+    (!f.side || t.side === f.side) &&
+    (!f.from || t.date >= f.from) &&
+    (!f.to || t.date <= f.to));
+  const total = shown.reduce((s, t) => s + t.quantity * t.unit_price, 0);
+  return {
+    shown: shown.length,
+    total: ledger.length,
+    html: `<section class="dk-panel">
+        <h2>Negócios <span class="sp"></span><span class="hint">o fixture carrega uma janela de ${ledger.length}; a leitura real pagina o livro inteiro</span></h2>
+        <table class="dk-table">
+          ${tableHead(["Data", "Ticker", "Lado", "Quantidade", "Preço", "Financeiro", "Origem"])}
+          ${shown.length === 0 ? emptyRows("trades", 7) : shown.map((t) => `<tr><td class="num dim">${dateBR(t.date)}</td><td><b class="num">${t.ticker}</b></td><td><span class="chip ${t.side === "BUY" ? "blue" : "amber"} plain">${t.side === "BUY" ? "Compra" : "Venda"}</span></td><td class="r num">${num(t.quantity)}</td><td class="r num">${money(t.unit_price)}</td><td class="r num">${money0(t.quantity * t.unit_price)}</td><td class="dim">${t.source === "B3_IMPORT" ? "B3" : "Manual"}</td></tr>`).join("")}
+          ${shown.length ? `<tr class="total"><td colspan="5">Total filtrado</td><td class="r num">${money0(total)}</td><td></td></tr>` : ""}
+        </table>
+      </section>
+      <div class="dk-note" style="margin-top:10px">O filtro é da página, não do aplicativo: sair e voltar limpa o recorte. Um negócio não planejado entra aqui do mesmo jeito — é a conferência que separa o que veio do plano do que veio da corretora.</div>`,
+  };
+}
+FILTER_VIEWS.trades = { group: "trades", view: tradesView };
+
 function assetsPage(sub) {
   const actions = `<button class="btn" data-go="imports/wizard/b3/1">Importar extrato</button><button class="btn ghost" data-go="imports/wizard/custody/1">Reconciliar custódia</button>`;
+  if (sub === "trades") {
+    const view = tradesView();
+    return `${pageHead("Ativos · Negócios", "O livro de negócios: a lista que cresce para sempre e o lastro do imposto.", actions)}
+      ${objectTabs("assets", "trades")}
+      ${filterBar("trades", [
+        { kind: "text", field: "q", label: "Ticker", placeholder: "ex.: VALE3" },
+        { kind: "date", field: "from", label: "De" },
+        { kind: "date", field: "to", label: "Até" },
+        { kind: "select", field: "side", label: "Lado", options: [["", "Os dois"], ["BUY", "Compra"], ["SELL", "Venda"]] },
+      ], view.shown, view.total)}
+      <div data-filtered="trades">${view.html}</div>`;
+  }
   if (sub === "fixed") {
     const subLabel = { INFLATION_LINKED: "IPCA+", FIXED_RATE: "Prefixado", FLOATING_RATE: "CDI" };
     return `${pageHead("Ativos · Renda fixa", "Títulos e contas na mesma tabela; o valor é por accrual.", actions)}
@@ -939,20 +1069,17 @@ function assetsPage(sub) {
       <section class="dk-panel"><table class="dk-table">${tableHead(["Ticker", "Data", "Quantidade", "Resultado", "Estado"])}${F.assets.gaps.map((g) => `<tr><td><b class="num">${g.ticker}</b></td><td class="num dim">${dateBR(g.date)}</td><td class="r num">${num(g.quantity)}</td><td>${g.realized_pending ? '<span class="chip amber">pendente</span>' : '<span class="chip green plain">resolvido</span>'}</td><td><span class="chip ${g.status === "OPEN" ? "red" : "grey"}">${g.status}</span></td></tr>`).join("")}</table></section>
       <div class="dk-callout"><b>A lacuna nasce no snapshot de custódia.</b> A importação 102 mostra AAPL34 com +50 cotas contra o livro; aplicar o snapshot abre a lacuna e deixa o resultado pendente. Fechar o mês não é bloqueado por ela.</div>`;
   }
-  const pos = F.assets.positions.map((p) => {
-    const q = F.assets.quotes.find((x) => x.ticker === p.ticker);
-    const cat = F.assets.catalog.find((x) => x.ticker === p.ticker);
-    return { ...p, close: q?.close, cls: cat?.asset_class, stale: q && q.date < "2026-10-30" };
-  });
-  const total = pos.reduce((s, p) => s + p.quantity * (p.close || 0), 0);
+  const pos = positionsRows();
+  const classOptions = [["", "Todas"], ...["ACOES", "FIIS", "RENDA_FIXA"].filter((c) => pos.some((p) => p.cls === c)).map((c) => [c, CLASS_LABEL[c]])];
+  const view = positionsView();
   return `${pageHead("Ativos · Posições", "Custódia real e preço médio fiscal; a atribuição por estratégia vem em segundo plano.", actions)}
     ${objectTabs("assets", "positions")}
     <div class="infobanner"><b>Revisão contextual.</b><span>O extrato B3 (101) e a custódia (102) abrem o assistente já no destino Ativos · Posições.</span><span class="sp"></span><a data-go="imports/inbox">Ver caixa de entrada →</a></div>
-    <section class="dk-panel"><table class="dk-table">
-      ${tableHead(["Ticker", "Classe", "Quantidade", "Preço médio", "Fechamento", "Valor"])}
-      ${pos.map((p) => `<tr><td><b class="num">${p.ticker}</b>${p.stale ? ' <span class="chip amber plain">cotação velha</span>' : ""}${p.ticker === "AAPL34" ? ' <span class="chip red plain">lacuna</span>' : ""}</td><td><span class="chip ${p.cls === "ACOES" ? "blue" : "amber"} plain">${CLASS_LABEL[p.cls] ?? "—"}</span></td><td class="r num">${num(p.quantity)}</td><td class="r num">${money(p.average_price)}</td><td class="r num">${p.close ? money(p.close) : "—"}</td><td class="r num">${p.close ? money0(p.quantity * p.close) : "—"}</td></tr>`).join("")}
-      <tr class="total"><td colspan="5">Total listado</td><td class="r num">${money0(total)}</td></tr>
-    </table></section>`;
+    ${filterBar("positions", [
+      { kind: "text", field: "q", label: "Ticker", placeholder: "ex.: PETR4" },
+      { kind: "select", field: "cls", label: "Classe", options: classOptions },
+    ], view.shown, view.total)}
+    <div data-filtered="positions">${view.html}</div>`;
 }
 
 function sourceStatus(key) {
@@ -993,15 +1120,48 @@ function sourceStrip() {
 
 function queueItems() {
   return [
-    { key: "101", kind: "b3", source: "B3 · Movimentações", file: F.imports.items.find((i) => i.id === 101).file_name, status: sourceStatus("mov"), text: sourceText("mov"), dest: "Ativos · Posições", go: STATE.imports.b3 ? "assets/positions" : "imports/wizard/b3/3" },
-    { key: "102", kind: "custody", source: "B3 · Custódia", file: F.imports.items.find((i) => i.id === 102).file_name, status: sourceStatus("pos"), text: sourceText("pos"), dest: "Ativos · Posições", go: STATE.imports.custody ? "assets/positions" : "imports/wizard/custody/3" },
-    { key: "ed104", kind: "xp", source: "XP · Relatório", file: "XP_Relatorio_Novembro_2026.csv", status: sourceStatus("xp"), text: sourceText("xp"), dest: "Estratégias · Dividendos BR", go: editionStatus(104) === "STAGED" ? "imports/wizard/xp/3" : "strategies/1/edicoes" },
+    { key: "101", kind: "b3", src: "B3_MOVEMENTS", source: "B3 · Movimentações", file: F.imports.items.find((i) => i.id === 101).file_name, status: sourceStatus("mov"), text: sourceText("mov"), dest: "Ativos · Posições", go: STATE.imports.b3 ? "assets/positions" : "imports/wizard/b3/3" },
+    { key: "102", kind: "custody", src: "B3_POSITION", source: "B3 · Custódia", file: F.imports.items.find((i) => i.id === 102).file_name, status: sourceStatus("pos"), text: sourceText("pos"), dest: "Ativos · Posições", go: STATE.imports.custody ? "assets/positions" : "imports/wizard/custody/3" },
+    { key: "ed104", kind: "xp", src: "XP_REPORT", source: "XP · Relatório", file: "XP_Relatorio_Novembro_2026.csv", status: sourceStatus("xp"), text: sourceText("xp"), dest: "Estratégias · Dividendos BR", go: editionStatus(104) === "STAGED" ? "imports/wizard/xp/3" : "strategies/1/edicoes" },
   ];
 }
 
-function importsInbox() {
+const IMPORT_SOURCE_LABEL = { B3_MOVEMENTS: "B3 · Movimentações", B3_POSITION: "B3 · Custódia", B3_TRADES: "B3 · Negócios", XP_REPORT: "XP · Relatório" };
+const matchImport = (item) => {
+  const f = FILTERS.imports;
+  return matchQ(f.q, item.file) && (!f.source || item.src === f.source) && (!f.status || item.status === f.status);
+};
+const importFilterBar = (items, shown, total) => filterBar("imports", [
+  { kind: "text", field: "q", label: "Arquivo", placeholder: "ex.: negocios" },
+  { kind: "select", field: "source", label: "Fonte", options: [["", "Todas"], ...Object.entries(IMPORT_SOURCE_LABEL).filter(([k]) => items.some((i) => i.src === k))] },
+  { kind: "select", field: "status", label: "Estado", options: [["", "Todos"], ...[...new Set(items.map((i) => i.status))].map((s) => [s, statusLabel[s] ?? s])] },
+], shown, total);
+
+function importsInboxView() {
   const queued = queueItems();
   const pending = queued.filter((q) => q.status !== "APPLIED" && q.status !== "DISCARDED");
+  const shown = queued.filter(matchImport);
+  return {
+    items: queued,
+    shown: shown.length,
+    total: queued.length,
+    html: `<section class="dk-panel">
+      <h2>Na fila <span class="sp"></span><span class="hint">${pending.length} ${pending.length === 1 ? "item" : "itens"} · os aplicados continuam no histórico</span></h2>
+      <div class="queue">${shown.length === 0
+        ? `<div class="dk-empty">Nenhuma sessão com esse filtro. <button class="btn sm ghost" data-act="clear-filters" data-group="imports">limpar</button></div>`
+        : shown.map((q) => `<button class="qitem" data-go="${q.go}">
+        <div><div class="src">${q.source}</div><div class="file">${esc(q.file)}</div></div>
+        <div class="what">${q.text}</div>
+        <div><span class="chip blue plain">${q.dest}</span></div>
+        <div class="right"><span class="chip ${statusTone[q.status] ?? "grey"}">${statusLabel[q.status] ?? q.status}</span><span class="go">${q.status === "APPLIED" ? "Ver →" : "Retomar →"}</span></div>
+      </button>`).join("")}</div>
+    </section>`,
+  };
+}
+FILTER_VIEWS.inbox = { group: "imports", view: importsInboxView };
+
+function importsInbox() {
+  const view = importsInboxView();
   const parked = STATE.imports.parked ? `<section class="dk-panel" style="margin-bottom:12px">
     <h2>Sessão aberta <span class="sp"></span><span class="chip amber plain">retomável</span><span class="hint">saiu sem concluir</span></h2>
     <div class="dk-mini"><div class="dk-mini-row">
@@ -1015,15 +1175,8 @@ function importsInbox() {
     ${sourceStrip()}
     <div class="infobanner"><b>Sessões, não linhas.</b><span>Cada upload vira uma sessão de assistente; abandonar guarda a sessão aqui para retomar.</span></div>
     ${parked}
-    <section class="dk-panel">
-      <h2>Na fila <span class="sp"></span><span class="hint">${pending.length} ${pending.length === 1 ? "item" : "itens"} · os aplicados continuam no histórico</span></h2>
-      <div class="queue">${queued.map((q) => `<button class="qitem" data-go="${q.go}">
-        <div><div class="src">${q.source}</div><div class="file">${esc(q.file)}</div></div>
-        <div class="what">${q.text}</div>
-        <div><span class="chip blue plain">${q.dest}</span></div>
-        <div class="right"><span class="chip ${statusTone[q.status] ?? "grey"}">${statusLabel[q.status] ?? q.status}</span><span class="go">${q.status === "APPLIED" ? "Ver →" : "Retomar →"}</span></div>
-      </button>`).join("")}</div>
-    </section>
+    ${importFilterBar(view.items, view.shown, view.total)}
+    <div data-filtered="inbox">${view.html}</div>
     <section class="dk-panel" style="margin-top:12px">
       <h2>Falhas e reenvios <span class="sp"></span><span class="hint">a fonte guarda a última tentativa</span></h2>
       <table class="dk-table"><thead><tr><th>Fonte</th><th>Arquivo</th><th>Motivo</th><th>Quando</th><th class="r">Ação</th></tr></thead>
@@ -1071,18 +1224,41 @@ function importsCorporate() {
     ${F.imports.corporateActions.filter((c) => c.status === "NEEDS_REVIEW").map((c) => `<div class="warnbanner" style="margin-top:12px"><b>Desdobramento 1:${c.ratio} em revisão.</b><span>${c.ticker} com ex em ${dateBR(c.ex_date)}. Aplicar muda quantidade e preço médio; nunca o caixa.</span><span class="sp"></span><a data-go="imports/wizard/b3/3">Abrir revisão →</a></div>`).join("")}`;
 }
 
+function importsHistoryList() {
+  return [
+    ...F.imports.items.map((i) => ({
+      id: `#${i.id}`,
+      src: i.source,
+      file: i.file_name,
+      created: i.created_at,
+      status: i.id === 101 ? sourceStatus("mov") : i.id === 102 ? sourceStatus("pos") : i.status,
+    })),
+    { id: "ed. 104", src: "XP_REPORT", file: "XP_Relatorio_Novembro_2026.csv", created: "2026-11-01T09:10:00Z", status: editionStatus(104) },
+  ];
+}
+function importsHistoryView() {
+  const list = importsHistoryList();
+  const shown = list.filter(matchImport);
+  return {
+    items: list,
+    shown: shown.length,
+    total: list.length,
+    html: `<section class="dk-panel"><table class="dk-table">
+      ${tableHead(["#", "Fonte", "Arquivo", "Criado", "Estado"])}
+      ${shown.length === 0 ? emptyRows("imports", 5) : shown.map((i) => `<tr><td class="num dim">${i.id}</td><td><span class="chip grey">${IMPORT_SOURCE_LABEL[i.src] ?? i.src}</span></td><td class="dim">${esc(i.file)}</td><td class="num">${dateBR(i.created)}</td><td><span class="chip ${statusTone[i.status] ?? "grey"}">${statusLabel[i.status] ?? i.status}</span></td></tr>`).join("")}
+    </table></section>`,
+  };
+}
+FILTER_VIEWS.importHistory = { group: "imports", view: importsHistoryView };
+
 function importsHistory() {
+  const view = importsHistoryView();
   return `${pageHead("Importações · Histórico", "Tudo que já foi staged, revisado, aplicado ou falhou.")}
     ${objectTabs("imports", "history")}
-    <section class="dk-panel"><table class="dk-table">
-      ${tableHead(["#", "Fonte", "Arquivo", "Criado", "Estado"])}
-      ${F.imports.items.map((i) => {
-        const status = i.id === 101 ? sourceStatus("mov") : i.id === 102 ? sourceStatus("pos") : i.status;
-        return `<tr><td class="num dim">#${i.id}</td><td><span class="chip grey">${i.source}</span></td><td class="dim">${esc(i.file_name)}</td><td class="num">${dateBR(i.created_at)}</td><td><span class="chip ${statusTone[status] ?? "grey"}">${statusLabel[status] ?? status}</span></td></tr>`;
-      }).join("")}
-      <tr><td class="num dim">ed. 104</td><td><span class="chip grey">XP · Relatório</span></td><td class="dim">XP_Relatorio_Novembro_2026.csv</td><td class="num">01/11</td><td><span class="chip ${statusTone[editionStatus(104)]}">${statusLabel[editionStatus(104)] ?? editionStatus(104)}</span></td></tr>
-    </table></section>`;
+    ${importFilterBar(view.items, view.shown, view.total)}
+    <div data-filtered="importHistory">${view.html}</div>`;
 }
+
 const WIZ_LABELS = {
   b3: ["Arquivo", "Destino e mapeamento", "Linhas", "Aplicar"],
   custody: ["Arquivo", "Destino e mapeamento", "Divergências", "Aplicar"],
@@ -1240,7 +1416,6 @@ function wizardScreen(kind, stepInput) {
       <div class="wiz-brand">Carteira Ideal <span>· Importar</span></div>
       <div class="wiz-dest">${dest}</div>
       <span class="sp"></span>
-      <span class="hint" style="font-size:11px;color:var(--ink3)">Ctrl K desligado neste modo</span>
       <button class="wiz-close" data-act="wiz-close" aria-label="Sair">✕</button>
     </div>
     <div class="steps-rail">
@@ -1680,10 +1855,15 @@ function analysisPerformance() {
   </div>`;
 }
 
-function analysisIncome() {
-  const r = currentRange();
-  const data = periodIncome(r);
-  const rows = data.rows.slice().sort((a, b) => b.date.localeCompare(a.date)).map((i) => `<tr>
+function incomeLedgerView() {
+  const data = periodIncome(currentRange());
+  const f = FILTERS.income;
+  const matches = (i) => {
+    const open = i.status !== "RECEIVED" && i.status !== "RECONCILED";
+    return matchQ(f.q, i.ticker) && (!f.status || (f.status === "recebido" ? !open : open));
+  };
+  const shownRows = data.rows.filter(matches);
+  const incomeRows = shownRows.slice().sort((a, b) => b.date.localeCompare(a.date)).map((i) => `<tr>
     <td class="num dim">${dateBR(i.date)}</td>
     <td><b class="num">${i.ticker}</b></td>
     <td class="faint">${i.type === "JCP" ? "JCP" : i.type === "FUND_INCOME" ? "Rendimento" : "Dividendo"}</td>
@@ -1692,6 +1872,18 @@ function analysisIncome() {
     <td class="r num">${money(i.net_amount)}</td>
     <td class="r ${i.status === "PAYABLE" || i.status === "ANNOUNCED" ? "over" : "faint"}">${i.status === "PAYABLE" ? "a pagar" : i.status === "ANNOUNCED" ? "anunciado" : "recebido"}</td>
   </tr>`).join("");
+  return {
+    shown: shownRows.length,
+    total: data.rows.length,
+    html: `<section class="dk-panel"><h2>Lançamentos <span class="sp"></span><span class="hint">a receber primeiro, depois a janela</span></h2><table class="dk-table">${tableHead(["Data", "Ativo", "Tipo", "Bruto", "Retido", "Líquido", "Status"])}${shownRows.length === 0 ? emptyRows("income", 7) : incomeRows}</table></section>`,
+  };
+}
+FILTER_VIEWS.income = { group: "income", view: incomeLedgerView };
+
+function analysisIncome() {
+  const r = currentRange();
+  const data = periodIncome(r);
+  const view = incomeLedgerView();
   const next = data.next;
   return `<div class="dk-strip">
     ${cell("Proventos na janela", money0(data.received), `${data.closed.length} lançamentos recebidos`)}
@@ -1705,7 +1897,11 @@ function analysisIncome() {
   <div class="dk-cols">
     <div class="dk-stack">
       <section class="dk-panel"><h2>Proventos por mês</h2><div class="dk-chart">${incomeChart(data.byMonth)}</div></section>
-      <section class="dk-panel"><h2>Lançamentos <span class="sp"></span><span class="hint">a receber primeiro, depois a janela</span></h2><table class="dk-table">${tableHead(["Data", "Ativo", "Tipo", "Bruto", "Retido", "Líquido", "Status"])}${rows}</table></section>
+      ${filterBar("income", [
+        { kind: "text", field: "q", label: "Ativo", placeholder: "ex.: BBAS3" },
+        { kind: "select", field: "status", label: "Estado", options: [["", "Todos"], ["recebido", "Recebido"], ["a-receber", "A receber"]] },
+      ], view.shown, view.total)}
+      <div data-filtered="income">${view.html}</div>
       <div class="dk-read" style="padding:0 2px"><p>A receber é prospectivo: um lançamento <b>anunciado</b> ou <b>a pagar</b> aparece mesmo quando a data cai fora da janela${data.upcomingOutsideRange ? " — e aqui um deles cai" : ""}.</p></div>
     </div>
     <aside class="dk-stack">
@@ -1802,6 +1998,7 @@ function guideOverlay() {
     ["Ver um bucket manual", "Legado Ações sem alvo, com abas reduzidas", "strategies/4/carteira"],
     ["Enviar e revisar um relatório", "assistente em tela cheia: arquivo → destino/mapeamento → diff → promover", "imports/wizard/xp/3"],
     ["Enviar um extrato B3", "4 linhas, 1 erro; ignorar a linha, aplicar as 3 válidas, cair em Ativos", "imports/wizard/b3/3"],
+    ["Filtrar uma lista longa", "Negócios, Posições, Proventos e Importações têm barra própria; o recorte morre ao sair da página", "assets/trades"],
     ["Rodar o plano de novembro", "6 etapas, abrindo na primeira aberta; ordens, transferência e fechamento", "plan/month"],
     ["Ler performance, proventos e impostos", "uma Análise, três abas, rail compartilhado; Impostos usa o mês-âncora", "analysis/performance"],
     ["Fechar o mês", "a transferência pendente bloqueia; aprovar ou recusar libera e fecha", "plan/close"],
@@ -1819,6 +2016,11 @@ function guideOverlay() {
 function render() {
   const parts = route();
   const app = document.getElementById("app");
+  const routeKey = parts.join("/");
+  if (routeKey !== render.lastKey) {
+    clearFilters();
+    render.lastKey = routeKey;
+  }
   if (parts[0] === "imports" && parts[1] === "wizard") {
     app.innerHTML = wizardScreen(parts[2], parts[3]) + (STATE.guide ? guideOverlay() : "");
     window.scrollTo(0, 0);
@@ -1939,8 +2141,26 @@ function act(name, data) {
     render();
     return;
   }
+  if (name === "clear-filters") {
+    clearFilters(data.group);
+    resetFilterInputs(data.group);
+    const host = document.querySelector("[data-filtered]");
+    if (host) refreshFiltered(host.dataset.filtered);
+    return;
+  }
   if (name === "noop") return;
 }
+
+function applyFilterInput(e) {
+  const el = e.target.closest("[data-flt]");
+  if (!el) return;
+  const [group, field] = el.dataset.flt.split(".");
+  FILTERS[group][field] = el.value;
+  const host = document.querySelector("[data-filtered]");
+  if (host) refreshFiltered(host.dataset.filtered);
+}
+document.addEventListener("input", applyFilterInput);
+document.addEventListener("change", applyFilterInput);
 
 document.addEventListener("click", (e) => {
   const el = e.target.closest("[data-go],[data-act],[data-step],[data-preset],[data-shift]");

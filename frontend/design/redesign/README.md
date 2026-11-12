@@ -185,7 +185,7 @@ class totals, strategy slices, income, orders and tax roll up to its Actual.
 | --- | --- |
 | Portfolio landing | `portfolio.summary`, `portfolio.allocation`, `portfolio.attention` |
 | Strategies list and detail | `strategies.rows`, `strategies.editions`, `strategies.holdings`, `strategies.attribution`, `strategies.performance` |
-| Assets | `assets.catalog`, `assets.quotes`, `assets.positions`, `assets.positionDetails`, `assets.gaps`, `assets.fixedIncome` |
+| Assets | `assets.catalog`, `assets.quotes`, `assets.positions`, `assets.positionDetails`, `assets.gaps`, `assets.fixedIncome`, `assets.recentTrades` (Negócios) |
 | Imports | `imports.items`, `imports.rows`, `imports.editionImport`, `imports.corporateActions`, `imports.movementsImportResult` |
 | Plan / Month | `plan.currentMonth`, `plan.allocation`, `plan.orderPlan`, `plan.orderList`, `plan.months` |
 | Analysis — Performance | `analysis.performanceSeries`, `analysis.monthPerformance` |
@@ -510,9 +510,9 @@ python3 -m http.server 8765 -d frontend/design/redesign
 # then open http://localhost:8765/app-prototype.html
 ```
 
-The top bar carries **roteiro**, a ten-step walkthrough with links (Carteira → Alocação → strategy
-and edition → manual bucket → XP report → B3 extract → month plan → Análise → close → snapshot), and
-**protótipo · resetar**, which returns every decision to the 02/11 state.
+The top bar carries **roteiro**, an eleven-step walkthrough with links (Carteira → Alocação → strategy
+and edition → manual bucket → XP report → B3 extract → a filtered list → month plan → Análise →
+close → snapshot), and **protótipo · resetar**, which returns every decision to the 02/11 state.
 
 What it carries from the decisions:
 
@@ -531,8 +531,46 @@ What it carries from the decisions:
 - **Visual language (#355, A · Console):** every screen is in the dark dense console, with the three
   document borrowings — the month standfirst on the landing, worded distances (“faltam” / “sobram”)
   in allocation tables, and prose captions under the Análise charts that state benchmark coverage.
+- **Finding things (#359):** no global search and no command palette; per-object filter bars on the
+  lists that grow without bound, and **Ativos · Negócios** as the ledger's home. Detail below.
 
 Live interactions: promote a staged edition, apply a B3 extract or custody snapshot, abandon and
 resume the assistant, approve/reject the WEGE3 transfer, close November, switch the shared period
-rail, and read a stored snapshot. Not modelled: global search / command layer (decided in #359),
-editing the target chain, manual order matching, the RF import path, and persistence.
+rail, filter a list and read a stored snapshot. Not modelled: editing the target chain, manual order
+matching, the RF import path, and persistence.
+
+## Finding things: the filter bars (wayfinder ticket #359)
+
+**Decided: no global search / command layer.** A Ctrl K palette (production ships a nav-only one)
+would have been a second way to reach rows that the object's own list already reaches, and a second
+filter model to keep in sync with the first. Instead the shell answers “where is it” with object
+navigation, page tabs, attention deep links, and one filter bar per list.
+
+What that means in the prototype:
+
+- **Ativos gains a fifth sub-view, Negócios** — the trade ledger (data, ticker, lado, quantidade,
+  preço, financeiro, origem), filtered by ticker, a `de`/`até` period and lado. It is the only truly
+  unbounded trading list and the lastro of the Impostos read; the fixture carries a 10-row window.
+  Adding it is the one screen-inventory change in this ticket.
+- **A filter bar on the lists that grow without bound**, and nowhere else: **Ativos · Posições**
+  (ticker + classe), **Ativos · Negócios** (ticker + período + lado), **Importações · Caixa de entrada
+  and · Histórico** (arquivo + fonte + estado, the same bar on both) and **Análise · Proventos**
+  (ativo + estado; the período stays on the shared rail and is not duplicated). Bounded lists —
+  Estratégias (5), ordens do mês (3), snapshots — get none.
+- **One bar shape, reused**: text fields plus selects, a live `n de m`, and a `limpar` action that
+  appears only while narrowing. An empty result says so and offers the same `limpar`.
+- **Each bar filters only its own table** — never a KPI strip, never the period rail, never another
+  object. The Proventos KPIs and chart stay at window level while the ledger narrows; the count
+  makes the difference legible.
+- **The filter is page state, not app state**: it is not in the URL, it survives typing and in-page
+  re-renders, and leaving the page clears it. A stale filter silently hiding rows is worse than
+  losing the narrowing.
+- **No cross-object ticker lookup.** A ticker lives in Ativos · Posições (the canonical row) and on
+  the strategy's Carteira/Atribuição tabs; there is no seventh “ticker detail” object and no ticker
+  box on Ativos.
+- Typing re-fills only the filtered host (not the whole page), so the caret never dies mid-keystroke;
+  the tab strip sits above the bar, so a page keeps its tabs at the same y with or without a filter.
+
+The shell prototype (#350) still shows the `Ctrl K` placeholder chip with a “not specified” toast;
+it stays there as comparison evidence. The assembled app carries no palette affordance at all, and
+the import assistant's stale “Ctrl K desligado neste modo” hint is gone.
