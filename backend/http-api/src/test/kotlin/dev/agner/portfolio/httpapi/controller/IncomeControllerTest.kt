@@ -5,6 +5,7 @@ import dev.agner.portfolio.httpapi.import.B3IncomeParser
 import dev.agner.portfolio.usecase.income.IncomeService
 import dev.agner.portfolio.usecase.income.model.Income
 import dev.agner.portfolio.usecase.income.model.IncomeCreation
+import dev.agner.portfolio.usecase.income.model.IncomeQuery
 import dev.agner.portfolio.usecase.income.model.IncomeStatus
 import dev.agner.portfolio.usecase.income.model.IncomeType
 import dev.agner.portfolio.usecase.income.model.Provenance
@@ -24,6 +25,7 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
@@ -33,7 +35,7 @@ class IncomeControllerTest : DescribeSpec({
 
         it("returns 200 with every movement and its derived lifecycle status") {
             val service = mockk<IncomeService>()
-            coEvery { service.fetchAll() } returns listOf(income)
+            coEvery { service.fetchAll(IncomeQuery()) } returns listOf(income)
 
             testApplication {
                 application { installRoutes(controller(service)) }
@@ -45,6 +47,70 @@ class IncomeControllerTest : DescribeSpec({
                 body.get("ticker").asText() shouldBe "PETR4"
                 body.get("type").asText() shouldBe "DIVIDEND"
                 body.get("status").asText() shouldBe "ANNOUNCED"
+            }
+        }
+
+        it("forwards the additive window, ticker and status filters to the service") {
+            val service = mockk<IncomeService>()
+            val query = slot<IncomeQuery>()
+            coEvery { service.fetchAll(capture(query)) } returns listOf(income)
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                val response = client.get(
+                    "/income?from=2026-11-01&to=2026-11-30&ticker=PETR4&status=ANNOUNCED",
+                )
+
+                response.status shouldBe HttpStatusCode.OK
+                query.captured shouldBe IncomeQuery(
+                    from = LocalDate.parse("2026-11-01"),
+                    to = LocalDate.parse("2026-11-30"),
+                    ticker = "PETR4",
+                    status = IncomeStatus.ANNOUNCED,
+                )
+            }
+        }
+
+        it("treats blank filters as absent") {
+            val service = mockk<IncomeService>()
+            val query = slot<IncomeQuery>()
+            coEvery { service.fetchAll(capture(query)) } returns listOf(income)
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                client.get("/income?ticker=&status=")
+
+                query.captured shouldBe IncomeQuery()
+            }
+        }
+
+        it("returns 400 with the canonical error body when a window date is malformed") {
+            val service = mockk<IncomeService>()
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                val response = client.get("/income?from=2026-13-01")
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "invalid-parameter"
+            }
+        }
+
+        it("returns 400 with the canonical error body when the status is unknown") {
+            val service = mockk<IncomeService>()
+
+            testApplication {
+                application { installRoutes(controller(service)) }
+
+                val response = client.get("/income?status=UNKNOWN")
+
+                response.status shouldBe HttpStatusCode.BadRequest
+                ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
+                    "invalid-parameter"
             }
         }
     }

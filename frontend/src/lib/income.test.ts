@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { Income } from "../api/types.ts";
 import {
   byPayableDate,
+  incomeLedgerRows,
   incomeRows,
   incomeStatusLabel,
   incomeTypeLabel,
+  incomeWindowView,
   netTotal,
 } from "./income.ts";
 
@@ -102,5 +104,86 @@ describe("byPayableDate", () => {
 
     expect(byPayableDate(input).map((income) => income.id)).toEqual([2, 3, 1]);
     expect(input.map((income) => income.id)).toEqual([1, 2, 3]);
+  });
+});
+
+const window = { start: "2026-10", end: "2026-11" };
+
+function movement(overrides: Partial<Income>): Income {
+  return {
+    id: 1,
+    ticker: "PETR4",
+    date: "2026-10-14",
+    type: "DIVIDEND",
+    gross_amount: 10,
+    retained_amount: 0,
+    net_amount: 10,
+    tax_nature: "INCOME",
+    provenance: "B3",
+    status: "RECEIVED",
+    ...overrides,
+  };
+}
+
+describe("incomeWindowView", () => {
+  const receivedInWindow = movement({ id: 2, date: "2026-10-10", net_amount: 20 });
+  const receivedBefore = movement({ id: 3, date: "2026-01-05", net_amount: 30 });
+  const openInWindow = movement({ id: 1, date: "2026-11-20", status: "ANNOUNCED", net_amount: 40 });
+  const openAfter = movement({ id: 4, date: "2026-12-01", status: "PAYABLE", net_amount: 50 });
+  const all = [openAfter, receivedBefore, openInWindow, receivedInWindow];
+
+  it("keeps the receivable rows forward-looking, even outside the window", () => {
+    const view = incomeWindowView(all, window);
+
+    expect(view.open.map((row) => row.id)).toEqual([1, 4]);
+    expect(view.toReceiveTotal).toBe(90);
+    expect(view.upcomingOutsideRange).toBe(true);
+    expect(view.next?.id).toBe(1);
+  });
+
+  it("counts only settled rows inside the window as received", () => {
+    const view = incomeWindowView(all, window);
+
+    expect(view.received.map((row) => row.id)).toEqual([2]);
+    expect(view.receivedTotal).toBe(20);
+    expect(view.byMonth).toEqual([
+      { period: "2026-10", value: 20 },
+      { period: "2026-11", value: 0 },
+    ]);
+    expect(view.monthsInWindow).toBe(2);
+  });
+
+  it("has no receivable flag when every open row falls inside the window", () => {
+    const view = incomeWindowView([openInWindow], window);
+
+    expect(view.upcomingOutsideRange).toBe(false);
+  });
+});
+
+describe("incomeLedgerRows", () => {
+  const open = incomeRows([
+    movement({ id: 1, date: "2026-11-20", status: "ANNOUNCED" }),
+    movement({ id: 4, date: "2026-12-01", status: "PAYABLE" }),
+  ]);
+  const received = incomeRows([movement({ id: 2, date: "2026-10-10" })]);
+
+  it("puts every receivable row before the settled window rows", () => {
+    expect(incomeLedgerRows(open, received, window).map((row) => row.key)).toEqual([1, 4, 2]);
+  });
+
+  it("flags only a receivable row paid outside the window", () => {
+    expect(incomeLedgerRows(open, received, window).map((row) => row.outsideWindow)).toEqual([
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  it("marks the deep-linked row as the focused one", () => {
+    expect(incomeLedgerRows(open, received, window, 4).map((row) => row.focused)).toEqual([
+      false,
+      true,
+      false,
+    ]);
   });
 });

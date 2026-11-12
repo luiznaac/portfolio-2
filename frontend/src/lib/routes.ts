@@ -49,6 +49,12 @@ export function strategyDetail(strategyId: number): string {
   return `${ROUTES.strategies}/${strategyId}`;
 }
 
+// An attention ref carries the target income row's id; Proventos reads it and anchors the shared
+// window on that row's month with the row highlighted.
+export function incomeRow(incomeId: number): string {
+  return `${ROUTES.income}?focus=${incomeId}`;
+}
+
 export interface SubView {
   key: string;
   label: string;

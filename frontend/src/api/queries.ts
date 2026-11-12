@@ -23,6 +23,7 @@ import type {
   HarvestPairCreation,
   HarvestReport,
   ImportSource,
+  IncomeQuery,
   LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
@@ -646,17 +647,14 @@ export function useActivateEdition() {
   });
 }
 
-export function useIncome() {
+// The ledger read, optionally narrowed at the source by the window and the page's active filters.
+// An untouched filter is absent from the request, so the default call is the same `/income` read
+// existing callers make.
+export function useIncome(query: IncomeQuery = {}, enabled = true) {
   return useQuery({
-    queryKey: ["income"],
-    queryFn: api.getIncome,
-  });
-}
-
-export function useUpcomingIncome() {
-  return useQuery({
-    queryKey: ["income", "upcoming"],
-    queryFn: api.getUpcomingIncome,
+    queryKey: ["income", "ledger", query],
+    queryFn: () => api.getIncome(query),
+    enabled,
   });
 }
 
