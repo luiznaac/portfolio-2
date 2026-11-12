@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { Edition, EditionDiff, EditionEntry, Strategy } from "../api/types.ts";
+import type { EditionDiff, EditionEntry, Strategy } from "../api/types.ts";
 import {
+  type StrategyPricing,
   editionDiffSummary,
-  editionStatusChip,
+  editionSummaryChip,
   editionWeightSum,
   groupStrategiesByClass,
-  isEditionForMonth,
   isWeightSumValid,
   overrideEntry,
   ratingLabel,
   referenceMonthLabel,
   reportDrivenStrategies,
-  strategyCoverage,
-  strategyCoverageLabel,
+  strategyRows,
   suggestStrategy,
 } from "./strategy.ts";
 
@@ -156,21 +155,6 @@ describe("ratingLabel", () => {
   });
 });
 
-describe("isEditionForMonth", () => {
-  it("matches the edition's reference month", () => {
-    const edition: Edition = {
-      id: 9,
-      strategy_id: 1,
-      reference_month: "2026-09",
-      status: "ACTIVE",
-      entries,
-    };
-
-    expect(isEditionForMonth(edition, "2026-09")).toBe(true);
-    expect(isEditionForMonth(edition, "2026-10")).toBe(false);
-  });
-});
-
 describe("overrideEntry", () => {
   it("replaces one entry immutably and leaves the others untouched", () => {
     const result = overrideEntry(entries, 0, {
@@ -247,73 +231,52 @@ describe("reportDrivenStrategies", () => {
   });
 });
 
-describe("strategyCoverage", () => {
-  const editions = new Map([
-    [1, [{ reference_month: "2026-09" }]],
-    [2, [{ reference_month: "2026-08" }]],
-  ]);
+describe("strategyRows", () => {
+  const pricing: StrategyPricing = {
+    classes: [
+      {
+        strategies: [{ strategy: "Top Dividendos", actual: 12000, drift: 2.4 }],
+        manual: { strategy: "Legado", actual: 3000 },
+      },
+      {
+        strategies: [{ strategy: "Fundamentalista FII", actual: 5000, drift: -1.2 }],
+      },
+    ],
+  };
 
-  it("counts report-driven strategies with an edition for the month", () => {
-    expect(strategyCoverage(strategies, editions, "2026-09")).toEqual({
-      withEdition: 1,
-      total: 3,
-    });
-    expect(strategyCoverageLabel(strategyCoverage(strategies, editions, "2026-09"))).toBe(
-      "1 de 3 com edição",
-    );
+  it("joins each strategy's value and drift and keeps the class order with the bucket last", () => {
+    expect(
+      strategyRows(strategies, pricing).map((row) => [row.strategy.name, row.value, row.drift]),
+    ).toEqual([
+      ["Top Dividendos", 12000, 2.4],
+      ["Top Ações", undefined, undefined],
+      ["Legado", 3000, undefined],
+      ["Fundamentalista FII", 5000, -1.2],
+    ]);
   });
 
-  it("leaves the bucket out of both the numerator and the denominator", () => {
-    const withBucketEdition = new Map([
-      [1, [{ reference_month: "2026-09" }]],
-      [2, [{ reference_month: "2026-09" }]],
-      [9, [{ reference_month: "2026-09" }]],
+  it("leaves every value unknown when no allocation was read", () => {
+    expect(strategyRows(strategies).map((row) => row.value)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
     ]);
-
-    expect(strategyCoverage(strategies, withBucketEdition, "2026-09")).toEqual({
-      withEdition: 2,
-      total: 3,
-    });
   });
 });
 
-describe("editionStatusChip", () => {
+describe("editionSummaryChip", () => {
   it("shows the latest active edition with a check", () => {
-    expect(
-      editionStatusChip([
-        {
-          id: 9,
-          strategy_id: 1,
-          reference_month: "2026-09",
-          status: "ACTIVE",
-          entries: [],
-        },
-      ]),
-    ).toEqual({ label: "set/26 ✓", tone: "green" });
-  });
-
-  it("shows a staged edition as in review", () => {
-    expect(
-      editionStatusChip([
-        {
-          id: 9,
-          strategy_id: 1,
-          reference_month: "2026-09",
-          status: "STAGED",
-          entries: [],
-        },
-      ]),
-    ).toEqual({ label: "set/26 · revisão", tone: "amber" });
-  });
-
-  it("reads sem edição when the strategy has none", () => {
-    expect(editionStatusChip([])).toEqual({
-      label: "sem edição",
-      tone: "neutral",
+    expect(editionSummaryChip({ id: 9, reference_month: "2026-09", status: "ACTIVE" })).toEqual({
+      label: "set/26 ✓",
+      tone: "green",
     });
-    expect(editionStatusChip(undefined)).toEqual({
-      label: "sem edição",
-      tone: "neutral",
+  });
+
+  it("badges a staged edition as in review", () => {
+    expect(editionSummaryChip({ id: 9, reference_month: "2026-09", status: "STAGED" })).toEqual({
+      label: "set/26 · revisão",
+      tone: "amber",
     });
   });
 });

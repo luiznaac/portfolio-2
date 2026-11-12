@@ -1,15 +1,17 @@
 import type {
   AssetClass,
-  Edition,
   EditionDiff,
   EditionEntry,
+  EditionSummary,
+  ManualAllocation,
   Rating,
   Strategy,
+  StrategyAllocation,
 } from "../api/types.ts";
 import { ASSET_CLASSES, MONTHS } from "./month.ts";
 
-// Pure helpers for the Estratégias screen — no React imports here (see AGENTS.md). The screen's
-// grouping, labels and diff summary are unit-tested in strategy.test.ts.
+// Pure helpers for the Estratégias screens — no React imports here (see AGENTS.md). The list's
+// row join, labels and edition chips are unit-tested in strategy.test.ts.
 
 export interface StrategyGroup {
   assetClass: AssetClass;
@@ -27,6 +29,47 @@ export function groupStrategiesByClass(strategies: Strategy[]): StrategyGroup[] 
   })).filter((group) => group.strategies.length > 0);
 }
 
+// The allocation tree slice the comparison list reads: each class's report strategies and its
+// optional manual bucket, narrowed from the mirrored wire types. `Allocation` satisfies it
+// structurally; the list needs nothing else.
+export interface StrategyPricing {
+  classes: {
+    strategies: Pick<StrategyAllocation, "strategy" | "actual" | "drift">[];
+    manual?: Pick<ManualAllocation, "strategy" | "actual"> | null;
+  }[];
+}
+
+export interface StrategyListRow {
+  strategy: Strategy;
+  // The strategy's priced Actual in the open month's allocation tree, absent when the chain carries
+  // no rung for it — rendered "—", never R$ 0,00.
+  value?: number;
+  // Drift in p.p.; a manual bucket has no target, so it is always absent.
+  drift?: number;
+}
+
+// One row per Strategy for the comparison list, in class order with each class's bucket last. The
+// value and drift join the allocation tree by the Strategy's unique name; a strategy the chain does
+// not carry stays unpriced. The manual bucket never carries drift (no target).
+export function strategyRows(strategies: Strategy[], pricing?: StrategyPricing): StrategyListRow[] {
+  const priced = new Map<string, { value?: number; drift?: number }>();
+  for (const assetClass of pricing?.classes ?? []) {
+    for (const strategy of assetClass.strategies) {
+      priced.set(strategy.strategy, { value: strategy.actual, drift: strategy.drift });
+    }
+    if (assetClass.manual) {
+      priced.set(assetClass.manual.strategy, { value: assetClass.manual.actual });
+    }
+  }
+
+  return groupStrategiesByClass(strategies).flatMap((group) =>
+    group.strategies.map((strategy) => {
+      const node = priced.get(strategy.name);
+      return { strategy, value: node?.value, drift: node?.drift };
+    }),
+  );
+}
+
 export function isReportDriven(strategy: Strategy | null | undefined): boolean {
   return strategy?.kind === "REPORT_DRIVEN";
 }
@@ -35,53 +78,17 @@ export function reportDrivenStrategies(strategies: Strategy[]): Strategy[] {
   return strategies.filter(isReportDriven);
 }
 
-export interface StrategyCoverage {
-  withEdition: number;
-  total: number;
-}
-
-// The class header's coverage count: report-driven Strategies only, so the bucket never keeps the
-// count permanently short. `period` absent means no open month, so nothing counts as covered.
-export function strategyCoverage(
-  strategies: Strategy[],
-  editionsByStrategyId: ReadonlyMap<number, readonly { reference_month: string }[]>,
-  period: string | undefined,
-): StrategyCoverage {
-  const report = reportDrivenStrategies(strategies);
-  const withEdition =
-    period === undefined
-      ? 0
-      : report.filter((strategy) =>
-          (editionsByStrategyId.get(strategy.id) ?? []).some(
-            (edition) => edition.reference_month === period,
-          ),
-        ).length;
-  return { withEdition, total: report.length };
-}
-
-export function strategyCoverageLabel(coverage: StrategyCoverage): string {
-  return `${coverage.withEdition} de ${coverage.total} com edição`;
-}
-
 export interface EditionStatusChip {
   label: string;
   tone: "green" | "amber" | "neutral";
 }
 
-// The catalog row's right-aligned chip: the latest edition is active (✓) or still in review; a
-// strategy with no edition reads "sem edição". The bucket gets the violet Legado chip instead.
-export function editionStatusChip(editions: readonly Edition[] | undefined): EditionStatusChip {
-  const latest = editions?.[0];
-  if (!latest) return { label: "sem edição", tone: "neutral" };
+// The comparison row's edition cell: the latest edition's month, ✓ when active and a "revisão"
+// badge when still staged.
+export function editionSummaryChip(latest: EditionSummary): EditionStatusChip {
   return latest.status === "ACTIVE"
-    ? {
-        label: `${referenceMonthLabel(latest.reference_month)} ✓`,
-        tone: "green",
-      }
-    : {
-        label: `${referenceMonthLabel(latest.reference_month)} · revisão`,
-        tone: "amber",
-      };
+    ? { label: `${referenceMonthLabel(latest.reference_month)} ✓`, tone: "green" }
+    : { label: `${referenceMonthLabel(latest.reference_month)} · revisão`, tone: "amber" };
 }
 
 // "2026-09" -> "set/26", matching the reference's edition chips.
@@ -123,10 +130,6 @@ export function ratingLabel(rating?: Rating): string {
     default:
       return "—";
   }
-}
-
-export function isEditionForMonth(edition: Edition, referenceMonth: string): boolean {
-  return edition.reference_month === referenceMonth;
 }
 
 // Inline override in the preview drawer: replace one entry immutably, leaving the rest identical.

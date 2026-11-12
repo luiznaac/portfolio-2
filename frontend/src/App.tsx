@@ -4,7 +4,6 @@ import { ObjectPage } from "./components/ObjectPage.tsx";
 import { PendingSurface } from "./components/PendingSurface.tsx";
 import { ROUTES } from "./lib/routes.ts";
 import { Allocation } from "./pages/Allocation.tsx";
-import { AssetDetail } from "./pages/AssetDetail.tsx";
 import { CorporateActions } from "./pages/CorporateActions.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
@@ -16,6 +15,7 @@ import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
 import { Overview } from "./pages/Overview.tsx";
 import { Performance } from "./pages/Performance.tsx";
+import { Positions } from "./pages/Positions.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { Taxes } from "./pages/Taxes.tsx";
 import { Trades } from "./pages/Trades.tsx";
@@ -49,6 +49,8 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Strategies /> },
           { path: "import", element: <Strategies /> },
+          // The list's row target; the detail shell lands with #374 and replaces this placeholder.
+          { path: ":id", element: <PendingSurface /> },
         ],
       },
       {
@@ -56,10 +58,10 @@ export const routes: RouteObject[] = [
         element: <ObjectPage objectKey="assets" />,
         children: [
           { index: true, element: <Navigate to="positions" replace /> },
-          { path: "positions", element: <PendingSurface /> },
-          // The ticker detail stays reachable as the last production asset surface until the
-          // Posições drawer slice replaces it.
-          { path: "positions/:ticker", element: <AssetDetail /> },
+          // One page for the list and its ticker drawer: the optional segment is the deep link
+          // Alocação and attention use, and the same route element keeps the page filters alive
+          // while the drawer opens.
+          { path: "positions/:ticker?", element: <Positions /> },
           { path: "trades", element: <Trades /> },
           { path: "fixed", element: <FixedIncome /> },
           { path: "quotes", element: <PendingSurface /> },

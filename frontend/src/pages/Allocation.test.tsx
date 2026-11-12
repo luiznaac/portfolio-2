@@ -338,81 +338,26 @@ describe("the Alocação tree", () => {
     expect(screen.getByText(/1 posição atribuída ao legado/)).toBeDefined();
   });
 
-  it("classifies an unclassified ticker from its leaf", async () => {
+  it("links an unclassified ticker leaf to the Positions drawer", async () => {
     mock.allocation = allocation;
     renderAllocation();
     const user = userEvent.setup();
 
     await screen.findByText("Sem classe");
     await user.click(within(rowFor("Sem classe")).getByRole("button"));
-    await user.click(
-      within(screen.getByTestId("allocation-tree")).getByRole("button", { name: "Classificar" }),
-    );
-    await user.click(screen.getByRole("button", { name: "FIIs" }));
 
-    expect(mock.classified).toEqual([["ZZZZ9", "FIIS"]]);
+    const link = within(screen.getByTestId("allocation-tree")).getByRole("link", {
+      name: "Classificar",
+    });
+    expect(link.getAttribute("href")).toBe("/ativos/positions/ZZZZ9");
   });
 
-  it("classifies only the chosen held tickers in one batch from the panel", async () => {
-    mock.allocation = allocation;
-    mock.queue = [
-      { ticker: "ZZZZ9", short_name: "ZZZZ", quantity: 10, reason: "UNHANDLED_BDI_CODE" },
-      { ticker: "MISS3", short_name: "MISS", quantity: 5, reason: "ABSENT_FROM_LATEST_FILE" },
-    ];
-    renderAllocation();
-    const user = userEvent.setup();
-
-    await screen.findByText("Sem classe");
-    await user.click(screen.getByRole("button", { name: "Classificar pendentes" }));
-
-    const dialog = await screen.findByRole("dialog", { name: "Classificar tickers sem classe" });
-    expect(within(dialog).getByText(/Código BDI não mapeado/)).toBeDefined();
-    expect(within(dialog).getByText(/Ausente do arquivo mais recente/)).toBeDefined();
-
-    await user.click(
-      within(within(dialog).getByTestId("bulk-classify-row-ZZZZ9")).getByRole("button", {
-        name: "Classificar ZZZZ9 como FIIs",
-      }),
-    );
-    await user.click(within(dialog).getByRole("button", { name: /Salvar 1 classificação/ }));
-
-    expect(mock.batch).toEqual([{ ZZZZ9: "FIIS" }]);
-  });
-
-  it("keeps the queue open and untouched when the batch save fails", async () => {
-    mock.allocation = allocation;
-    mock.batchError = true;
-    mock.queue = [
-      { ticker: "ZZZZ9", short_name: "ZZZZ", quantity: 10, reason: "UNHANDLED_BDI_CODE" },
-    ];
-    renderAllocation();
-    const user = userEvent.setup();
-
-    await screen.findByText("Sem classe");
-    await user.click(screen.getByRole("button", { name: "Classificar pendentes" }));
-
-    const dialog = await screen.findByRole("dialog", { name: "Classificar tickers sem classe" });
-    await user.click(within(dialog).getByRole("button", { name: "Classificar ZZZZ9 como Ações" }));
-    await user.click(within(dialog).getByRole("button", { name: /Salvar 1 classificação/ }));
-
-    expect(await within(dialog).findByText("save failed")).toBeDefined();
-    expect(within(dialog).getByTestId("bulk-classify-row-ZZZZ9")).toBeDefined();
-  });
-
-  it("offers the catalog refresh as the bulk alternative in the classify dialog", async () => {
+  it("points the data-quality bulk classification action at Positions", async () => {
     mock.allocation = allocation;
     renderAllocation();
-    const user = userEvent.setup();
 
-    await screen.findByText("Sem classe");
-    await user.click(within(rowFor("Sem classe")).getByRole("button"));
-    await user.click(
-      within(screen.getByTestId("allocation-tree")).getByRole("button", { name: "Classificar" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Atualizar catálogo" }));
-
-    expect(mock.refreshed).toBe(1);
-    expect(mock.classified).toEqual([]);
+    const link = await screen.findByRole("link", { name: "Classificar pendentes" });
+    expect(link.getAttribute("href")).toBe("/ativos/positions");
   });
 
   it("renders the Dados da carteira panel with the three counts and their rows", async () => {

@@ -14,10 +14,14 @@ export function Table<T>({
   columns,
   rows,
   rowKey,
+  footer,
+  onRowClick,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string | number;
+  footer?: ReactNode;
+  onRowClick?: (row: T) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-panel border border-line">
@@ -39,7 +43,24 @@ export function Table<T>({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="bg-panel">
+            <tr
+              key={rowKey(row)}
+              onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
+              onKeyDown={
+                onRowClick === undefined
+                  ? undefined
+                  : (event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+              }
+              tabIndex={onRowClick === undefined ? undefined : 0}
+              className={cn(
+                "bg-panel",
+                onRowClick !== undefined && "cursor-pointer hover:bg-panel-2",
+              )}
+            >
               {columns.map((column) => (
                 <td
                   key={column.key}
@@ -54,6 +75,7 @@ export function Table<T>({
             </tr>
           ))}
         </tbody>
+        {footer !== undefined && <tfoot>{footer}</tfoot>}
       </table>
     </div>
   );

@@ -19,7 +19,6 @@ import type {
   LegacyAttributionSkip,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
-import { ClassifyTickerModal } from "../components/ClassifyTickerModal.tsx";
 import { DataQualityPanel } from "../components/DataQualityPanel.tsx";
 import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -52,7 +51,7 @@ import {
   skipReasonLabel,
 } from "../lib/legacyAttribution.ts";
 import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
-import { ROUTES } from "../lib/routes.ts";
+import { ROUTES, positionDetail } from "../lib/routes.ts";
 
 const HEADER =
   "sticky top-0 z-[1] bg-surface-2 px-3 py-2.5 font-mono text-[10px] font-medium tracking-[.09em] text-ink-faint uppercase whitespace-nowrap";
@@ -89,7 +88,6 @@ interface TransferTarget {
 function AllocationTree({ allocation }: { allocation: AllocationModel }) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [transfer, setTransfer] = useState<TransferTarget | null>(null);
-  const [classifying, setClassifying] = useState<string | null>(null);
   const rows = allocationRows(allocation, expanded);
   const maxDeficit = maxAbsDeficit(rows);
   const maxDrift = maxAbsDrift(rows);
@@ -147,7 +145,6 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
                     maxDrift={maxDrift}
                     onToggle={toggle}
                     onTransfer={openTransfer}
-                    onClassify={setClassifying}
                   />
                 ))}
               </tbody>
@@ -158,7 +155,7 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
         </div>
 
         <div className="flex flex-col gap-4">
-          <DataQualityPanel allocation={allocation} onClassify={setClassifying} />
+          <DataQualityPanel allocation={allocation} />
           <CapitalPanel allocation={allocation} />
         </div>
       </div>
@@ -169,10 +166,6 @@ function AllocationTree({ allocation }: { allocation: AllocationModel }) {
           assetClass={transfer.assetClass}
           onClose={() => setTransfer(null)}
         />
-      )}
-
-      {classifying && (
-        <ClassifyTickerModal ticker={classifying} onClose={() => setClassifying(null)} />
       )}
     </>
   );
@@ -187,7 +180,6 @@ function AllocationTableRow({
   maxDrift,
   onToggle,
   onTransfer,
-  onClassify,
 }: {
   row: AllocationRow;
   expanded: boolean;
@@ -195,7 +187,6 @@ function AllocationTableRow({
   maxDrift: number;
   onToggle: (key: string) => void;
   onTransfer: (row: AllocationRow) => void;
-  onClassify: (ticker: string) => void;
 }) {
   const ticker = row.ticker;
 
@@ -252,13 +243,12 @@ function AllocationTableRow({
             </button>
           )}
           {row.kind === "unclassified_ticker" && ticker !== undefined && (
-            <button
-              type="button"
-              onClick={() => onClassify(ticker)}
+            <Link
+              to={positionDetail(ticker)}
               className="rounded-sm border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim hover:border-surface-3 hover:text-ink"
             >
               Classificar
-            </button>
+            </Link>
           )}
         </span>
       </td>

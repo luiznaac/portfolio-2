@@ -44,6 +44,11 @@ export function positionDetail(ticker: string): string {
   return `${ROUTES.positions}/${encodeURIComponent(ticker)}`;
 }
 
+// The strategy detail nests under Estratégias · Todas; the id is the path segment.
+export function strategyDetail(strategyId: number): string {
+  return `${ROUTES.strategies}/${strategyId}`;
+}
+
 export interface SubView {
   key: string;
   label: string;

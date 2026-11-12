@@ -1,31 +1,23 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useGaps, useRefreshCatalog } from "../api/queries.ts";
 import type { Allocation, HeldTicker } from "../api/types.ts";
 import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatNumber } from "../lib/format.ts";
 import { pendingProceedsGaps } from "../lib/history.ts";
-import { ROUTES } from "../lib/routes.ts";
+import { ROUTES, positionDetail } from "../lib/routes.ts";
 import { BenchmarkRefresh } from "./BenchmarkRefresh.tsx";
-import { BulkClassifyModal } from "./BulkClassifyModal.tsx";
 import { CatalogRefreshButton, CatalogRefreshReport } from "./CatalogRefresh.tsx";
 import { Panel } from "./Panel.tsx";
 
 // The single place to see and fix what makes the book wrong: unpriced positions, held tickers with
 // no class, negative custody and open GAPs. Its header carries the one combined catalog-and-quotes
-// refresh; the unpriced rows repeat that action, the unclassified rows open the classify dialog and
-// the negative/lacuna rows deep-link to the Histórico screen that adopts and prices them.
-export function DataQualityPanel({
-  allocation,
-  onClassify,
-}: {
-  allocation: Allocation;
-  onClassify: (ticker: string) => void;
-}) {
+// refresh; the unpriced rows repeat that action, the unclassified rows and the bulk action link to
+// the Ativos · Posições classification surface, and the negative/lacuna rows deep-link to the
+// Histórico screen that adopts and prices them.
+export function DataQualityPanel({ allocation }: { allocation: Allocation }) {
   const refresh = useRefreshCatalog();
   const gaps = useGaps();
-  const [bulkOpen, setBulkOpen] = useState(false);
   const counts = dataQualityCounts(allocation, gaps.data ?? []);
   const pendingProceeds = pendingProceedsGaps(gaps.data ?? []).length;
   const unpriced = allocation.unpriced ?? [];
@@ -72,24 +64,22 @@ export function DataQualityPanel({
             rows={unclassified}
             headerAction={
               counts.unclassified > 0 ? (
-                <button
-                  type="button"
+                <Link
+                  to={ROUTES.positions}
                   data-testid="bulk-classify-open"
-                  onClick={() => setBulkOpen(true)}
                   className="font-mono text-[10px] text-principal hover:underline"
                 >
                   Classificar pendentes
-                </button>
+                </Link>
               ) : undefined
             }
             renderAction={(row) => (
-              <button
-                type="button"
-                onClick={() => onClassify(row.ticker)}
+              <Link
+                to={positionDetail(row.ticker)}
                 className="font-mono text-[10px] text-principal hover:underline"
               >
                 Classificar
-              </button>
+              </Link>
             )}
           />
 
@@ -142,8 +132,6 @@ export function DataQualityPanel({
           )}
         </div>
       </Panel>
-
-      {bulkOpen && <BulkClassifyModal onClose={() => setBulkOpen(false)} />}
     </>
   );
 }
