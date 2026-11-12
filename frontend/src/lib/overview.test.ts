@@ -8,7 +8,6 @@ import type {
 import {
   attentionQueue,
   dataStatePanel,
-  distanceText,
   monthLine,
   monthStandfirst,
   resultsPanel,
@@ -177,20 +176,6 @@ describe("monthLine", () => {
     expect(line.period).toBe("Nenhum mês aberto");
     expect(line.planState).toBe("sem mês aberto");
     expect(line.transfers).toBe("sem mês aberto");
-  });
-});
-
-describe("distanceText", () => {
-  it("writes a deficit as money still missing", () => {
-    expect(distanceText(23_580)).toBe("faltam R$ 23.580,00");
-  });
-
-  it("writes a surplus as money above the ideal", () => {
-    expect(distanceText(-30_190)).toBe("sobram R$ 30.190,00");
-  });
-
-  it("says a level is on target at zero", () => {
-    expect(distanceText(0)).toBe("no alvo");
   });
 });
 

@@ -379,6 +379,9 @@ export interface ClassAllocation {
 
 export interface StrategyAllocation {
   strategy: string;
+  // The catalog id, so the tree links to the strategy detail without matching on name. Absent when
+  // the chain names a Strategy the catalog no longer carries.
+  strategy_id?: number;
   target: number;
   ideal: number;
   actual: number;
@@ -393,6 +396,8 @@ export interface StrategyAllocation {
 // than zero — a zero would draw an excess bar for money that has no target.
 export interface ManualAllocation {
   strategy: string;
+  // The catalog id, so the bucket links to its strategy detail.
+  strategy_id?: number;
   actual: number;
   tickers: ActualTickerAllocation[];
 }
