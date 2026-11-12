@@ -1,14 +1,24 @@
 import type {
+  Allocation,
   AssetClass,
+  ClassAllocation,
+  Edition,
   EditionDiff,
   EditionEntry,
   EditionSummary,
   ManualAllocation,
+  MonthPerformance,
+  PerformanceDecomposition,
   Rating,
   Strategy,
   StrategyAllocation,
+  StrategyPerformance,
 } from "../api/types.ts";
-import { ASSET_CLASSES, MONTHS } from "./month.ts";
+import { formatPoints, formatTarget } from "./allocation.ts";
+import { formatCurrency, formatPercent, formatSignedPercent } from "./format.ts";
+import { ASSET_CLASSES, MONTHS, assetClassLabel } from "./month.ts";
+import { distanceText } from "./overview.ts";
+import { type Tone, deficitTone, driftTone, returnTone } from "./tones.ts";
 
 // Pure helpers for the Estratégias screens — no React imports here (see AGENTS.md). The list's
 // row join, labels and edition chips are unit-tested in strategy.test.ts.
@@ -68,6 +78,266 @@ export function strategyRows(strategies: Strategy[], pricing?: StrategyPricing):
       return { strategy, value: node?.value, drift: node?.drift };
     }),
   );
+}
+
+// The strategy detail's window into the allocation tree: the class rung it sits in plus the report
+// rung (a Strategy with targets) or the manual bucket rung. A rung the open month does not carry is
+// absent, never a zero.
+export interface StrategySlice {
+  cls?: ClassAllocation;
+  report?: StrategyAllocation;
+  manual?: ManualAllocation;
+  actual?: number;
+  target?: number;
+  ideal?: number;
+  deficit?: number;
+  drift?: number;
+}
+
+export function strategySlice(strategy: Strategy, allocation?: Allocation): StrategySlice {
+  const cls = allocation?.classes.find(
+    (candidate) => candidate.asset_class === strategy.asset_class,
+  );
+  if (cls === undefined) return {};
+
+  const report = cls.strategies.find((candidate) => candidate.strategy === strategy.name);
+  if (report !== undefined) {
+    return {
+      cls,
+      report,
+      actual: report.actual,
+      target: report.target,
+      ideal: report.ideal,
+      deficit: report.deficit,
+      drift: report.drift,
+    };
+  }
+
+  const manual = cls.manual?.strategy === strategy.name ? cls.manual : undefined;
+  return manual === undefined ? { cls } : { cls, manual, actual: manual.actual };
+}
+
+// One Carteira row: the report rung carries target/Ideal/Drift, the manual bucket only custody.
+export interface StrategyPositionRow {
+  ticker: string;
+  quantity?: number;
+  price?: number;
+  value?: number;
+  target?: number;
+  ideal?: number;
+  drift?: number;
+  stale?: boolean;
+  quoteDate?: string;
+}
+
+export function strategyPositionRows(
+  strategy: Strategy,
+  allocation?: Allocation,
+): StrategyPositionRow[] {
+  const slice = strategySlice(strategy, allocation);
+  if (slice.report !== undefined) {
+    return slice.report.tickers.map((ticker) => ({
+      ticker: ticker.ticker,
+      quantity: ticker.quantity,
+      price: ticker.price,
+      value: ticker.actual,
+      target: ticker.target,
+      ideal: ticker.ideal,
+      drift: ticker.drift,
+      stale: ticker.stale,
+      quoteDate: ticker.quote_date,
+    }));
+  }
+  if (slice.manual !== undefined) {
+    return slice.manual.tickers.map((ticker) => ({
+      ticker: ticker.ticker,
+      quantity: ticker.quantity,
+      price: ticker.price,
+      value: ticker.actual,
+      target: undefined,
+      ideal: undefined,
+      drift: undefined,
+      stale: ticker.stale,
+      quoteDate: ticker.quote_date,
+    }));
+  }
+  return [];
+}
+
+// The Fatia tab's composition table: each slice's weight inside the strategy, with the total and a
+// completeness flag. An unpriced ticker leaves the total partial, so the footer never claims a 100%
+// it did not value.
+export interface StrategyCompositionRow extends StrategyPositionRow {
+  weight?: number;
+}
+
+export interface StrategyComposition {
+  rows: StrategyCompositionRow[];
+  total: number;
+  complete: boolean;
+}
+
+export function strategyComposition(positions: StrategyPositionRow[]): StrategyComposition {
+  const total = positions.reduce((sum, row) => sum + (row.value ?? 0), 0);
+  const complete = positions.every((row) => row.value !== undefined);
+
+  return {
+    total,
+    complete,
+    rows: positions.map((row) => ({
+      ...row,
+      weight: row.value === undefined || total <= 0 ? undefined : (row.value / total) * 100,
+    })),
+  };
+}
+
+// The detail's KPI row: fatia, target, Ideal, Drift and the last close's return. A value the tree or
+// the close does not carry renders "—" (or "sem alvo" in a target column), never a fabricated zero.
+export interface StrategyKpi {
+  key: "fatia" | "alvo" | "ideal" | "drift" | "return";
+  label: string;
+  value: string;
+  hint: string;
+  tone: Tone;
+}
+
+function shareOf(value: number, total: number | undefined): string {
+  if (total === undefined || total <= 0) return "—";
+  return formatPercent((value / total) * 100, 1);
+}
+
+export function strategyKpis(
+  strategy: Strategy,
+  allocation: Allocation | undefined,
+  performance: MonthPerformance | undefined,
+): StrategyKpi[] {
+  const slice = strategySlice(strategy, allocation);
+  const perf = findStrategyPerformance(performance, strategy.id);
+  const portfolioShare =
+    slice.actual === undefined || allocation === undefined || allocation.actual <= 0
+      ? undefined
+      : formatPercent((slice.actual / allocation.actual) * 100, 1);
+  const returnValue = perf?.decomposition.return_percentage;
+
+  return [
+    {
+      key: "fatia",
+      label: "Fatia",
+      value: slice.actual === undefined ? "—" : formatCurrency(slice.actual),
+      hint: portfolioShare === undefined ? "—" : `${portfolioShare} da carteira`,
+      tone: "default",
+    },
+    {
+      key: "alvo",
+      label: "Alvo",
+      value: slice.target === undefined ? "sem alvo" : formatTarget(slice.target),
+      hint:
+        strategy.kind === "MANUAL"
+          ? "bucket manual"
+          : slice.cls === undefined
+            ? "sem alvo na cadeia"
+            : `da classe ${assetClassLabel(slice.cls.asset_class)}`,
+      tone: "default",
+    },
+    {
+      key: "ideal",
+      label: "Ideal",
+      value: slice.ideal === undefined ? "—" : formatCurrency(slice.ideal),
+      hint: slice.deficit === undefined ? "não gera ordem" : distanceText(slice.deficit),
+      tone: slice.deficit === undefined ? "muted" : deficitTone(slice.deficit),
+    },
+    {
+      key: "drift",
+      label: "Drift",
+      value: slice.drift === undefined ? "—" : formatPoints(slice.drift),
+      hint: "contra o alvo",
+      tone: slice.drift === undefined ? "muted" : driftTone(slice.drift),
+    },
+    {
+      key: "return",
+      label:
+        performance === undefined
+          ? "Retorno"
+          : `Retorno ${referenceMonthLabel(performance.period)}`,
+      value: returnValue === undefined ? "—" : formatSignedPercent(returnValue),
+      hint: "último fechamento",
+      tone: returnTone(returnValue),
+    },
+  ];
+}
+
+export function findStrategyPerformance(
+  performance: MonthPerformance | undefined,
+  strategyId: number,
+): StrategyPerformance | undefined {
+  for (const cls of performance?.classes ?? []) {
+    const match = (cls.strategies ?? []).find((strategy) => strategy.strategy_id === strategyId);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
+// The Fatia tab's reads: the slice's share of the portfolio and of its class, its target/drift, and
+// the last close's return decomposition. It carries no edition state — the Carteira strip owns that.
+export interface StrategyDecompositionView {
+  valueStart: string;
+  valueEnd: string;
+  aportes: string;
+  income: string;
+  return: string;
+  returnTone: Tone;
+}
+
+export interface StrategyFatiaView {
+  portfolioShare: string;
+  classShare: string;
+  target: string;
+  drift: string;
+  driftTone: Tone;
+  period?: string;
+  decomposition?: StrategyDecompositionView;
+}
+
+function decompositionView(decomposition: PerformanceDecomposition): StrategyDecompositionView {
+  return {
+    valueStart:
+      decomposition.value_start === undefined ? "—" : formatCurrency(decomposition.value_start),
+    valueEnd: formatCurrency(decomposition.value_end),
+    aportes: formatCurrency(decomposition.net_aportes),
+    income: formatCurrency(decomposition.net_income),
+    return:
+      decomposition.return_percentage === undefined
+        ? "—"
+        : formatSignedPercent(decomposition.return_percentage),
+    returnTone: returnTone(decomposition.return_percentage),
+  };
+}
+
+export function strategyFatiaView(
+  strategy: Strategy,
+  allocation: Allocation | undefined,
+  performance: MonthPerformance | undefined,
+): StrategyFatiaView {
+  const slice = strategySlice(strategy, allocation);
+  const perf = findStrategyPerformance(performance, strategy.id);
+
+  return {
+    portfolioShare: slice.actual === undefined ? "—" : shareOf(slice.actual, allocation?.actual),
+    classShare: slice.actual === undefined ? "—" : shareOf(slice.actual, slice.cls?.actual),
+    target: slice.target === undefined ? "sem alvo" : formatTarget(slice.target),
+    drift: slice.drift === undefined ? "—" : formatPoints(slice.drift),
+    driftTone: slice.drift === undefined ? "muted" : driftTone(slice.drift),
+    period: perf === undefined ? undefined : performance?.period,
+    decomposition: perf === undefined ? undefined : decompositionView(perf.decomposition),
+  };
+}
+
+// The Carteira strip's edition: the newest staged report, if any. The active edition is not shown
+// here — the list already carries it, and the strip only asks for a review decision.
+export function stagedEdition(editions: Edition[]): Edition | undefined {
+  return [...editions]
+    .filter((edition) => edition.status === "STAGED")
+    .sort((left, right) => right.reference_month.localeCompare(left.reference_month))[0];
 }
 
 export function isReportDriven(strategy: Strategy | null | undefined): boolean {

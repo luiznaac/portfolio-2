@@ -36,14 +36,21 @@ vi.mock(import("./api/queries.ts"), async (importOriginal) => {
 const SAMPLE_PARAM: Record<string, string> = {
   ticker: "PETR4",
   id: "1",
+  tab: "carteira",
   period: "2026-10",
 };
 
-// The one route whose head is not an object label: the off-nav health slice. The landing redirect
-// resolves to Carteira through `resolveCrumb`.
+// The routes whose head is not an object label: the off-nav health slice and the strategy detail,
+// whose title is the entity name the loading mocks cannot know. The landing redirect resolves to
+// Carteira through `resolveCrumb`.
 const OFF_OBJECT_HEAD: Record<string, string> = {
   [ROUTES.health]: "Health",
 };
+
+function expectedHead(path: string): string | undefined {
+  const detail = path.startsWith(`${ROUTES.strategies}/`) && path !== ROUTES.strategiesImport;
+  return detail ? "Estratégia" : (OFF_OBJECT_HEAD[path] ?? resolveCrumb(path)?.object);
+}
 
 function joinPath(parent: string, child: string): string {
   if (child.startsWith("/")) return child;
@@ -90,7 +97,7 @@ describe("route table", () => {
       );
 
       const head = await screen.findByTestId("page-head");
-      const expected = OFF_OBJECT_HEAD[path] ?? resolveCrumb(path)?.object;
+      const expected = expectedHead(path);
       if (expected === undefined) throw new Error(`route ${path} has no expected page head`);
       expect(within(head).getByRole("heading", { level: 1 }).textContent).toBe(expected);
       view.unmount();

@@ -23,8 +23,9 @@ src/
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
                 never in the URL)
   pages/        route-level components (`/portfolio` is Overview.tsx, the landing; Positions.tsx
-                owns the Posições table and its optional ticker drawer route; Dashboard.tsx is the
-                off-nav health-check example at /health); a page that needs a behaviour test gets a
+                owns the Posições table and its optional ticker drawer route; StrategyDetail.tsx is
+                the Estratégias detail shell at /strategies/:id/:tab?; Dashboard.tsx is the off-nav
+                health-check example at /health); a page that needs a behaviour test gets a
                 co-located *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
                 (routes.ts is the single six-object table: sidebar groups, page tabs, breadcrumb
