@@ -174,7 +174,9 @@ describe("the B3 import wizard", () => {
     expect(screen.getByRole("heading", { name: "Resultado" })).toBeDefined();
     expect(screen.getByText("Este arquivo já foi importado em 14/10/2026 10:00.")).toBeDefined();
     expect(screen.getByText("PETR4")).toBeDefined();
-    expect(screen.getByRole("link", { name: "Ver negócios" }).getAttribute("href")).toBe("/trades");
+    expect(screen.getByRole("link", { name: "Ver negócios" }).getAttribute("href")).toBe(
+      "/ativos/trades",
+    );
     expect(screen.getByTestId("import-quality-summary").textContent).toContain(
       "0 entradas importadas",
     );
@@ -285,7 +287,9 @@ describe("the B3 import wizard", () => {
     expect(summary.textContent).toContain("1 negativa");
     expect(summary.textContent).toContain("1 sem classe");
     expect(summary.textContent).toContain("2 sem cotação");
-    expect(screen.getByRole("link", { name: "negativa" }).getAttribute("href")).toBe("/history");
+    expect(screen.getByRole("link", { name: "negativa" }).getAttribute("href")).toBe(
+      "/ativos/gaps",
+    );
 
     await user.click(screen.getByRole("button", { name: "Atualizar catálogo e cotações" }));
     expect(state.refreshed).toBe(1);

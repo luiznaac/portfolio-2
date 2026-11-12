@@ -7,6 +7,7 @@ import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { usePageFilters } from "../hooks/usePageFilters.ts";
 import { formatNumber, formatTradeSide } from "../lib/format.ts";
+import { positionDetail } from "../lib/routes.ts";
 import { TRADE_FILTER_FIELDS, filterTrades } from "../lib/tradeFilters.ts";
 
 const COLUMNS: Column<Trade>[] = [
@@ -16,7 +17,7 @@ const COLUMNS: Column<Trade>[] = [
     header: "Ticker",
     render: (trade) => (
       <Link
-        to={`/trades/${encodeURIComponent(trade.ticker)}`}
+        to={positionDetail(trade.ticker)}
         className="font-mono font-medium text-principal hover:underline"
       >
         {trade.ticker}
@@ -58,7 +59,6 @@ export function Trades() {
 
   return (
     <section>
-      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Ativos</h1>
       <Panel title="Negócios">
         {trades.isLoading ? (
           <p className="text-[13.5px] text-ink-dim">Carregando…</p>

@@ -70,9 +70,9 @@ function renderAssetDetail() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/trades/ZZZZ9"]}>
+      <MemoryRouter initialEntries={["/ativos/positions/ZZZZ9"]}>
         <Routes>
-          <Route path="/trades/:ticker" element={<AssetDetail />} />
+          <Route path="/ativos/positions/:ticker" element={<AssetDetail />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

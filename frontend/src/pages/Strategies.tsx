@@ -28,6 +28,7 @@ import { type Column, Table } from "../components/Table.tsx";
 import { cn } from "../lib/cn.ts";
 import { formatCurrency, formatNumber, formatPercent } from "../lib/format.ts";
 import { ASSET_CLASSES, assetClassLabel } from "../lib/month.ts";
+import { ROUTES } from "../lib/routes.ts";
 import {
   editionDiffSummary,
   editionStatusChip,
@@ -85,18 +86,12 @@ function StrategyCatalogView() {
 
   return (
     <section>
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Estratégias</h1>
-          <p className="text-[13px] text-ink-dim">
-            As carteiras da XP, edição por edição. O diff mês a mês e os alvos por ticker.
-          </p>
-        </div>
+      <div className="mb-4 flex items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <Button variant="default" onClick={() => setCreating(true)}>
             Nova estratégia
           </Button>
-          <Link to="/strategies/import">
+          <Link to={ROUTES.strategiesImport}>
             <Button variant="default">Importar relatórios</Button>
           </Link>
         </div>
@@ -352,7 +347,7 @@ function ManualHoldings({ strategyId }: { strategyId: number }) {
       )}
       <p className="mt-3 text-[11.5px] text-ink-faint">
         Transferências e classificação acontecem na{" "}
-        <Link to="/allocation" className="text-principal hover:underline">
+        <Link to={ROUTES.allocation} className="text-principal hover:underline">
           Alocação
         </Link>
         .
@@ -700,17 +695,8 @@ function StrategyImportView() {
 
   return (
     <section>
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">
-            Importar relatórios da XP
-          </h1>
-          <p className="text-[13px] text-ink-dim">
-            Solte os PDFs de cada estratégia. O parser sugere a estratégia e o mês; a edição fica em
-            prévia até a confirmação.
-          </p>
-        </div>
-        <Link to="/strategies">
+      <div className="mb-4 flex items-center justify-end gap-3">
+        <Link to={ROUTES.strategies}>
           <Button variant="ghost">Voltar</Button>
         </Link>
       </div>

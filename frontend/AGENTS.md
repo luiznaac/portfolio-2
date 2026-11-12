@@ -2,7 +2,7 @@
 
 React 19 + Vite + TypeScript + Tailwind v4 + TanStack Query + React Router SPA for the investment portfolio tracker. The stack and conventions are shared across all of luiznaac's frontends (see salgadinhos' `react-spa-screen` skill for the shared parts); this file only covers what's specific to portfolio-2.
 
-The product frontend is built out: the Cockpit at `/` is the monthly ritual's home, and the other screens hang off it (month, orders, import, close; allocation, strategies, assets, history, fixed income, corporate actions; income, taxes, performance). The scaffold's `GET /health` health-check dashboard stays reachable at `/health` as the end-to-end read example.
+The product frontend runs on the six-object shell: **Posição** (Carteira, Estratégias, Ativos), **Operações** (Importações, Plano / Mês) and **Resultados** (Análise), with sub-views as page tabs under the object head and the landing at Carteira · Visão geral. Production screens are remounted under their new object routes until their redesign slice replaces them; the scaffold's `GET /health` health-check dashboard stays reachable off-nav at `/health` as the end-to-end read example.
 
 ## Code map
 
@@ -13,21 +13,22 @@ The product frontend is built out: the Cockpit at `/` is the monthly ritual's ho
 ```
 src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
-  components/   Layout.tsx, Sidebar.tsx, MonthPill.tsx, CommandPalette.tsx — shell;
+  components/   Layout.tsx, TopBar.tsx, Sidebar.tsx, ObjectPage.tsx, PendingSurface.tsx — shell;
                 RitualStepper/AllocationStrip/Agenda — Cockpit pieces; PageHead/PageTabs — the
                 object head and sub-view tab strip; Panel/Chip/Badge/Button/Table/FilterBar/
                 WizardStepper/Kpi/Num — the token-based primitive layer; icons.tsx; *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts, and usePageFilters.ts — a
                 page's filter values, kept for the route element's lifetime and never in the URL)
-  pages/        route-level components (`/` is Cockpit.tsx; Dashboard.tsx is the health-check
-                example at /health); a page that needs a behaviour test gets a co-located
-                *.test.tsx render test
+  pages/        route-level components (`/portfolio` is Cockpit.tsx, the interim Visão geral;
+                Dashboard.tsx is the off-nav health-check example at /health); a page that needs a
+                behaviour test gets a co-located *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
-                (navigation.ts holds the sidebar groups + breadcrumb table; palette.ts flattens it
-                for Ctrl/Cmd+K; cockpit.ts derives KPIs, ritual steps and attention cards; agenda.ts
-                derives the agenda and its read set; dates.ts is the shared calendar arithmetic;
-                filters.ts is the shared filter model, with tradeFilters.ts/incomeFilters.ts
-                declaring each list's fields + matcher)
+                (routes.ts is the single six-object table: sidebar groups, page tabs, breadcrumb
+                resolver and entity-at-depth rule; status.ts derives the sidebar attention counts and
+                the top bar's freshness/month lines; cockpit.ts derives KPIs, ritual steps and
+                attention cards; agenda.ts derives the agenda and its read set; dates.ts is the shared
+                calendar arithmetic; filters.ts is the shared filter model, with
+                tradeFilters.ts/incomeFilters.ts declaring each list's fields + matcher)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
@@ -64,6 +65,6 @@ node <salgadinhos>/adapters/sandbox/run.mjs --stack node --workspace <repo-root>
 - **Design reference**: A · Console (issues #355/#366) is the committed token source in `src/index.css` — new pages consume its tokens and the primitive layer, never a raw colour or a `slate-*`/`emerald-*` default. [`design/front-prototype.html`](design/front-prototype.html) (issue #205) remains the reference for the un-migrated screens until their own slice lands.
 - **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; `loadEnv` reads the lane's env file (Vite does not inject it into `process.env`), the dev server binds `FRONTEND_DEV_PORT` (default `8113`, strict so a taken port fails loudly) and proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8110`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
-- **Testing scope**: `src/lib/**/*.test.ts` covers the pure helpers in a node environment; a query hook that owns a cache-invalidation contract gets a co-located `src/api/*.test.tsx` with `renderHook` over a `QueryClientProvider`, asserting the read the UI consumes rather than spy call counts; a page that needs a behaviour test adds a co-located `src/**/*.test.tsx` render test that opts into jsdom with a `// @vitest-environment jsdom` docblock (Testing Library + `user-event`, asserting user-observable results such as focus or the rendered DOM — not implementation details). `lib/theme.test.ts` and `lib/dtoMirrorGuard.test.ts` additionally read source files as build-time guards (the `@theme` tokens/scaffold shades; every `api/types.ts` interface against the DTO the backend serialises — its header says where a new DTO is mapped). Don't claim UI coverage beyond what actually exists.
+- **Testing scope**: `src/lib/**/*.test.ts` covers the pure helpers in a node environment; a query hook that owns a cache-invalidation contract gets a co-located `src/api/*.test.tsx` with `renderHook` over a `QueryClientProvider`, asserting the read the UI consumes rather than spy call counts; a page that needs a behaviour test adds a co-located `src/**/*.test.tsx` render test that opts into jsdom with a `// @vitest-environment jsdom` docblock (Testing Library + `user-event`, asserting user-observable results such as focus or the rendered DOM — not implementation details). `components/Layout.test.tsx` pins the six-object sidebar, attention badges, breadcrumb and topbar status lines, and `src/App.test.tsx` is the route-table smoke harness — every registered route renders its page head without a runtime error, and each page slice extends it. `lib/theme.test.ts` and `lib/dtoMirrorGuard.test.ts` additionally read source files as build-time guards (the `@theme` tokens/scaffold shades; every `api/types.ts` interface against the DTO the backend serialises — its header says where a new DTO is mapped). Don't claim UI coverage beyond what actually exists.
 
 Git/PR conventions: see `salgadinhos/global/AGENTS.md`.

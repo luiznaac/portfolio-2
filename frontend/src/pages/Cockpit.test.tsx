@@ -211,7 +211,7 @@ describe("Cockpit", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Cockpit de out/2026")).toBeDefined();
+    expect(screen.getByText("Fechamento de out/2026")).toBeDefined();
     expect(screen.getByTestId("cockpit-capital").textContent).toContain("100.000,00");
     expect(screen.getByTestId("cockpit-caixa").textContent).toContain("20.000,00");
     expect(screen.getByTestId("cockpit-investable").textContent).toContain("80.000,00");

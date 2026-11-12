@@ -109,7 +109,7 @@ describe("noBucketSkips", () => {
 describe("skipAction", () => {
   it("points an unclassified ticker at its asset detail", () => {
     expect(skipAction({ ticker: "ZZZZ3", reason: "UNCLASSIFIED", asset_class: null })).toEqual({
-      to: "/trades/ZZZZ3",
+      to: "/ativos/positions/ZZZZ3",
       label: "Classificar",
     });
   });
@@ -124,7 +124,7 @@ describe("skipAction", () => {
   it("points an attributed ticker at its asset detail", () => {
     expect(
       skipAction({ ticker: "VALE3", reason: "HAS_ATTRIBUTION", asset_class: "ACOES" }),
-    ).toEqual({ to: "/trades/VALE3", label: "Ver ativo" });
+    ).toEqual({ to: "/ativos/positions/VALE3", label: "Ver ativo" });
   });
 
   it("has no link for a write failure", () => {

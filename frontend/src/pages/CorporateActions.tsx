@@ -65,14 +65,6 @@ export function CorporateActions() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Eventos corporativos</h1>
-        <p className="text-[13px] text-ink-dim">
-          Desdobramentos, grupamentos, bonificações e proventos em dinheiro aplicados ao livro, com
-          os eventos que precisam de decisão humana.
-        </p>
-      </div>
-
       <div className="mb-5">
         <Panel title="Importar movimentações">
           <input

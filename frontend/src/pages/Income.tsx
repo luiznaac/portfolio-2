@@ -83,14 +83,6 @@ export function Income() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Proventos</h1>
-        <p className="text-[13px] text-ink-dim">
-          Previsto a partir da B3, na posição da data-com. Conciliação contra o extrato
-          &quot;Movimentação&quot;.
-        </p>
-      </div>
-
       <div className="mb-5">
         <Panel title="Proventos previstos">
           {upcoming.isLoading ? (

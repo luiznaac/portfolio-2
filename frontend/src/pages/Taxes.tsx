@@ -63,14 +63,6 @@ export function Taxes() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Impostos</h1>
-        <p className="text-[13px] text-ink-dim">
-          Livro mensal de ganho de capital, ações e FIIs em baldes separados. Leia qualquer mês do
-          histórico importado; o planejador de step-up só existe para o mês aberto.
-        </p>
-      </div>
-
       {range.isLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : range.isError ? (

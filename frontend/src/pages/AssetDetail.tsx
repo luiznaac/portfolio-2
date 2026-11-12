@@ -23,6 +23,7 @@ import { classificationNote, effectiveAssetClass } from "../lib/catalog.ts";
 import { formatCurrency, formatNumber, formatTradeSide } from "../lib/format.ts";
 import { assetClassLabel } from "../lib/month.ts";
 import { latestQuote, positionValue } from "../lib/position.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 const BACK_LINK =
   "inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[12.5px] text-ink hover:border-surface-3 hover:bg-surface-3";
@@ -79,7 +80,6 @@ export function AssetDetail() {
       !position.error || (position.error instanceof ApiError && position.error.status === 404);
     return (
       <section>
-        <h1 className="mb-4 font-mono text-[24px] font-bold">{ticker}</h1>
         <Panel>
           <p className="text-[13.5px] text-ink-dim">
             {notFound ? "Ativo não encontrado." : "Não foi possível carregar o ativo."}
@@ -105,9 +105,8 @@ export function AssetDetail() {
     <section>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-mono text-[24px] font-bold tracking-normal">{current.ticker}</h1>
           <p className="text-[13px] text-ink-dim">
-            <Link to="/trades" className="text-principal hover:underline">
+            <Link to={ROUTES.positions} className="text-principal hover:underline">
               todos os ativos
             </Link>
           </p>
@@ -133,7 +132,7 @@ export function AssetDetail() {
             <p className="mt-1 text-[12.5px] text-tax">{revertClassification.error.message}</p>
           )}
         </div>
-        <Link to="/trades" className={BACK_LINK}>
+        <Link to={ROUTES.positions} className={BACK_LINK}>
           ← Voltar
         </Link>
       </div>

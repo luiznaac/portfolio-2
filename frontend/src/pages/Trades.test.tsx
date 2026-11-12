@@ -42,14 +42,14 @@ function renderTrades() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/trades"]}>
+      <MemoryRouter initialEntries={["/ativos/trades"]}>
         <LocationProbe />
         <nav>
-          <Link to="/trades">Negócios</Link>
+          <Link to="/ativos/trades">Negócios</Link>
           <Link to="/outra">Outra página</Link>
         </nav>
         <Routes>
-          <Route path="/trades" element={<Trades />} />
+          <Route path="/ativos/trades" element={<Trades />} />
           <Route path="/outra" element={<p>outra página</p>} />
         </Routes>
       </MemoryRouter>

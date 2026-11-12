@@ -6,6 +6,7 @@ import type { Allocation, HeldTicker } from "../api/types.ts";
 import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatNumber } from "../lib/format.ts";
 import { pendingProceedsGaps } from "../lib/history.ts";
+import { ROUTES } from "../lib/routes.ts";
 import { BenchmarkRefresh } from "./BenchmarkRefresh.tsx";
 import { BulkClassifyModal } from "./BulkClassifyModal.tsx";
 import { CatalogRefreshButton, CatalogRefreshReport } from "./CatalogRefresh.tsx";
@@ -99,7 +100,7 @@ export function DataQualityPanel({
             rows={negative}
             renderAction={() => (
               <Link
-                to="/history"
+                to={ROUTES.gaps}
                 data-testid="negative-history-link"
                 className="font-mono text-[10px] text-principal hover:underline"
               >
@@ -116,7 +117,7 @@ export function DataQualityPanel({
               <span className="flex items-center gap-3">
                 {counts.lacunas > 0 && (
                   <Link
-                    to="/history"
+                    to={ROUTES.gaps}
                     className="font-mono text-[10px] text-principal hover:underline"
                   >
                     Revisar

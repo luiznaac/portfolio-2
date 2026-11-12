@@ -21,6 +21,7 @@ import { formatCurrency } from "./format.ts";
 import { netTotal } from "./income.ts";
 import { outsideCustody, shouldShowBanner } from "./legacyAttribution.ts";
 import { assetClassLabel, monthPeriodLabel } from "./month.ts";
+import { ROUTES } from "./routes.ts";
 
 function roundCents(value: number): number {
   return Math.round(value * 100) / 100;
@@ -119,7 +120,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
     // A legacy-only book has nothing to import, so the step is complete rather than waiting on a
     // report that will never exist.
     status: editions === coverage.length ? "complete" : "pending",
-    to: "/strategies",
+    to: ROUTES.strategies,
     actionLabel: "Importar relatórios",
   };
 
@@ -131,7 +132,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
       ? `Plano de ${monthPeriodLabel(month.period)} persistido`
       : "Plano ainda não recalculado",
     status: persisted ? "complete" : "pending",
-    to: "/orders",
+    to: ROUTES.planOrders,
     actionLabel: "Recalcular",
   };
 
@@ -145,7 +146,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
         ? "Todas decididas"
         : `${pending.length} transferências pendentes`,
     status: !persisted ? "pending" : pending.length === 0 ? "complete" : "attention",
-    to: "/orders",
+    to: ROUTES.planOrders,
     actionLabel: "Decidir",
   };
 
@@ -155,7 +156,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
     title: "Gerar a lista de ordens",
     detail: persisted ? `${orderCount} ordens na lista` : "A lista nasce do plano recalculado",
     status: persisted && pending.length === 0 ? "complete" : "pending",
-    to: "/orders",
+    to: ROUTES.planOrders,
     actionLabel: "Ver ordens",
   };
 
@@ -168,7 +169,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
         ? "Nenhum negócio do mês importado"
         : `${importedTrades.length} negócios importados`,
     status: importedTrades.length > 0 ? "complete" : "pending",
-    to: "/imports",
+    to: ROUTES.imports,
     actionLabel: "Importar extrato",
   };
 
@@ -182,7 +183,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
         : `${reconciled} de ${monthIncome.length} conciliados`,
     status: monthIncome.length > 0 && reconciled === monthIncome.length ? "complete" : "pending",
     optional: true,
-    to: "/income",
+    to: ROUTES.income,
     actionLabel: "Conciliar",
   };
 
@@ -196,7 +197,7 @@ export function ritualSteps(input: RitualInput): RitualStep[] {
       : "Pronto para fechar",
     status: month.status === "CLOSED" ? "complete" : closeBlocked ? "attention" : "pending",
     blocking: closeBlocked,
-    to: "/fechamento",
+    to: ROUTES.planClose,
     actionLabel: "Fechar o mês",
   };
 
@@ -247,7 +248,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       key: "data-quality",
       severity: "critical",
       text: `Dados da carteira: ${dataQualitySummary(quality)}`,
-      to: "/allocation",
+      to: ROUTES.allocation,
       actionLabel: "Revisar",
     });
   }
@@ -263,7 +264,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       key: "drift",
       severity: "warning",
       text: `Maior desvio: ${assetClassLabel(worst.asset_class)} ${formatPoints(worst.drift)}`,
-      to: "/allocation",
+      to: ROUTES.allocation,
     });
   }
 
@@ -273,7 +274,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       key: "unfunded",
       severity: "warning",
       text: `${formatCurrency(funding.unfunded_amount)} do plano segue sem funding`,
-      to: "/orders",
+      to: ROUTES.planOrders,
     });
   }
 
@@ -282,7 +283,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
       key: "neutro",
       severity: "warning",
       text: `NEUTRO sem funding: ${formatCurrency(funding.neutro_deficit)}`,
-      to: "/orders",
+      to: ROUTES.planOrders,
     });
   }
 
@@ -298,7 +299,7 @@ export function attentionItems(input: AttentionInput): AttentionItem[] {
         outsideValue > 0
           ? `Cotas fora da estratégia: ${formatCurrency(outsideValue)}`
           : "Cotas fora da estratégia — sem cotação",
-      to: "/allocation",
+      to: ROUTES.allocation,
       actionLabel: "Atribuir",
     });
   }

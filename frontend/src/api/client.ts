@@ -42,6 +42,7 @@ import type {
   OrderPlan,
   OrderPlanPhase,
   PerformanceSeries,
+  PortfolioStatus,
   Position,
   PositionDetail,
   PositionReconciliation,
@@ -119,6 +120,12 @@ export interface StagedImport {
 export const api = {
   getHealth(): Promise<HealthCheckResult[]> {
     return request("/health");
+  },
+
+  // The landing's single aggregate: the shell's attention counts, quote freshness and month status
+  // all read this one route.
+  getPortfolioStatus(): Promise<PortfolioStatus> {
+    return request("/portfolio/status");
   },
 
   async stageImport(source: ImportSource, file: File): Promise<StagedImport> {
