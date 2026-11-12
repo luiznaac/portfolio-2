@@ -98,6 +98,32 @@ export function inWindow(period: string, range: WindowRange): boolean {
   return period >= range.start && period <= range.end;
 }
 
+// The window's calendar months in order, both edges included — the income chart plots every month
+// of the window, including the ones that paid nothing.
+export function windowMonthKeys(range: WindowRange): string[] {
+  const keys: string[] = [];
+  if (range.start > range.end) return keys;
+  let cursor = range.start;
+  while (cursor <= range.end) {
+    keys.push(cursor);
+    cursor = addMonths(cursor, 1);
+  }
+  return keys;
+}
+
+// The same window expressed as the inclusive ISO day bounds the income read's `from`/`to` filters
+// take: the first day of the start month through the last day of the end month.
+export function windowDayRange(range: WindowRange): { from: string; to: string } {
+  return { from: `${range.start}-01`, to: `${range.end}-${daysInMonth(range.end)}` };
+}
+
+function daysInMonth(period: string): string {
+  const match = PERIOD.exec(period);
+  if (match === null) return "31";
+  const days = new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate();
+  return String(days).padStart(2, "0");
+}
+
 export function windowMonths<T extends { period: string }>(months: T[], range: WindowRange): T[] {
   return months.filter((month) => inWindow(month.period, range));
 }

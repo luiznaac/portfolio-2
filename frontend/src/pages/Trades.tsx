@@ -4,8 +4,10 @@ import type { Trade } from "../api/types.ts";
 import { Badge } from "../components/Badge.tsx";
 import { Button } from "../components/Button.tsx";
 import { FilterBar } from "../components/FilterBar.tsx";
+import { ImportAppliedBanner } from "../components/ImportAppliedBanner.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { RebuildHistory } from "../components/RebuildHistory.tsx";
+import { ResumableImportStrip } from "../components/ResumableImportStrip.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { usePageFilters } from "../hooks/usePageFilters.ts";
 import { hasActiveFilter } from "../lib/filters.ts";
@@ -16,6 +18,7 @@ import {
   formatTradeSide,
   formatTradeSource,
 } from "../lib/format.ts";
+import { assistantPath } from "../lib/importDestinations.ts";
 import { positionDetail } from "../lib/routes.ts";
 import { TRADE_FILTER_FIELDS, tradeLedgerQuery } from "../lib/tradeFilters.ts";
 
@@ -86,6 +89,7 @@ function LedgerTotal({ value }: { value: number }) {
 // Ativos · Negócios (#379): the trade ledger read through the paged, filtered GET /trades/ledger, with
 // the filter state owned by the page. Below it the page hosts "Reconstruir histórico" — adoption
 // seeds, the backfill replay and the custody cross-check — which the old Histórico screen carried.
+// The import assistant's banners/strip stay above the ledger; uploading a B3 extract lands here.
 export function Trades() {
   const filters = usePageFilters(TRADE_FILTER_FIELDS);
   const query = tradeLedgerQuery(filters.values);
@@ -98,7 +102,19 @@ export function Trades() {
 
   return (
     <section className="space-y-4">
-      <Panel title="Negócios">
+      <ImportAppliedBanner />
+      <ResumableImportStrip destination="TRADES" />
+      <Panel
+        title="Negócios"
+        action={
+          <Link
+            to={assistantPath("TRADES")}
+            className="text-[12px] font-medium text-accent hover:underline"
+          >
+            Enviar extrato →
+          </Link>
+        }
+      >
         {ledger.isLoading ? (
           <p className="text-[13.5px] text-ink-dim">Carregando…</p>
         ) : total === 0 && !narrowing ? (

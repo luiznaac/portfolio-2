@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   useCurrentMonth,
   useMonthPeriodRange,
@@ -20,6 +21,7 @@ import type {
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
+import { Kpi } from "../components/Kpi.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { PeriodSelect } from "../components/PeriodSelect.tsx";
 import { type Column, Table } from "../components/Table.tsx";
@@ -49,7 +51,14 @@ import {
   toMonthUpdate,
   toTargets,
 } from "../lib/month.ts";
-import { orderSideLabel, orderStatusLabel } from "../lib/orders.ts";
+import {
+  orderExecutionSummary,
+  orderProgressLabel,
+  orderSideLabel,
+  orderStateLabel,
+  orderStateTone,
+  orderStatusLabel,
+} from "../lib/orders.ts";
 import {
   type ChainPreviewRow,
   PLAN_STEPS_TOTAL,
@@ -61,6 +70,7 @@ import {
   hasPersistedPlan,
   planSteps,
 } from "../lib/plan.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px] text-ink";
 
@@ -179,9 +189,8 @@ function MonthPlan({
           {active.key === "plan" && (
             <PlanStepBody orders={orders} stale={stale} onRefreshed={() => setStale(false)} />
           )}
-          {(active.key === "execution" || active.key === "transfer" || active.key === "close") && (
-            <PendingStep step={active} />
-          )}
+          {active.key === "execution" && <ExecutionStep orders={orders} />}
+          {(active.key === "transfer" || active.key === "close") && <PendingStep step={active} />}
         </div>
       </div>
     </div>
@@ -446,7 +455,83 @@ const PLAN_COLUMNS: Column<SuggestedOrder>[] = [
   { key: "status", header: "Estado", render: (order) => orderStatusLabel(order.status) },
 ];
 
-// Steps 4–6 keep their rail row and their meta; the bodies land with the slices that own them.
+// Step 4 — Ordens executadas: the month's orders in three buckets. A partial execution is PARCIAL
+// here too, derived from the executed quantity; the persisted lifecycle stays SUGGESTED. Neither a
+// partial nor an unexecuted order blocks the close — the step summarises, it never gates.
+function ExecutionStep({ orders }: { orders: OrderList | null }) {
+  const summary = orderExecutionSummary(orders?.orders ?? []);
+  const link = (
+    <Link to={ROUTES.planOrders} className="text-principal underline">
+      Ver ordens →
+    </Link>
+  );
+
+  return (
+    <Panel title="Ordens executadas" action={link}>
+      {!hasPersistedPlan(orders) || orders === null ? (
+        <p className="text-[13px] text-ink-dim">
+          Nenhum plano persistido para este mês. Recalcule o plano na etapa anterior para acompanhar
+          a execução.
+        </p>
+      ) : orders.orders.length === 0 ? (
+        <p className="text-[13px] text-ink-dim">Sem ordens sugeridas para este mês.</p>
+      ) : (
+        <>
+          <div className="mb-3 grid grid-cols-3 gap-3" data-testid="execution-summary">
+            <Kpi
+              label="Executadas"
+              value={formatNumber(summary.executed.length)}
+              testId="execution-executed"
+            />
+            <Kpi
+              label="Parciais"
+              value={formatNumber(summary.partial.length)}
+              testId="execution-partial"
+            />
+            <Kpi
+              label="Não executadas"
+              value={formatNumber(summary.unexecuted.length)}
+              testId="execution-unexecuted"
+            />
+          </div>
+          <Table columns={EXECUTION_COLUMNS} rows={orders.orders} rowKey={(order) => order.id} />
+          <p className="mt-3 text-[12px] text-ink-dim">
+            Ordens parciais ou não executadas não travam o fechamento: o snapshot as congela como
+            estão.
+          </p>
+        </>
+      )}
+    </Panel>
+  );
+}
+
+const EXECUTION_COLUMNS: Column<SuggestedOrder>[] = [
+  {
+    key: "ticker",
+    header: "Ticker",
+    render: (order) => <span className="font-mono">{order.ticker}</span>,
+  },
+  { key: "side", header: "Lado", render: (order) => orderSideLabel(order.side) },
+  {
+    key: "quantity",
+    header: "Qtd",
+    align: "right",
+    render: (order) => formatNumber(order.quantity),
+  },
+  {
+    key: "executed",
+    header: "Executado",
+    align: "right",
+    render: (order) => orderProgressLabel(order),
+  },
+  {
+    key: "state",
+    header: "Estado",
+    render: (order) => <Chip tone={orderStateTone(order)}>{orderStateLabel(order)}</Chip>,
+  },
+];
+
+// Steps 5–6 keep their rail row and their meta; the bodies land with the slices that own them.
 function PendingStep({ step }: { step: PlanStep }) {
   return (
     <Panel title={step.label}>

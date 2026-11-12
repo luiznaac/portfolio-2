@@ -83,6 +83,8 @@ vi.mock("../api/client.ts", () => ({
       mock.custodyFile = file;
       return Promise.resolve(mock.reconcile ?? []);
     },
+    getImports: () => Promise.resolve([]),
+    importOriginalUrl: (id: number) => `/api/imports/${id}/file`,
   },
 }));
 

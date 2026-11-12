@@ -2,6 +2,7 @@ package dev.agner.portfolio.usecase.income
 
 import dev.agner.portfolio.usecase.income.model.Income
 import dev.agner.portfolio.usecase.income.model.IncomeCreation
+import dev.agner.portfolio.usecase.income.model.IncomeQuery
 import dev.agner.portfolio.usecase.income.model.IncomeStatus
 import dev.agner.portfolio.usecase.income.model.IncomeType
 import dev.agner.portfolio.usecase.income.model.Provenance
@@ -42,6 +43,55 @@ class IncomeServiceTest : StringSpec({
             IncomeStatus.RECEIVED,
             IncomeStatus.RECONCILED,
         )
+    }
+
+    "fetchAll applies an inclusive window boundary on the payable date" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-10-31", status = IncomeStatus.RECEIVED),
+            income(id = 2, date = "2026-11-01", status = IncomeStatus.RECEIVED),
+            income(id = 3, date = "2026-11-30", status = IncomeStatus.RECEIVED),
+            income(id = 4, date = "2026-12-01", status = IncomeStatus.RECEIVED),
+        )
+
+        val window = service.fetchAll(
+            IncomeQuery(
+                from = LocalDate.parse("2026-11-01"),
+                to = LocalDate.parse("2026-11-30"),
+            ),
+        )
+
+        window.map { it.id } shouldBe listOf(2, 3)
+    }
+
+    "fetchAll treats the ticker as a search term, not a canonical identity" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "PETR4"),
+            income(id = 2, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "VALE3"),
+            income(id = 3, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "FGIN11"),
+        )
+
+        // A one-letter search must narrow, not normalize to an empty query that matches everything.
+        service.fetchAll(IncomeQuery(ticker = "f")).map { it.id } shouldBe listOf(3)
+    }
+
+    "fetchAll narrows the ticker as the filter bar's case-insensitive substring" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "PETR4"),
+            income(id = 2, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "PETR3"),
+            income(id = 3, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "VALE3"),
+        )
+
+        service.fetchAll(IncomeQuery(ticker = "petr")).map { it.id } shouldBe listOf(1, 2)
+    }
+
+    "fetchAll filters on the derived lifecycle status, not the stored one" {
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.ANNOUNCED),
+            income(id = 2, date = "2026-11-05", status = IncomeStatus.ANNOUNCED),
+            income(id = 3, date = "2026-10-01", status = IncomeStatus.ANNOUNCED),
+        )
+
+        service.fetchAll(IncomeQuery(status = IncomeStatus.PAYABLE)).map { it.id } shouldBe listOf(2)
     }
 
     "fetchUpcoming keeps only the movements not yet received" {

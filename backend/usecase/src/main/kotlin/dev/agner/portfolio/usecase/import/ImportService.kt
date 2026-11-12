@@ -4,8 +4,12 @@ import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
+import dev.agner.portfolio.usecase.import.model.ImportApplyResult
 import dev.agner.portfolio.usecase.import.model.ImportCreation
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRow
+import dev.agner.portfolio.usecase.import.model.ImportRowOutcome
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportRowSituation
 import dev.agner.portfolio.usecase.import.model.ImportSource
@@ -34,19 +38,31 @@ class ImportService(
 
     // Re-importing the identical file is a no-op: the hash is the file's identity, so the existing
     // import (whatever its status) is returned untouched rather than staged again, and `created`
-    // tells the caller whether this request made it.
+    // tells the caller whether this request made it. The destination is recorded with the file so a
+    // parked session can resume and an apply can land on the object the record names. A destination
+    // whose own pipeline has not landed yet is refused before anything is written.
     suspend fun stage(
         source: ImportSource,
         fileName: String,
         fileHash: String,
         rows: List<ImportRowPayload>,
-    ): StagingResult = repository.fetchByHash(fileHash)
-        ?.let { StagingResult(it, created = false) }
-        ?: StagingResult(repository.save(ImportCreation(source, fileName, fileHash, rows)), created = true)
+        destination: ImportDestination,
+        original: ByteArray? = null,
+    ): StagingResult {
+        repository.fetchByHash(fileHash)?.let { return StagingResult(it, created = false) }
+        requireSupported(destination)
+        return StagingResult(
+            repository.save(ImportCreation(source, fileName, fileHash, rows, destination, original)),
+            created = true,
+        )
+    }
 
-    suspend fun fetchAll() = repository.fetchAll()
+    suspend fun fetchAll(status: ImportStatus? = null, source: ImportSource? = null) =
+        repository.fetchAll(status, source)
 
     suspend fun fetchById(id: Int) = repository.fetchById(id)
+
+    suspend fun fetchOriginal(id: Int) = repository.fetchOriginal(id)
 
     suspend fun fetchRows(id: Int): List<ImportRow>? =
         repository.fetchById(id)?.let { repository.fetchRows(id).withSituations() }
@@ -63,14 +79,17 @@ class ImportService(
     // create/fetch each institution once, and by natural tuple so the occurrence walk sees one
     // tuple's rows together. A manual trade the import matches is skipped and marked confirmed by
     // B3; an occurrence the ledger already holds is skipped (dedup). Flagged rows are skipped, so a
-    // row-level problem never blocks the batch. The whole batch runs in one transaction, so a
-    // failure part way through cannot leave a half-applied ledger behind a still-REVIEWED import.
-    suspend fun apply(id: Int): Import? {
+    // row-level problem never blocks the batch. Every row's outcome is persisted, so the rejected
+    // rows stay visible as the retry batch. The whole batch runs in one transaction, so a failure
+    // part way through cannot leave a half-applied ledger behind a still-REVIEWED import.
+    suspend fun apply(id: Int): ImportApplyResult? {
         val import = repository.fetchById(id) ?: return null
         requireStatus(import, ImportStatus.REVIEWED)
+        requireSupported(import.destination)
 
         return transaction.execute {
-            val errorFreeRows = repository.fetchRows(id).filter { it.error == null }
+            val rows = repository.fetchRows(id).withSituations()
+            val errorFreeRows = rows.filter { it.error == null }
             // Auto-enter unknown tickers into the catalog before creating trades.
             errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
                 catalogService.upsertTicker(ticker)
@@ -80,16 +99,24 @@ class ImportService(
             // rows in that group map through the institution id the key resolved to.
             val creations = errorFreeRows
                 .groupBy { it.institutionName.normalizedInstitutionName() }
-                .flatMap { (name, rows) ->
+                .flatMap { (name, grouped) ->
                     val institution = institutionService.create(InstitutionCreation(name))
-                    rows.map { it.toCreation(institution.id) }
+                    grouped.map { it.toCreation(institution.id) }
                 }
 
             creations
                 .groupBy { it.naturalKey() }
                 .forEach { (key, grouped) -> tradeService.reconcile(key, grouped) }
 
-            repository.updateStatus(id, ImportStatus.APPLIED)
+            val outcomes = rows.outcomes()
+            repository.saveOutcomes(id, outcomes)
+            val applied = repository.updateStatus(id, ImportStatus.APPLIED)
+            ImportApplyResult(
+                record = requireNotNull(applied) { "Import $id disappeared during apply" },
+                applied = outcomes.count { it.value == ImportRowOutcome.APPLIED },
+                rejected = outcomes.count { it.value == ImportRowOutcome.REJECTED },
+                skippedDuplicate = outcomes.count { it.value == ImportRowOutcome.SKIPPED_DUPLICATE },
+            )
         }
     }
 
@@ -130,6 +157,16 @@ class ImportService(
         }
     }
 
+    // Apply's persisted decision per row. In-file repeats are written by the ordinal model, so they
+    // are applied; the ledger-covered prefix is the duplicate that was ignored.
+    private fun List<ImportRow>.outcomes(): Map<Int, ImportRowOutcome> = associate { row ->
+        row.id to when (requireNotNull(row.situation) { "Import row ${row.id} has no situation" }) {
+            ImportRowSituation.NEW, ImportRowSituation.DUPLICATE_IN_FILE -> ImportRowOutcome.APPLIED
+            ImportRowSituation.DUPLICATE_IN_LEDGER -> ImportRowOutcome.SKIPPED_DUPLICATE
+            ImportRowSituation.ERROR -> ImportRowOutcome.REJECTED
+        }
+    }
+
     private fun ImportRow.occurrenceKey() = ImportRowKey(
         date = requireDate(),
         side = side,
@@ -160,6 +197,14 @@ class ImportService(
 
     private fun requireStatus(import: Import, expected: ImportStatus) {
         if (import.status != expected) throw InvalidImportStateException(import.id, expected, import.status)
+    }
+
+    // The trades pipeline is the only destination variant that has landed; the typed destination
+    // keeps the others nameable so their own slices can add the pipeline without a schema change.
+    private fun requireSupported(destination: ImportDestination) {
+        if (destination.objectType != ImportDestinationObject.TRADES) {
+            throw UnsupportedImportDestinationException(destination)
+        }
     }
 }
 

@@ -6,6 +6,8 @@ import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.import.ImportService
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.listedasset.TradeService
@@ -116,7 +118,13 @@ private fun TradeLedgerPage.shouldHold(tickers: List<String>) {
 
 private suspend fun applyImport(rows: List<ImportRowPayload>) {
     val service = getBean<ImportService>()
-    val import = service.stage(ImportSource.B3_TRADES, "ledger.xlsx", "ledger-hash", rows).record
+    val import = service.stage(
+        ImportSource.B3_TRADES,
+        "ledger.xlsx",
+        "ledger-hash",
+        rows,
+        ImportDestination(ImportDestinationObject.TRADES),
+    ).record
     service.review(import.id)
     service.apply(import.id)
 }

@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.income.model.Income
 import dev.agner.portfolio.usecase.income.model.IncomeCreation
+import dev.agner.portfolio.usecase.income.model.IncomeQuery
 import dev.agner.portfolio.usecase.income.model.IncomeStatus
 import dev.agner.portfolio.usecase.income.model.IncomeType
 import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
@@ -20,8 +21,14 @@ class IncomeService(
 
     // A read derives each movement's stage from its payable date; the one stage a stored row owns
     // (RECONCILED) wins, so the lifecycle never walks a settled movement backwards. A GET never
-    // writes (backend/AGENTS.md -> separate commands from queries).
-    suspend fun fetchAll(): List<Income> = derive(repository.fetchAll())
+    // writes (backend/AGENTS.md -> separate commands from queries). The optional query narrows the
+    // ledger at the source: the window is inclusive, the ticker is the filter bar's case-insensitive
+    // search term (not an identity, so it is never normalized away), and the lifecycle stage is
+    // filtered after it is derived, never from the stored column.
+    suspend fun fetchAll(query: IncomeQuery = IncomeQuery()): List<Income> {
+        val filter = query.prepared()
+        return derive(repository.fetchAll()).filter { filter.matches(it) }
+    }
 
     // "Upcoming" is everything not yet paid: announced and payable movements. A received (or
     // reconciled) one has already landed, so it is not a forecast.
@@ -71,6 +78,16 @@ class IncomeService(
         return derive(newlyReconciled.map { (_, income) -> income.copy(status = IncomeStatus.RECONCILED) } + saved)
     }
 }
+
+// A blank field is no narrowing; the ticker is a search term, so it is trimmed rather than
+// normalized to a canonical identity — the filter bar narrows as the owner types.
+private fun IncomeQuery.prepared() = copy(ticker = ticker?.trim()?.takeIf { it.isNotEmpty() })
+
+private fun IncomeQuery.matches(income: Income): Boolean =
+    (from == null || income.date >= from) &&
+        (to == null || income.date <= to) &&
+        (ticker == null || income.ticker.contains(ticker, ignoreCase = true)) &&
+        (status == null || income.status == status)
 
 private fun Income.matches(creation: IncomeCreation): Boolean =
     ticker == creation.ticker &&

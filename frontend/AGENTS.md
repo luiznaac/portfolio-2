@@ -23,11 +23,14 @@ src/
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
                 Análise rail's shared window, kept across the three tabs and reset on area re-entry;
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
-                never in the URL)
+                never in the URL; useImportLog.ts — the shared bar state plus the `GET /imports`
+                read and full total behind the inbox queue and the import log)
   pages/        route-level components (`/portfolio` is Overview.tsx, the landing; Positions.tsx
-                owns the Posições table and its optional ticker drawer route; Dashboard.tsx is the
-                off-nav health-check example at /health); a page that needs a behaviour test gets a
-                co-located *.test.tsx render test
+                owns the Posições table and its optional ticker drawer route; StrategyDetail.tsx is
+                the Estratégias detail shell at /strategies/:id/:tab?; ImportInbox.tsx and
+                ImportHistory.tsx are Importações' queue and log over the same filter bar;
+                Dashboard.tsx is the off-nav health-check example at /health); a page that needs a
+                behaviour test gets a co-located *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
                 (routes.ts is the single six-object table: sidebar groups, page tabs, breadcrumb
                 resolver and entity-at-depth rule; status.ts derives the sidebar attention counts and
@@ -35,10 +38,12 @@ src/
                 month line, standfirst, class rows, attention queue and data panel; tones.ts is the
                 one meaning→token class map; plan.ts derives the six-step month tool; dates.ts is the
                 shared calendar arithmetic; filters.ts is the shared filter model — the bar needs
-                controls only, while a locally narrowed list adds its matcher; incomeFilters.ts and
-                positionFilters.ts declare fields + matcher, and tradeFilters.ts declares the
-                server-narrowed ledger's controls plus its request mapping; position.ts builds the
-                Posições rows and their filtered total;
+                controls only, while a locally narrowed list adds its matcher; tradeFilters.ts
+                declares the server-narrowed ledger's controls plus its request mapping, while
+                incomeFilters.ts/positionFilters.ts/importFilters.ts declare fields + matcher (the
+                import bar also maps fonte/estado to the additive `GET /imports` parameters);
+                imports.ts names the sources/states and defines the parked session and the record
+                age; position.ts builds the Posições rows and their filtered total;
                 analysisWindow.ts is the Análise rail's preset/range/window math)
 ```
 

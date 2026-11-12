@@ -151,6 +151,36 @@ describe("the Alocação tree", () => {
     expect(screen.getByText("Fora da estratégia")).toBeDefined();
   });
 
+  it("writes the distance in words and draws the Actual × Ideal bar on planned rows", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Ações");
+    expect(within(rowFor("Ações")).getByText("faltam R$ 48.500,00")).toBeDefined();
+    expect(within(rowFor("Ações")).getByTestId("actual-ideal-bar")).toBeDefined();
+
+    await user.click(within(rowFor("Ações")).getByRole("button"));
+    expect(within(rowFor("Top Dividendos")).getByTestId("actual-ideal-bar")).toBeDefined();
+    expect(within(rowFor("Legado Ações")).queryByTestId("actual-ideal-bar")).toBeNull();
+  });
+
+  it("links the report Strategy and the manual bucket to their detail by id", async () => {
+    mock.allocation = allocation;
+    renderAllocation();
+    const user = userEvent.setup();
+
+    await screen.findByText("Ações");
+    await user.click(within(rowFor("Ações")).getByRole("button"));
+
+    expect(within(rowFor("Top Dividendos")).getByRole("link").getAttribute("href")).toBe(
+      "/strategies/9001",
+    );
+    expect(within(rowFor("Legado Ações")).getByRole("link").getAttribute("href")).toBe(
+      "/strategies/9002",
+    );
+  });
+
   it("renders an em dash, not a zero, for the bucket's target, ideal and deltas", async () => {
     mock.allocation = allocation;
     renderAllocation();
@@ -687,6 +717,7 @@ const allocation: AllocationModel = {
       strategies: [
         {
           strategy: "Top Dividendos",
+          strategy_id: 9001,
           target: 100,
           ideal: 50000,
           actual: 600,
@@ -699,6 +730,7 @@ const allocation: AllocationModel = {
       ],
       manual: {
         strategy: "Legado Ações",
+        strategy_id: 9002,
         actual: 500,
         tickers: [
           { ticker: "ITUB4", actual: 300 },
