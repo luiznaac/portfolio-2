@@ -14,10 +14,11 @@ The product frontend is built out: the Cockpit at `/` is the monthly ritual's ho
 src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
   components/   Layout.tsx, Sidebar.tsx, MonthPill.tsx, CommandPalette.tsx — shell;
-                RitualStepper/AllocationStrip/Agenda — Cockpit pieces; Panel/Chip/Badge/Button/
-                Table/FilterBar/WizardStepper/Kpi — the token-based primitive layer; icons.tsx; *Chip.tsx
-  hooks/        shared stateful UI logic (useClosedMonthSelection.ts, usePageFilters.ts — a page's
-                filter values, kept for the route element's lifetime and never in the URL)
+                RitualStepper/AllocationStrip/Agenda — Cockpit pieces; PageHead/PageTabs — the
+                object head and sub-view tab strip; Panel/Chip/Badge/Button/Table/FilterBar/
+                WizardStepper/Kpi/Num — the token-based primitive layer; icons.tsx; *Chip.tsx
+  hooks/        shared stateful UI logic (useClosedMonthSelection.ts, and usePageFilters.ts — a
+                page's filter values, kept for the route element's lifetime and never in the URL)
   pages/        route-level components (`/` is Cockpit.tsx; Dashboard.tsx is the health-check
                 example at /health); a page that needs a behaviour test gets a co-located
                 *.test.tsx render test
@@ -59,8 +60,8 @@ node <salgadinhos>/adapters/sandbox/run.mjs --stack node --workspace <repo-root>
 
 ## Portfolio-2-specific pieces
 
-- **Tailwind v4 config lives in CSS**: `src/index.css` has `@import "tailwindcss";` and an `@theme` block holding the reference palette, sign convention, radii scale and the three IBM Plex families (`src/fonts.css` bundles them via `@fontsource`); there is no `tailwind.config.js`.
-- **Design reference**: [`design/front-prototype.html`](design/front-prototype.html) (issue #205) is the committed styling source — new pages carry its tokens (no `slate-*`/`emerald-*` defaults) and compose the primitive layer rather than hand-rolling Tailwind.
+- **Tailwind v4 config lives in CSS**: `src/index.css` has `@import "tailwindcss";` and the `@theme` block holding the A · Console palette, fixed sign semantics, type scale, density and the three IBM Plex families (`src/fonts.css` bundles them via `@fontsource`); there is no `tailwind.config.js`.
+- **Design reference**: A · Console (issues #355/#366) is the committed token source in `src/index.css` — new pages consume its tokens and the primitive layer, never a raw colour or a `slate-*`/`emerald-*` default. [`design/front-prototype.html`](design/front-prototype.html) (issue #205) remains the reference for the un-migrated screens until their own slice lands.
 - **Base path / dev proxy**: `vite.config.ts` defaults the production `base` to `/portfolio/` (override with `VITE_BASE`) and `/` in dev; `loadEnv` reads the lane's env file (Vite does not inject it into `process.env`), the dev server binds `FRONTEND_DEV_PORT` (default `8113`, strict so a taken port fails loudly) and proxies `/api` to `VITE_API_TARGET` (default `http://localhost:8110`) to dodge CORS.
 - `index.html` ships `lang="pt-BR"` and `class="dark"`.
 - **Testing scope**: `src/lib/**/*.test.ts` covers the pure helpers in a node environment; a query hook that owns a cache-invalidation contract gets a co-located `src/api/*.test.tsx` with `renderHook` over a `QueryClientProvider`, asserting the read the UI consumes rather than spy call counts; a page that needs a behaviour test adds a co-located `src/**/*.test.tsx` render test that opts into jsdom with a `// @vitest-environment jsdom` docblock (Testing Library + `user-event`, asserting user-observable results such as focus or the rendered DOM — not implementation details). `lib/theme.test.ts` and `lib/dtoMirrorGuard.test.ts` additionally read source files as build-time guards (the `@theme` tokens/scaffold shades; every `api/types.ts` interface against the DTO the backend serialises — its header says where a new DTO is mapped). Don't claim UI coverage beyond what actually exists.

@@ -3,21 +3,21 @@ import type { ReactNode } from "react";
 export type ChipTone = "neutral" | "blue" | "green" | "amber" | "rose" | "violet";
 
 // The single place the sign palette maps to utilities — callers name a tone, never a colour. Tones
-// follow the reference's sign convention: blue = falta · comprar · Δ−, amber = excesso · vender,
-// green = ganho · ok, rose = imposto · alerta, violet = FIIs.
+// follow the console sign convention: blue = deficit · falta · comprar, amber = surplus · atenção,
+// green = return+ · ganho/ok, rose = return− · crítico, violet = FIIs.
 const TONES: Record<ChipTone, string> = {
-  neutral: "bg-surface-3 text-ink-dim",
-  blue: "bg-principal-bg text-principal",
-  green: "bg-yield-bg text-yield",
-  amber: "bg-accent-bg text-accent",
-  rose: "bg-tax-bg text-tax",
+  neutral: "bg-panel-3 text-muted",
+  blue: "bg-action-bg text-action",
+  green: "bg-return-up-bg text-return-up",
+  amber: "bg-attention-bg text-attention",
+  rose: "bg-return-down-bg text-return-down",
   violet: "bg-violet-bg text-violet",
 };
 
 export function Chip({ tone = "neutral", children }: { tone?: ChipTone; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-sm px-2 py-0.5 font-mono text-[10.5px] tracking-[.02em] whitespace-nowrap ${TONES[tone]}`}
+      className={`inline-flex items-center gap-1 rounded-xs px-1.5 py-[3px] font-mono text-label font-semibold tracking-[.06em] uppercase whitespace-nowrap ${TONES[tone]}`}
     >
       {children}
     </span>

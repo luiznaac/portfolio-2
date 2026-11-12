@@ -49,7 +49,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         type="button"
         aria-label="Fechar comandos"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-black/60"
+        className="absolute inset-0 cursor-default bg-bg/70"
       />
       <dialog
         open

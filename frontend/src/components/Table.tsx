@@ -8,8 +8,8 @@ export interface Column<T> {
   render: (row: T) => ReactNode;
 }
 
-// The reference table shell: bordered, rounded, sticky mono-uppercase head, hairline row rules.
-// Data-driven so a page declares its columns once.
+// The console table shell: a 3 px panel radius, a sticky mono-uppercase head, 26 px rows on 1 px
+// hairlines. Data-driven so a page declares its columns once.
 export function Table<T>({
   columns,
   rows,
@@ -20,15 +20,15 @@ export function Table<T>({
   rowKey: (row: T) => string | number;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-line">
-      <table className="w-full border-collapse text-[13px]">
+    <div className="overflow-x-auto rounded-panel border border-line">
+      <table className="w-full border-collapse text-num">
         <thead>
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
                 className={cn(
-                  "sticky top-0 z-[1] bg-surface-2 px-3 py-2.5 font-mono text-[10px] font-medium tracking-[.09em] text-ink-faint uppercase whitespace-nowrap",
+                  "sticky top-0 z-[1] h-[var(--height-row)] bg-panel-2 px-2.5 font-mono text-label font-semibold tracking-[.1em] text-faint uppercase whitespace-nowrap",
                   column.align === "right" ? "text-right" : "text-left",
                 )}
               >
@@ -39,12 +39,12 @@ export function Table<T>({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="bg-surface">
+            <tr key={rowKey(row)} className="bg-panel">
               {columns.map((column) => (
                 <td
                   key={column.key}
                   className={cn(
-                    "border-t border-line-soft px-3 py-2.5 align-middle",
+                    "h-[var(--height-row)] border-t border-line-soft px-2.5 align-middle",
                     column.align === "right" ? "text-right" : "text-left",
                   )}
                 >
