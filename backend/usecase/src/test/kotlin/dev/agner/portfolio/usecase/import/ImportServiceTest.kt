@@ -3,8 +3,12 @@ package dev.agner.portfolio.usecase.import
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
+import dev.agner.portfolio.usecase.import.model.ImportApplyResult
 import dev.agner.portfolio.usecase.import.model.ImportCreation
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRow
+import dev.agner.portfolio.usecase.import.model.ImportRowOutcome
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportRowSituation
 import dev.agner.portfolio.usecase.import.model.ImportSource
@@ -50,21 +54,44 @@ class ImportServiceTest : StringSpec({
     "stage should return the existing import untouched and report it was not created" {
         coEvery { repository.fetchByHash(HASH) } returns appliedImport
 
-        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload)) shouldBe
+        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload), destination) shouldBe
             StagingResult(appliedImport, created = false)
 
         coVerify(exactly = 0) { repository.save(any()) }
     }
 
-    "stage should persist a new staged import with its rows and report it was created" {
+    "stage should persist a new staged import with its destination, original and rows" {
         coEvery { repository.fetchByHash(HASH) } returns null
         val captured = slot<ImportCreation>()
         coEvery { repository.save(capture(captured)) } returns stagedImport
 
-        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload)) shouldBe
+        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload), destination, ORIGINAL) shouldBe
             StagingResult(stagedImport, created = true)
 
-        captured.captured shouldBe ImportCreation(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload))
+        captured.captured.let { creation ->
+            creation.source shouldBe ImportSource.B3_TRADES
+            creation.fileName shouldBe "neg.xlsx"
+            creation.fileHash shouldBe HASH
+            creation.rows shouldBe listOf(payload)
+            creation.destination shouldBe destination
+            creation.original!!.toList() shouldBe ORIGINAL.toList()
+        }
+    }
+
+    "stage should refuse a destination whose pipeline has not landed" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+
+        shouldThrow<UnsupportedImportDestinationException> {
+            service.stage(
+                ImportSource.B3_TRADES,
+                "neg.xlsx",
+                HASH,
+                listOf(payload),
+                ImportDestination(ImportDestinationObject.POSITIONS),
+            )
+        }
+
+        coVerify(exactly = 0) { repository.save(any()) }
     }
 
     "review should move a staged import to reviewed" {
@@ -90,13 +117,18 @@ class ImportServiceTest : StringSpec({
         service.review(1) shouldBe null
     }
 
-    "apply should reconcile one error-free row with its own trade and skip the flagged row" {
+    "apply should reconcile one error-free row with its own trade and count the rejected row" {
         coEvery { repository.fetchById(1) } returns reviewedImport
         coEvery { repository.fetchRows(1) } returns listOf(row, errorRow)
         coEvery { institutionService.create(InstitutionCreation("XP INVESTIMENTOS")) } returns institution
         coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedImport
 
-        service.apply(1) shouldBe appliedImport
+        service.apply(1) shouldBe ImportApplyResult(
+            record = appliedImport,
+            applied = 1,
+            rejected = 1,
+            skippedDuplicate = 0,
+        )
 
         coVerify(exactly = 1) {
             tradeService.reconcile(
@@ -111,6 +143,34 @@ class ImportServiceTest : StringSpec({
             )
         }
         coVerify(exactly = 1) { repository.updateStatus(1, ImportStatus.APPLIED) }
+    }
+
+    "apply should persist each row's outcome so rejected rows survive as a retry batch" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns
+            listOf(row, row.copy(id = 12), row.copy(id = 13), errorRow)
+        coEvery { institutionService.create(any()) } returns institution
+        coEvery { tradeService.countByKey(any()) } returns 1
+        coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedImport
+
+        service.apply(1) shouldBe ImportApplyResult(
+            record = appliedImport,
+            applied = 2,
+            rejected = 1,
+            skippedDuplicate = 1,
+        )
+
+        coVerify(exactly = 1) {
+            repository.saveOutcomes(
+                1,
+                mapOf(
+                    10 to ImportRowOutcome.SKIPPED_DUPLICATE,
+                    12 to ImportRowOutcome.APPLIED,
+                    13 to ImportRowOutcome.APPLIED,
+                    11 to ImportRowOutcome.REJECTED,
+                ),
+            )
+        }
     }
 
     "apply should create/fetch each institution once for rows that share its name" {
@@ -165,6 +225,16 @@ class ImportServiceTest : StringSpec({
         coVerify(exactly = 0) { tradeService.reconcile(any(), any()) }
     }
 
+    "apply should refuse a record whose destination has no pipeline" {
+        coEvery { repository.fetchById(1) } returns
+            reviewedImport.copy(destination = ImportDestination(ImportDestinationObject.POSITIONS))
+
+        shouldThrow<UnsupportedImportDestinationException> { service.apply(1) }
+
+        coVerify(exactly = 0) { tradeService.reconcile(any(), any()) }
+        coVerify(exactly = 0) { repository.updateStatus(any(), any()) }
+    }
+
     "apply should run the whole batch inside one transaction" {
         coEvery { repository.fetchById(1) } returns reviewedImport
         coEvery { repository.fetchRows(1) } returns listOf(row)
@@ -173,6 +243,13 @@ class ImportServiceTest : StringSpec({
         service.apply(1)
 
         transaction.count shouldBe 1
+    }
+
+    "fetchAll should forward the status and source filters to the repository" {
+        coEvery { repository.fetchAll(ImportStatus.STAGED, ImportSource.B3_TRADES) } returns
+            listOf(stagedImport)
+
+        service.fetchAll(ImportStatus.STAGED, ImportSource.B3_TRADES) shouldBe listOf(stagedImport)
     }
 
     "fetchRows should annotate new rows, in-file repeats and errors" {
@@ -235,6 +312,8 @@ class ImportServiceTest : StringSpec({
 })
 
 private const val HASH = "a1b2c3"
+private val ORIGINAL = "the original workbook".toByteArray()
+private val destination = ImportDestination(ImportDestinationObject.TRADES)
 
 private class CountingTransaction : ITransactionTemplate {
     var count = 0
@@ -251,6 +330,8 @@ private val stagedImport = Import(
     fileName = "neg.xlsx",
     fileHash = HASH,
     status = ImportStatus.STAGED,
+    destination = destination,
+    hasOriginal = true,
     createdAt = LocalDateTime.parse("2026-10-14T10:00:00"),
 )
 

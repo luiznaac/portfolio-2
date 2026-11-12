@@ -14,7 +14,7 @@ import type {
   PortfolioStatus,
   StockTaxReport,
 } from "../api/types.ts";
-import { formatPoints, formatTarget } from "./allocation.ts";
+import { distanceText, formatPoints, formatTarget } from "./allocation.ts";
 import { pendingTransferNoun } from "./fechamento.ts";
 import {
   formatCurrency,
@@ -144,13 +144,6 @@ export function monthLine(status: PortfolioStatus): MonthLineView {
         : `${formatNumber(pending)} ${pendingTransferNoun(pending)}`,
     to: ROUTES.plan,
   };
-}
-
-// The document-direction borrowing the tables use beside the colour: a distance stated in words.
-export function distanceText(deficit: number): string {
-  if (deficit > 0) return `faltam ${formatCurrency(deficit)}`;
-  if (deficit < 0) return `sobram ${formatCurrency(Math.abs(deficit))}`;
-  return "no alvo";
 }
 
 export interface ClassRow {

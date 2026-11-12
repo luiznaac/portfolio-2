@@ -47,6 +47,7 @@ class AllocationControllerTest : DescribeSpec({
                 acoes.get("asset_class").asText() shouldBe "ACOES"
                 acoes.get("target").isNumber shouldBe true
                 acoes.get("strategies").get(0).get("strategy").asText() shouldBe "Top Dividendos"
+                acoes.get("strategies").get(0).get("strategy_id").asInt() shouldBe 1
                 acoes.get("strategies").get(0).get("tickers").get(0).get("ticker").asText() shouldBe "VALE3"
                 acoes.get("strategies").get(0).get("tickers").get(0).get("quantity").decimalValue()
                     .compareTo(BigDecimal("60")) shouldBe 0
@@ -54,6 +55,7 @@ class AllocationControllerTest : DescribeSpec({
                 body.get("unpriced").size() shouldBe 0
                 body.get("negative").size() shouldBe 0
                 acoes.get("manual").get("strategy").asText() shouldBe "Legado Ações"
+                acoes.get("manual").get("strategy_id").asInt() shouldBe 9
                 acoes.get("manual").has("target") shouldBe false
                 acoes.get("outside").get("actual").decimalValue()
                     .compareTo(BigDecimal("400.00")) shouldBe 0
@@ -148,4 +150,5 @@ private val allocation = AllocationCalculator.compute(
         StrategyTicker("Legado Ações", "ITUB4") to BigDecimal("30"),
     ),
     manualStrategies = listOf(ManualStrategyHolding("Legado Ações", AssetClass.ACOES)),
+    strategyIds = mapOf("Top Dividendos" to 1, "Legado Ações" to 9),
 )

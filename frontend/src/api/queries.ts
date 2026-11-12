@@ -22,13 +22,17 @@ import type {
   Gap,
   HarvestPairCreation,
   HarvestReport,
+  ImportApplyResult,
+  ImportDestinationObject,
   ImportSource,
+  ImportStatus,
   IncomeQuery,
   LegacyAttributionResult,
   MonthCreation,
   MonthUpdate,
   OpeningSeedCreation,
   OrderList,
+  OrderPlanPhase,
   PositionReconciliation,
   Quote,
   Snapshot,
@@ -73,6 +77,31 @@ export function usePortfolioStatus() {
   return useQuery({
     queryKey: ["portfolio", "status"],
     queryFn: api.getPortfolioStatus,
+  });
+}
+
+export interface ImportFilterInput {
+  status?: ImportStatus;
+  source?: ImportSource;
+}
+
+// The import log, optionally narrowed by the additive server filters. The inbox and the parked
+// session read the same hook.
+export function useImports(filters: ImportFilterInput = {}) {
+  return useQuery({
+    queryKey: ["imports", filters.status ?? null, filters.source ?? null],
+    queryFn: () => api.getImports(filters),
+  });
+}
+
+export function useImport(importId: number | null) {
+  return useQuery({
+    queryKey: ["imports", importId],
+    queryFn: () => {
+      if (importId === null) throw new Error("importId is required to fetch an import");
+      return api.getImport(importId);
+    },
+    enabled: importId !== null,
   });
 }
 
@@ -479,10 +508,10 @@ export function useOrders() {
 // The computed plan read (never the persisted lifecycle): Alocação reads the funding arithmetic and
 // the outside-strategy holdings the persisted list does not carry. The funding phase is the
 // shallowest depth that carries both, so the screen does not pay for the pro-rata/attribution pass.
-export function useOrderPlan() {
+export function useOrderPlan(phase: OrderPlanPhase = "FUNDING") {
   return useQuery({
-    queryKey: ["month", "current", "orders", "funding"],
-    queryFn: nullOn404(() => api.getOrderPlan("FUNDING")),
+    queryKey: ["month", "current", "orders", phase.toLowerCase()],
+    queryFn: nullOn404(() => api.getOrderPlan(phase)),
   });
 }
 
@@ -538,8 +567,17 @@ export function useOverrideOrderMatch() {
 export function useStageImport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ source, file }: { source: ImportSource; file: File }) =>
-      api.stageImport(source, file),
+    mutationFn: ({
+      source,
+      file,
+      destination,
+      destinationEntityId,
+    }: {
+      source: ImportSource;
+      file: File;
+      destination: ImportDestinationObject;
+      destinationEntityId?: number;
+    }) => api.stageImport(source, file, destination, destinationEntityId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
       invalidatePortfolioStatus(queryClient);
@@ -560,7 +598,7 @@ export function useReviewImport() {
 
 export function useApplyImport() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<ImportApplyResult, Error, number>({
     mutationFn: (importId: number) => api.applyImport(importId),
     // Apply writes the ledger and auto-enters unknown tickers into the catalog, so the result's
     // custody and data-quality counts must refresh alongside the import and trade lists.

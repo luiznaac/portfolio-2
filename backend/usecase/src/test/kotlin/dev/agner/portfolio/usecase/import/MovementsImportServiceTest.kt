@@ -5,6 +5,9 @@ import dev.agner.portfolio.usecase.corporateAction
 import dev.agner.portfolio.usecase.corporateaction.CorporateActionService
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.import.model.Import
+import dev.agner.portfolio.usecase.import.model.ImportApplyResult
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
@@ -33,10 +36,10 @@ class MovementsImportServiceTest : StringSpec({
 
     beforeTest {
         clearAllMocks()
-        coEvery { imports.stage(any(), any(), any(), any()) } returns
+        coEvery { imports.stage(any(), any(), any(), any(), any(), any()) } returns
             StagingResult(import(ImportStatus.STAGED), created = true)
         coEvery { imports.review(any()) } returns import(ImportStatus.REVIEWED)
-        coEvery { imports.apply(any()) } returns import(ImportStatus.APPLIED)
+        coEvery { imports.apply(any()) } returns ImportApplyResult(import(ImportStatus.APPLIED), 1, 0, 0)
         coEvery { incomeService.reconcile(any()) } returns emptyList()
         coEvery { corporateActions.importEvents(any()) } returns listOf(action)
     }
@@ -47,7 +50,16 @@ class MovementsImportServiceTest : StringSpec({
         result.trades shouldBe 1
         result.incomes shouldBe 0
         result.corporateActions shouldBe listOf(action)
-        coVerify { imports.stage(ImportSource.B3_MOVEMENTS, "movimentacao.xlsx", "hash", routing.trades) }
+        coVerify {
+            imports.stage(
+                ImportSource.B3_MOVEMENTS,
+                "movimentacao.xlsx",
+                "hash",
+                routing.trades,
+                ImportDestination(ImportDestinationObject.TRADES),
+                null,
+            )
+        }
         coVerify { imports.review(any()) }
         coVerify { imports.apply(any()) }
         coVerify { incomeService.reconcile(routing.incomes) }
@@ -56,7 +68,7 @@ class MovementsImportServiceTest : StringSpec({
 
     "a file already applied skips the trade pipeline and reports the import it matched" {
         val applied = import(ImportStatus.APPLIED)
-        coEvery { imports.stage(any(), any(), any(), any()) } returns
+        coEvery { imports.stage(any(), any(), any(), any(), any(), any()) } returns
             StagingResult(applied, created = false)
 
         val result = service.import("movimentacao.xlsx", "hash", routing)
@@ -70,7 +82,7 @@ class MovementsImportServiceTest : StringSpec({
 
     "a fresh import reports its trade import without the re-upload flag" {
         val staged = import(ImportStatus.STAGED)
-        coEvery { imports.stage(any(), any(), any(), any()) } returns
+        coEvery { imports.stage(any(), any(), any(), any(), any(), any()) } returns
             StagingResult(staged, created = true)
 
         val result = service.import("movimentacao.xlsx", "hash", routing)
@@ -84,7 +96,7 @@ class MovementsImportServiceTest : StringSpec({
 
         result.tradeImport shouldBe null
         result.reuploaded shouldBe false
-        coVerify(exactly = 0) { imports.stage(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { imports.stage(any(), any(), any(), any(), any(), any()) }
     }
 })
 
@@ -128,5 +140,7 @@ private fun import(status: ImportStatus) = Import(
     fileName = "movimentacao.xlsx",
     fileHash = "hash",
     status = status,
+    destination = ImportDestination(ImportDestinationObject.TRADES),
+    hasOriginal = false,
     createdAt = LocalDateTime.parse("2026-10-20T10:00:00"),
 )

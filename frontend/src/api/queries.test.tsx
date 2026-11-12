@@ -43,12 +43,19 @@ describe("useApplyImport", () => {
     vi.spyOn(api, "getPositions").mockResolvedValueOnce([]).mockResolvedValue(positions);
     vi.spyOn(api, "getCurrentAllocation").mockResolvedValueOnce(empty).mockResolvedValue(applied);
     vi.spyOn(api, "applyImport").mockResolvedValue({
-      id: 7,
-      source: "B3_TRADES",
-      file_name: "neg.xlsx",
-      file_hash: "hash",
-      status: "APPLIED",
-      created_at: "2026-10-14T10:00:00",
+      record: {
+        id: 7,
+        source: "B3_TRADES",
+        file_name: "neg.xlsx",
+        file_hash: "hash",
+        status: "APPLIED",
+        destination: { object_type: "TRADES" },
+        has_original: true,
+        created_at: "2026-10-14T10:00:00",
+      },
+      applied: 1,
+      rejected: 0,
+      skipped_duplicate: 0,
     });
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

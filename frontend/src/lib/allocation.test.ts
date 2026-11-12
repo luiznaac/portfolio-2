@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Allocation } from "../api/types.ts";
 import {
+  actualIdealBar,
   allocationRows,
-  barWidth,
+  distanceText,
   formatPoints,
   formatTarget,
-  maxAbsDeficit,
-  maxAbsDrift,
   unattributedShare,
 } from "./allocation.ts";
 
@@ -35,6 +34,7 @@ const allocation: Allocation = {
       strategies: [
         {
           strategy: "Top Dividendos",
+          strategy_id: 9001,
           target: 100,
           ideal: 50000,
           actual: 600,
@@ -47,6 +47,7 @@ const allocation: Allocation = {
       ],
       manual: {
         strategy: "Legado Ações",
+        strategy_id: 9002,
         actual: 500,
         tickers: [
           { ticker: "ITUB4", actual: 300 },
@@ -141,6 +142,15 @@ describe("allocationRows", () => {
       expect(row?.deficit).toBeUndefined();
       expect(row?.drift).toBeUndefined();
     }
+  });
+
+  it("carries the catalog id on the strategy and bucket rows only", () => {
+    const rows = allocationRows(allocation, new Set(["class:ACOES"]));
+
+    expect(rows.find((row) => row.label === "Top Dividendos")?.strategyId).toBe(9001);
+    expect(rows.find((row) => row.label === "Legado Ações")?.strategyId).toBe(9002);
+    expect(rows.find((row) => row.label === "Ações")?.strategyId).toBeUndefined();
+    expect(rows.find((row) => row.label === "Capital")?.strategyId).toBeUndefined();
   });
 
   it("reveals a strategy's tickers only when the strategy is expanded", () => {
@@ -263,20 +273,39 @@ describe("allocationRows", () => {
   });
 });
 
-describe("bars", () => {
-  it("maps a value to at most half the track, and zero when nothing diverges", () => {
-    expect(barWidth(50, 100)).toBe(25);
-    expect(barWidth(-50, 100)).toBe(25);
-    expect(barWidth(100, 100)).toBe(50);
-    expect(barWidth(200, 100)).toBe(50);
-    expect(barWidth(10, 0)).toBe(0);
+describe("actualIdealBar", () => {
+  it("fills the Actual and marks the Ideal against the larger of the two", () => {
+    const bar = actualIdealBar(25, 100);
+
+    expect(bar?.actual).toBeCloseTo((25 / 104) * 100);
+    expect(bar?.ideal).toBeCloseTo((100 / 104) * 100);
   });
 
-  it("scales against the largest absolute deficit and drift on the planned rows", () => {
-    const rows = allocationRows(allocation, new Set());
+  it("keeps both in view when the Actual is the larger", () => {
+    const bar = actualIdealBar(150, 100);
 
-    expect(maxAbsDeficit(rows)).toBe(96400);
-    expect(maxAbsDrift(rows)).toBe(96.4);
+    expect(bar?.actual).toBeCloseTo((150 / 156) * 100);
+    expect(bar?.ideal).toBeCloseTo((100 / 156) * 100);
+  });
+
+  it("draws no bar without a value or a target", () => {
+    expect(actualIdealBar(undefined, 100)).toBeNull();
+    expect(actualIdealBar(100, undefined)).toBeNull();
+    expect(actualIdealBar(0, 0)).toBeNull();
+  });
+});
+
+describe("distanceText", () => {
+  it("writes a deficit as money still missing", () => {
+    expect(distanceText(23_580)).toBe("faltam R$ 23.580,00");
+  });
+
+  it("writes a surplus as money above the ideal", () => {
+    expect(distanceText(-30_190)).toBe("sobram R$ 30.190,00");
+  });
+
+  it("says a level is on target at zero", () => {
+    expect(distanceText(0)).toBe("no alvo");
   });
 });
 
@@ -336,6 +365,7 @@ const monthFree: Allocation = {
       strategies: [],
       manual: {
         strategy: "Legado Ações",
+        strategy_id: 9002,
         actual: 500,
         tickers: [
           { ticker: "ITUB4", actual: 300 },

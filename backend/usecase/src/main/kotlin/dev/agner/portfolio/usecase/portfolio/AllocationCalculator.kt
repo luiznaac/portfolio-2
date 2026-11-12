@@ -59,7 +59,7 @@ private fun heldTickers(
     .sortedBy { it.ticker }
 
 // A Manual Strategy (the legacy bucket) crossing into the calculator: one per class, identified by its
-// own name so its attribution slices can be joined.
+// own name so its attribution slices and catalog id can be joined.
 data class ManualStrategyHolding(
     val name: String,
     val assetClass: AssetClass,
@@ -95,6 +95,8 @@ object AllocationCalculator {
         fixedIncome: List<FixedIncomeHolding>,
         attributions: AttributionLedger = emptyMap(),
         manualStrategies: List<ManualStrategyHolding> = emptyList(),
+        // The catalog's name → id map; the chain references a Strategy by name, the tree links by id.
+        strategyIds: Map<String, Int> = emptyMap(),
     ): Allocation {
         val chain = TargetChainCalculator.compute(capital, targets)
         val listedByClass = listed
@@ -110,6 +112,7 @@ object AllocationCalculator {
                     holdings = listedByClass[classChain.assetClass].orEmpty(),
                     attributions = attributions,
                     manualStrategies = manualStrategies,
+                    strategyIds = strategyIds,
                     capital = capital,
                 )
 
@@ -152,6 +155,7 @@ object AllocationCalculator {
         holdings: List<ListedHolding>,
         attributions: AttributionLedger,
         manualStrategies: List<ManualStrategyHolding>,
+        strategyIds: Map<String, Int>,
         capital: BigDecimal,
     ): ClassAllocation {
         val holdingByTicker = holdings.distinctBy { it.ticker }.associateBy { it.ticker }
@@ -181,6 +185,7 @@ object AllocationCalculator {
             val actual = tickers.mapNotNull { it.actual }.sumOf { it }.defaultScale()
             StrategyAllocation(
                 strategy = strategy.strategy,
+                strategyId = strategyIds[strategy.strategy],
                 target = strategy.target,
                 ideal = strategy.ideal,
                 actual = actual,
@@ -201,6 +206,7 @@ object AllocationCalculator {
         val manual = manualStrategy?.let {
             ManualAllocation(
                 strategy = it.name,
+                strategyId = strategyIds[it.name],
                 actual = manualTickers.mapNotNull { ticker -> ticker.actual }.sumOf { value -> value }
                     .defaultScale(),
                 tickers = manualTickers,

@@ -214,6 +214,38 @@ class AllocationCalculatorTest : StringSpec({
             mapOf("ITUB4" to "300", "VALE3" to "200")
     }
 
+    "links a report Strategy and the manual bucket to their catalog ids" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = emptyList(),
+            fixedIncome = emptyList(),
+            manualStrategies = listOf(manualStrategy("Legado Ações", AssetClass.ACOES)),
+            strategyIds = mapOf("Top Dividendos" to 7, "Legado Ações" to 9),
+        )
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
+
+        acoes.strategies.single().strategyId shouldBe 7
+        acoes.manual!!.strategyId shouldBe 9
+    }
+
+    "leaves the id absent when the chain names a Strategy the catalog does not carry" {
+        val allocation = compute(
+            capital = "100000",
+            targets = chainWithStrategy(tickerTarget("Top Dividendos", "VALE3", "100")),
+            listed = emptyList(),
+            fixedIncome = emptyList(),
+        )
+
+        val strategy = allocation.classes
+            .single { it.assetClass == AssetClass.ACOES }
+            .strategies
+            .single()
+
+        strategy.strategyId shouldBe null
+    }
+
     "an outside row follows the bucket so the class rows sum to its full-custody Actual" {
         val allocation = compute(
             capital = "100000",
@@ -436,6 +468,7 @@ private fun compute(
     fixedIncome: List<FixedIncomeHolding>,
     attributions: AttributionLedger = emptyMap(),
     manualStrategies: List<ManualStrategyHolding> = emptyList(),
+    strategyIds: Map<String, Int> = emptyMap(),
 ) = AllocationCalculator.compute(
     period = period,
     capital = BigDecimal(capital),
@@ -445,12 +478,14 @@ private fun compute(
     fixedIncome = fixedIncome,
     attributions = attributions,
     manualStrategies = manualStrategies,
+    strategyIds = strategyIds,
 )
 
 private fun attributed(strategy: String, ticker: String, quantity: String) =
     StrategyTicker(strategy, ticker) to BigDecimal(quantity)
 
-private fun manualStrategy(name: String, assetClass: AssetClass) = ManualStrategyHolding(name, assetClass)
+private fun manualStrategy(name: String, assetClass: AssetClass) =
+    ManualStrategyHolding(name, assetClass)
 
 private fun targets(vararg classes: ClassTarget) =
     Targets(classes.toList(), emptyList(), emptyList(), emptyList())

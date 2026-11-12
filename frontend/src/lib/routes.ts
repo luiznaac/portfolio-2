@@ -26,6 +26,7 @@ export const ROUTES = {
   quotes: "/ativos/quotes",
   gaps: "/ativos/gaps",
   imports: "/imports",
+  importAssistant: "/imports/assistant",
   importSources: "/imports/sources",
   corporateActions: "/imports/corporate",
   importHistory: "/imports/history",
@@ -47,6 +48,13 @@ export function positionDetail(ticker: string): string {
 // The strategy detail nests under Estratégias · Todas; the id is the path segment.
 export function strategyDetail(strategyId: number): string {
   return `${ROUTES.strategies}/${strategyId}`;
+}
+
+// The detail's own tabs are routes under the id; Carteira is the detail's landing tab.
+export type StrategyDetailTab = "carteira" | "fatia";
+
+export function strategyDetailTab(strategyId: number, tab: StrategyDetailTab): string {
+  return tab === "carteira" ? strategyDetail(strategyId) : `${strategyDetail(strategyId)}/${tab}`;
 }
 
 // An attention ref carries the target income row's id; Proventos reads it and anchors the shared
