@@ -3,21 +3,18 @@ import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   useActivateEdition,
   useCreateStrategy,
-  useCurrentMonth,
-  useEditions,
+  useCurrentAllocation,
   useImportEdition,
   useStrategies,
-  useStrategyEditions,
-  useStrategyHoldings,
 } from "../api/queries.ts";
 import type {
   AssetClass,
   Edition,
   EditionDiff,
   EditionEntry,
+  EditionSummary,
   Rating,
   Strategy,
-  StrategyHolding,
   StrategyKind,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
@@ -25,24 +22,23 @@ import { Chip } from "../components/Chip.tsx";
 import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
+import { formatPoints } from "../lib/allocation.ts";
 import { cn } from "../lib/cn.ts";
-import { formatCurrency, formatNumber, formatPercent } from "../lib/format.ts";
+import { formatCurrency } from "../lib/format.ts";
 import { ASSET_CLASSES, assetClassLabel } from "../lib/month.ts";
-import { ROUTES } from "../lib/routes.ts";
+import { ROUTES, strategyDetail } from "../lib/routes.ts";
 import {
+  type StrategyListRow,
   editionDiffSummary,
-  editionStatusChip,
+  editionSummaryChip,
   editionWeightSum,
-  groupStrategiesByClass,
-  isEditionForMonth,
   isReportDriven,
   isWeightSumValid,
   overrideEntry,
   ratingLabel,
   referenceMonthLabel,
   reportDrivenStrategies,
-  strategyCoverage,
-  strategyCoverageLabel,
+  strategyRows,
   suggestStrategy,
 } from "../lib/strategy.ts";
 
@@ -56,304 +52,119 @@ const STRATEGY_CLASSES: AssetClass[] = ASSET_CLASSES.filter(
   (assetClass) => assetClass !== "RENDA_FIXA",
 );
 
-// The Estratégias screen (issue #162): the XP strategy catalog, each strategy's editions with the
-// month-to-month diff, and the batch report import with a per-edition preview drawer. The catalog
-// view is a read of GET /strategies + GET /strategies/{id}/editions; the import view stages each PDF
-// through POST .../editions/import and confirms through POST .../editions.
+// The Estratégias screen: the comparison list (issue #373) and the batch report import. The list is
+// one bounded table over the whole catalog — no filter bar — reading GET /strategies (which carries
+// `latest_edition`) and the allocation tree for value/drift; a row opens the strategy detail (#374).
+// The import view stages each PDF through POST .../editions/import and confirms through
+// POST .../editions.
 export function Strategies() {
   const { pathname } = useLocation();
-  return pathname.endsWith("/import") ? <StrategyImportView /> : <StrategyCatalogView />;
+  return pathname.endsWith("/import") ? <StrategyImportView /> : <StrategyListView />;
 }
 
-function StrategyCatalogView() {
+function StrategyListView() {
   const strategies = useStrategies();
-  const currentMonth = useCurrentMonth().data?.month.period;
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const allocation = useCurrentAllocation();
   const [creating, setCreating] = useState(false);
 
   const list = strategies.data ?? [];
-  const reportStrategies = reportDrivenStrategies(list);
-  const groups = groupStrategiesByClass(list);
-  // The default selection is the first row the nav renders, so the bucket never opens the detail
-  // pane just because its name sorts first in the server's list.
-  const selected =
-    list.find((strategy) => strategy.id === selectedId) ?? groups[0]?.strategies[0] ?? null;
-  const editions = useEditions(isReportDriven(selected) ? selected.id : null);
-  const catalogEditions = useStrategyEditions(reportStrategies);
-  const editionsById = new Map(
-    reportStrategies.map((strategy, index) => [strategy.id, catalogEditions[index]?.data ?? []]),
-  );
+  const rows = strategyRows(list, allocation.data);
+
+  const columns: Column<StrategyListRow>[] = [
+    {
+      key: "strategy",
+      header: "Estratégia",
+      render: (row) => (
+        <Link to={strategyDetail(row.strategy.id)} className="text-ink hover:text-accent">
+          {row.strategy.name}
+        </Link>
+      ),
+    },
+    {
+      key: "class",
+      header: "Classe",
+      render: (row) => assetClassLabel(row.strategy.asset_class),
+    },
+    {
+      key: "kind",
+      header: "Tipo",
+      render: (row) => (isReportDriven(row.strategy) ? "Com relatório" : "Manual (legado)"),
+    },
+    {
+      key: "edition",
+      header: "Edição",
+      render: (row) => <EditionCell latest={row.strategy.latest_edition} />,
+    },
+    {
+      key: "value",
+      header: "Valor",
+      align: "right",
+      render: (row) =>
+        row.value === undefined ? (
+          <Unknown />
+        ) : (
+          <span className="font-mono">{formatCurrency(row.value)}</span>
+        ),
+    },
+    {
+      key: "drift",
+      header: "Drift",
+      align: "right",
+      render: (row) =>
+        row.drift === undefined ? (
+          <Unknown />
+        ) : (
+          <span className="font-mono">{formatPoints(row.drift)}</span>
+        ),
+    },
+  ];
 
   return (
     <section>
-      <div className="mb-4 flex items-center justify-end gap-3">
-        <div className="flex items-center gap-2">
-          <Button variant="default" onClick={() => setCreating(true)}>
-            Nova estratégia
-          </Button>
-          <Link to={ROUTES.strategiesImport}>
-            <Button variant="default">Importar relatórios</Button>
-          </Link>
-        </div>
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <Button variant="default" onClick={() => setCreating(true)}>
+          Nova estratégia
+        </Button>
+        <Link to={ROUTES.strategiesImport}>
+          <Button variant="default">Importar relatórios</Button>
+        </Link>
       </div>
 
       {strategies.isLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : strategies.isError ? (
         <p className="text-[13.5px] text-tax">{strategies.error.message}</p>
+      ) : rows.length === 0 ? (
+        <Panel>
+          <p className="text-[13px] text-ink-dim">Nenhuma estratégia cadastrada.</p>
+        </Panel>
       ) : (
-        <div className="flex gap-5">
-          <nav className="w-[250px] shrink-0 space-y-4">
-            {groups.map((group) => (
-              <div key={group.assetClass}>
-                <h5 className="flex items-baseline justify-between gap-2 px-2 pb-1 font-mono text-[10px] font-medium tracking-[.12em] text-ink-faint uppercase">
-                  <span>{assetClassLabel(group.assetClass)}</span>
-                  <span className="tracking-[.02em] normal-case">
-                    {strategyCoverageLabel(
-                      strategyCoverage(group.strategies, editionsById, currentMonth),
-                    )}
-                  </span>
-                </h5>
-                <ul className="space-y-1">
-                  {group.strategies.map((strategy) => (
-                    <li key={strategy.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(strategy.id)}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left",
-                          strategy.id === selected?.id
-                            ? "border-accent bg-surface-2"
-                            : "border-line bg-surface hover:bg-surface-2",
-                        )}
-                      >
-                        <span className="text-[13.5px] text-ink">{strategy.name}</span>
-                        <StrategyStatusChip
-                          strategy={strategy}
-                          editions={editionsById.get(strategy.id)}
-                        />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-            {groups.length === 0 && (
-              <p className="text-[13px] text-ink-dim">Nenhuma estratégia cadastrada.</p>
-            )}
-          </nav>
-
-          <div className="min-w-0 flex-1">
-            {selected ? (
-              <StrategyDetail
-                strategy={selected}
-                editions={editions.data ?? []}
-                loading={editions.isLoading}
-              />
-            ) : (
-              <Panel>
-                <p className="text-[13px] text-ink-dim">
-                  Cadastre as estratégias da XP para ver as edições.
-                </p>
-              </Panel>
-            )}
-          </div>
-        </div>
+        <Table columns={columns} rows={rows} rowKey={(row) => row.strategy.id} />
       )}
 
       {creating && (
         <CreateStrategyModal
           strategies={list}
           onClose={() => setCreating(false)}
-          onCreated={(created) => {
-            setSelectedId(created.id);
-            setCreating(false);
-          }}
+          onCreated={() => setCreating(false)}
         />
       )}
     </section>
   );
 }
 
-function StrategyStatusChip({
-  strategy,
-  editions,
-}: {
-  strategy: Strategy;
-  editions?: Edition[];
-}) {
-  if (!isReportDriven(strategy)) return <Chip tone="violet">Legado</Chip>;
-  const status = editionStatusChip(editions);
-  return <Chip tone={status.tone}>{status.label}</Chip>;
+// The latest edition cell: the month with a ✓ when active, a "revisão" badge while staged, and an
+// em dash when the strategy has never received a report.
+function EditionCell({ latest }: { latest?: EditionSummary }) {
+  if (!latest) return <Unknown />;
+  const chip = editionSummaryChip(latest);
+  return <Chip tone={chip.tone}>{chip.label}</Chip>;
 }
 
-function StrategyDetail({
-  strategy,
-  editions,
-  loading,
-}: {
-  strategy: Strategy;
-  editions: Edition[];
-  loading: boolean;
-}) {
-  const currentMonth = useCurrentMonth().data?.month.period;
-  const latest = editions[0] ?? null;
-
-  const columns: Column<EditionEntry>[] = [
-    {
-      key: "ticker",
-      header: "Ticker",
-      render: (entry) => <span className="font-mono font-medium">{entry.ticker}</span>,
-    },
-    {
-      key: "weight",
-      header: "Peso",
-      align: "right",
-      render: (entry) => `${entry.weight}%`,
-    },
-    {
-      key: "rating",
-      header: "Rating",
-      render: (entry) => ratingLabel(entry.rating),
-    },
-    {
-      key: "target",
-      header: "Preço-alvo",
-      align: "right",
-      render: (entry) => (entry.target_price == null ? "—" : formatCurrency(entry.target_price)),
-    },
-    {
-      key: "do_not_trade",
-      header: "Não operar",
-      render: (entry) =>
-        entry.do_not_trade ? (
-          <Chip tone="rose">Não operar</Chip>
-        ) : (
-          <span className="text-ink-faint">—</span>
-        ),
-    },
-  ];
-
-  return (
-    <>
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-cond text-[19px] font-bold">{strategy.name}</h2>
-          <p className="flex items-center gap-1.5 text-[12.5px] text-ink-dim">
-            <span>{assetClassLabel(strategy.asset_class)}</span>
-            <StrategyStatusChip strategy={strategy} editions={editions} />
-          </p>
-        </div>
-        {isReportDriven(strategy) && (
-          <Link to={`/strategies/import?strategy=${strategy.id}`}>
-            <Button variant="default">Importar relatório</Button>
-          </Link>
-        )}
-      </div>
-
-      {!isReportDriven(strategy) && <ManualHoldings strategyId={strategy.id} />}
-
-      {isReportDriven(strategy) && (
-        <>
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            {editions.map((edition) => (
-              <Chip key={edition.id} tone={edition.status === "ACTIVE" ? "green" : "amber"}>
-                {referenceMonthLabel(edition.reference_month)}
-                {edition.status === "ACTIVE" ? " · ativa" : " · em revisão"}
-                {currentMonth && isEditionForMonth(edition, currentMonth) ? " · mês atual" : ""}
-              </Chip>
-            ))}
-          </div>
-
-          {latest?.diff_from_previous && (
-            <div className="mb-4">
-              <DiffPanel diff={latest.diff_from_previous} />
-            </div>
-          )}
-
-          {loading ? (
-            <p className="text-[13.5px] text-ink-dim">Carregando edições…</p>
-          ) : latest ? (
-            <Table columns={columns} rows={latest.entries} rowKey={(entry) => entry.ticker} />
-          ) : (
-            <Panel>
-              <p className="text-[13px] text-ink-dim">
-                Sem edição importada. Importe o relatório do mês para ver os alvos.
-              </p>
-            </Panel>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-
-const MANUAL_HOLDING_COLUMNS: Column<StrategyHolding>[] = [
-  {
-    key: "ticker",
-    header: "Ticker",
-    render: (holding) => <span className="font-mono font-medium">{holding.ticker}</span>,
-  },
-  {
-    key: "quantity",
-    header: "Unidades atribuídas",
-    align: "right",
-    render: (holding) => formatNumber(holding.quantity),
-  },
-  {
-    key: "value",
-    header: "Valor atual",
-    align: "right",
-    render: (holding) => formatCurrency(holding.value),
-  },
-  {
-    key: "share",
-    header: "Fatia do legado",
-    align: "right",
-    render: (holding) => formatPercent(holding.share),
-  },
-];
-
-// The manual Strategy detail is a read-only holdings view: no edition chips, diff, import button,
-// transfer or classify action. Every write lives on Alocação, which the footer points at.
-function ManualHoldings({ strategyId }: { strategyId: number }) {
-  const holdings = useStrategyHoldings(strategyId);
-
-  if (holdings.isLoading) return <p className="text-[13.5px] text-ink-dim">Carregando posições…</p>;
-  if (holdings.error) return <p className="text-[13.5px] text-tax">{holdings.error.message}</p>;
-
-  return (
-    <>
-      {holdings.data && holdings.data.holdings.length > 0 ? (
-        <>
-          <Table
-            columns={MANUAL_HOLDING_COLUMNS}
-            rows={holdings.data.holdings}
-            rowKey={(holding) => holding.ticker}
-          />
-          <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-[13px]">
-            <span className="text-ink-dim">Total do legado</span>
-            <span className="font-mono font-semibold">
-              {formatCurrency(holdings.data.total_value)}
-            </span>
-          </div>
-        </>
-      ) : (
-        <Panel>
-          <p className="text-[13px] text-ink-dim">
-            Nenhuma posição atribuída. Use Atribuir posições fora da estratégia na Alocação.
-          </p>
-        </Panel>
-      )}
-      <p className="mt-3 text-[11.5px] text-ink-faint">
-        Transferências e classificação acontecem na{" "}
-        <Link to={ROUTES.allocation} className="text-principal hover:underline">
-          Alocação
-        </Link>
-        .
-      </p>
-    </>
-  );
+// An unknown number — a strategy the month chain does not carry, or a bucket with no target. It is
+// always an em dash, never R$ 0,00.
+function Unknown() {
+  return <span className="text-ink-dim">—</span>;
 }
 
 function CreateStrategyModal({

@@ -35,6 +35,8 @@ const BACKEND_ROOTS = [
 const BACKEND_TYPES: BackendTypeMap = {
   // The read shape is `EditionDetail`; the mirror keeps the name the UI uses.
   Edition: "EditionDetail",
+  // The catalog read's row adds the latest edition to the persisted Strategy.
+  Strategy: "StrategyCatalogRow",
   // The read shape is `AttributionSummary`; `Attribution` is the stored slice's name.
   Attribution: "AttributionSummary",
   // The blocked-close 409 body is built by DomainExceptionHandling from its private `ApiError`.

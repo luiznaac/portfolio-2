@@ -10,9 +10,11 @@ import dev.agner.portfolio.usecase.strategy.model.EditionDiff
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.EditionImport
 import dev.agner.portfolio.usecase.strategy.model.EditionStatus
+import dev.agner.portfolio.usecase.strategy.model.EditionSummary
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyCatalogRow
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
@@ -101,6 +103,31 @@ class StrategyServiceTest : StringSpec({
         (runCatching { service.create(reportDriven) }.exceptionOrNull() is InvalidStrategyClassException) shouldBe true
         (runCatching { service.create(manual) }.exceptionOrNull() is InvalidStrategyClassException) shouldBe true
         coVerify(exactly = 0) { strategies.save(any()) }
+    }
+
+    "fetchAll carries each strategy's latest edition so the list reads them in one pass" {
+        val summary = EditionSummary(9, SEPTEMBER, EditionStatus.STAGED)
+        coEvery { strategies.fetchAll() } returns listOf(strategy, manualStrategy)
+        coEvery { editions.fetchLatestByStrategy(listOf(1, 7)) } returns mapOf(1 to summary)
+
+        service.fetchAll() shouldBe listOf(
+            StrategyCatalogRow(1, "Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN, summary),
+            StrategyCatalogRow(7, "Legado", AssetClass.ACOES, StrategyKind.MANUAL, null),
+        )
+    }
+
+    "fetchAll serialises latest_edition as an additive nested read" {
+        coEvery { strategies.fetchAll() } returns listOf(strategy)
+        coEvery { editions.fetchLatestByStrategy(listOf(1)) } returns mapOf(
+            1 to EditionSummary(9, SEPTEMBER, EditionStatus.STAGED),
+        )
+
+        val json = JsonMapper.mapper.writeValueAsString(service.fetchAll())
+
+        json.contains(
+            "\"latest_edition\":{\"id\":9,\"reference_month\":\"2026-09\",\"status\":\"STAGED\"}",
+        ) shouldBe true
+        json.contains("\"entries\"") shouldBe false
     }
 
     "fetchEditions is null when the strategy does not exist" {
