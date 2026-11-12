@@ -19,8 +19,8 @@ export const INCOME_FILTER_FIELDS: FilterField<IncomeRow>[] = [
     control: {
       kind: "select",
       key: "status",
-      label: "Situação",
-      emptyLabel: "Todas",
+      label: "Estado",
+      emptyLabel: "Todos",
       options: INCOME_STATUSES.map((status) => ({
         value: status,
         label: incomeStatusLabel(status),

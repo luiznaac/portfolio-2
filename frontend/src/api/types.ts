@@ -944,6 +944,14 @@ export interface Income {
   status: IncomeStatus;
 }
 
+/** The additive GET /income filters: an absent field is no narrowing. */
+export interface IncomeQuery {
+  from?: string;
+  to?: string;
+  ticker?: string;
+  status?: IncomeStatus;
+}
+
 // Eventos corporativos: a holder-neutral event template plus the engine's decision. `ratio` keeps
 // the event's own direction — DESDOBRAMENTO multiplies the quantity by it, GRUPAMENTO divides — and
 // the amounts stay null on kinds that do not carry them. NEEDS_REVIEW is the review queue.
@@ -1343,7 +1351,8 @@ export type StatusRefType =
   | "CORPORATE_ACTION"
   | "GAP"
   | "QUOTE"
-  | "TICKER";
+  | "TICKER"
+  | "INCOME";
 
 export type AttentionKind =
   | "PENDING_TRANSFER"

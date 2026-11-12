@@ -708,7 +708,26 @@ In order: upload the workbook, submit it, review its two `nova(s)` rows and appl
 
 The refresh walks back to the latest published COTAHIST daily file and reads the ledger's 2026 annual file, so its intent needs a generous timeout rather than a short one. A count that differs from the enumerated summary, a missing `/history` link, a refresh report carrying failure lines or a zero catalog/quote count, a re-upload without its resume banner or with a non-zero imported count, or an upload that does not reach the result is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Análise · Proventos (issue [#393](https://github.com/luiznaac/portfolio-2/issues/393))
+
+**Scenario**: the run drives the windowed Proventos tab, its filter and its attention deep link on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves five income movements with explicit ids: three past payments (PETR4, VALE3, ITUB4), one receivable later in the current month (PETR4) and one receivable in the next month (VALE3). With no closed month the rail opens on 12 months ending the newest income month; a one-month window on that anchor leaves the earlier receivable outside the window and flagged "fora do recorte". The deep link `?focus=9001` anchors the rail on the received PETR4's month and highlights that ledger row. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM cash_movement; \
+      INSERT INTO cash_movement (id, ticker, \`date\`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES \
+        (9001, 'PETR4', DATE_SUB(CURDATE(), INTERVAL 40 DAY), 120, 0, 120, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW()), \
+        (9002, 'VALE3', DATE_SUB(CURDATE(), INTERVAL 25 DAY), 80, 0, 80, 'INCOME', 'B3', 'ANNOUNCED', 'JCP', NOW()), \
+        (9003, 'ITUB4', DATE_SUB(CURDATE(), INTERVAL 15 DAY), 60, 6, 54, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW()), \
+        (9004, 'PETR4', DATE_ADD(CURDATE(), INTERVAL 5 DAY), 90, 0, 90, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW()), \
+        (9005, 'VALE3', DATE_ADD(CURDATE(), INTERVAL 40 DAY), 70, 0, 70, 'INCOME', 'B3', 'ANNOUNCED', 'JCP', NOW());"
+```
+
+With a run in November 2026 the reads are deterministic: the window is `jan/2026 – dez/2026`, the KPIs read Recebidos R$ 254,00 / A receber R$ 160,00 / Próximo PETR4 / Média mensal R$ 21,17, the chart plots October's 254,00, and the ledger reads `5 de 5` with PETR4 and VALE3's receivables first and then the three October payments. Typing `petr` narrows the ledger to `2 de 5` while the KPIs and the rail stay put. Selecting the `Mês` preset moves the window to `dez/2026 – dez/2026`, leaves the November receivable in the ledger flagged "fora do recorte", and still reports the same KPIs. Opening `/portfolio/analysis/income?focus=9001` anchors the rail on `nov/2025 – out/2026` and shows the amber "do alerta" chip on the received PETR4 row. A missing KPI or chart, a ledger row order that puts a received payment before a receivable, a filter that changes the KPIs or the rail, a receivable that disappears when it falls outside the window, or a deep link that lands on another window without the highlight is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — shared filter bar and page-scoped filter state (issue [#367](https://github.com/luiznaac/portfolio-2/issues/367))
+
+> The Proventos half of this scenario predates the Análise · Proventos slice ([#393](https://github.com/luiznaac/portfolio-2/issues/393)): the forecast panel is now the window KPIs, the status control is labelled Estado, and a settled status narrows the ledger rather than emptying it. Use the Análise · Proventos scenario above for Proventos acceptance; the Ativos · Negócios half stands.
 
 **Scenario**: the run drives the shared filter bar on the two unbounded lists that exist today — Ativos · Negócios (`/trades`) and Análise · Proventos (`/income`) — on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves three trades (PETR4 buy, VALE3 buy, PETR4 sell) and three income movements (PETR4 announced, VALE3 payable today, ITUB4 received), plus a R$ 200,00 forecast. Run it independently of the other seeds.
 

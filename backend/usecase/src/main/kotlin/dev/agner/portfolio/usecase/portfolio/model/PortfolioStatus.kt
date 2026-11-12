@@ -87,6 +87,10 @@ enum class StatusRefType {
     GAP,
     QUOTE,
     TICKER,
+
+    // A Proventos ledger row. A receivable finding carries its id so the Proventos deep link lands in
+    // the shared window with that row highlighted.
+    INCOME,
 }
 
 // The landing's data-state panel: how fresh the quotes are, which held tickers are stale, how many

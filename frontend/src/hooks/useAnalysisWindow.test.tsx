@@ -54,6 +54,21 @@ function renderHarness() {
   );
 }
 
+function PreferredProbe() {
+  const rail = useAnalysisWindow(PERIODS, "2026-02", "2026-01");
+
+  return (
+    <div>
+      <span data-testid="preferred-range">
+        {rail.range === undefined ? "none" : `${rail.range.start}..${rail.range.end}`}
+      </span>
+      <button type="button" onClick={() => rail.shift(1)}>
+        Um mês depois
+      </button>
+    </div>
+  );
+}
+
 afterEach(cleanup);
 
 describe("useAnalysisWindow", () => {
@@ -75,6 +90,22 @@ describe("useAnalysisWindow", () => {
     await user.click(screen.getByText("Proventos"));
     expect(screen.getByTestId("preset").textContent).toBe("3m");
     expect(screen.getByTestId("range").textContent).toBe("2025-11..2026-01");
+  });
+
+  it("honours a page's preferred anchor until the owner moves the rail", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AnalysisWindowProvider>
+          <PreferredProbe />
+        </AnalysisWindowProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("preferred-range").textContent).toBe("2025-02..2026-01");
+
+    await user.click(screen.getByText("Um mês depois"));
+    expect(screen.getByTestId("preferred-range").textContent).toBe("2025-03..2026-02");
   });
 
   it("resets on re-entry to the area", async () => {

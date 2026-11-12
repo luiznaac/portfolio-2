@@ -16,12 +16,19 @@ export function Table<T>({
   rowKey,
   footer,
   onRowClick,
+  rowClassName,
+  rowId,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string | number;
   footer?: ReactNode;
   onRowClick?: (row: T) => void;
+  // A row's own background replaces the panel default, so a deep-linked row can carry the
+  // attention highlight without a second colour token.
+  rowClassName?: (row: T) => string | undefined;
+  // A stable element id, so a deep link can scroll its target row into view.
+  rowId?: (row: T) => string;
 }) {
   return (
     <div className="overflow-x-auto rounded-panel border border-line">
@@ -45,6 +52,7 @@ export function Table<T>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
+              id={rowId?.(row)}
               onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
               onKeyDown={
                 onRowClick === undefined
@@ -57,7 +65,7 @@ export function Table<T>({
               }
               tabIndex={onRowClick === undefined ? undefined : 0}
               className={cn(
-                "bg-panel",
+                rowClassName?.(row) ?? "bg-panel",
                 onRowClick !== undefined && "cursor-pointer hover:bg-panel-2",
               )}
             >

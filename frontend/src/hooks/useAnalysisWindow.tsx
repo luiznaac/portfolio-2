@@ -61,19 +61,23 @@ export interface AnalysisWindow {
 
 // Resolves the shared state against the periods the active tab actually carries. The last closed
 // month is the default anchor; the computed history has no close, so the newest series month stands
-// in. A preset/anchor pair whose anchor fell outside the data is clamped at render, never trusted.
-export function useAnalysisWindow(periods: string[], lastClosedPeriod?: string): AnalysisWindow {
+// in. `preferredAnchor` is a page-level request (a deep link's target month) that applies only until
+// the owner first moves the rail, when the shared state takes over. A preset/anchor pair whose
+// anchor fell outside the data is clamped at render, never trusted.
+export function useAnalysisWindow(
+  periods: string[],
+  lastClosedPeriod?: string,
+  preferredAnchor?: string,
+): AnalysisWindow {
   const context = useContext(AnalysisWindowContext);
   if (context === null) {
     throw new Error("useAnalysisWindow must be used inside AnalysisWindowProvider");
   }
 
   const bounds = windowBounds(periods);
-  const fallback = defaultAnchor(periods, lastClosedPeriod);
+  const requested = context.anchor ?? preferredAnchor ?? defaultAnchor(periods, lastClosedPeriod);
   const anchor =
-    bounds === undefined || fallback === undefined
-      ? undefined
-      : clampPeriod(context.anchor ?? fallback, bounds);
+    bounds === undefined || requested === undefined ? undefined : clampPeriod(requested, bounds);
 
   return {
     preset: context.preset,

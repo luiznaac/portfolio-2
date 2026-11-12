@@ -31,6 +31,7 @@ import type {
   ImportSource,
   ImportStatus,
   Income,
+  IncomeQuery,
   LegacyAttributionPreview,
   LegacyAttributionResult,
   Month,
@@ -89,6 +90,17 @@ async function unwrap<T>(res: Response): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+// Builds a path's query string from the values the caller actually set, so an untouched filter is
+// absent from the URL and the default read keeps its bare path.
+function withQuery(path: string, params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") search.set(key, value);
+  }
+  const query = search.toString();
+  return query.length === 0 ? path : `${path}?${query}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -419,12 +431,8 @@ export const api = {
     });
   },
 
-  getIncome(): Promise<Income[]> {
-    return request("/income");
-  },
-
-  getUpcomingIncome(): Promise<Income[]> {
-    return request("/income/upcoming");
+  getIncome(query: IncomeQuery = {}): Promise<Income[]> {
+    return request(withQuery("/income", { ...query }));
   },
 
   importIncome(file: File): Promise<Income[]> {

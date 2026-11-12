@@ -4,6 +4,8 @@ import {
   clampPeriod,
   defaultAnchor,
   shiftAnchor,
+  windowDayRange,
+  windowMonthKeys,
   windowMonths,
   windowRange,
   windowRangeLabel,
@@ -70,6 +72,37 @@ describe("clampPeriod and shiftAnchor", () => {
 describe("windowRangeLabel", () => {
   it("renders both window edges with the shared month labels", () => {
     expect(windowRangeLabel({ start: "2025-03", end: "2026-02" })).toBe("mar/2025 – fev/2026");
+  });
+});
+
+describe("windowMonthKeys", () => {
+  it("lists every month of the window, both edges included", () => {
+    expect(windowMonthKeys({ start: "2025-11", end: "2026-02" })).toEqual([
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+    ]);
+  });
+
+  it("lists a single month for a one-month window", () => {
+    expect(windowMonthKeys({ start: "2026-10", end: "2026-10" })).toEqual(["2026-10"]);
+  });
+});
+
+describe("windowDayRange", () => {
+  it("turns the month window into inclusive ISO day bounds", () => {
+    expect(windowDayRange({ start: "2026-01", end: "2026-03" })).toEqual({
+      from: "2026-01-01",
+      to: "2026-03-31",
+    });
+  });
+
+  it("ends February on the leap year's 29th", () => {
+    expect(windowDayRange({ start: "2024-02", end: "2024-02" })).toEqual({
+      from: "2024-02-01",
+      to: "2024-02-29",
+    });
   });
 });
 

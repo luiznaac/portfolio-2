@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_GROUPS, OBJECTS, activeSub, resolveCrumb } from "./routes.ts";
+import { NAV_GROUPS, OBJECTS, activeSub, incomeRow, resolveCrumb } from "./routes.ts";
 
 describe("OBJECTS", () => {
   it("holds exactly six objects in the three console groups", () => {
@@ -120,6 +120,12 @@ describe("resolveCrumb", () => {
   it("returns null outside the object table", () => {
     expect(resolveCrumb("/health")).toBeNull();
     expect(resolveCrumb("/trades")).toBeNull();
+  });
+});
+
+describe("incomeRow", () => {
+  it("builds the Proventos deep link with the target row id", () => {
+    expect(incomeRow(24)).toBe("/analysis/income?focus=24");
   });
 });
 
