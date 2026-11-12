@@ -74,6 +74,9 @@ data class ClassAllocation(
 // units of its target tickers × the current quote.
 data class StrategyAllocation(
     val strategy: String,
+    // The catalog id, so the tree links to the strategy detail without matching on name. Absent when
+    // the chain names a Strategy the catalog no longer carries.
+    val strategyId: Int? = null,
     val target: BigDecimal,
     val ideal: BigDecimal,
     val actual: BigDecimal,
@@ -88,6 +91,8 @@ data class StrategyAllocation(
 // than zero — a zero would draw an excess bar for money that has no target.
 data class ManualAllocation(
     val strategy: String,
+    // The catalog id, so the tree links the bucket to its strategy detail by id.
+    val strategyId: Int? = null,
     val actual: BigDecimal,
     val tickers: List<ActualTickerAllocation>,
 )
