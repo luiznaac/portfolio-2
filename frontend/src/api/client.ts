@@ -25,8 +25,11 @@ import type {
   HarvestReport,
   HealthCheckResult,
   Import,
+  ImportApplyResult,
+  ImportDestinationObject,
   ImportRow,
   ImportSource,
+  ImportStatus,
   Income,
   LegacyAttributionPreview,
   LegacyAttributionResult,
@@ -110,11 +113,16 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 // One staged upload: `created` is the 201 the server answers for a new file, absent (false) when
-// the hash already named an import and the server answered 200 with that import. The wizard needs
-// the distinction to put a resume banner on an existing file and none on a fresh one.
+// the hash already named an import and the server answered 200 with that import. The assistant
+// needs the distinction to put a resume banner on an existing file and none on a fresh one.
 export interface StagedImport {
   import: Import;
   created: boolean;
+}
+
+export interface ImportFilters {
+  status?: ImportStatus;
+  source?: ImportSource;
 }
 
 export const api = {
@@ -128,9 +136,36 @@ export const api = {
     return request("/portfolio/status");
   },
 
-  async stageImport(source: ImportSource, file: File): Promise<StagedImport> {
+  // The import log; the status and source filters are the server's additive query parameters.
+  getImports(filters: ImportFilters = {}): Promise<Import[]> {
+    const query = new URLSearchParams();
+    if (filters.status !== undefined) query.set("status", filters.status);
+    if (filters.source !== undefined) query.set("source", filters.source);
+    const suffix = query.toString();
+    return request(`/imports${suffix.length > 0 ? `?${suffix}` : ""}`);
+  },
+
+  getImport(importId: number): Promise<Import> {
+    return request(`/imports/${importId}`);
+  },
+
+  // The retained original, served as an attachment; a link/download target, not a JSON read.
+  importOriginalUrl(importId: number): string {
+    return `${BASE}/imports/${importId}/file`;
+  },
+
+  async stageImport(
+    source: ImportSource,
+    file: File,
+    destination: ImportDestinationObject,
+    destinationEntityId?: number,
+  ): Promise<StagedImport> {
     const form = new FormData();
     form.append("source", source);
+    form.append("destination_object", destination);
+    if (destinationEntityId !== undefined) {
+      form.append("destination_entity_id", String(destinationEntityId));
+    }
     form.append("file", file);
     const { body, status } = await postForm<Import>("/imports", form);
     return { import: body, created: status === 201 };
@@ -144,7 +179,7 @@ export const api = {
     return request(`/imports/${importId}/review`, { method: "POST" });
   },
 
-  applyImport(importId: number): Promise<Import> {
+  applyImport(importId: number): Promise<ImportApplyResult> {
     return request(`/imports/${importId}/apply`, { method: "POST" });
   },
 
