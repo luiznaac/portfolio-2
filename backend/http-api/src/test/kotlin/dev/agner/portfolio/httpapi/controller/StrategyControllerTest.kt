@@ -13,9 +13,11 @@ import dev.agner.portfolio.usecase.strategy.model.EditionDiff
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.EditionImport
 import dev.agner.portfolio.usecase.strategy.model.EditionStatus
+import dev.agner.portfolio.usecase.strategy.model.EditionSummary
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyCatalogRow
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyHolding
 import dev.agner.portfolio.usecase.strategy.model.StrategyHoldings
@@ -47,9 +49,17 @@ class StrategyControllerTest : DescribeSpec({
 
     describe("listing strategies") {
 
-        it("serves the catalog with snake_case fields") {
+        it("serves the catalog with snake_case fields and the latest edition") {
             val service = mockk<StrategyService>()
-            coEvery { service.fetchAll() } returns listOf(strategy)
+            coEvery { service.fetchAll() } returns listOf(
+                StrategyCatalogRow(
+                    id = 1,
+                    name = "Top Dividendos",
+                    assetClass = AssetClass.ACOES,
+                    kind = StrategyKind.REPORT_DRIVEN,
+                    latestEdition = EditionSummary(9, YearMonth.parse("2026-09"), EditionStatus.STAGED),
+                ),
+            )
 
             testApplication {
                 application { installRoutes(StrategyController(service, resolver(), holdingsService)) }
@@ -61,6 +71,8 @@ class StrategyControllerTest : DescribeSpec({
                 body.get("name").asText() shouldBe "Top Dividendos"
                 body.get("asset_class").asText() shouldBe "ACOES"
                 body.get("kind").asText() shouldBe "REPORT_DRIVEN"
+                body.get("latest_edition").get("reference_month").asText() shouldBe "2026-09"
+                body.get("latest_edition").get("status").asText() shouldBe "STAGED"
                 body.has("weight") shouldBe false
             }
         }
