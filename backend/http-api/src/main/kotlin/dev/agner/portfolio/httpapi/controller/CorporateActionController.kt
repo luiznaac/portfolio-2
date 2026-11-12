@@ -32,7 +32,7 @@ class CorporateActionController(
                 val routing = parsers.parse(upload.fileName, upload.content)
                 call.respond(
                     HttpStatusCode.Created,
-                    movements.import(upload.fileName, upload.content.sha256Hex(), routing),
+                    movements.import(upload.fileName, upload.content.sha256Hex(), routing, upload.content),
                 )
             }
         }

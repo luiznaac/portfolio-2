@@ -58,7 +58,7 @@ class CorporateActionControllerTest : DescribeSpec({
             val movements = mockk<MovementsImportService>()
             val parser = mockk<MovementsParserResolver>()
             every { parser.parse("movimentacao.xlsx", any()) } returns MovementsRouting()
-            coEvery { movements.import("movimentacao.xlsx", any(), any()) } returns
+            coEvery { movements.import("movimentacao.xlsx", any(), any(), any()) } returns
                 MovementsImportResult(trades = 1, incomes = 1, corporateActions = listOf(action))
 
             testApplication {

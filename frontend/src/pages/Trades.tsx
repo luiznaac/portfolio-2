@@ -3,10 +3,13 @@ import { useTrades } from "../api/queries.ts";
 import type { Trade } from "../api/types.ts";
 import { Badge } from "../components/Badge.tsx";
 import { FilterBar } from "../components/FilterBar.tsx";
+import { ImportAppliedBanner } from "../components/ImportAppliedBanner.tsx";
 import { Panel } from "../components/Panel.tsx";
+import { ResumableImportStrip } from "../components/ResumableImportStrip.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { usePageFilters } from "../hooks/usePageFilters.ts";
 import { formatNumber, formatTradeSide } from "../lib/format.ts";
+import { assistantPath } from "../lib/importDestinations.ts";
 import { positionDetail } from "../lib/routes.ts";
 import { TRADE_FILTER_FIELDS, filterTrades } from "../lib/tradeFilters.ts";
 
@@ -58,8 +61,20 @@ export function Trades() {
   const filtered = filterTrades(rows, filters.values);
 
   return (
-    <section>
-      <Panel title="Negócios">
+    <section className="space-y-4">
+      <ImportAppliedBanner />
+      <ResumableImportStrip destination="TRADES" />
+      <Panel
+        title="Negócios"
+        action={
+          <Link
+            to={assistantPath("TRADES")}
+            className="text-[12px] font-medium text-accent hover:underline"
+          >
+            Enviar extrato →
+          </Link>
+        }
+      >
         {trades.isLoading ? (
           <p className="text-[13.5px] text-ink-dim">Carregando…</p>
         ) : rows.length === 0 ? (

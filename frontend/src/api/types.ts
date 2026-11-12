@@ -90,13 +90,41 @@ export type TradeSide = "BUY" | "SELL";
 export type ImportSource = "B3_TRADES" | "B3_POSITION" | "B3_MOVEMENTS" | "XP_REPORT";
 export type ImportStatus = "STAGED" | "REVIEWED" | "APPLIED" | "FAILED";
 
+// The object an import lands on. The kind is typed so the parked session, the resume strip and the
+// apply landing read the destination instead of inferring it from the file's source.
+export type ImportDestinationObject =
+  | "TRADES"
+  | "POSITIONS"
+  | "INCOME"
+  | "STRATEGY_EDITION"
+  | "CORPORATE_ACTIONS";
+
+export interface ImportDestination {
+  object_type: ImportDestinationObject;
+  entity_id?: number;
+}
+
 export interface Import {
   id: number;
   source: ImportSource;
   file_name: string;
   file_hash: string;
   status: ImportStatus;
+  destination: ImportDestination;
+  has_original: boolean;
   created_at: string;
+}
+
+// What apply did with one staged row; persisted, so a rejected row stays visible as the retry
+// batch after the import is APPLIED.
+export type ImportRowOutcome = "applied" | "rejected" | "skipped_duplicate";
+
+// The apply response: the applied record beside the counts over its rows.
+export interface ImportApplyResult {
+  record: Import;
+  applied: number;
+  rejected: number;
+  skipped_duplicate: number;
 }
 
 // The server's own review verdict for a staged row, computed with the occurrence walk apply uses.
@@ -117,6 +145,7 @@ export interface ImportRow {
   institution_name: string;
   error?: string;
   situation: ImportRowSituation;
+  outcome?: ImportRowOutcome;
 }
 
 export type TradeSource = "MANUAL" | "B3_IMPORT" | "OPENING";
@@ -379,6 +408,9 @@ export interface ClassAllocation {
 
 export interface StrategyAllocation {
   strategy: string;
+  // The catalog id, so the tree links to the strategy detail without matching on name. Absent when
+  // the chain names a Strategy the catalog no longer carries.
+  strategy_id?: number;
   target: number;
   ideal: number;
   actual: number;
@@ -393,6 +425,8 @@ export interface StrategyAllocation {
 // than zero — a zero would draw an excess bar for money that has no target.
 export interface ManualAllocation {
   strategy: string;
+  // The catalog id, so the bucket links to its strategy detail.
+  strategy_id?: number;
   actual: number;
   tickers: ActualTickerAllocation[];
 }
