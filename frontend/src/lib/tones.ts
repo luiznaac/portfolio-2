@@ -35,3 +35,9 @@ export function driftTone(value: number): SignedTone {
 export function deficitTone(value: number): SignedTone {
   return value > 0 ? "deficit" : value < 0 ? "surplus" : "muted";
 }
+
+// A return's direction: positive is green, negative is red, and a zero or absent read is neutral.
+export function returnTone(value: number | undefined): Tone {
+  if (value === undefined) return "muted";
+  return value > 0 ? "return-up" : value < 0 ? "return-down" : "default";
+}

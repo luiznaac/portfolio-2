@@ -42,6 +42,7 @@ import {
   windowCumulativeReturns,
 } from "../lib/performance.ts";
 import { ROUTES } from "../lib/routes.ts";
+import { returnTone } from "../lib/tones.ts";
 
 // Análise · Performance: the window read over the shared period rail — the base-100 cumulative
 // return, the month-by-month table, the per-class and per-strategy series, the monthly decomposition
@@ -155,21 +156,21 @@ function PerformanceWindow({
           testId="period-return-kpi"
           label="Retorno no período"
           value={formatSignedPercent(cumulative.returnPercentage)}
-          tone={toneOf(cumulative.returnPercentage)}
+          tone={returnTone(cumulative.returnPercentage)}
           hint={`${monthCount} ${monthCount === 1 ? "mês" : "meses"} · ${windowRangeLabel(range)}`}
         />
         <Kpi
           testId="benchmark-kpi"
           label="Benchmark blend"
           value={benchmark === undefined ? undefined : formatSignedPercent(benchmark)}
-          tone={benchmark === undefined ? "muted" : toneOf(benchmark)}
+          tone={returnTone(benchmark)}
           hint={benchmarkHint}
         />
         <Kpi
           testId="last-month-kpi"
           label={last?.source === "snapshot" ? "Último mês fechado" : "Último mês do recorte"}
           value={formatSignedPercent(last?.decomposition.return_percentage)}
-          tone={toneOf(last?.decomposition.return_percentage)}
+          tone={returnTone(last?.decomposition.return_percentage)}
           hint={
             last === undefined
               ? undefined
@@ -664,9 +665,4 @@ function xirrCaption(series: PerformanceSeries): string {
   return only === undefined
     ? ""
     : `O XIRR não é recalculado no recorte: a série expõe ${formatPercent(only, 1)}.`;
-}
-
-function toneOf(value: number | undefined): "gain" | "loss" | "default" {
-  if (value === undefined || value === 0) return "default";
-  return value > 0 ? "gain" : "loss";
 }

@@ -20,6 +20,7 @@ import { Overview } from "./pages/Overview.tsx";
 import { Performance } from "./pages/Performance.tsx";
 import { Positions } from "./pages/Positions.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
+import { StrategyDetail } from "./pages/StrategyDetail.tsx";
 import { Taxes } from "./pages/Taxes.tsx";
 import { Trades } from "./pages/Trades.tsx";
 
@@ -52,10 +53,11 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Strategies /> },
           { path: "import", element: <Strategies /> },
-          // The list's row target; the detail shell lands with #374 and replaces this placeholder.
-          { path: ":id", element: <PendingSurface /> },
         ],
       },
+      // The row target is a depth page with its own head and its own tab strip, so it sits beside
+      // the object frame instead of inside its tabbed children (#374).
+      { path: "strategies/:id/:tab?", element: <StrategyDetail /> },
       {
         path: "ativos",
         element: <ObjectPage objectKey="assets" />,

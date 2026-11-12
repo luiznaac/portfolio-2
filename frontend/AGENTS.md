@@ -24,7 +24,8 @@ src/
                 never in the URL; useImportLog.ts — the shared bar state plus the `GET /imports`
                 read and full total behind the inbox queue and the import log)
   pages/        route-level components (`/portfolio` is Overview.tsx, the landing; Positions.tsx
-                owns the Posições table and its optional ticker drawer route; ImportInbox.tsx and
+                owns the Posições table and its optional ticker drawer route; StrategyDetail.tsx is
+                the Estratégias detail shell at /strategies/:id/:tab?; ImportInbox.tsx and
                 ImportHistory.tsx are Importações' queue and log over the same filter bar;
                 Dashboard.tsx is the off-nav health-check example at /health); a page that needs a
                 behaviour test gets a co-located *.test.tsx render test

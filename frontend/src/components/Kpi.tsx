@@ -1,13 +1,9 @@
 import { cn } from "../lib/cn.ts";
+import { type Tone, toneClass } from "../lib/tones.ts";
 
-export type KpiTone = "default" | "gain" | "loss" | "muted";
-
-const TONES: Record<KpiTone, string> = {
-  default: "text-text",
-  gain: "text-return-up",
-  loss: "text-deficit",
-  muted: "text-muted",
-};
+// The KPI tile reads the shared meaning→token table, so a caller names a role (deficit, surplus,
+// return-up, …) and never a colour.
+export type KpiTone = Tone;
 
 // The console KPI tile — a 9,5 px uppercase mono label over one figure. `lg` is the detail-page
 // stat; `sm` the compact grid tile the month-history screens use. Callers name a tone, never a
@@ -42,7 +38,7 @@ export function Kpi({
         className={cn(
           "mt-1 tabular-nums",
           size === "sm" ? "font-mono text-title" : "font-cond text-[22px] font-bold",
-          TONES[tone],
+          toneClass(tone),
         )}
       >
         {value ?? "—"}
