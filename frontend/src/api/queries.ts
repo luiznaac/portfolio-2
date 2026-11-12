@@ -340,7 +340,7 @@ export function useCurrentMonth() {
   });
 }
 
-// The same window every month picker reads: the opener, its validation and Impostos' period picker.
+// The same window every month picker reads: the opener, its validation and Impostos' apuração bounds.
 export function useMonthPeriodRange() {
   return useQuery({
     queryKey: ["month", "period-range"],

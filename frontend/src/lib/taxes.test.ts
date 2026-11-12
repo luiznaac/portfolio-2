@@ -6,6 +6,7 @@ import type {
   StockTaxReport,
 } from "../api/types.ts";
 import {
+  carryClosing,
   darfDeadlineLabel,
   darfIsOverdue,
   harvestPairForm,
@@ -14,6 +15,8 @@ import {
   meterProgress,
   realizedKindLabel,
   realizedRows,
+  taxApuracoes,
+  taxGrainNote,
   taxPeriodChip,
   toHarvestPairCreation,
 } from "./taxes.ts";
@@ -111,6 +114,48 @@ describe("tax period labels", () => {
     expect(hasSales({ ...report, realized: [] })).toBe(false);
     expect(darfIsOverdue(report, "2026-11-30")).toBe(false);
     expect(darfIsOverdue(report, "2026-12-01")).toBe(true);
+  });
+});
+
+describe("monthly apurações", () => {
+  const periods = ["2026-08", "2026-09", "2026-10", "2026-11"];
+
+  it("lists only the apurações inside the window, each with its month state", () => {
+    const rows = taxApuracoes(periods, { start: "2026-09", end: "2026-10" }, "2026-11", "2026-11", [
+      "2026-10",
+    ]);
+
+    expect(rows.map((row) => row.period)).toEqual(["2026-09", "2026-10"]);
+    expect(rows[0]?.chip).toEqual({ label: "histórico", tone: "amber" });
+    expect(rows[1]?.chip).toEqual({ label: "fechado", tone: "neutral" });
+  });
+
+  it("states the monthly grain the rail's window is filtering", () => {
+    expect(taxGrainNote("2026-10")).toBe(
+      "mês-âncora out/2026 · apuração mensal; a janela filtra a lista",
+    );
+  });
+
+  it("reads a carry bucket's closing balance, unknown before the adoption boundary", () => {
+    expect(carryClosing(report, "SWING")).toBeNull();
+    expect(
+      carryClosing(
+        {
+          ...report,
+          carry: [
+            {
+              kind: "SWING",
+              available: true,
+              opening_balance: 100,
+              loss_banked: 0,
+              loss_applied: 20,
+              closing_balance: 80,
+            },
+          ],
+        },
+        "SWING",
+      ),
+    ).toBe(80);
   });
 });
 

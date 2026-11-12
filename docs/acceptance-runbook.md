@@ -725,6 +725,51 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 
 With a run in November 2026 the reads are deterministic: the window is `jan/2026 – dez/2026`, the KPIs read Recebidos R$ 254,00 / A receber R$ 160,00 / Próximo PETR4 / Média mensal R$ 21,17, the chart plots October's 254,00, and the ledger reads `5 de 5` with PETR4 and VALE3's receivables first and then the three October payments. Typing `petr` narrows the ledger to `2 de 5` while the KPIs and the rail stay put. Selecting the `Mês` preset moves the window to `dez/2026 – dez/2026`, leaves the November receivable in the ledger flagged "fora do recorte", and still reports the same KPIs. Opening `/portfolio/analysis/income?focus=9001` anchors the rail on `nov/2025 – out/2026` and shows the amber "do alerta" chip on the received PETR4 row. A missing KPI or chart, a ledger row order that puts a received payment before a receivable, a filter that changes the KPIs or the rail, a receivable that disappears when it falls outside the window, or a deep link that lands on another window without the highlight is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Análise · Impostos monthly read (issue [#394](https://github.com/luiznaac/portfolio-2/issues/394))
+
+**Scenario**: the run drives the monthly Impostos tab over the shared rail. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves three closed months (January–March 2027) and one open month (April 2027), so the rail opens on 12 months ending the last close and the open month stays reachable through the harvest panel. The ledger marks CSNA3 and KNRI11 as STOCK and FII, so the March carry banks a R$ 100 swing loss and a R$ 1,000 FII loss; April then sells R$ 20,600 of stocks (B3SA3 R$ 600 + VALE3 R$ 20,000) over the R$ 20,000 cliff, offsets R$ 600 of swing loss, and leaves a R$ 3,400 taxable gain / R$ 510,00 DARF. The same-day CSNA3 round trip is the day-trade pendência, and the HGLG11 position gives the harvest pass its FII report (R$ 1,000 gain / R$ 200 estimate); April's headroom is zero, so the pass proposes no pair. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM snapshot; DELETE FROM harvest_pair; DELETE FROM harvest_opt_out; \
+      DELETE FROM transfer_proposal; DELETE FROM suggested_order; DELETE FROM target; DELETE FROM month; \
+      DELETE FROM gap; DELETE FROM attribution; DELETE FROM trade; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy; DELETE FROM ticker_catalog; \
+      DELETE FROM tax_carry_bucket; DELETE FROM corporate_action; DELETE FROM institution; \
+      INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+      SET @inst := LAST_INSERT_ID(); \
+      INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('B3SA3','B3','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('KNRI11','KINEA RENDA','12',NULL,'FII','FIIS','2027-01-01','2027-04-30',NOW()), \
+        ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS','2027-01-01','2027-04-30',NOW()); \
+      INSERT INTO tax_carry_bucket (kind, opening_balance, as_of_period, created_at) VALUES \
+        ('SWING', 500, '2027-02', NOW()), ('DAY_TRADE', 300, '2027-02', NOW()), ('FII', 250, '2027-02', NOW()); \
+      INSERT INTO month (id, period, capital, \`floor\`, status, created_at) VALUES \
+        (9401,'2027-01',0,0,'CLOSED',NOW()), (9402,'2027-02',0,0,'CLOSED',NOW()), \
+        (9403,'2027-03',0,0,'CLOSED',NOW()), (9404,'2027-04',0,0,'OPEN',NOW()); \
+      INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+        ('ITUB4','2027-01-05','B3', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('VALE3','2027-02-10','B3', 2000, 8, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('KNRI11','2027-02-10','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('CSNA3','2027-03-01','B3', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('CSNA3','2027-03-15','B3',-100, 9, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('KNRI11','2027-03-15','B3',-100, 90, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('B3SA3','2027-04-01','B3', 60, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('HGLG11','2027-04-02','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('VALE3','2027-04-07','B3',-2000, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('B3SA3','2027-04-08','B3',-60, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('CSNA3','2027-04-09','B3', 1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()), \
+        ('CSNA3','2027-04-09','B3',-1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 100, 10), ('HGLG11', 100, 100); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), ('HGLG11','2027-04-30',110,'COTAHIST',NOW());"
+```
+
+With a run whose calendar month is before 2027-04, `/analysis/tax` opens on the anchored `mar/2027` apuração: the rail reads `abr/2026 – mar/2027` and states `mês-âncora mar/2027 · apuração mensal; a janela filtra a lista`, the side panel lists three apurações (jan/2027, fev/2027, mar/2027) all chipped `fechado`, and the anchored panel reads `Apuração de mar/2027` with the R$ 900,00 stock meter, the swing loss, and the carry KPIs at R$ 600,00 (swing) and R$ 1.250,00 (FII). Selecting the `Mês` preset moves the window to `mar/2027 – mar/2027`, leaves the anchored apuração on mar/2027, and narrows the side panel to one row. **Ir para o mês aberto · abr/2027** anchors April: the panel reads `Apuração de abr/2027`, the meter is `Teto estourado` at R$ 20.600,00, the DARF KPI reads R$ 510,00, the Pendências panel carries the CSNA3 day-trade warning, and the harvest pass renders with zero headroom and the HGLG11 FII report. A rail without the monthly grain note, a side list that changes with the preset while the anchored apuração changes too, a meter/DARF/carry that disagrees with the seed, a missing pendência, or a harvest pass unreachable from the anchored historical month is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — shared filter bar and page-scoped filter state (issue [#367](https://github.com/luiznaac/portfolio-2/issues/367))
 
 > The Proventos half of this scenario predates the Análise · Proventos slice ([#393](https://github.com/luiznaac/portfolio-2/issues/393)): the forecast panel is now the window KPIs, the status control is labelled Estado, and a settled status narrows the ledger rather than emptying it. Use the Análise · Proventos scenario above for Proventos acceptance; the Ativos · Negócios half stands.

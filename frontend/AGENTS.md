@@ -41,7 +41,9 @@ src/
                 `GET /imports` parameters); imports.ts names the sources/states and defines the
                 parked session and the record age; position.ts builds the Posições rows and their
                 filtered total;
-                analysisWindow.ts is the Análise rail's preset/range/window math)
+                analysisWindow.ts is the Análise rail's preset/range/window math; taxes.ts is
+                Impostos' monthly apuração derivation — the window-filtered apuração list, the
+                grain note and the DARF/carry/harvest helpers)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
