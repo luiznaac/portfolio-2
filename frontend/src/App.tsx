@@ -49,6 +49,8 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Strategies /> },
           { path: "import", element: <Strategies /> },
+          // The list's row target; the detail shell lands with #374 and replaces this placeholder.
+          { path: ":id", element: <PendingSurface /> },
         ],
       },
       {

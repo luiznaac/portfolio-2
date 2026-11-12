@@ -7,13 +7,16 @@ import dev.agner.portfolio.usecase.strategy.model.EditionDetail
 import dev.agner.portfolio.usecase.strategy.model.EditionDiff
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.EditionStatus
+import dev.agner.portfolio.usecase.strategy.model.EditionSummary
 import dev.agner.portfolio.usecase.strategy.repository.IEditionRepository
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.YearMonth
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -43,6 +46,29 @@ class EditionRepository(
             .firstOrNull()
             ?.toDetail()
     }
+
+    override suspend fun fetchLatestByStrategy(strategyIds: List<Int>): Map<Int, EditionSummary> =
+        transaction {
+            if (strategyIds.isEmpty()) return@transaction emptyMap()
+            EditionTable
+                .select(
+                    EditionTable.strategyId,
+                    EditionTable.id,
+                    EditionTable.referenceMonth,
+                    EditionTable.status,
+                )
+                .where { EditionTable.strategyId inList strategyIds }
+                .orderBy(EditionTable.referenceMonth to SortOrder.DESC)
+                .groupBy { row -> row[EditionTable.strategyId].value }
+                .mapValues { (_, rows) ->
+                    val latest = rows.first()
+                    EditionSummary(
+                        id = latest[EditionTable.id].value,
+                        referenceMonth = YearMonth.parse(latest[EditionTable.referenceMonth]),
+                        status = latest[EditionTable.status],
+                    )
+                }
+        }
 
     override suspend fun saveStaged(
         strategyId: Int,
