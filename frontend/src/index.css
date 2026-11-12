@@ -1,52 +1,92 @@
 @import "tailwindcss";
 
-/* Tailwind v4: theme customization lives here, not in tailwind.config.js — see AGENTS.md. The
-   tokens below are the reference palette ported from frontend/design/front-prototype.html (issue
-   #205); every @theme key here generates the matching utility (bg-ground, text-ink-dim, rounded-lg,
-   font-cond, …). */
+/* Tailwind v4: theme customization lives here, not in tailwind.config.js — see AGENTS.md. The tokens
+   below are the single source of the A · Console visual language (issue #366): palette, fixed sign
+   semantics, type scale and density. Every @theme key generates the matching utility
+   (bg-panel, text-muted, text-num, rounded-panel, …); components consume those by name and never a
+   raw colour. */
 @theme {
-  /* Chrome */
-  --color-ground: #0b0f14;
-  --color-surface: #121a21;
-  --color-surface-2: #19232c;
-  --color-surface-3: #212f3a;
-  --color-line: #263440;
-  --color-line-soft: #1c2833;
+  /* Console palette */
+  --color-bg: #0b0e12;
+  --color-panel: #11161c;
+  --color-panel-2: #161d25;
+  --color-panel-3: #1b232c;
+  --color-line: #232c37;
+  --color-line-soft: #19212a;
 
-  --color-ink: #e5ebf1;
-  --color-ink-dim: #9ba8b4;
-  --color-ink-faint: #667581;
+  --color-text: #e7edf4;
+  --color-muted: #9ba8b7;
+  --color-faint: #64707f;
 
-  /* Sign convention — fixed semantics, inherited from the current SPA:
-     principal (blue) = falta · comprar · Δ−; accent (amber) = excesso · vender · ação primária;
-     yield (green) = ganho · ok; tax (rose) = imposto · alerta · bloqueio; violet = FIIs. */
-  --color-principal: #38bdf8;
-  --color-principal-bg: #38bdf81f;
-  --color-yield: #34d399;
-  --color-yield-bg: #34d3991f;
-  --color-tax: #fb7185;
-  --color-tax-bg: #fb71851f;
-  --color-accent: #f59e0b;
-  --color-accent-2: #d97706;
-  --color-accent-bg: #f59e0b1f;
-  --color-accent-ink: #1a1205;
+  /* Fixed sign semantics: deficit/short/action blue, surplus/attention amber, return+ green,
+     return− red. The numeric sign is always rendered beside the colour, so colour never carries
+     meaning alone. */
+  --color-action: #78a9ff;
+  --color-action-bg: #14243d;
+  --color-return-up: #54c98c;
+  --color-return-up-bg: #10241b;
+  --color-return-down: #f0736a;
+  --color-return-down-bg: #2a1515;
+  --color-attention: #d9a45e;
+  --color-attention-bg: #2a2115;
+
+  /* The named sign roles, so a primitive says what it means instead of borrowing a hue. */
+  --color-deficit: var(--color-action);
+  --color-surplus: var(--color-attention);
   --color-violet: #a78bfa;
   --color-violet-bg: #a78bfa1f;
 
-  /* Benchmark series — the reference's data colours. The portfolio line uses the ink chrome so the
-     four benchmark lines read as the comparison, never as a sign. */
-  --color-blend: #f59e0b;
-  --color-cdi: #38bdf8;
-  --color-ipca: #f472b6;
-  --color-ibov: #34d399;
+  /* Legacy token names consumed by the screens still waiting for their own slice. Each aliases its
+     console token, so the un-migrated screens keep rendering without a second palette drifting. */
+  --color-ground: var(--color-bg);
+  --color-surface: var(--color-panel);
+  --color-surface-2: var(--color-panel-2);
+  --color-surface-3: var(--color-panel-3);
+  --color-ink: var(--color-text);
+  --color-ink-dim: var(--color-muted);
+  --color-ink-faint: var(--color-faint);
+  --color-principal: var(--color-deficit);
+  --color-principal-bg: var(--color-action-bg);
+  --color-yield: var(--color-return-up);
+  --color-yield-bg: var(--color-return-up-bg);
+  --color-tax: var(--color-return-down);
+  --color-tax-bg: var(--color-return-down-bg);
+  --color-accent: var(--color-surplus);
+  --color-accent-bg: var(--color-attention-bg);
+  --color-accent-2: #b9873f;
+  --color-accent-ink: #16090a;
 
-  /* Radii scale, matching the reference's primitives: badge → chip/input → button → panel →
-     overlay. */
-  --radius-xs: 4px;
-  --radius-sm: 5px;
-  --radius-md: 7px;
-  --radius-lg: 10px;
-  --radius-xl: 12px;
+  /* Benchmark series — the data colours. The portfolio line uses the text chrome so the four
+     benchmark lines read as the comparison, never as a sign. */
+  --color-blend: var(--color-attention);
+  --color-cdi: var(--color-action);
+  --color-ipca: #f472b6;
+  --color-ibov: var(--color-return-up);
+
+  /* Type scale: 12,5 body · 11,5 tabular numerals · 9,5 uppercase labels · 17/600 page titles. */
+  --text-body: 12.5px;
+  --text-body--line-height: 1.38;
+  --text-num: 11.5px;
+  --text-num--line-height: 1.3;
+  --text-label: 9.5px;
+  --text-label--line-height: 1.2;
+  --text-title: 17px;
+  --text-title--line-height: 1.2;
+
+  /* Density: 26px rows, 3px panels, 198px sidebar, 44px top bar, 26px page-head floor. */
+  --height-row: 26px;
+  --height-pagehead: 26px;
+  --height-topbar: 44px;
+  --width-sidebar: 198px;
+  --hairline: 1px;
+  --radius-panel: 3px;
+
+  /* Radii scale: badge → chip/input → button/panel. */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 6px;
 
   /* Type families — bundled from @fontsource in fonts.css. */
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
@@ -59,8 +99,8 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-ground font-sans text-ink antialiased;
-    font-size: 14px;
-    line-height: 1.55;
+    @apply bg-bg font-sans text-text antialiased;
+    font-size: 12.5px;
+    line-height: 1.38;
   }
 }

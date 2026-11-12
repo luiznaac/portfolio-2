@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-// The reference panel (`.panel`): surface card on the line border. An optional title is the
-// condensed uppercase section label the reference uses above/inside panels.
+// The console panel: a 3 px surface card on the line border. An optional title is the 9,5 px
+// uppercase mono label the console uses above a section, separated by a hairline.
 export function Panel({
   title,
   action,
@@ -12,18 +12,19 @@ export function Panel({
   children?: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-line bg-surface px-[18px] py-4">
+    <section className="min-w-0 rounded-panel border border-line bg-panel">
       {(title || action) && (
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 border-b border-line-soft px-[11px] py-2">
           {title && (
-            <h2 className="font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
+            <h2 className="font-mono text-label font-semibold tracking-[.13em] text-muted uppercase">
               {title}
             </h2>
           )}
+          <span className="flex-1" />
           {action}
         </div>
       )}
-      {children}
+      <div className="p-[11px]">{children}</div>
     </section>
   );
 }

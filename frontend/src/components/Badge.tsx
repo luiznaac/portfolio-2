@@ -1,24 +1,19 @@
 import type { ReactNode } from "react";
+import { Chip, type ChipTone } from "./Chip.tsx";
 
 export type BadgeTone = "neutral" | "ok" | "warn" | "crit" | "info";
 
-// The status counterpart of Chip: mono, uppercase, smaller — the one place its tones map to
-// utilities. ok = green (ganho), warn = amber (atenção/excesso), crit = rose (bloqueio/imposto),
-// info = blue (informativo).
-const TONES: Record<BadgeTone, string> = {
-  neutral: "bg-surface-3 text-ink-dim",
-  ok: "bg-yield-bg text-yield",
-  warn: "bg-accent-bg text-accent",
-  crit: "bg-tax-bg text-tax",
-  info: "bg-principal-bg text-principal",
+// The status counterpart of Chip: the same shell and sign palette, with a semantic status name.
+// ok = return+ (ganho), warn = attention (atenção/surplus), crit = return− (bloqueio), info =
+// action (informativo). Mapping to Chip's tones here keeps one place deciding the colour.
+const TONES: Record<BadgeTone, ChipTone> = {
+  neutral: "neutral",
+  ok: "green",
+  warn: "amber",
+  crit: "rose",
+  info: "blue",
 };
 
 export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; children: ReactNode }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-xs px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-[.06em] uppercase whitespace-nowrap ${TONES[tone]}`}
-    >
-      {children}
-    </span>
-  );
+  return <Chip tone={TONES[tone]}>{children}</Chip>;
 }

@@ -7,6 +7,7 @@ import {
   formatNumber,
   formatPercent,
   formatSignedPercent,
+  formatSignedValue,
   formatTradeSide,
   isWeekend,
 } from "./format.ts";
@@ -94,6 +95,24 @@ describe("formatSignedPercent", () => {
 
   it("leaves zero unsigned", () => {
     expect(formatSignedPercent(0)).toBe("0,00%");
+  });
+});
+
+describe("formatSignedValue", () => {
+  it("puts a plus in front of a positive magnitude", () => {
+    expect(formatSignedValue(1500, formatNumber)).toBe("+1.500");
+  });
+
+  it("puts a true minus in front of a negative magnitude", () => {
+    expect(formatSignedValue(-1234.5, formatCurrency)).toBe("−R$ 1.234,50");
+  });
+
+  it("strips a sign the formatter already added, so it never doubles", () => {
+    expect(formatSignedValue(1500, (value) => `+${formatNumber(value)}`)).toBe("+1.500");
+  });
+
+  it("leaves zero unsigned", () => {
+    expect(formatSignedValue(0, formatCurrency)).toBe("R$ 0,00");
   });
 });
 

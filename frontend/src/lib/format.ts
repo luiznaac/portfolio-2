@@ -44,6 +44,16 @@ export function formatSignedPercent(value: number | undefined, digits = 2): stri
   return value > 0 ? `+${formatted}` : formatted;
 }
 
+// A signed numeric read: the sign is part of the text, so the value decodes without seeing the
+// colour. The formatter formats the magnitude and any sign it adds is stripped, so the result
+// carries exactly one sign character.
+export function formatSignedValue(value: number, format: (value: number) => string): string {
+  const magnitude = format(Math.abs(value)).replace(/^[+\-−]/, "");
+  if (value > 0) return `+${magnitude}`;
+  if (value < 0) return `−${magnitude}`;
+  return format(0);
+}
+
 const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 
 // A local date-time with no zone (the backend's snapshot `created_at`); parse the fields ourselves so
