@@ -15,3 +15,8 @@ data class Position(
         fun empty(ticker: String) = Position(ticker, BigDecimal.ZERO, BigDecimal.ZERO)
     }
 }
+
+// The tickers the book actually holds — the set every quote-freshness read needs. Zero or negative
+// custody is not a holding and never asks for a quote.
+fun List<Position>.heldTickers(): Set<String> =
+    filter { it.quantity.signum() > 0 }.map { it.ticker }.toSet()
