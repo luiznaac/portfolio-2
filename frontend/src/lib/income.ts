@@ -13,12 +13,17 @@ export function incomeTypeLabel(type: IncomeType): string {
   return TYPE_LABELS[type];
 }
 
-const STATUS_LABELS: Record<IncomeStatus, string> = {
+// The lifecycle labels in reading order; `satisfies` keeps the map exhaustive over the union, so a
+// new status is a compile error until it gets a label, and the filter options derive from the same
+// declaration instead of restating the key set.
+const STATUS_LABELS = {
   ANNOUNCED: "Anunciado",
   PAYABLE: "Pagável",
   RECEIVED: "Recebido",
   RECONCILED: "Conciliado",
-};
+} satisfies Record<IncomeStatus, string>;
+
+export const INCOME_STATUSES = Object.keys(STATUS_LABELS) as IncomeStatus[];
 
 export function incomeStatusLabel(status: IncomeStatus): string {
   return STATUS_LABELS[status];

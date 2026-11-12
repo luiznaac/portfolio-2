@@ -705,3 +705,24 @@ The seed resets the import tables so `b3-negociacao.xlsx` stages fresh, then sta
 In order: upload the workbook, submit it, review its two `nova(s)` rows and apply. The read-only **Resultado** must read `2 entradas importadas · 2 posições na carteira · 1 negativa · 2 sem classe · 2 sem cotação`, with the negative count rendered as the `/history` link and the combined **Atualizar catálogo e cotações** action with its report visible beside the counts. Run that refresh: its report reads a positive `Catálogo: <n>`, a positive `Cotações: <m>` and a `Fechamento: <date>` with no failure lines, and the summary becomes `2 entradas importadas · 2 posições na carteira · 1 negativa · 0 sem classe · 0 sem cotação` because the COTAHIST file classes and prices both tickers. Click the negative count: the browser lands on `/history` with the Histórico screen open. Return to `/imports`, upload the same workbook again: the read-only Resultado shows the `Este arquivo já foi importado em <date>.` resume banner and `0 entradas importadas`, with the same two positions and one negative.
 
 The refresh walks back to the latest published COTAHIST daily file and reads the ledger's 2026 annual file, so its intent needs a generous timeout rather than a short one. A count that differs from the enumerated summary, a missing `/history` link, a refresh report carrying failure lines or a zero catalog/quote count, a re-upload without its resume banner or with a non-zero imported count, or an upload that does not reach the result is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — shared filter bar and page-scoped filter state (issue [#367](https://github.com/luiznaac/portfolio-2/issues/367))
+
+**Scenario**: the run drives the shared filter bar on the two unbounded lists that exist today — Ativos · Negócios (`/trades`) and Análise · Proventos (`/income`) — on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves three trades (PETR4 buy, VALE3 buy, PETR4 sell) and three income movements (PETR4 announced, VALE3 payable today, ITUB4 received), plus a R$ 200,00 forecast. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM cash_movement; DELETE FROM trade; DELETE FROM institution; \
+      INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+      SET @inst := LAST_INSERT_ID(); \
+      INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+        ('PETR4', DATE_SUB(CURDATE(), INTERVAL 20 DAY), 'VISTA', 100, 30, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()), \
+        ('VALE3', DATE_SUB(CURDATE(), INTERVAL 10 DAY), 'VISTA', 50, 60, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('PETR4', DATE_SUB(CURDATE(), INTERVAL 2 DAY), 'VISTA', -40, 35, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()); \
+      INSERT INTO cash_movement (ticker, \`date\`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES \
+        ('PETR4', DATE_ADD(CURDATE(), INTERVAL 5 DAY), 120, 0, 120, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW()), \
+        ('VALE3', CURDATE(), 80, 0, 80, 'INCOME', 'B3', 'ANNOUNCED', 'JCP', NOW()), \
+        ('ITUB4', DATE_SUB(CURDATE(), INTERVAL 15 DAY), 60, 6, 54, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW());"
+```
+
+On `/trades` the Negócios panel reads `3 de 3` with no `limpar`; typing `petr` in Ticker narrows it to `2 de 3`, selecting Lado `Venda` narrows to `1 de 3`, and a ticker that matches nothing (`zzz`) reaches `Nenhuma linha com esse filtro.`; its own `limpar` restores `3 de 3` and empty fields. Leaving the page and returning keeps `3 de 3`. On `/income` the Proventos ledger reads `3 de 3`; the forecast panel above it stays `R$ 200,00` / `2 pagamentos a receber` while the ledger narrows to `1 de 3` on `petr`; adding Situação `Recebido` reaches the narrowing empty state, whose `limpar` restores `3 de 3`; leaving and returning keeps `3 de 3` with empty fields. A filter that changes the count without narrowing the table, that survives leaving the page, that writes a query string into the URL, that changes the forecast/KPI read, or a narrowing empty state without `limpar` is an automatic red; the evidence names the first failing intent. The caret staying in the field while typing is pinned by `Trades.test.tsx`/`Income.test.tsx` (the browser schema has no focus assertion).

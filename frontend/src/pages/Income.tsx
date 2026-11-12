@@ -2,8 +2,10 @@ import type { ChangeEvent } from "react";
 import { useImportIncome, useIncome, useUpcomingIncome } from "../api/queries.ts";
 import type { IncomeStatus } from "../api/types.ts";
 import { Chip, type ChipTone } from "../components/Chip.tsx";
+import { FilterBar } from "../components/FilterBar.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
+import { usePageFilters } from "../hooks/usePageFilters.ts";
 import { formatCurrency } from "../lib/format.ts";
 import {
   type IncomeRow,
@@ -12,6 +14,7 @@ import {
   incomeStatusLabel,
   netTotal,
 } from "../lib/income.ts";
+import { INCOME_FILTER_FIELDS, filterIncome } from "../lib/incomeFilters.ts";
 
 // The lifecycle stage maps to the reference sign palette (Chip names a tone, never a colour): a
 // forecast is neutral/blue, a settled payment green, a reconciled one violet.
@@ -62,11 +65,13 @@ const COLUMNS: Column<IncomeRow>[] = [
 // Proventos (issue #164): the income ledger with its lifecycle column (anunciado / pagável /
 // recebido / conciliado), the upcoming forecast, and the "Proventos a Receber" import.
 export function Income() {
+  const filters = usePageFilters(INCOME_FILTER_FIELDS);
   const income = useIncome();
   const upcoming = useUpcomingIncome();
   const importIncome = useImportIncome();
 
   const rows = incomeRows(income.data ?? []);
+  const filtered = filterIncome(rows, filters.values);
   const forecast = byPayableDate(upcoming.data ?? []);
   const forecastTotal = netTotal(forecast);
 
@@ -152,7 +157,16 @@ export function Income() {
           </p>
         </Panel>
       ) : (
-        <Table columns={COLUMNS} rows={rows} rowKey={(row) => row.key} />
+        <FilterBar
+          fields={INCOME_FILTER_FIELDS}
+          values={filters.values}
+          onChange={filters.setFilter}
+          onClear={filters.clear}
+          shown={filtered.length}
+          total={rows.length}
+        >
+          <Table columns={COLUMNS} rows={filtered} rowKey={(row) => row.key} />
+        </FilterBar>
       )}
     </section>
   );

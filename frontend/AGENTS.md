@@ -15,15 +15,18 @@ src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
   components/   Layout.tsx, Sidebar.tsx, MonthPill.tsx, CommandPalette.tsx — shell;
                 RitualStepper/AllocationStrip/Agenda — Cockpit pieces; Panel/Chip/Badge/Button/
-                Table/WizardStepper/Kpi — the token-based primitive layer; icons.tsx; *Chip.tsx
-  hooks/        shared stateful UI logic (useClosedMonthSelection.ts)
+                Table/FilterBar/WizardStepper/Kpi — the token-based primitive layer; icons.tsx; *Chip.tsx
+  hooks/        shared stateful UI logic (useClosedMonthSelection.ts, usePageFilters.ts — a page's
+                filter values, kept for the route element's lifetime and never in the URL)
   pages/        route-level components (`/` is Cockpit.tsx; Dashboard.tsx is the health-check
                 example at /health); a page that needs a behaviour test gets a co-located
                 *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
                 (navigation.ts holds the sidebar groups + breadcrumb table; palette.ts flattens it
                 for Ctrl/Cmd+K; cockpit.ts derives KPIs, ritual steps and attention cards; agenda.ts
-                derives the agenda and its read set; dates.ts is the shared calendar arithmetic)
+                derives the agenda and its read set; dates.ts is the shared calendar arithmetic;
+                filters.ts is the shared filter model, with tradeFilters.ts/incomeFilters.ts
+                declaring each list's fields + matcher)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
