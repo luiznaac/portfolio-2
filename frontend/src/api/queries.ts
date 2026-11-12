@@ -28,6 +28,7 @@ import type {
   MonthUpdate,
   OpeningSeedCreation,
   OrderList,
+  OrderPlanPhase,
   PositionReconciliation,
   Quote,
   Snapshot,
@@ -478,10 +479,10 @@ export function useOrders() {
 // The computed plan read (never the persisted lifecycle): Alocação reads the funding arithmetic and
 // the outside-strategy holdings the persisted list does not carry. The funding phase is the
 // shallowest depth that carries both, so the screen does not pay for the pro-rata/attribution pass.
-export function useOrderPlan() {
+export function useOrderPlan(phase: OrderPlanPhase = "FUNDING") {
   return useQuery({
-    queryKey: ["month", "current", "orders", "funding"],
-    queryFn: nullOn404(() => api.getOrderPlan("FUNDING")),
+    queryKey: ["month", "current", "orders", phase.toLowerCase()],
+    queryFn: nullOn404(() => api.getOrderPlan(phase)),
   });
 }
 
