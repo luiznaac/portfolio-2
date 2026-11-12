@@ -108,7 +108,7 @@
   .dk-attn-item .t { display: block; font-size: 11.5px; line-height: 1.3; color: var(--ink); }
   .dk-attn-item .d { display: block; font: 10px/1.35 var(--mono); color: var(--ink3); margin-top: 2px; }
   .dk-attn-item .r { display: block; font: 9.5px/1 var(--mono); color: var(--accent); margin-top: 3px; }
-  .dk-pagehead { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+  .dk-pagehead { display: flex; align-items: flex-start; gap: 14px; min-height: 26px; margin-bottom: 12px; }
   .dk-pagehead h1 { margin: 0; font: 600 17px/1.2 var(--sans); letter-spacing: -.02em; }
   .dk-pagehead p { margin: 3px 0 0; font: 10.5px/1.4 var(--mono); color: var(--ink3); }
   .dk-pagehead .sp { flex: 1; }
@@ -414,7 +414,7 @@ function objectTabs(objKey, active) {
   </div>`;
 }
 function pageHead(title, sub, extra = "") {
-  return `<div class="dk-pagehead"><div><h1>${title}</h1><p>${sub}</p></div><span class="sp"></span>${extra}</div>`;
+  return `<div class="dk-pagehead"><div><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ""}</div><span class="sp"></span>${extra}</div>`;
 }
 function cell(k, v, s, cls = "") {
   return `<div class="dk-cell"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`;
@@ -554,7 +554,7 @@ function monthLine() {
 }
 
 function portfolioOverview() {
-  return `${pageHead("Visão geral", `Capital ${money0(ALLOC.capital)} · piso ${money0(ALLOC.floor)} · ${longMonth(ALLOC.period)}`)}
+  return `${pageHead("Visão geral", "")}
   ${objectTabs("portfolio", "overview")}
   <div class="dk-strip">
     ${cell("Capital", money0(SUMMARY.capital), `alvo de ${monthLabel(SUMMARY.open_month)}`)}
@@ -599,7 +599,7 @@ function allocationTree() {
 }
 
 function portfolioAllocation() {
-  return `${pageHead("Alocação", `Capital ${money0(ALLOC.capital)} · piso ${money0(ALLOC.floor)} · ${longMonth(ALLOC.period)}`, `<div class="dk-chips"><span class="on">Árvore</span><span>Por estratégia</span><span>Por ticker</span></div>`)}
+  return `${pageHead("Alocação", "", `<div class="dk-chips"><span class="on">Árvore</span><span>Por estratégia</span><span>Por ticker</span></div>`)}
   ${objectTabs("portfolio", "allocation")}
   <div class="dk-cols">
     <div class="dk-stack">
@@ -645,12 +645,12 @@ function portfolioHistory(parts) {
     </table>
   </section>`;
   if (!selected) {
-    return `${pageHead("Histórico", "Fechamentos guardados como snapshot; a evolução é construída a partir deles.")}
+    return `${pageHead("Histórico", "")}
       ${objectTabs("portfolio", "history")}${list}
       <div class="dk-note" style="margin-top:10px">Selecione um mês para ver o que o snapshot congelou.</div>`;
   }
   const st = selected.state;
-  return `${pageHead(`Histórico · ${monthLabel(st.period)}`, `Snapshot de ${dateBR(selected.created_at)} · ${selected.id}`, `<button class="btn ghost" data-go="portfolio/history">← Todos os fechamentos</button>`)}
+  return `${pageHead(`Histórico · ${monthLabel(st.period)}`, "", `<button class="btn ghost" data-go="portfolio/history">← Todos os fechamentos</button>`)}
     ${objectTabs("portfolio", "history")}
     <div class="dk-kv">
       <div><div class="k">Capital</div><div class="v">${money0(st.capital)}</div><div class="s">piso ${money0(st.floor)}</div></div>
