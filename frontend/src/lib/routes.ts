@@ -45,6 +45,12 @@ export function positionDetail(ticker: string): string {
   return `${ROUTES.positions}/${encodeURIComponent(ticker)}`;
 }
 
+// The frozen month nests under Carteira · Histórico; the period is the path segment and the entity
+// name the breadcrumb names at depth.
+export function portfolioHistoryDetail(period: string): string {
+  return `${ROUTES.portfolioHistory}/${encodeURIComponent(period)}`;
+}
+
 // The strategy detail nests under Estratégias · Todas; the id is the path segment.
 export function strategyDetail(strategyId: number): string {
   return `${ROUTES.strategies}/${strategyId}`;

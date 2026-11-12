@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { NAV_GROUPS, OBJECTS, activeSub, incomeRow, resolveCrumb } from "./routes.ts";
+import {
+  NAV_GROUPS,
+  OBJECTS,
+  activeSub,
+  incomeRow,
+  portfolioHistoryDetail,
+  resolveCrumb,
+} from "./routes.ts";
 
 describe("OBJECTS", () => {
   it("holds exactly six objects in the three console groups", () => {
@@ -126,6 +133,12 @@ describe("resolveCrumb", () => {
 describe("incomeRow", () => {
   it("builds the Proventos deep link with the target row id", () => {
     expect(incomeRow(24)).toBe("/analysis/income?focus=24");
+  });
+});
+
+describe("portfolioHistoryDetail", () => {
+  it("nests the frozen month under Histórico with the period as the entity segment", () => {
+    expect(portfolioHistoryDetail("2026-10")).toBe("/portfolio/history/2026-10");
   });
 });
 

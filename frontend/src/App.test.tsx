@@ -4,6 +4,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { type RouteObject, RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { routes } from "./App.tsx";
+import { monthPeriodLabel } from "./lib/month.ts";
 import { ROUTES, resolveCrumb } from "./lib/routes.ts";
 
 // The route-table smoke harness: render every registered route against loading queries, so a route
@@ -48,14 +49,17 @@ const FULL_SCREEN: Record<string, string> = {
   [`${ROUTES.importAssistant}/7`]: "import-assistant",
 };
 
-// The routes whose head is not an object label: the off-nav health slice and the strategy detail,
-// whose title is the entity name the loading mocks cannot know. The landing redirect resolves to
-// Carteira through `resolveCrumb`.
+// The routes whose head is not an object label: the off-nav health slice and the two detail pages
+// (the strategy and the frozen month), whose titles are the entity's, not the object's. The landing
+// redirect resolves to Carteira through `resolveCrumb`.
 const OFF_OBJECT_HEAD: Record<string, string> = {
   [ROUTES.health]: "Health",
 };
 
 function expectedHead(path: string): string | undefined {
+  if (path.startsWith(`${ROUTES.portfolioHistory}/`)) {
+    return `Histórico · ${monthPeriodLabel(path.slice(ROUTES.portfolioHistory.length + 1))}`;
+  }
   const detail = path.startsWith(`${ROUTES.strategies}/`) && path !== ROUTES.strategiesImport;
   return detail ? "Estratégia" : (OFF_OBJECT_HEAD[path] ?? resolveCrumb(path)?.object);
 }
