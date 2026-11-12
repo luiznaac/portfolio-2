@@ -726,3 +726,41 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 ```
 
 On `/trades` the Negócios panel reads `3 de 3` with no `limpar`; typing `petr` in Ticker narrows it to `2 de 3`, selecting Lado `Venda` narrows to `1 de 3`, and a ticker that matches nothing (`zzz`) reaches `Nenhuma linha com esse filtro.`; its own `limpar` restores `3 de 3` and empty fields. Leaving the page and returning keeps `3 de 3`. On `/income` the Proventos ledger reads `3 de 3`; the forecast panel above it stays `R$ 200,00` / `2 pagamentos a receber` while the ledger narrows to `1 de 3` on `petr`; adding Situação `Recebido` reaches the narrowing empty state, whose `limpar` restores `3 de 3`; leaving and returning keeps `3 de 3` with empty fields. A filter that changes the count without narrowing the table, that survives leaving the page, that writes a query string into the URL, that changes the forecast/KPI read, or a narrowing empty state without `limpar` is an automatic red; the evidence names the first failing intent. The caret staying in the field while typing is pinned by `Trades.test.tsx`/`Income.test.tsx` (the browser schema has no focus assertion).
+
+## Acceptance scenario — Ativos · Posições (issue [#378](https://github.com/luiznaac/portfolio-2/issues/378))
+
+**Scenario**: the run drives the custody table, its shared filter bar, the filtered total, the ticker drawer and the classification surface on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves five positions, one stale close with an open gap, one ticker split across two attribution slices plus an outside remainder, and two held tickers with no class. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM gap; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO institution (id, name, created_at) VALUES (9001, 'XP', NOW()); \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES \
+        ('VALE3',100,8), ('ITUB4',50,8), ('HGLG11',10,8), ('ZZZZ9',10,8), ('UNCL1',5,8); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('VALE3',9001,60), ('VALE3',9002,20), ('ITUB4',9002,30); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('VALE3', DATE_SUB(CURDATE(), INTERVAL 40 DAY), 10, 'COTAHIST', NOW()), \
+        ('ITUB4', CURDATE(), 10, 'COTAHIST', NOW()), \
+        ('HGLG11', CURDATE(), 10, 'COTAHIST', NOW()), \
+        ('ZZZZ9', CURDATE(), 10, 'COTAHIST', NOW()), \
+        ('UNCL1', CURDATE(), 10, 'COTAHIST', NOW()); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES',DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES',DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS',DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('UNCL1','UNCL1','??',NULL,'UNKNOWN',NULL,DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()); \
+      INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+        ('VALE3', DATE_SUB(CURDATE(), INTERVAL 60 DAY), 'VISTA', 100, 8, 9001, NULL, 'MANUAL', FALSE, 1, NOW()); \
+      INSERT INTO gap (id, ticker, \`date\`, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES \
+        (9401, 'VALE3', DATE_SUB(CURDATE(), INTERVAL 30 DAY), 'BUY', 2, 10, 'OPEN', 0, 0, NOW());"
+```
+
+On `/ativos/positions` the table reads `5 de 5` and total `R$ 1.750,00`: VALE3 (Ações, 100, R$ 8,00 average, R$ 10,00 close, R$ 1.000,00 value, `desatualizada · <date>` and `1 lacuna` chips), ITUB4 (Ações, R$ 500,00), HGLG11 (Fundos imob., R$ 100,00), ZZZZ9 and UNCL1 (Sem classe, R$ 100,00 and R$ 50,00). Typing `vale` in Ticker narrows to `1 de 5` with total `R$ 1.000,00`; `limpar` restores `5 de 5`. Selecting Classe `Sem classe` narrows to `2 de 5` with total `R$ 150,00` and shows the `Classificar sem classe` bulk action. Clicking a row opens the ticker drawer with the position, average price, attribution, recent trades, quotes, gap and classification; VALE3's drawer shows the split attribution (Top Dividendos 60, Legado 20, 20 unattributed), the one trade, the stale quote and the open gap. In UNCL1's drawer, Classificar → FIIs moves it to Fundos imob.; the Sem classe filter then reads `1 de 5`. The bulk action opens the queue with ZZZZ9; classifying it as FIIs empties the filtered table (`Nenhuma linha com esse filtro.`) and removes the bulk action. A table/total that disagrees with the seed, a missing stale or gap chip, a value that uses one attribution slice instead of the whole custody (VALE3 R$ 600,00 instead of R$ 1.000,00), a drawer missing a section, a classification that leaves the row/or action unchanged, a filter that changes the URL or a count without narrowing the table, or an empty state without `limpar` is an automatic red; the evidence names the first failing intent.

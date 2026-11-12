@@ -16,10 +16,13 @@ src/
   components/   Layout.tsx, TopBar.tsx, Sidebar.tsx, ObjectPage.tsx, PendingSurface.tsx — shell;
                 RitualStepper/AllocationStrip/Agenda — Cockpit pieces; PageHead/PageTabs — the
                 object head and sub-view tab strip; Panel/Chip/Badge/Button/Table/FilterBar/
-                WizardStepper/Kpi/Num — the token-based primitive layer; icons.tsx; *Chip.tsx
+                WizardStepper/Kpi/Num/ClassBadge — the token-based primitive layer; TickerDrawer —
+                the Ativos ticker detail opened from a Posições row or its deep link; icons.tsx;
+                *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts, and usePageFilters.ts — a
                 page's filter values, kept for the route element's lifetime and never in the URL)
   pages/        route-level components (`/portfolio` is Cockpit.tsx, the interim Visão geral;
+                Positions.tsx owns the Posições table and its optional ticker drawer route;
                 Dashboard.tsx is the off-nav health-check example at /health); a page that needs a
                 behaviour test gets a co-located *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
@@ -28,7 +31,8 @@ src/
                 the top bar's freshness/month lines; cockpit.ts derives KPIs, ritual steps and
                 attention cards; agenda.ts derives the agenda and its read set; dates.ts is the shared
                 calendar arithmetic; filters.ts is the shared filter model, with
-                tradeFilters.ts/incomeFilters.ts declaring each list's fields + matcher)
+                tradeFilters.ts/incomeFilters.ts/positionFilters.ts declaring each list's fields +
+                matcher; position.ts builds the Posições rows and their filtered total)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
