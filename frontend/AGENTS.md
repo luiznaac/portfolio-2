@@ -17,8 +17,10 @@ src/
                 RitualStepper/AllocationStrip/Agenda — Cockpit pieces; PageHead/PageTabs — the
                 object head and sub-view tab strip; Panel/Chip/Badge/Button/Table/FilterBar/
                 WizardStepper/Kpi/Num — the token-based primitive layer; icons.tsx; *Chip.tsx
-  hooks/        shared stateful UI logic (useClosedMonthSelection.ts, and usePageFilters.ts — a
-                page's filter values, kept for the route element's lifetime and never in the URL)
+  hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
+                Análise rail's shared window, kept across the three tabs and reset on area re-entry;
+                usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
+                never in the URL)
   pages/        route-level components (`/portfolio` is Cockpit.tsx, the interim Visão geral;
                 Dashboard.tsx is the off-nav health-check example at /health); a page that needs a
                 behaviour test gets a co-located *.test.tsx render test
@@ -28,7 +30,8 @@ src/
                 the top bar's freshness/month lines; cockpit.ts derives KPIs, ritual steps and
                 attention cards; agenda.ts derives the agenda and its read set; dates.ts is the shared
                 calendar arithmetic; filters.ts is the shared filter model, with
-                tradeFilters.ts/incomeFilters.ts declaring each list's fields + matcher)
+                tradeFilters.ts/incomeFilters.ts declaring each list's fields + matcher;
+                analysisWindow.ts is the Análise rail's preset/range/window math)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.

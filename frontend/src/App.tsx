@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
 import { ObjectPage } from "./components/ObjectPage.tsx";
 import { PendingSurface } from "./components/PendingSurface.tsx";
+import { AnalysisWindowProvider } from "./hooks/useAnalysisWindow.tsx";
 import { ROUTES } from "./lib/routes.ts";
 import { Allocation } from "./pages/Allocation.tsx";
 import { AssetDetail } from "./pages/AssetDetail.tsx";
@@ -90,7 +91,13 @@ export const routes: RouteObject[] = [
       },
       {
         path: "analysis",
-        element: <ObjectPage objectKey="analysis" />,
+        // The provider is mounted on the object route, so the shared rail survives a switch between
+        // Performance, Proventos and Impostos but resets when the owner leaves the area.
+        element: (
+          <AnalysisWindowProvider>
+            <ObjectPage objectKey="analysis" />
+          </AnalysisWindowProvider>
+        ),
         children: [
           { index: true, element: <Performance /> },
           { path: "income", element: <Income /> },

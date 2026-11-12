@@ -9,10 +9,10 @@ import type {
   BenchmarkIndex,
   ClassPerformance,
   PerformanceDecomposition,
-  PerformanceSeries,
   PeriodPerformance,
   StrategyKind,
 } from "../api/types.ts";
+import { type WindowRange, addMonths, windowMonths } from "./analysisWindow.ts";
 import { ASSET_CLASSES } from "./month.ts";
 
 // The shared sign vocabulary for a return figure: a gain reads in the yield colour, a loss in the
@@ -73,66 +73,86 @@ export function projectX(index: number, count: number, area: PlotArea): number {
   return area.left + (index / (count - 1)) * area.width;
 }
 
-export interface CumulativePoint {
+export interface WindowCumulativePoint {
   period: string;
   portfolio: number;
-  // The blend has no point before the first Snapshot, and a month with no priced return breaks the
-  // line instead of reading as flat 0,00%.
+  // The blend has a dashed point only on a month it could price; a month without a return breaks
+  // the line instead of reading as flat 0,00%.
   benchmark?: number;
   // Each policy index's cumulative line; a missing point is a gap, never a carried-forward value.
   indexes: Partial<Record<BenchmarkIndex, number>>;
 }
 
-// Both the portfolio and the blend start at 100 and compound each month's percentage return, and
-// each policy index carries its own line from the same base. The first snapshot is the anchor: it
-// has no portfolio return, so it does not compound any line — otherwise a benchmark priced for that
-// month would start ahead of the portfolio. A month without a priced return leaves a gap on the
-// line (the running value is kept for the next priced month), so a data hole never reads as 0,00%.
-export function cumulativeReturns(months: PeriodPerformance[]): CumulativePoint[] {
+export interface WindowCumulative {
+  // The series months the window actually holds; every window read uses this one filtered list.
+  months: PeriodPerformance[];
+  points: WindowCumulativePoint[];
+  // The window's chained return, in percentage points, and the blend's own coverage.
+  returnPercentage: number;
+  benchmarkPercentage?: number;
+  benchmarkCount: number;
+}
+
+// The Análise window read: the portfolio starts at 100 one month before the window and compounds
+// every in-window month, so the first visible month already carries its return. The blend and each
+// policy index start at 100 on their own first priced month and only advance where a return exists,
+// which is what leaves the dashed line with gaps instead of carrying a value forward. `benchmarkCount`
+// is how many in-window months the blend covered — the caption states it rather than hiding a short
+// blend behind a 12-month portfolio return.
+export function windowCumulativeReturns(
+  months: PeriodPerformance[],
+  range: WindowRange,
+): WindowCumulative {
   let portfolio = 100;
   let benchmarkRunning: number | undefined;
+  let benchmarkCount = 0;
   const indexRunning: Partial<Record<BenchmarkIndex, number>> = {};
-  const firstSnapshotIndex = months.findIndex((month) => month.source === "snapshot");
 
-  return months.map((month, index) => {
-    if (index > 0 && month.decomposition.return_percentage !== undefined) {
+  const windowed = windowMonths(months, range);
+  const points: WindowCumulativePoint[] = [
+    { period: addMonths(range.start, -1), portfolio, indexes: {} },
+  ];
+
+  for (const month of windowed) {
+    if (month.decomposition.return_percentage !== undefined) {
       portfolio *= 1 + month.decomposition.return_percentage / 100;
     }
 
     let benchmarkPoint: number | undefined;
-    const indexPoints: Partial<Record<BenchmarkIndex, number>> = {};
-
-    if (index === firstSnapshotIndex) {
-      benchmarkRunning ??= 100;
+    if (month.benchmark_return !== undefined) {
+      benchmarkRunning = (benchmarkRunning ?? 100) * (1 + month.benchmark_return / 100);
       benchmarkPoint = benchmarkRunning;
-      for (const benchmarkIndex of BENCHMARK_INDEXES) {
-        indexRunning[benchmarkIndex] ??= 100;
-        indexPoints[benchmarkIndex] = indexRunning[benchmarkIndex];
-      }
-    } else if (index > 0) {
-      if (month.benchmark_return !== undefined) {
-        benchmarkRunning = (benchmarkRunning ?? 100) * (1 + month.benchmark_return / 100);
-        benchmarkPoint = benchmarkRunning;
-      }
-
-      const seen = new Set<BenchmarkIndex>();
-      for (const row of month.benchmarks ?? []) {
-        seen.add(row.index);
-        if (row.return_percentage === undefined) {
-          indexPoints[row.index] = undefined;
-        } else {
-          indexRunning[row.index] =
-            (indexRunning[row.index] ?? 100) * (1 + row.return_percentage / 100);
-          indexPoints[row.index] = indexRunning[row.index];
-        }
-      }
-      for (const benchmarkIndex of BENCHMARK_INDEXES) {
-        if (!seen.has(benchmarkIndex)) indexPoints[benchmarkIndex] = undefined;
-      }
+      benchmarkCount += 1;
     }
 
-    return { period: month.period, portfolio, benchmark: benchmarkPoint, indexes: indexPoints };
-  });
+    const indexPoints: Partial<Record<BenchmarkIndex, number>> = {};
+    const seen = new Set<BenchmarkIndex>();
+    for (const row of month.benchmarks ?? []) {
+      seen.add(row.index);
+      if (row.return_percentage === undefined) continue;
+      indexRunning[row.index] =
+        (indexRunning[row.index] ?? 100) * (1 + row.return_percentage / 100);
+      indexPoints[row.index] = indexRunning[row.index];
+    }
+    for (const benchmarkIndex of BENCHMARK_INDEXES) {
+      if (!seen.has(benchmarkIndex)) indexPoints[benchmarkIndex] = undefined;
+    }
+
+    points.push({
+      period: month.period,
+      portfolio,
+      benchmark: benchmarkPoint,
+      indexes: indexPoints,
+    });
+  }
+
+  return {
+    months: windowed,
+    points,
+    returnPercentage: portfolio - 100,
+    benchmarkPercentage: benchmarkCount > 0 ? (benchmarkRunning ?? 100) - 100 : undefined,
+    benchmarkCount,
+  };
 }
 
 // The contiguous runs of defined points a chart draws as one polyline, so a gap splits the line
@@ -156,20 +176,6 @@ export function contiguousSegments(values: (number | undefined)[]): number[][] {
   return segments;
 }
 
-// The eras a series actually holds. A page labels the value and the XIRR from these, never from a
-// guessed default.
-export interface EraState {
-  hasComputed: boolean;
-  hasSnapshot: boolean;
-}
-
-export function eraState(months: PeriodPerformance[]): EraState {
-  return {
-    hasComputed: months.some((month) => month.source === "computed"),
-    hasSnapshot: months.some((month) => month.source === "snapshot"),
-  };
-}
-
 // The value KPI reads "Valor investido" while the last point is the computed history, because the
 // computed era is Positions only and has no recorded cash basis.
 export function valueKpi(months: PeriodPerformance[]): { label: string; hint?: string } {
@@ -180,40 +186,15 @@ export function valueKpi(months: PeriodPerformance[]): { label: string; hint?: s
   return { label: "Patrimônio" };
 }
 
-export interface XirrKpi {
-  testId: string;
-  label: string;
-  value?: number;
-}
-
-// One XIRR per era that exists: the computed history and the Snapshot era are never blended.
-export function xirrKpis(series: PerformanceSeries): XirrKpi[] {
-  const eras = eraState(series.months);
-  const kpis: XirrKpi[] = [];
-  if (eras.hasComputed) {
-    kpis.push({
-      testId: "computed-xirr",
-      label: "XIRR do histórico",
-      value: series.computed_xirr,
-    });
-  }
-  if (eras.hasSnapshot) {
-    kpis.push({
-      testId: "xirr",
-      label: eras.hasComputed ? "XIRR dos fechamentos" : "XIRR desde o início",
-      value: series.xirr,
-    });
-  }
-  return kpis;
-}
-
-export interface BenchmarkCoverageRow {
+export interface BenchmarkIndexCoverage {
   index: BenchmarkIndex;
   missing: number;
 }
 
-// How many months of the series each policy index could not price — the coverage strip's count.
-export function benchmarkCoverage(months: PeriodPerformance[]): BenchmarkCoverageRow[] {
+// How many months of the window each policy index could not price — the per-index strip beside the
+// blend caption. Kept separate from the blend coverage so a blend that prices through one index
+// cannot hide another index's gap.
+export function benchmarkIndexCoverage(months: PeriodPerformance[]): BenchmarkIndexCoverage[] {
   return BENCHMARK_INDEXES.map((index) => ({
     index,
     missing: months.filter((month) => {
