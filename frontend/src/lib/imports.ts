@@ -18,6 +18,19 @@ export function importSourceLabel(source: ImportSource): string {
   return SOURCE_LABELS[source];
 }
 
+// What each source carries, in the card's own words. Kept beside the labels so the Fontes cards
+// never restate a source's shape.
+const SOURCE_DETAILS = {
+  B3_TRADES: "Extrato de negócios fechados",
+  B3_POSITION: "Snapshot de posição em custódia",
+  B3_MOVEMENTS: "Negócios, proventos e eventos",
+  XP_REPORT: "Relatório mensal por estratégia",
+} satisfies Record<ImportSource, string>;
+
+export function importSourceDetail(source: ImportSource): string {
+  return SOURCE_DETAILS[source];
+}
+
 // The lifecycle labels in reading order; `satisfies` keeps the map exhaustive over the union, so a
 // new status is a compile error until it gets a label, and the filter options derive from the same
 // declaration instead of restating the key set.

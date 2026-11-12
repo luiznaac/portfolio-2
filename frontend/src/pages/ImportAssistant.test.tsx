@@ -171,6 +171,16 @@ describe("the import assistant", () => {
     expect(screen.getByRole("button", { name: /Aplicar/ })).toBeDefined();
   });
 
+  it("opens a failed record read-only instead of offering an apply", () => {
+    state.record = importRecord("FAILED");
+    renderAssistant("/imports/assistant/7");
+
+    expect(screen.getByRole("heading", { name: "O que esta importação muda" })).toBeDefined();
+    expect(screen.getByText(/Esta tentativa falhou e não pode ser aplicada/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Aplicar/ })).toBeNull();
+    expect(state.applyCalls).toBe(0);
+  });
+
   it("leaves the staged session parked in the inbox", async () => {
     state.record = importRecord("STAGED");
     const user = userEvent.setup();
