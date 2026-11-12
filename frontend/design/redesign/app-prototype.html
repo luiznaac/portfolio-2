@@ -554,7 +554,7 @@ function monthLine() {
 }
 
 function portfolioOverview() {
-  return `
+  return `${pageHead("Visão geral", `Capital ${money0(ALLOC.capital)} · piso ${money0(ALLOC.floor)} · ${longMonth(ALLOC.period)}`)}
   ${objectTabs("portfolio", "overview")}
   <div class="dk-strip">
     ${cell("Capital", money0(SUMMARY.capital), `alvo de ${monthLabel(SUMMARY.open_month)}`)}
