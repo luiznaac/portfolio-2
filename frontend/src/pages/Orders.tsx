@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useDecideTransfer,
+  useOrderPlan,
   useOrders,
   useOverrideOrderMatch,
   useRefreshOrders,
@@ -9,18 +10,26 @@ import {
 } from "../api/queries.ts";
 import type { OrderList, Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
-import { Chip, type ChipTone } from "../components/Chip.tsx";
+import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
-import { formatCurrency, formatNumber } from "../lib/format.ts";
+import { formatCurrency, formatNumber, formatSignedValue } from "../lib/format.ts";
 import { monthPeriodLabel } from "../lib/month.ts";
 import {
+  type OrderContext,
+  fundingSourceLabel,
+  fundingSourceTone,
   groupOrders,
   orderClipboardText,
+  orderContextKey,
+  orderContexts,
+  orderProgressLabel,
   orderSideLabel,
-  orderStatusLabel,
+  orderStateLabel,
+  orderStateTone,
   orderTotals,
   ordersCsv,
+  planCoversOrder,
   toTradeId,
   transferCopy,
   transferStatusLabel,
@@ -60,6 +69,13 @@ function OrdersView({ list }: { list: OrderList }) {
   const refresh = useRefreshOrders();
   // The catalog resolves a transfer row's source kind: a MANUAL Strategy means a legacy move.
   const strategies = useStrategies().data;
+  // The persisted list carries no funding/attribution context, so a row's context joins the full
+  // computed plan (its attribution moves) by ticker. The join only holds while the computed plan
+  // still matches the persisted order — a stale plan renders no context rather than the wrong one.
+  const plan = useOrderPlan("FULL").data;
+  const contexts = orderContexts(plan);
+  const contextFor = (order: SuggestedOrder) =>
+    planCoversOrder(plan, order) ? contexts.get(orderContextKey(order)) : undefined;
   const groups = groupOrders(list.orders);
   const totals = orderTotals(list.orders);
   const pending = list.transfers.filter((transfer) => transfer.status === "PENDING");
@@ -145,6 +161,11 @@ function OrdersView({ list }: { list: OrderList }) {
       )}
 
       <div className="space-y-4">
+        {groups.length > 0 && (
+          <p className="text-[11.5px] text-ink-faint">
+            PARCIAL é só exibição: a ordem segue Sugerida até ser executada por inteiro.
+          </p>
+        )}
         {groups.length === 0 ? (
           <Panel title="Lista de ordens">
             <p className="text-[13px] text-ink-dim">
@@ -157,7 +178,11 @@ function OrdersView({ list }: { list: OrderList }) {
               <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
                 {group.label}
               </h2>
-              <Table columns={ORDER_COLUMNS} rows={group.orders} rowKey={(order) => order.id} />
+              <Table
+                columns={orderColumns(contextFor)}
+                rows={group.orders}
+                rowKey={(order) => order.id}
+              />
             </div>
           ))
         )}
@@ -242,68 +267,110 @@ function TransferRow({
   );
 }
 
-const STATUS_TONES: Record<SuggestedOrder["status"], ChipTone> = {
-  SUGGESTED: "amber",
-  EXECUTED: "blue",
-  IMPORTED: "green",
-};
-
-const ORDER_COLUMNS: Column<SuggestedOrder>[] = [
-  {
-    key: "ticker",
-    header: "Ticker",
-    render: (order) => (
-      <span className="font-mono text-[12.5px] font-semibold text-ink">{order.ticker}</span>
-    ),
-  },
-  {
-    key: "side",
-    header: "Tipo",
-    render: (order) => <Chip tone="neutral">{orderSideLabel(order.side)}</Chip>,
-  },
-  {
-    key: "quantity",
-    header: "Qtd.",
-    align: "right",
-    render: (order) => <span className="font-mono">{formatNumber(order.quantity)}</span>,
-  },
-  {
-    key: "price",
-    header: "Preço ref.",
-    align: "right",
-    render: (order) =>
-      order.suggested_price === undefined ? (
-        <span className="text-ink-faint">—</span>
-      ) : (
-        <span className="font-mono">{formatCurrency(order.suggested_price)}</span>
+function orderColumns(
+  contextFor: (order: SuggestedOrder) => OrderContext | undefined,
+): Column<SuggestedOrder>[] {
+  return [
+    {
+      key: "ticker",
+      header: "Ticker",
+      render: (order) => (
+        <span className="font-mono text-[12.5px] font-semibold text-ink">{order.ticker}</span>
       ),
-  },
-  {
-    key: "amount",
-    header: "Valor",
-    align: "right",
-    render: (order) => (
-      <span className="font-mono">
-        {order.suggested_price === undefined
-          ? "—"
-          : formatCurrency(order.quantity * order.suggested_price)}
+    },
+    {
+      key: "side",
+      header: "Tipo",
+      render: (order) => <Chip tone="neutral">{orderSideLabel(order.side)}</Chip>,
+    },
+    {
+      key: "quantity",
+      header: "Qtd.",
+      align: "right",
+      render: (order) => <span className="font-mono">{formatNumber(order.quantity)}</span>,
+    },
+    {
+      key: "price",
+      header: "Preço ref.",
+      align: "right",
+      render: (order) =>
+        order.suggested_price === undefined ? (
+          <span className="text-ink-faint">—</span>
+        ) : (
+          <span className="font-mono">{formatCurrency(order.suggested_price)}</span>
+        ),
+    },
+    {
+      key: "amount",
+      header: "Valor",
+      align: "right",
+      render: (order) => (
+        <span className="font-mono">
+          {order.suggested_price === undefined
+            ? "—"
+            : formatCurrency(order.quantity * order.suggested_price)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Ciclo",
+      render: (order) => (
+        <span data-testid={`order-state-${order.ticker}`}>
+          <Chip tone={orderStateTone(order)}>{orderStateLabel(order)}</Chip>
+        </span>
+      ),
+    },
+    {
+      key: "context",
+      header: "Contexto",
+      render: (order) => <ContextCell order={order} context={contextFor(order)} />,
+    },
+    {
+      key: "executed",
+      header: "Executado",
+      align: "right",
+      render: (order) => <MatchCell order={order} />,
+    },
+  ];
+}
+
+// The plan's context for one order: the strategies the units belong to (attribution) and, for a
+// funding sell, why the sale exists. Both come from the computed plan; the persisted order knows
+// neither.
+function ContextCell({
+  order,
+  context,
+}: {
+  order: SuggestedOrder;
+  context: OrderContext | undefined;
+}) {
+  if (context === undefined) {
+    return (
+      <span data-testid={`order-context-${order.ticker}`} className="text-ink-faint">
+        —
       </span>
-    ),
-  },
-  {
-    key: "status",
-    header: "Ciclo",
-    render: (order) => (
-      <Chip tone={STATUS_TONES[order.status]}>{orderStatusLabel(order.status)}</Chip>
-    ),
-  },
-  {
-    key: "executed",
-    header: "Executado",
-    align: "right",
-    render: (order) => <MatchCell order={order} />,
-  },
-];
+    );
+  }
+
+  return (
+    <span
+      data-testid={`order-context-${order.ticker}`}
+      className="inline-flex flex-wrap items-center gap-1"
+    >
+      {context.contributions.map((contribution) => (
+        <Chip key={contribution.strategy}>
+          {`${contribution.strategy} ${formatSignedValue(contribution.quantity, formatNumber)}`}
+        </Chip>
+      ))}
+      {context.fundingSource !== undefined && (
+        <Chip tone={fundingSourceTone(context.fundingSource)}>
+          {fundingSourceLabel(context.fundingSource)}
+        </Chip>
+      )}
+    </span>
+  );
+}
 
 // The lifecycle match is overridable: the executed figures carry a control that retargets the order
 // at a specific trade (or clears the override). The server validates the trade's ticker and side.
@@ -316,11 +383,15 @@ function MatchCell({ order }: { order: SuggestedOrder }) {
   if (!editing) {
     return (
       <span className="inline-flex items-center justify-end gap-2">
-        <span className="font-mono text-[11.5px] text-ink-dim">
-          {formatNumber(order.executed_quantity)}/{formatNumber(order.quantity)}
+        <span
+          data-testid={`order-executed-${order.ticker}`}
+          className="font-mono text-[11.5px] text-ink-dim"
+        >
+          {orderProgressLabel(order)}
         </span>
         <Button
           variant="ghost"
+          data-testid={`order-match-edit-${order.ticker}`}
           className="px-1.5 py-0.5 text-[11px]"
           onClick={() => setEditing(true)}
         >
@@ -342,6 +413,7 @@ function MatchCell({ order }: { order: SuggestedOrder }) {
       />
       <Button
         variant="primary"
+        data-testid={`order-match-apply-${order.ticker}`}
         className="px-2 py-0.5 text-[11px]"
         disabled={parsed === null || override.isPending}
         onClick={() =>

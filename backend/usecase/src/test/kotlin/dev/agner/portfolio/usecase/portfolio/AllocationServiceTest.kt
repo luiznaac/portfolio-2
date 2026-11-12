@@ -147,7 +147,9 @@ class AllocationServiceTest : StringSpec({
 
         acoes.actual.plain() shouldBe "1500"
         acoes.strategies.single().actual.plain() shouldBe "600"
+        acoes.strategies.single().strategyId shouldBe reportStrategy.id
         acoes.manual!!.strategy shouldBe "Legado Ações"
+        acoes.manual!!.strategyId shouldBe manualStrategy.id
         acoes.manual!!.actual.plain() shouldBe "500"
         acoes.outside.actual.plain() shouldBe "400"
     }

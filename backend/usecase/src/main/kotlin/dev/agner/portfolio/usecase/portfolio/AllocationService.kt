@@ -53,6 +53,9 @@ class AllocationService(
 
         val strategyList = strategies.fetchAll()
         val strategyById = strategyList.associateBy { it.id }
+        // The chain names a strategy; the tree links by id. The catalog is the one place that maps
+        // the two, so a renamed strategy keeps its link and a deleted one simply has none.
+        val strategyIdsByName = strategyList.associate { it.name to it.id }
         // The ledger is keyed by strategy name because that is how the Target chain names its
         // strategies; the id resolves the name and the kind in one read.
         val ledger: AttributionLedger = attributions.fetchAll()
@@ -75,6 +78,7 @@ class AllocationService(
             fixedIncome = fixedIncome,
             attributions = ledger,
             manualStrategies = manual,
+            strategyIds = strategyIdsByName,
         )
     }
 

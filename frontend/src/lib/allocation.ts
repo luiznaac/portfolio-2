@@ -7,12 +7,13 @@ import type {
   Allocation,
   AssetClass,
   ClassAllocation,
+  ManualAllocation,
   StrategyAllocation,
   SubClassAllocation,
   TickerAllocation,
 } from "../api/types.ts";
 import { subClassLabel } from "./fixedIncome.ts";
-import { formatPercent } from "./format.ts";
+import { formatCurrency, formatPercent } from "./format.ts";
 import { assetClassLabel } from "./month.ts";
 
 export type AllocationRowKind =
@@ -40,6 +41,8 @@ export interface AllocationRow {
   assetClass?: AssetClass;
   // The ticker a leaf row names — the classify action keys on it.
   ticker?: string;
+  // The catalog id of a report Strategy or a manual bucket, so its row links to the detail.
+  strategyId?: number;
   // The units the leaf values; absent on rungs that aggregate other rows.
   quantity?: number;
   target?: number;
@@ -190,9 +193,7 @@ export function allocationRows(
 
     if (cls.manual) {
       const manualKey = manualRowKey(cls.asset_class);
-      rows.push(
-        manualRow(cls.manual.strategy, cls.manual.actual, manualKey, cls.manual.tickers.length > 0),
-      );
+      rows.push(manualRow(cls.manual, manualKey));
       if (expanded.has(manualKey)) {
         for (const ticker of cls.manual.tickers) {
           rows.push(actualTickerRow(cls.asset_class, ticker, "manual_ticker"));
@@ -262,6 +263,7 @@ function strategyRow(strategy: StrategyAllocation, key: string, planned: boolean
     kind: "strategy",
     depth: 2,
     label: strategy.strategy,
+    strategyId: strategy.strategy_id,
     ...planning(planned, {
       target: strategy.target,
       ideal: strategy.ideal,
@@ -316,14 +318,15 @@ function tickerRow(
   };
 }
 
-function manualRow(label: string, actual: number, key: string, expandable: boolean): AllocationRow {
+function manualRow(manual: ManualAllocation, key: string): AllocationRow {
   return {
     key,
     kind: "manual",
     depth: 2,
-    label,
-    actual,
-    expandable,
+    label: manual.strategy,
+    strategyId: manual.strategy_id,
+    actual: manual.actual,
+    expandable: manual.tickers.length > 0,
   };
 }
 
@@ -371,23 +374,32 @@ function actualTickerRow(
   };
 }
 
-// The divergent bars fill from a centre axis; a value maps to at most half the track, so both a
-// deficit (left, blue) and an excess (right, amber) fit on the same scale.
-export function barWidth(value: number, maxAbs: number): number {
-  if (maxAbs <= 0) return 0;
-  return Math.min(50, (Math.abs(value) / maxAbs) * 50);
+// The document-direction borrowing allocation tables share: a distance stated in words beside the
+// colour, so the reading never depends on telling blue from amber.
+export function distanceText(deficit: number): string {
+  if (deficit > 0) return `faltam ${formatCurrency(deficit)}`;
+  if (deficit < 0) return `sobram ${formatCurrency(Math.abs(deficit))}`;
+  return "no alvo";
 }
 
-export function maxAbs(rows: AllocationRow[], value: (row: AllocationRow) => number): number {
-  return rows.reduce((max, row) => Math.max(max, Math.abs(value(row))), 0);
+export interface ActualIdealBar {
+  // The Actual's fill and the Ideal's marker, each as a share of the track (0–100).
+  actual: number;
+  ideal: number;
 }
 
-export function maxAbsDeficit(rows: AllocationRow[]): number {
-  return maxAbs(rows, (row) => row.deficit ?? 0);
-}
-
-export function maxAbsDrift(rows: AllocationRow[]): number {
-  return maxAbs(rows, (row) => row.drift ?? 0);
+// The Actual × Ideal bar: the Actual fills from the left and the Ideal is a hairline marker, with the
+// track scaled to the larger of the two plus a little headroom so a rung in excess still shows both.
+// Null when there is no target to mark or no priced Actual — a manual bucket, the outside remainder
+// and an unpriced leaf draw no target-shaped bar.
+export function actualIdealBar(
+  actual: number | undefined,
+  ideal: number | undefined,
+): ActualIdealBar | null {
+  if (actual === undefined || ideal === undefined) return null;
+  const track = Math.max(actual, ideal) * 1.04;
+  if (track <= 0) return null;
+  return { actual: (actual / track) * 100, ideal: (ideal / track) * 100 };
 }
 
 // The hatched share of the reconciliation bar: the unattributed value over the listed book. Bucket

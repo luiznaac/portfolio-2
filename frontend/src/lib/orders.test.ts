@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
-import type { Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
+import type { OrderPlan, Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
 import {
+  fundingSourceLabel,
   groupOrders,
   isBuySide,
   isSellSide,
   orderClipboardText,
+  orderContextKey,
+  orderContexts,
+  orderExecutionState,
+  orderExecutionSummary,
+  orderProgressLabel,
   orderSideLabel,
+  orderStateLabel,
   orderStatusLabel,
   orderTotals,
   ordersCsv,
+  planCoversOrder,
   toTradeId,
   transferCopy,
   transferSourceIsBucket,
@@ -213,6 +221,194 @@ function transfer(overrides: Partial<TransferProposal> = {}): TransferProposal {
     amount: 100,
     auto_approved: false,
     status: "PENDING",
+    ...overrides,
+  };
+}
+
+describe("order execution state", () => {
+  it("labels a partial execution PARCIAL from executed_quantity and leaves the persisted status alone", () => {
+    const partial = order({ status: "SUGGESTED", executed_quantity: 4 });
+
+    expect(orderExecutionState(partial)).toBe("PARTIAL");
+    expect(orderStateLabel(partial)).toBe("PARCIAL");
+    // PARCIAL is display-only: the persisted lifecycle state is never rewritten.
+    expect(partial.status).toBe("SUGGESTED");
+  });
+
+  it("exports the persisted Sugerido status while the screen shows PARCIAL", () => {
+    const partial = order({ status: "SUGGESTED", executed_quantity: 4 });
+
+    expect(orderStateLabel(partial)).toBe("PARCIAL");
+    expect(ordersCsv([partial]).split("\n")[1]?.split(";")[5]).toBe("Sugerido");
+  });
+
+  it("derives executed and unexecuted states from the executed quantity", () => {
+    expect(orderExecutionState(order({ status: "EXECUTED", executed_quantity: 70 }))).toBe(
+      "EXECUTED",
+    );
+    expect(orderExecutionState(order({ status: "IMPORTED", executed_quantity: 70 }))).toBe(
+      "EXECUTED",
+    );
+    expect(orderExecutionState(order({ status: "SUGGESTED", executed_quantity: 0 }))).toBe(
+      "UNEXECUTED",
+    );
+  });
+
+  it("renders the executed ratio over the suggested quantity", () => {
+    expect(orderProgressLabel(order({ quantity: 24, executed_quantity: 6 }))).toBe("6/24");
+  });
+
+  it("keeps the persisted label for a fully executed or untouched order", () => {
+    expect(orderStateLabel(order({ status: "EXECUTED", executed_quantity: 70 }))).toBe("Executado");
+    expect(orderStateLabel(order({ status: "IMPORTED", executed_quantity: 70 }))).toBe("Importado");
+    expect(orderStateLabel(order({ status: "SUGGESTED", executed_quantity: 0 }))).toBe("Sugerido");
+  });
+
+  it("splits a month's orders into executed, partial and unexecuted buckets", () => {
+    const executed = order({ id: 1, status: "EXECUTED", executed_quantity: 70 });
+    const partial = order({ id: 2, status: "SUGGESTED", executed_quantity: 4 });
+    const untouched = order({ id: 3, status: "SUGGESTED", executed_quantity: 0 });
+
+    const summary = orderExecutionSummary([executed, partial, untouched]);
+
+    expect(summary.executed).toEqual([executed]);
+    expect(summary.partial).toEqual([partial]);
+    expect(summary.unexecuted).toEqual([untouched]);
+  });
+});
+
+describe("order context", () => {
+  it("derives each ticker's strategy moves from the plan's attribution ledger", () => {
+    const contexts = orderContexts(
+      plan({
+        attribution: [
+          { ticker: "VALE3", strategy: "Top Dividendos", side: "ALLOCATE", quantity: 16 },
+          { ticker: "VALE3", strategy: "Small Caps", side: "ALLOCATE", quantity: 8 },
+          { ticker: "ITSA4", strategy: "Top Dividendos", side: "DEALLOCATE", quantity: 90 },
+        ],
+      }),
+    );
+
+    expect(contexts.get(orderContextKey(order({ ticker: "VALE3", side: "BUY" })))).toEqual({
+      contributions: [
+        { strategy: "Top Dividendos", quantity: 16 },
+        { strategy: "Small Caps", quantity: 8 },
+      ],
+    });
+    expect(
+      contexts.get(orderContextKey(order({ ticker: "ITSA4", side: "SELL" })))?.contributions,
+    ).toEqual([{ strategy: "Top Dividendos", quantity: -90 }]);
+  });
+
+  it("reads a funding sell's source from the plan's candidate", () => {
+    const contexts = orderContexts(
+      plan({
+        candidates: [
+          {
+            ticker: "ITSA4",
+            side: "SELL",
+            quantity: 90,
+            price: 10,
+            amount: 900,
+            deficit: -100,
+            ideal: 0,
+            target_quantity: 0,
+            position_quantity: 90,
+            funding_source: "NEUTRO",
+          },
+        ],
+      }),
+    );
+
+    const context = contexts.get(orderContextKey(order({ ticker: "ITSA4", side: "SELL" })));
+
+    expect(context?.fundingSource).toBe("NEUTRO");
+    expect(context?.contributions).toEqual([]);
+    expect(fundingSourceLabel("NEUTRO")).toBe("Neutro");
+    expect(fundingSourceLabel("OUTSIDE_STRATEGY")).toBe("Fora da estratégia");
+    expect(fundingSourceLabel("SURPLUS")).toBe("Excedente");
+  });
+
+  it("has no context for an order the plan does not name", () => {
+    const contexts = orderContexts(plan());
+
+    expect(contexts.get(orderContextKey(order({ ticker: "ZZZZ9" })))).toBeUndefined();
+  });
+
+  it("keeps a buy's and a funding sell's context apart on the same ticker", () => {
+    const contexts = orderContexts(
+      plan({
+        attribution: [
+          { ticker: "VALE3", strategy: "Top Dividendos", side: "ALLOCATE", quantity: 16 },
+          { ticker: "VALE3", strategy: "Dividendos", side: "DEALLOCATE", quantity: 40 },
+        ],
+        candidates: [
+          {
+            ticker: "VALE3",
+            side: "SELL",
+            quantity: 40,
+            price: 10,
+            amount: 400,
+            deficit: -100,
+            ideal: 0,
+            target_quantity: 0,
+            position_quantity: 40,
+            funding_source: "NEUTRO",
+          },
+        ],
+      }),
+    );
+
+    expect(contexts.get(orderContextKey(order({ ticker: "VALE3", side: "BUY" })))).toEqual({
+      contributions: [{ strategy: "Top Dividendos", quantity: 16 }],
+    });
+    expect(contexts.get(orderContextKey(order({ ticker: "VALE3", side: "EXIT" })))).toEqual({
+      contributions: [{ strategy: "Dividendos", quantity: -40 }],
+      fundingSource: "NEUTRO",
+    });
+  });
+
+  it("only covers a persisted order the computed plan still matches", () => {
+    const planWithCandidate = plan({
+      candidates: [
+        {
+          ticker: "VALE3",
+          side: "BUY",
+          quantity: 24,
+          price: 10,
+          amount: 240,
+          deficit: 240,
+          ideal: 10_000,
+          target_quantity: 40,
+          position_quantity: 16,
+        },
+      ],
+    });
+
+    expect(planCoversOrder(planWithCandidate, order({ ticker: "VALE3", quantity: 24 }))).toBe(true);
+    expect(planCoversOrder(planWithCandidate, order({ ticker: "VALE3", quantity: 30 }))).toBe(
+      false,
+    );
+    expect(planCoversOrder(planWithCandidate, order({ ticker: "VALE3", side: "SELL" }))).toBe(
+      false,
+    );
+    expect(planCoversOrder(null, order({ ticker: "VALE3" }))).toBe(false);
+  });
+});
+
+function plan(overrides: Partial<OrderPlan> = {}): OrderPlan {
+  return {
+    period: "2026-10",
+    phase: "FUNDING",
+    capital: 100_000,
+    floor: 0,
+    investable_capital: 100_000,
+    classes: [],
+    candidates: [],
+    outside_strategy: [],
+    unclassified: [],
+    attribution: [],
+    transfers: [],
     ...overrides,
   };
 }

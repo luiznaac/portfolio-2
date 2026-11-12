@@ -822,3 +822,41 @@ On `/strategies` the single table lists four rows in class order with the bucket
 Both clauses stay terminal and single-per-intent. The step 3 clause (`material-rows`) names the copy the screen renders: the header reads `2 aceitas` / `0 com atenção`, and each of the two rows carries the `Novo` chip (the `new` situation) — never "accepted"/`aceito`, and no rejected row. The Ativos · Negócios strip check (`strip-on-object`) is two intents, not one: a navigation intent whose after gate asserts `Sessão em revisão` and declares no visual, then a **static** intent anchored on the strip that carries the single terminal vision clause. A static intent asserts before its after-capture, so the trade ledger's `Carregando…` placeholder can never be the screenshot the vision verifier reads.
 
 A clause whose copy disagrees with the screen (a row asserted as "accepted"/`aceito`), a strip screenshot taken while `Carregando…` is still up, more than one vision clause on an intent, or an apply that does not land on `/ativos/trades` is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — Carteira · Alocação (issue [#371](https://github.com/luiznaac/portfolio-2/issues/371))
+
+**Scenario**: the run drives the full allocation chain on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents. It resets the allocation tables and seeds an open 2027-05 month (id 9300, Capital R$ 100.000,00) with Ações 40 / Renda fixa 60, one report Strategy (Top Dividendos, id 9001) at 100% of Ações targeting ITUB4 60 / VALE3 40, one manual bucket (Legado Ações, id 9002), a 100% Pós-fixado RF sub-class target, and four R$ 10,00 closes. ITUB4 (100 units) is split 60/40 between the report Strategy and the bucket, VALE3 (40 units) is fully attributed, PETR4 (10 units) is the outside remainder, and ZZZZ9 (5 units) has a quote but no catalog row. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM gap; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+      INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9300, '2027-05', 100000, 0, 'OPEN', NOW()); \
+      INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+        (9300,'CLASS','ACOES',NULL,NULL,NULL,40,NOW()), \
+        (9300,'CLASS','RENDA_FIXA',NULL,NULL,NULL,60,NOW()), \
+        (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()), \
+        (9300,'SUB_CLASS','RENDA_FIXA',NULL,'FLOATING_RATE',NULL,100,NOW()), \
+        (9300,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',60,NOW()), \
+        (9300,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',40,NOW()); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES \
+        ('ITUB4',100,8), ('VALE3',40,8), ('PETR4',10,8), ('ZZZZ9',5,8); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('ITUB4',9001,60), ('ITUB4',9002,40), ('VALE3',9001,40); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('ITUB4','2027-05-31',10,'COTAHIST',NOW()), \
+        ('VALE3','2027-05-31',10,'COTAHIST',NOW()), \
+        ('PETR4','2027-05-31',10,'COTAHIST',NOW()), \
+        ('ZZZZ9','2027-05-31',10,'COTAHIST',NOW()); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-31',NOW()), \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-31',NOW()), \
+        ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2027-01-01','2027-05-31',NOW());"
+```
+
+On `/portfolio/allocation` the tree reads: Capital Actual **R$ 1.550,00** against the R$ 100.000,00 Ideal (worded **faltam R$ 98.450,00**); Ações target 40%, Ideal R$ 40.000,00, Actual R$ 1.500,00, distance **faltam R$ 38.500,00**, split into Top Dividendos R$ 1.000,00 (**faltam R$ 39.000,00**), the Legado Ações bucket R$ 400,00 and Fora da estratégia R$ 100,00 (1.000 + 400 + 100 = 1.500); Fundos imob. with no target and Actual R$ 0,00 (**no alvo**); Renda fixa target 60%, Ideal R$ 60.000,00, Actual R$ 0,00 (**faltam R$ 60.000,00**), whose Pós-fixado sub-class holds the whole R$ 60.000,00 Ideal and the same worded shortfall. The Legado Ações bucket shows **—** in Alvo, Ideal, Déficit / distância and Δ p.p. and no bar in the Atual × Ideal column. Sem classe follows the class rows at R$ 50,00. Top Dividendos and Legado Ações link to `/strategies/9001` and `/strategies/9002`. The legacy banner reads R$ 100,00 outside; its preview lists PETR4 under Ações and skips ZZZZ9, and Confirmar reports **1 posição atribuída ao legado.** (the bucket then holds R$ 500,00 and the banner disappears). Expanding Sem classe exposes ZZZZ9's **Classificar** link to `/ativos/positions/ZZZZ9`. A tree missing the RF sub-class rung, a bucket target/bar, a signed Δ R$ instead of the worded distance, a class whose rows do not sum to its Actual, a dead strategy link, a bulk action that does not preview or apply, or an unreachable classification link is an automatic red; the evidence names the first failing intent.

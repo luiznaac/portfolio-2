@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrderList, Strategy, Targets } from "../api/types.ts";
+import type { OrderList, Strategy, SuggestedOrder, Targets } from "../api/types.ts";
 import { Month } from "./Month.tsx";
 
 // Pin "today" so the month's backdated chip is deterministic: the page compares the open month's
@@ -275,3 +276,58 @@ describe("Month strategy targets", () => {
     expect(save.disabled).toBe(false);
   });
 });
+
+describe("Execution step", () => {
+  it("summarises executed, partial and unexecuted orders and links to Ordens", async () => {
+    mock.orders = monthOrders({
+      orders: [
+        order({ id: 1, ticker: "ITUB4", quantity: 70, executed_quantity: 70, status: "EXECUTED" }),
+        order({
+          id: 2,
+          ticker: "B3SA3",
+          quantity: 200,
+          executed_quantity: 200,
+          status: "IMPORTED",
+        }),
+        order({ id: 3, ticker: "VALE3", quantity: 24, executed_quantity: 6 }),
+        order({ id: 4, ticker: "EGIE3", quantity: 30, executed_quantity: 0 }),
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("plan-step-execution")).toBeDefined();
+    expect(screen.getByTestId("execution-executed").textContent).toBe("2");
+    expect(screen.getByTestId("execution-partial").textContent).toBe("1");
+    expect(screen.getByTestId("execution-unexecuted").textContent).toBe("1");
+    const summary = screen.getByTestId("execution-summary");
+    expect(within(summary).getByText("Executadas")).toBeDefined();
+    expect(within(summary).getByText("Parciais")).toBeDefined();
+    expect(within(summary).getByText("Não executadas")).toBeDefined();
+
+    expect(screen.getByText("PARCIAL")).toBeDefined();
+    const link = screen.getByRole("link", { name: /Ver ordens/ });
+    expect(link.getAttribute("href")).toBe("/plan/orders");
+  });
+});
+
+function order(overrides: Partial<SuggestedOrder> = {}): SuggestedOrder {
+  return {
+    id: 1,
+    ticker: "VALE3",
+    side: "BUY",
+    quantity: 10,
+    suggested_price: 10,
+    executed_quantity: 0,
+    status: "SUGGESTED",
+    ...overrides,
+  };
+}
+
+function monthOrders(overrides: Partial<OrderList> = {}): OrderList {
+  return { period: "2026-10", orders: [], transfers: [], unplanned_trades: [], ...overrides };
+}
