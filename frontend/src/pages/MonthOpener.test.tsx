@@ -12,6 +12,7 @@ vi.mock("../api/queries.ts", () => {
 
   return {
     useCurrentMonth: () => ({ isLoading: false, isError: false, data: null }),
+    useOrders: () => ({ data: null, isLoading: false, isError: false }),
     useMonthPeriodRange: () => ({
       isLoading: false,
       isError: false,
@@ -20,6 +21,7 @@ vi.mock("../api/queries.ts", () => {
     useOpenMonth: mutation,
     useUpdateCurrentMonth: mutation,
     useReplaceTargets: mutation,
+    useRefreshOrders: mutation,
     useStrategies: () => ({ data: [], isLoading: false, isError: false }),
   };
 });
