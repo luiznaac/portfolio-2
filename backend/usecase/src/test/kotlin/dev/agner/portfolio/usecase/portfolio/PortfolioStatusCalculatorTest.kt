@@ -8,6 +8,8 @@ import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSource
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
 import dev.agner.portfolio.usecase.import.model.Import
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.listedasset.model.Gap
@@ -368,6 +370,8 @@ private fun import(status: ImportStatus) = Import(
     fileName = "movimentacoes.xlsx",
     fileHash = "abc",
     status = status,
+    destination = ImportDestination(ImportDestinationObject.TRADES),
+    hasOriginal = false,
     createdAt = LocalDateTime.parse("2026-11-10T10:00:00"),
 )
 

@@ -1,6 +1,7 @@
 package dev.agner.portfolio.persistence.import
 
 import dev.agner.portfolio.usecase.import.model.ImportRow
+import dev.agner.portfolio.usecase.import.model.ImportRowOutcome
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
@@ -25,6 +26,10 @@ object ImportRowTable : IntIdTable("import_row") {
 
     // Non-null marks a row-level problem; apply skips flagged rows.
     val error = varchar("error", 255).nullable()
+
+    // What apply decided for this row; null until the import is applied. A rejected row stays here
+    // beside the applied ones, which is the retry batch the surface reports.
+    val outcome = enumerationByName<ImportRowOutcome>("outcome", 20).nullable()
     val createdAt = datetime("created_at")
 }
 
@@ -42,6 +47,7 @@ class ImportRowEntity(id: EntityID<Int>) : IntEntity(id) {
     var unitPrice by ImportRowTable.unitPrice
     var institutionName by ImportRowTable.institutionName
     var error by ImportRowTable.error
+    var outcome by ImportRowTable.outcome
     var createdAt by ImportRowTable.createdAt
 
     fun toModel() = ImportRow(
@@ -55,5 +61,6 @@ class ImportRowEntity(id: EntityID<Int>) : IntEntity(id) {
         unitPrice = unitPrice,
         institutionName = institutionName,
         error = error,
+        outcome = outcome,
     )
 }

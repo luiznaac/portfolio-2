@@ -11,6 +11,8 @@ import dev.agner.portfolio.usecase.corporateaction.CorporateActionService
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.import.ImportService
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.listedasset.model.GapCreation
 import dev.agner.portfolio.usecase.listedasset.model.Position
@@ -109,7 +111,13 @@ class PortfolioStatusTest : StringSpec({
                 status = TransferStatus.PENDING,
             ),
         )
-        getBean<ImportService>().stage(ImportSource.B3_TRADES, "inbox.xlsx", "inbox-hash", emptyList())
+        getBean<ImportService>().stage(
+            ImportSource.B3_TRADES,
+            "inbox.xlsx",
+            "inbox-hash",
+            emptyList(),
+            ImportDestination(ImportDestinationObject.TRADES),
+        )
 
         strategies.importEdition(
             topDividends.id,

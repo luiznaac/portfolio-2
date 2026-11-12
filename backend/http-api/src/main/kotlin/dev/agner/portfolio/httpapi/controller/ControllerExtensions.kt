@@ -44,6 +44,13 @@ internal fun ApplicationCall.requiredDate(name: String): LocalDate {
         ?: throw InvalidParameterException(name, raw)
 }
 
+// An optional enum query parameter: absent keeps the unfiltered read, a value outside the enum is
+// the caller's error rather than a silent ignore.
+internal inline fun <reified T : Enum<T>> ApplicationCall.optionalEnumParameter(name: String): T? {
+    val raw = request.queryParameters[name] ?: return null
+    return enumValues<T>().firstOrNull { it.name == raw } ?: throw InvalidParameterException(name, raw)
+}
+
 // The current-month reads all share one "absent is a 404" contract; the generic keeps a controller
 // from hand-rolling the same branch per shape.
 internal suspend inline fun <reified T : Any> ApplicationCall.respondOr404(value: T?) =

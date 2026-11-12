@@ -10,7 +10,8 @@ import { Dashboard } from "./pages/Dashboard.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
 import { History } from "./pages/History.tsx";
-import { ImportWizard } from "./pages/ImportWizard.tsx";
+import { ImportAssistant } from "./pages/ImportAssistant.tsx";
+import { ImportInbox } from "./pages/ImportInbox.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
@@ -73,7 +74,7 @@ export const routes: RouteObject[] = [
         path: "imports",
         element: <ObjectPage objectKey="imports" />,
         children: [
-          { index: true, element: <ImportWizard /> },
+          { index: true, element: <ImportInbox /> },
           { path: "sources", element: <PendingSurface /> },
           { path: "corporate", element: <CorporateActions /> },
           { path: "history", element: <PendingSurface /> },
@@ -108,4 +109,8 @@ export const routes: RouteObject[] = [
       },
     ],
   },
+  // The import assistant is a full-screen flow, not a page under the shell: it owns the viewport
+  // while a session is open and lands on its destination when the apply finishes.
+  { path: "imports/assistant", element: <ImportAssistant /> },
+  { path: "imports/assistant/:importId", element: <ImportAssistant /> },
 ];

@@ -5,6 +5,8 @@ import dev.agner.portfolio.integrationTest.config.IntegrationTest
 import dev.agner.portfolio.integrationTest.config.postRequest
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.usecase.import.ImportService
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.institution.InstitutionService
@@ -94,7 +96,8 @@ private suspend fun apply(
     hash: String,
     rows: List<ImportRowPayload>,
 ) {
-    val import = service.stage(ImportSource.B3_TRADES, fileName, hash, rows).record
+    val destination = ImportDestination(ImportDestinationObject.TRADES)
+    val import = service.stage(ImportSource.B3_TRADES, fileName, hash, rows, destination).record
     service.review(import.id)
     service.apply(import.id)
 }

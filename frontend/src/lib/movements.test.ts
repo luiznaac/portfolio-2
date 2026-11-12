@@ -8,6 +8,8 @@ const importRecord: Import = {
   file_name: "movimentacao.xlsx",
   file_hash: "hash",
   status: "APPLIED",
+  destination: { object_type: "TRADES" },
+  has_original: true,
   created_at: "2026-10-14T10:00:00",
 };
 

@@ -3,6 +3,8 @@ package dev.agner.portfolio.usecase.import
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.corporateaction.CorporateActionService
 import dev.agner.portfolio.usecase.import.model.Import
+import dev.agner.portfolio.usecase.import.model.ImportDestination
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.model.MovementsImportResult
@@ -27,8 +29,9 @@ class MovementsImportService(
         fileName: String,
         fileHash: String,
         routing: MovementsRouting,
+        original: ByteArray? = null,
     ): MovementsImportResult = transaction.execute {
-        val trades = applyTrades(fileName, fileHash, routing)
+        val trades = applyTrades(fileName, fileHash, routing, original)
         val incomes = incomeService.reconcile(routing.incomes)
         val actions = corporateActionService.importEvents(
             routing.corporateActions.map { it.copy(fileHash = fileHash) },
@@ -45,18 +48,27 @@ class MovementsImportService(
     // A re-import of the same file finds its own Import by hash. APPLIED means its trades are
     // already in the ledger; STAGED/REVIEWED are walked forward; FAILED is terminal for the file.
     // The import record travels back beside the count so the page can name the date of a repeat
-    // upload whose only outcome is "nothing new".
+    // upload whose only outcome is "nothing new". The trade leg lands on the trades object; the
+    // events and income legs have their own ledgers.
     private suspend fun applyTrades(
         fileName: String,
         fileHash: String,
         routing: MovementsRouting,
+        original: ByteArray?,
     ): TradeOutcome {
         if (routing.trades.isEmpty()) {
             return TradeOutcome(absorbed = 0, tradeImport = null, reuploaded = false)
         }
         // Malformed rows stage but apply skips them, so they do not count as absorbed trades.
         val validTrades = routing.trades.count { it.error == null }
-        val staged = imports.stage(ImportSource.B3_MOVEMENTS, fileName, fileHash, routing.trades)
+        val staged = imports.stage(
+            ImportSource.B3_MOVEMENTS,
+            fileName,
+            fileHash,
+            routing.trades,
+            ImportDestination(ImportDestinationObject.TRADES),
+            original,
+        )
         val fileImport = staged.record
         val reuploaded = !staged.created
         val absorbed = when (fileImport.status) {
