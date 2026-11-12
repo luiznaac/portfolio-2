@@ -487,7 +487,9 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   `^BVSP` for the rest; CDI and IPCA from BCB SGS. Re-running is safe: existing points are upserted,
   never duplicated, and an empty provider response leaves the stored rows untouched.
 
-- **Cockpit seed**: run the Performance + Fechamento seed first — its open month (9003) and pending transfer are the Cockpit's close reminder, blocked close and transfer attention. This seed moves 9003's period to the previous calendar month (so the close reminder is due), then adds the agenda/proventos/edition rows its panels read. Dates are relative to `CURDATE()` so the maturity stays inside the seven-day lead and the payment inside the thirty-day window whenever acceptance runs:
+- **Legacy seed prose**: the seed paragraphs below predate the Carteira · Visão geral landing and name the retired Cockpit's panels (ritual stepper, agenda, class strip, split attention cards). Read those references as historical fixture descriptions for the screens they exercise, not as the current landing.
+
+- **Open-month seed**: run the Performance + Fechamento seed first — its open month (9003) and pending transfer feed the landing's month line and attention queue. This seed moves 9003's period to the previous calendar month, then adds the proventos and edition rows the Análise and Estratégias screens read. Dates are relative to `CURDATE()` so the maturity stays inside the seven-day lead and the payment inside the thirty-day window whenever acceptance runs:
 
   ```
   docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
@@ -509,9 +511,9 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   SQL
   ```
 
-  Browser intents then read the shell against real data: `/` shows the four KPIs, the seven-step stepper (step 3 pending transfers, step 7 blocked), the `Cotas fora da estratégia` attention card (2.000 cotas held, 500 attributed), the class strip with a 19,3% Ações bar and the 60/80/100 target markers, `Vencimento de CDB Aceite` and a `Fechamento de … pendente` agenda item, and `PETR4` among the próximos proventos; the retired command palette has no trigger and no shortcut; the agenda's `Marcar como lida` removes the item, and after a close the same item turns into a `concluído` notice that also waits for the mark-as-read before it leaves the list.
+  Browser intents then read the shell against real data: the six-object sidebar, the top bar's quote freshness and open-month line, the open month on Plano / Mês, and `PETR4` among the próximos proventos; the retired command palette has no trigger and no shortcut. The landing's own acceptance intents are derived from its ticket, not from this seed.
 
-- **Cockpit legacy-only seed** (issue #263): the Cockpit's report-only editions step and its split attention cards read a book with no report-driven Strategy at all. This seed resets the plan, allocation and catalog tables and seeds one manual bucket (Legado Ações, id 9002) that holds 30 of ITUB4's 50 units, an open 2027-06 month with a 100% Ações class target, and an unclassified ZZZZ9 with a quote but no catalog class. The tree then reads: no report-driven Strategy, so step 1 is complete and reads `Nenhuma estratégia com relatório`; class Ações Actual 500,00 = Legado Ações 300,00 + outside 200,00; the root adds the unclassified 100,00. The attention panel therefore shows `Cotas fora da estratégia: R$ 200,00` (info, `Atribuir`) and `1 ticker sem classe — classificar` (critical, `Classificar`), and no card for the bucket. Run it independently of the other seeds.
+- **Legacy-only seed** (issue #263): the retired report-only editions step and split attention cards read a book with no report-driven Strategy at all. This seed resets the plan, allocation and catalog tables and seeds one manual bucket (Legado Ações, id 9002) that holds 30 of ITUB4's 50 units, an open 2027-06 month with a 100% Ações class target, and an unclassified ZZZZ9 with a quote but no catalog class. The tree then reads: no report-driven Strategy, so step 1 is complete and reads `Nenhuma estratégia com relatório`; class Ações Actual 500,00 = Legado Ações 300,00 + outside 200,00; the root adds the unclassified 100,00. The status aggregate's attention queue therefore carries the unclassified ticker as an ACTION finding; outside custody stays a planning state on Alocação, and the manual bucket generates no finding. Run it independently of the other seeds.
 
   ```bash
   docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
@@ -580,7 +582,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
   The reads are then deterministic: `GET /orders` (after the refresh) carries one transfer with `from_strategy: "Legado"`, `to_strategy: "Top Dividendos"`, `quantity: 10`, `amount: 100`, `auto_approved: false`, `status: "PENDING"`; the Ordens page renders its caption as `move R$ 100,00 do legado`.
 
-- **Valuation and data-quality seed**: the honest-valuation read and the "Dados da carteira" panel need one book with a priced stale close, an unpriced holding, a negative position and an unclassified holding. This seed resets the allocation tables and seeds an open current month (id 9300, 2026-10) with Ações 100 and Fundos imob. 0; one report Strategy (Top Dividendos, id 9001) targeting VALE3 100; PETR4 10 units at a 2026-10-07 close (stale), VALE3 5 units with no close (attributed to Top Dividendos, so its leaf is `—`), BCFF11 −10 units at a 2026-10-29 close, and ZZZZ9 3 units priced but with no catalog row (unclassified). The read is then: root Actual 424,20 marked parcial, Ações Actual 489,20 marked parcial (Top Dividendos leaf unknown, outside PETR4 489,20 marked `desatualizada · 07/10/2026`), Fundos imob. Actual −80,00, unclassified 15,00; `unpriced` holds VALE3 5, `negative` holds BCFF11 −10. The panel reads Sem cotação 1, Tickers sem classe 1, Posições negativas 1, and the Cockpit shows one data card with the same three counts.
+- **Valuation and data-quality seed**: the honest-valuation read and the "Dados da carteira" panel need one book with a priced stale close, an unpriced holding, a negative position and an unclassified holding. This seed resets the allocation tables and seeds an open current month (id 9300, 2026-10) with Ações 100 and Fundos imob. 0; one report Strategy (Top Dividendos, id 9001) targeting VALE3 100; PETR4 10 units at a 2026-10-07 close (stale), VALE3 5 units with no close (attributed to Top Dividendos, so its leaf is `—`), BCFF11 −10 units at a 2026-10-29 close, and ZZZZ9 3 units priced but with no catalog row (unclassified). The read is then: root Actual 424,20 marked parcial, Ações Actual 489,20 marked parcial (Top Dividendos leaf unknown, outside PETR4 489,20 marked `desatualizada · 07/10/2026`), Fundos imob. Actual −80,00, unclassified 15,00; `unpriced` holds VALE3 5, `negative` holds BCFF11 −10. The panel reads Sem cotação 1, Tickers sem classe 1, Posições negativas 1, and the data-quality panel on Alocação reads the same three counts.
 
   ```bash
   docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
@@ -643,7 +645,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
   Run it independently of the other seeds. After the adoption is saved, the replay's `positions_reprojected` is 4 — every ledger ticker, not only the ones the run touched. Skipping the adoption leaves one imported ticker in the ledger, so the same replay reports 1; either way the count is greater than zero.
 
-- **Classification authority and plan-gate seed** (issue #306): the bulk classification modal, the legacy preview's effective class and the plan's refusal (surfaced as the Cockpit's plan error) read this scenario. It resets the plan, allocation and catalog tables and seeds an open 2027-06 month with an Ações class and a Top Dividendos strategy/ticker target, a manual Legado Ações bucket, and four held tickers at a R$10 close except one left unpriced: **OVR9** (10 un) has a placeholder BDI row with a manual `ACOES` override (the override-only ticker), **UNCL1** (5 un) has a placeholder BDI row with no class (queue reason `ABSENT_FROM_LATEST_FILE`), **UNCL2** (3 un) has an unmapped BDI `99` with no class (queue reason `UNHANDLED_BDI_CODE`), and **NOPR1** (4 un) is a classified Ações ticker with no close (the unpriced gate). **NOPOS3** is named only by a ticker target — no position, no close. The book then reads: the queue is UNCL1 + UNCL2 with their reasons; the preview groups OVR9 (override Ações) and NOPR1 under Ações and skips UNCL1/UNCL2 (`UNCLASSIFIED`); the plan refuses with `unpriced-positions` naming NOPR1.
+- **Classification authority and plan-gate seed** (issue #306): the bulk classification modal, the legacy preview's effective class and the plan's refusal (read on Plano / Mês · Ordens) read this scenario. It resets the plan, allocation and catalog tables and seeds an open 2027-06 month with an Ações class and a Top Dividendos strategy/ticker target, a manual Legado Ações bucket, and four held tickers at a R$10 close except one left unpriced: **OVR9** (10 un) has a placeholder BDI row with a manual `ACOES` override (the override-only ticker), **UNCL1** (5 un) has a placeholder BDI row with no class (queue reason `ABSENT_FROM_LATEST_FILE`), **UNCL2** (3 un) has an unmapped BDI `99` with no class (queue reason `UNHANDLED_BDI_CODE`), and **NOPR1** (4 un) is a classified Ações ticker with no close (the unpriced gate). **NOPOS3** is named only by a ticker target — no position, no close. The book then reads: the queue is UNCL1 + UNCL2 with their reasons; the preview groups OVR9 (override Ações) and NOPR1 under Ações and skips UNCL1/UNCL2 (`UNCLASSIFIED`); the plan refuses with `unpriced-positions` naming NOPR1.
 
   ```bash
   docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
@@ -673,7 +675,7 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('NOPR1','NOPR','02',NULL,'STOCK','ACOES',NULL,'2027-01-01','2027-06-30',NOW());"
   ```
 
-  Run it independently of the other seeds, after the app has migrated and is healthy. The browser reads `/allocation` (Dados da carteira panel: Sem classe **2**, Sem cotação **1**; "Classificar pendentes" opens the bulk modal listing UNCL1 and UNCL2 with their reasons), the legacy banner (the preview lists OVR9 under Ações with Confirmar enabled), `/trades/OVR9` (the "classe manual: Ações" line with Reverter), and `/` (the Cockpit's "Não foi possível ler a alocação e o plano." attention error, the plan refusing on the unpriced NOPR1).
+  Run it independently of the other seeds, after the app has migrated and is healthy. The browser reads `/allocation` (Dados da carteira panel: Sem classe **2**, Sem cotação **1**; "Classificar pendentes" opens the bulk modal listing UNCL1 and UNCL2 with their reasons), the legacy banner (the preview lists OVR9 under Ações with Confirmar enabled), `/trades/OVR9` (the "classe manual: Ações" line with Reverter), and `/plan/orders` (the plan refusing on the unpriced NOPR1).
 
 ## Acceptance scenario — imported 2020 export (issue #309)
 
@@ -726,3 +728,89 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 ```
 
 On `/trades` the Negócios panel reads `3 de 3` with no `limpar`; typing `petr` in Ticker narrows it to `2 de 3`, selecting Lado `Venda` narrows to `1 de 3`, and a ticker that matches nothing (`zzz`) reaches `Nenhuma linha com esse filtro.`; its own `limpar` restores `3 de 3` and empty fields. Leaving the page and returning keeps `3 de 3`. On `/income` the Proventos ledger reads `3 de 3`; the forecast panel above it stays `R$ 200,00` / `2 pagamentos a receber` while the ledger narrows to `1 de 3` on `petr`; adding Situação `Recebido` reaches the narrowing empty state, whose `limpar` restores `3 de 3`; leaving and returning keeps `3 de 3` with empty fields. A filter that changes the count without narrowing the table, that survives leaving the page, that writes a query string into the URL, that changes the forecast/KPI read, or a narrowing empty state without `limpar` is an automatic red; the evidence names the first failing intent. The caret staying in the field while typing is pinned by `Trades.test.tsx`/`Income.test.tsx` (the browser schema has no focus assertion).
+
+## Acceptance scenario — Ativos · Posições (issue [#378](https://github.com/luiznaac/portfolio-2/issues/378))
+
+**Scenario**: the run drives the custody table, its shared filter bar, the filtered total, the ticker drawer and the classification surface on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves five positions, one stale close with an open gap, one ticker split across two attribution slices plus an outside remainder, and two held tickers with no class. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM gap; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO institution (id, name, created_at) VALUES (9001, 'XP', NOW()); \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Legado Ações','ACOES','MANUAL',NOW()); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES \
+        ('VALE3',100,8), ('ITUB4',50,8), ('HGLG11',10,8), ('ZZZZ9',10,8), ('UNCL1',5,8); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('VALE3',9001,60), ('VALE3',9002,20), ('ITUB4',9002,30); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('VALE3', DATE_SUB(CURDATE(), INTERVAL 40 DAY), 10, 'COTAHIST', NOW()), \
+        ('ITUB4', CURDATE(), 10, 'COTAHIST', NOW()), \
+        ('HGLG11', CURDATE(), 10, 'COTAHIST', NOW()), \
+        ('ZZZZ9', CURDATE(), 10, 'COTAHIST', NOW()), \
+        ('UNCL1', CURDATE(), 10, 'COTAHIST', NOW()); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES',DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES',DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS',DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('ZZZZ9','ZZZZ','??',NULL,'UNKNOWN',NULL,DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()), \
+        ('UNCL1','UNCL1','??',NULL,'UNKNOWN',NULL,DATE_SUB(CURDATE(), INTERVAL 60 DAY),CURDATE(),NOW()); \
+      INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+        ('VALE3', DATE_SUB(CURDATE(), INTERVAL 60 DAY), 'VISTA', 100, 8, 9001, NULL, 'MANUAL', FALSE, 1, NOW()); \
+      INSERT INTO gap (id, ticker, \`date\`, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES \
+        (9401, 'VALE3', DATE_SUB(CURDATE(), INTERVAL 30 DAY), 'BUY', 2, 10, 'OPEN', 0, 0, NOW());"
+```
+
+On `/ativos/positions` the table reads `5 de 5` and total `R$ 1.750,00`: VALE3 (Ações, 100, R$ 8,00 average, R$ 10,00 close, R$ 1.000,00 value, `desatualizada · <date>` and `1 lacuna` chips), ITUB4 (Ações, R$ 500,00), HGLG11 (Fundos imob., R$ 100,00), ZZZZ9 and UNCL1 (Sem classe, R$ 100,00 and R$ 50,00). Typing `vale` in Ticker narrows to `1 de 5` with total `R$ 1.000,00`; `limpar` restores `5 de 5`. Selecting Classe `Sem classe` narrows to `2 de 5` with total `R$ 150,00` and shows the `Classificar sem classe` bulk action. Clicking a row opens the ticker drawer with the position, average price, attribution, recent trades, quotes, gap and classification; VALE3's drawer shows the split attribution (Top Dividendos 60, Legado 20, 20 unattributed), the one trade, the stale quote and the open gap. In UNCL1's drawer, Classificar → FIIs moves it to Fundos imob.; the Sem classe filter then reads `1 de 5`. The bulk action opens the queue with ZZZZ9; classifying it as FIIs empties the filtered table (`Nenhuma linha com esse filtro.`) and removes the bulk action. A table/total that disagrees with the seed, a missing stale or gap chip, a value that uses one attribution slice instead of the whole custody (VALE3 R$ 600,00 instead of R$ 1.000,00), a drawer missing a section, a classification that leaves the row/or action unchanged, a filter that changes the URL or a count without narrowing the table, or an empty state without `limpar` is an automatic red; the evidence names the first failing intent.
+## Acceptance scenario — Estratégias · Todas comparison list (issue [#373](https://github.com/luiznaac/portfolio-2/issues/373))
+
+**Scenario**: the run drives the new comparison table on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the plan and allocation tables and seeds four strategies (Top Dividendos and Small Caps report-driven, the Legado Ações bucket, and Fundamentalista FII with no edition), two editions — Top Dividendos' latest is **staged** for 2027-06, Small Caps' is **active** for 2027-05 — and an open 2027-06 month at Capital R$ 100.000,00 whose chain gives Ações 60 / Fundos imob. 40 and one ticker target per report strategy. Custody and quotes at R$ 10 make every priced value exact: Top Dividendos R$ 10.000,00 (drift −26,0 p.p.), Small Caps R$ 20.000,00 (−4,0 p.p.), Fundamentalista FII R$ 5.000,00 (−35,0 p.p.), Legado Ações R$ 1.000,00 with no drift (the bucket has no target). Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Small Caps','ACOES','REPORT_DRIVEN',NOW()), \
+        (9003,'Legado Ações','ACOES','MANUAL',NOW()), \
+        (9004,'Fundamentalista FII','FIIS','REPORT_DRIVEN',NOW()); \
+      INSERT INTO \`month\` (id, period, capital, \`floor\`, status, created_at) VALUES (9300, '2027-06', 100000, 0, 'OPEN', NOW()); \
+      INSERT INTO target (month_id, \`level\`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES \
+        (9300,'CLASS','ACOES',NULL,NULL,NULL,60,NOW()), \
+        (9300,'CLASS','FIIS',NULL,NULL,NULL,40,NOW()), \
+        (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,60,NOW()), \
+        (9300,'STRATEGY','ACOES','Small Caps',NULL,NULL,40,NOW()), \
+        (9300,'STRATEGY','FIIS','Fundamentalista FII',NULL,NULL,100,NOW()), \
+        (9300,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',100,NOW()), \
+        (9300,'TICKER','ACOES','Small Caps',NULL,'PETR4',100,NOW()), \
+        (9300,'TICKER','FIIS','Fundamentalista FII',NULL,'HGLG11',100,NOW()); \
+      INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES \
+        (9401, 9001, '2027-06', 'STAGED', NOW()), \
+        (9402, 9002, '2027-05', 'ACTIVE', NOW()); \
+      INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES \
+        (9401,'VALE3',100,NULL,NULL,FALSE), (9402,'PETR4',100,NULL,NULL,FALSE); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES \
+        ('VALE3',1000,8), ('PETR4',2000,8), ('HGLG11',500,8), ('ITUB4',100,8); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('VALE3',9001,1000), ('PETR4',9002,2000), ('HGLG11',9004,500), ('ITUB4',9003,100); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('VALE3','2027-06-30',10,'COTAHIST',NOW()), \
+        ('PETR4','2027-06-30',10,'COTAHIST',NOW()), \
+        ('HGLG11','2027-06-30',10,'COTAHIST',NOW()), \
+        ('ITUB4','2027-06-30',10,'COTAHIST',NOW()); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()), \
+        ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()), \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()), \
+        ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS','2027-01-01','2027-06-30',NOW());"
+```
+
+On `/strategies` the single table lists four rows in class order with the bucket last: `Small Caps` (Ações · Com relatório · `mai/27 ✓` · R$ 20.000,00 · -4,0 p.p.), `Top Dividendos` (Ações · Com relatório · `jun/27 · revisão` · R$ 10.000,00 · -26,0 p.p.), `Legado Ações` (Ações · Manual (legado) · — · R$ 1.000,00 · —) and `Fundamentalista FII` (Fundos imob. · Com relatório · — · R$ 5.000,00 · -35,0 p.p.). The Fundamentalista FII row proves `kind`, not the presence of an edition, separates the two types: it reads `Com relatório` while its Edição cell is `—`. The Legado Ações row's Drift cell is `—`. Clicking the `Top Dividendos` link opens `/strategies/9001` (the detail placeholder until [#374](https://github.com/luiznaac/portfolio-2/issues/374) lands). `GET /strategies` answers 200 with the additive `latest_edition` (`{id, reference_month, status}`) on each row — Top Dividendos `2027-06` `STAGED`, Small Caps `2027-05` `ACTIVE` — and omits it for the two editionless strategies. A table missing a strategy, a manual row with a drift value, a wrong value or drift, a report strategy hidden because it has no edition, a dead detail link, or a `latest_edition` absent from the HTTP read is an automatic red; the evidence names the first failing intent. The list issuing no per-strategy editions request is pinned by `Strategies.test.tsx`, and the DTO-mirror guard by `dtoMirrorGuard.test.ts`.

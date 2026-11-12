@@ -2,7 +2,7 @@
 // attention counts and the top bar's freshness and open-month lines. Every sentence is written
 // here from typed fields — the wire carries numbers, ids and enum kinds only.
 
-import type { AttentionItem, PortfolioStatus } from "../api/types.ts";
+import type { AttentionItem, MonthRef, PortfolioStatus } from "../api/types.ts";
 import { formatIsoDate } from "./format.ts";
 import { monthPeriodLabel } from "./month.ts";
 import type { ObjectKey } from "./routes.ts";
@@ -42,7 +42,13 @@ export function quoteFreshnessLabel(status: PortfolioStatus): string {
   return asOf === undefined ? "sem cotações" : `cotações ${formatIsoDate(asOf)}`;
 }
 
+// The one rule for what "open" means, shared by the top bar's label and the landing's month line
+// and standfirst. A closed month keeps its `open_month` ref but is not open.
+export function openMonthRef(status: PortfolioStatus): MonthRef | undefined {
+  return status.month.open ? status.open_month : undefined;
+}
+
 export function openMonthLabel(status: PortfolioStatus): string {
-  if (!status.month.open || status.open_month === undefined) return "Nenhum mês aberto";
-  return `${monthPeriodLabel(status.open_month.period)} · aberto`;
+  const open = openMonthRef(status);
+  return open === undefined ? "Nenhum mês aberto" : `${monthPeriodLabel(open.period)} · aberto`;
 }

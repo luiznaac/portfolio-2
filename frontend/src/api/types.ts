@@ -802,11 +802,21 @@ export type EditionStatus = "STAGED" | "ACTIVE";
 // legacy bucket, one per Asset Class, with no Edition and no Targets.
 export type StrategyKind = "REPORT_DRIVEN" | "MANUAL";
 
+// The latest Edition reduced to a catalog row: no entries and no diff, so the strategy list stays
+// one read. `status` drives the staged badge.
+export interface EditionSummary {
+  id: number;
+  reference_month: string;
+  status: EditionStatus;
+}
+
 export interface Strategy {
   id: number;
   name: string;
   asset_class: AssetClass;
   kind: StrategyKind;
+  // Only the catalog read (GET /strategies) carries it; a strategy with no edition omits it.
+  latest_edition?: EditionSummary;
 }
 
 export interface StrategyCreation {

@@ -1,4 +1,4 @@
-// Pure data-quality derivations for the "Dados da carteira" panel and the Cockpit's single card.
+// Pure data-quality derivations for the "Dados da carteira" panel.
 // Counts come from the allocation read and the GAP list, so a stale read never invents a number: a
 // missing list is an empty one.
 
