@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Month, MonthPerformance, PerformanceSeries } from "../api/types.ts";
+import { AnalysisWindowProvider } from "../hooks/useAnalysisWindow.tsx";
 import { Performance } from "./Performance.tsx";
 
 const mock = vi.hoisted(() => ({
@@ -15,6 +17,18 @@ vi.mock("../api/queries.ts", () => ({
   useClosedMonths: () => ({ isLoading: false, isError: false, data: mock.closedMonths }),
   usePerformanceSeries: () => ({ isLoading: false, isError: false, data: mock.series }),
   useMonthPerformance: () => ({ isLoading: false, isError: false, data: mock.detail }),
+  useBenchmarkStatus: () => ({
+    isLoading: false,
+    isError: false,
+    data: { indexes: [] },
+    error: null,
+  }),
+  useRefreshBenchmarks: () => ({
+    isPending: false,
+    data: undefined,
+    error: null,
+    mutate: () => undefined,
+  }),
 }));
 
 const closedMonths: Month[] = [
@@ -58,6 +72,7 @@ const snapshotSeries: PerformanceSeries = {
       },
       xirr: 12,
       benchmark_return: 0.9,
+      benchmarks: [{ index: "IBOV", return_percentage: 2.5 }, { index: "CDI" }],
       classes: [{ asset_class: "ACOES", value_end: 62100 }],
       strategies: [
         {
@@ -199,60 +214,122 @@ afterEach(cleanup);
 function renderPage() {
   return render(
     <MemoryRouter>
-      <Performance />
+      <AnalysisWindowProvider>
+        <Performance />
+      </AnalysisWindowProvider>
     </MemoryRouter>,
   );
 }
 
 describe("Performance", () => {
-  it("shows the since-inception XIRR and the monthly decomposition", () => {
+  it("opens on the shared rail with 12 months ending the last closed month", () => {
     renderPage();
 
-    expect(screen.getByTestId("xirr").textContent).toContain("12,00%");
-    expect(screen.getByTestId("decomposition-table")).toBeTruthy();
-    expect(screen.getAllByText("fev/2026").length).toBeGreaterThan(0);
-    expect(screen.getByText("R$ 1.500,00")).toBeTruthy();
+    expect(screen.getByTestId("period-rail")).toBeTruthy();
+    expect(screen.getByTestId("rail-range").textContent).toContain("mar/2025 – fev/2026");
+    expect(screen.getByTestId("rail-preset-12m").getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("renders the portfolio × benchmark and the aportes charts", () => {
+  it("falls back to the newest series month while the closed list is empty", () => {
+    mock.closedMonths = [];
+    mock.detail = null;
     renderPage();
 
-    expect(screen.getByTestId("return-chart")).toBeTruthy();
+    expect(screen.getByTestId("rail-range").textContent).toContain("mar/2025 – fev/2026");
+    expect(screen.getByTestId("month-row-2026-02")).toBeTruthy();
+    expect(screen.getByTestId("month-row-2026-01")).toBeTruthy();
+  });
+
+  it("reads the window's return, the blend coverage and the closing value", () => {
+    renderPage();
+
+    expect(screen.getByTestId("period-return-kpi").textContent).toContain("+1,50%");
+    expect(screen.getByTestId("benchmark-kpi").textContent).toContain("+0,90%");
+    expect(screen.getByTestId("last-month-kpi").textContent).toContain("+1,50%");
+    expect(screen.getByTestId("value-kpi").textContent).toContain("R$ 103.500,00");
+    expect(screen.getByTestId("benchmark-coverage-caption").textContent).toContain(
+      "blend cobre 1 de 2 meses",
+    );
+    expect(screen.getByTestId("benchmark-coverage-caption").textContent).toContain(
+      "mar/2025 – fev/2026",
+    );
+    // The per-index strip stays beside the blend caption: IBOV is priced in February only.
+    expect(screen.getByTestId("index-coverage-IBOV").textContent).toContain("1 mês sem dado");
+  });
+
+  it("renders the base-100 cumulative chart with the blend dashed", () => {
+    renderPage();
+
     expect(screen.getByTestId("cumulative-chart")).toBeTruthy();
-    expect(screen.getByTestId("class-chart")).toBeTruthy();
+    expect(screen.getByText("início")).toBeTruthy();
+    const blend = screen.getByTestId("blend-line");
+    expect(blend.getAttribute("stroke-dasharray")).not.toBeNull();
+    expect(screen.getByTestId("portfolio-line").getAttribute("stroke-dasharray")).toBeNull();
+    expect(screen.getByTestId("index-line-IBOV").getAttribute("stroke-dasharray")).not.toBeNull();
+    // February is the only priced month, so the dashed blend gets a marker there and none in January.
+    expect(screen.getByTestId("blend-point-2026-02")).toBeTruthy();
+    expect(screen.queryByTestId("blend-point-2026-01")).toBeNull();
+  });
+
+  it("renders the month-by-month table, the anchor mark and the decomposition in R$", () => {
+    renderPage();
+
+    expect(screen.getByTestId("month-table")).toBeTruthy();
+    expect(screen.getByTestId("month-row-2026-02")).toBeTruthy();
+    expect(screen.getByTestId("month-row-2026-01")).toBeTruthy();
+    expect(screen.getByTestId("month-anchor-2026-02").textContent).toContain("âncora");
     expect(screen.getByTestId("decomposition-chart")).toBeTruthy();
     expect(screen.getByTestId("aportes-performance")).toBeTruthy();
-    expect(screen.getAllByText("IPCA").length).toBeGreaterThan(0);
-    // Neither snapshot point carries a benchmark series, so the coverage strip names the gap.
-    expect(screen.getByTestId("benchmark-coverage-IBOV").textContent).toContain("2 meses sem dado");
-  });
-
-  it("renders the selected month's benchmark, class and ticker views", () => {
-    renderPage();
-
-    expect(screen.getByTestId("benchmark-panel")).toBeTruthy();
-    expect(screen.getAllByText("IBOV").length).toBeGreaterThan(0);
-    expect(screen.getByText("Blend alvo")).toBeTruthy();
-    expect(screen.getByTestId("class-table")).toBeTruthy();
-    expect(screen.getByTestId("ticker-table")).toBeTruthy();
-    expect(screen.getAllByText("PETR4").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ações").length).toBeGreaterThan(0);
-  });
-
-  it("renders the per-Strategy slices, the outside row and the strategy series", () => {
-    renderPage();
-
-    expect(screen.getByTestId("strategy-table")).toBeTruthy();
-    expect(screen.getAllByText("Top Dividendos").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Legado").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Fora da estratégia").length).toBeGreaterThan(0);
-    // The shared-Ticker split: the report slice takes 40 of the ticker's income, the bucket 60.
-    expect(screen.getAllByText("R$ 40,00").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("R$ 60,00").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("class-chart")).toBeTruthy();
     expect(screen.getByTestId("strategy-chart")).toBeTruthy();
   });
 
-  it("renders the computed era with Valor investido, the divider and no month detail", () => {
+  it("keeps the strategy series surface with an empty message when snapshots carry no slices", () => {
+    mock.series = {
+      ...snapshotSeries,
+      months: snapshotSeries.months.map((month) => ({ ...month, strategies: undefined })),
+    };
+    renderPage();
+
+    const chart = screen.getByTestId("strategy-chart");
+    expect(chart.textContent).toContain("Sem valores por estratégia nos meses fechados.");
+  });
+
+  it("anchors the month detail and the benchmark refresh panel", () => {
+    renderPage();
+
+    expect(screen.getByTestId("benchmark-panel")).toBeTruthy();
+    expect(screen.getByTestId("class-table")).toBeTruthy();
+    expect(screen.getByTestId("strategy-table")).toBeTruthy();
+    expect(screen.getByTestId("ticker-table")).toBeTruthy();
+    expect(screen.getByTestId("benchmark-refresh")).toBeTruthy();
+    expect(screen.getAllByText("IBOV").length).toBeGreaterThan(0);
+    expect(screen.getByText("Blend alvo")).toBeTruthy();
+    expect(screen.getAllByText("PETR4").length).toBeGreaterThan(0);
+  });
+
+  it("narrows the month table when a preset or the anchor changes", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByTestId("rail-preset-1m"));
+    expect(screen.getByTestId("rail-range").textContent).toContain("fev/2026 – fev/2026");
+    expect(screen.getByTestId("month-row-2026-02")).toBeTruthy();
+    expect(screen.queryByTestId("month-row-2026-01")).toBeNull();
+    expect(screen.getByTestId("benchmark-coverage-caption").textContent).toContain(
+      "blend cobre 1 de 1 mês",
+    );
+    // A one-month window still renders the per-class and per-strategy series as visible points.
+    expect(screen.getByTestId("class-chart").querySelector("circle")).not.toBeNull();
+    expect(screen.getByTestId("strategy-chart").querySelector("circle")).not.toBeNull();
+
+    await user.click(screen.getByLabelText("Um mês antes"));
+    expect(screen.getByTestId("rail-range").textContent).toContain("jan/2026 – jan/2026");
+    expect(screen.getByTestId("month-row-2026-01")).toBeTruthy();
+    expect(screen.queryByTestId("month-row-2026-02")).toBeNull();
+  });
+
+  it("renders the computed era with Valor investido and no benchmark line", () => {
     mock.closedMonths = [];
     mock.series = computedSeries;
     mock.detail = null;
@@ -260,9 +337,8 @@ describe("Performance", () => {
 
     expect(screen.getByText("Valor investido")).toBeTruthy();
     expect(screen.getByTestId("value-kpi").textContent).toContain("R$ 1.100,00");
-    expect(screen.getByTestId("computed-xirr").textContent).toContain("8,00%");
-    expect(screen.queryByTestId("xirr")).toBeNull();
-    expect(screen.getByTestId("era-divider").textContent).toContain("histórico · valor investido");
+    expect(screen.queryByTestId("blend-line")).toBeNull();
+    expect(screen.queryByTestId("blend-point-2026-01")).toBeNull();
     expect(screen.getByTestId("detail-snapshot-only")).toBeTruthy();
     expect(screen.getByTestId("month-partial-2026-01").textContent).toContain("parcial");
     expect(screen.queryByText("Sem meses fechados")).toBeNull();
@@ -275,9 +351,10 @@ describe("Performance", () => {
     renderPage();
 
     expect(screen.getByText("Sem meses fechados")).toBeTruthy();
+    expect(screen.queryByTestId("period-rail")).toBeNull();
   });
 
-  it("names the blocking leg and reads an absent index as sem dados", () => {
+  it("names the blocking leg in the anchor month's benchmark panel", () => {
     mock.detail = {
       ...monthDetail,
       benchmark: {
@@ -285,12 +362,14 @@ describe("Performance", () => {
           { label: "ACOES", target: 60, benchmark: "IBOV" },
           { label: "RENDA_FIXA", target: 40, benchmark: "CDI", return_percentage: 0.9 },
         ],
+        return_percentage: undefined,
       },
     };
     renderPage();
 
-    expect(screen.getByTestId("benchmark-row-IBOV").textContent).toBe("sem dados");
-    expect(screen.getByTestId("benchmark-row-blend").textContent).toBe("sem dados");
-    expect(screen.getByTestId("blocking-legs").textContent).toContain("ACOES (IBOV)");
+    const panel = screen.getByTestId("benchmark-panel");
+    expect(within(panel).getByTestId("benchmark-row-IBOV").textContent).toBe("sem dados");
+    expect(within(panel).getByTestId("benchmark-row-blend").textContent).toBe("sem dados");
+    expect(within(panel).getByTestId("blocking-legs").textContent).toContain("ACOES (IBOV)");
   });
 });

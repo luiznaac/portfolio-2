@@ -2,20 +2,17 @@ import { describe, expect, it } from "vitest";
 import type {
   BenchmarkBlend,
   ClassPerformance,
-  PerformanceSeries,
   PerformanceSource,
   PeriodPerformance,
 } from "../api/types.ts";
 import {
   aportesPerformanceRows,
-  benchmarkCoverage,
+  benchmarkIndexCoverage,
   benchmarkRows,
   blockingLegs,
   classValueSeries,
   contiguousSegments,
-  cumulativeReturns,
   decompositionResult,
-  eraState,
   plotArea,
   projectX,
   projectY,
@@ -25,7 +22,7 @@ import {
   strategyValueSeries,
   valueExtent,
   valueKpi,
-  xirrKpis,
+  windowCumulativeReturns,
 } from "./performance.ts";
 
 function point(
@@ -210,77 +207,87 @@ describe("strategyValueSeries", () => {
   });
 });
 
-describe("cumulativeReturns", () => {
-  it("compounds the monthly returns from a base of 100", () => {
-    const rows = cumulativeReturns([
-      point("2026-01", undefined, undefined),
-      point("2026-02", 1, 2),
-      point("2026-03", -1, 1),
-    ]);
+describe("windowCumulativeReturns", () => {
+  const range = { start: "2026-01", end: "2026-03" };
 
-    expect(rows.map((row) => row.period)).toEqual(["2026-01", "2026-02", "2026-03"]);
-    expect(rows[0].portfolio).toBe(100);
-    expect(rows[0].benchmark).toBe(100);
-    expect(rows[1].portfolio).toBeCloseTo(101);
-    expect(rows[1].benchmark).toBeCloseTo(102);
-    expect(rows[2].portfolio).toBeCloseTo(99.99);
-    expect(rows[2].benchmark).toBeCloseTo(103.02);
+  it("starts at 100 one month before the window and compounds every in-window month", () => {
+    const result = windowCumulativeReturns(
+      [point("2026-01", 1, 2), point("2026-02", -1, 1), point("2026-03", 0.5, undefined)],
+      range,
+    );
+    const points = result.points;
+
+    expect(points.map((point) => point.period)).toEqual([
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+    ]);
+    expect(points[0].portfolio).toBe(100);
+    expect(points[1].portfolio).toBeCloseTo(101);
+    expect(points[2].portfolio).toBeCloseTo(99.99);
+    expect(points[3].portfolio).toBeCloseTo(100.48995);
   });
 
-  it("breaks the benchmark line instead of carrying it forward when a month has no return", () => {
-    const rows = cumulativeReturns([point("2026-01", undefined), point("2026-02", 1, undefined)]);
+  it("dashes the benchmark only where a return exists and counts its coverage", () => {
+    const result = windowCumulativeReturns(
+      [
+        point("2026-01", 1, undefined),
+        point("2026-02", 1, 2),
+        { ...point("2026-03", 0), benchmark_return: undefined },
+      ],
+      range,
+    );
 
-    expect(rows[1].portfolio).toBeCloseTo(101);
-    expect(rows[1].benchmark).toBeUndefined();
+    expect(result.points[1].benchmark).toBeUndefined();
+    expect(result.points[2].benchmark).toBeCloseTo(102);
+    expect(result.points[3].benchmark).toBeUndefined();
+    expect(result.benchmarkCount).toBe(1);
+    expect(result.benchmarkPercentage).toBeCloseTo(2);
+  });
+
+  it("reports a window with no benchmark as having no blend", () => {
+    const result = windowCumulativeReturns([point("2026-01", 1)], range);
+
+    expect(result.benchmarkCount).toBe(0);
+    expect(result.benchmarkPercentage).toBeUndefined();
+  });
+
+  it("leaves out series months outside the window, even when they predate its baseline", () => {
+    const result = windowCumulativeReturns(
+      [point("2025-11", 5), point("2025-12", 5), point("2026-01", 1)],
+      range,
+    );
+
+    expect(result.points.map((point) => point.period)).toEqual(["2025-12", "2026-01"]);
+    expect(result.months.map((month) => month.period)).toEqual(["2026-01"]);
+    expect(result.points[1].portfolio).toBeCloseTo(101);
+    expect(result.returnPercentage).toBeCloseTo(1);
   });
 
   it("tracks each policy index on its own cumulative line and breaks a missing point", () => {
-    const rows = cumulativeReturns([
-      point("2026-01", undefined),
-      {
-        ...point("2026-02", 1, 0.9),
-        benchmarks: [
-          { index: "CDI", return_percentage: 1 },
-          { index: "IPCA", return_percentage: 0.5 },
-        ],
-      },
-      point("2026-03", 0),
-    ]);
+    const result = windowCumulativeReturns(
+      [
+        {
+          ...point("2026-01", 1, 0.9),
+          benchmarks: [
+            { index: "CDI", return_percentage: 1 },
+            { index: "IPCA", return_percentage: 0.5 },
+          ],
+        },
+        point("2026-02", 0),
+      ],
+      range,
+    );
 
-    expect(rows[1].indexes.CDI).toBeCloseTo(101);
-    expect(rows[1].indexes.IPCA).toBeCloseTo(100.5);
-    expect(rows[1].indexes.IBOV).toBeUndefined();
-    expect(rows[2].indexes.IPCA).toBeUndefined();
+    expect(result.points[1].indexes.CDI).toBeCloseTo(101);
+    expect(result.points[1].indexes.IPCA).toBeCloseTo(100.5);
+    expect(result.points[1].indexes.IBOV).toBeUndefined();
+    expect(result.points[2].indexes.IPCA).toBeUndefined();
   });
+});
 
-  it("anchors every line at 100 on the first snapshot, even when a benchmark priced that month", () => {
-    const rows = cumulativeReturns([point("2026-01", undefined, 2), point("2026-02", 1, 1)]);
-
-    expect(rows[0].portfolio).toBe(100);
-    expect(rows[0].benchmark).toBe(100);
-    expect(rows[0].indexes.CDI).toBe(100);
-    expect(rows[1].benchmark).toBeCloseTo(101);
-  });
-
-  it("has no blend point before the first snapshot and lets a raw index line start where priced", () => {
-    const rows = cumulativeReturns([
-      computed("2025-12", undefined),
-      {
-        ...computed("2026-01", 1),
-        benchmarks: [{ index: "IBOV", return_percentage: 2 }],
-      },
-      point("2026-02", 1, 0.9),
-    ]);
-
-    expect(rows[0].benchmark).toBeUndefined();
-    expect(rows[0].indexes.IBOV).toBeUndefined();
-    expect(rows[1].benchmark).toBeUndefined();
-    expect(rows[1].indexes.IBOV).toBeCloseTo(102);
-    // The first snapshot anchors the blend at 100; the index line it already carries is not reset.
-    expect(rows[2].benchmark).toBe(100);
-    expect(rows[2].indexes.IBOV).toBeCloseTo(102);
-  });
-
+describe("contiguousSegments", () => {
   it("groups a defined value's points into contiguous segments for a broken line", () => {
     expect(contiguousSegments([100, 101, undefined, undefined, 103, 104])).toEqual([
       [0, 1],
@@ -291,9 +298,9 @@ describe("cumulativeReturns", () => {
   });
 });
 
-describe("benchmarkCoverage", () => {
-  it("counts the months each policy index could not price", () => {
-    const coverage = benchmarkCoverage([
+describe("benchmarkIndexCoverage", () => {
+  it("counts the window months each policy index could not price", () => {
+    const coverage = benchmarkIndexCoverage([
       { ...computed("2026-01", 1), benchmarks: [{ index: "IBOV", return_percentage: 1 }] },
       {
         ...point("2026-02", 1, 0.9),
@@ -337,35 +344,13 @@ describe("blockingLegs", () => {
   });
 });
 
-describe("era labels", () => {
-  it("reads the last point's era and switches the value KPI to Valor investido", () => {
-    expect(eraState([computed("2026-01", undefined), point("2026-02", 1)])).toEqual({
-      hasComputed: true,
-      hasSnapshot: true,
-    });
+describe("valueKpi", () => {
+  it("switches to Valor investido while the last point is the computed history", () => {
     expect(valueKpi([computed("2026-01", undefined)]).label).toBe("Valor investido");
     expect(valueKpi([computed("2026-01", undefined)]).hint).toBe(
       "histórico · sem caixa registrado",
     );
     expect(valueKpi([point("2026-02", 1)]).label).toBe("Patrimônio");
-  });
-
-  it("labels one XIRR per era that exists", () => {
-    const series: PerformanceSeries = {
-      months: [computed("2026-01", undefined), point("2026-02", 1)],
-      xirr: 12,
-      computed_xirr: 8,
-    };
-
-    expect(xirrKpis(series).map((kpi) => kpi.label)).toEqual([
-      "XIRR do histórico",
-      "XIRR dos fechamentos",
-    ]);
-    expect(
-      xirrKpis({ months: [computed("2026-01", undefined)], xirr: undefined }).map(
-        (kpi) => kpi.label,
-      ),
-    ).toEqual(["XIRR do histórico"]);
   });
 });
 

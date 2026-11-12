@@ -17,9 +17,11 @@ src/
                 PageHead/PageTabs — the object head and sub-view tab strip; Panel/Chip/Badge/
                 Button/Table/FilterBar/WizardStepper/Kpi/Num/ClassBadge — the token-based
                 primitive layer; TickerDrawer — the Ativos ticker detail opened from a Posições row
-                or its deep link; icons.tsx; *Chip.tsx
-  hooks/        shared stateful UI logic (useClosedMonthSelection.ts, and usePageFilters.ts — a
-                page's filter values, kept for the route element's lifetime and never in the URL)
+                or its deep link; PeriodRail — the Análise period rail; icons.tsx; *Chip.tsx
+  hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
+                Análise rail's shared window, kept across the three tabs and reset on area re-entry;
+                usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
+                never in the URL)
   pages/        route-level components (`/portfolio` is Overview.tsx, the landing; Positions.tsx
                 owns the Posições table and its optional ticker drawer route; Dashboard.tsx is the
                 off-nav health-check example at /health); a page that needs a behaviour test gets a
@@ -32,7 +34,8 @@ src/
                 one meaning→token class map; plan.ts derives the six-step month tool; dates.ts is the
                 shared calendar arithmetic; filters.ts is the shared filter model, with
                 tradeFilters.ts/incomeFilters.ts/positionFilters.ts declaring each list's fields +
-                matcher; position.ts builds the Posições rows and their filtered total)
+                matcher; position.ts builds the Posições rows and their filtered total;
+                analysisWindow.ts is the Análise rail's preset/range/window math)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.
