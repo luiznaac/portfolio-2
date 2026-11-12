@@ -25,6 +25,7 @@ import {
   transferCopy,
   transferStatusLabel,
 } from "../lib/orders.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 // The month's Orders screen: the persisted plan (never recomputed on read), the Attribution
 // Transfer inbox with its approve/reject decisions, and the copy/CSV exits. "Recalcular" is the one
@@ -34,8 +35,6 @@ export function Orders() {
 
   return (
     <section>
-      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Ordens</h1>
-
       {orders.isLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : orders.isError ? (
@@ -46,7 +45,7 @@ export function Orders() {
         <Panel title="Sem mês aberto">
           <p className="text-[13.5px] text-ink-dim">
             Abra um mês em{" "}
-            <Link to="/month" className="text-principal underline">
+            <Link to={ROUTES.plan} className="text-principal underline">
               Capital e alvos
             </Link>{" "}
             para calcular o plano de ordens.

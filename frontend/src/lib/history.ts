@@ -1,5 +1,5 @@
-// Pure Histórico helpers — no React imports here (see AGENTS.md). The adoption defaults, the GAP
-// reading and the badge arithmetic are unit-tested without a browser; the page only renders them.
+// Pure Histórico helpers — no React imports here (see AGENTS.md). The adoption defaults and the GAP
+// reading are unit-tested without a browser; the page only renders them.
 
 import type { Gap, HeldTicker, Quote, Trade } from "../api/types.ts";
 import { addDays, todayIso } from "./dates.ts";
@@ -75,8 +75,4 @@ export function isMissingBuy(gap: Gap): boolean {
 
 export function pendingProceedsGaps(gaps: Gap[]): Gap[] {
   return openGaps(gaps).filter((gap) => gap.realized_pending === true);
-}
-
-export function historyAttentionCount(negativeCount: number, gaps: Gap[]): number {
-  return negativeCount + openGaps(gaps).length;
 }

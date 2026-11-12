@@ -66,6 +66,15 @@ export function useHealth() {
   });
 }
 
+// The portfolio's standing status, not a screen read: the shell's sidebar counts, the top bar's
+// freshness line and the landing all consume it, so every write that changes attention refreshes it.
+export function usePortfolioStatus() {
+  return useQuery({
+    queryKey: ["portfolio", "status"],
+    queryFn: api.getPortfolioStatus,
+  });
+}
+
 export function useImportRows(importId: number | null) {
   return useQuery({
     queryKey: ["imports", importId, "rows"],
@@ -137,6 +146,7 @@ export function useTransferAttribution(ticker: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["positions", ticker] });
       queryClient.invalidateQueries({ queryKey: ["month"] });
+      invalidatePortfolioStatus(queryClient);
     },
   });
 }
@@ -161,6 +171,7 @@ export function useApplyLegacyAttribution() {
       queryClient.invalidateQueries({ queryKey: ["positions"] });
       queryClient.invalidateQueries({ queryKey: ["month"] });
       queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      invalidatePortfolioStatus(queryClient);
     },
   });
 }
@@ -199,6 +210,12 @@ export function useTicker(ticker: string) {
 // The reads derived from the ledger, catalog and quotes. A classification, a catalog refresh or an
 // import apply changes at least one of them, so they share one invalidation instead of each caller
 // spelling out the set.
+// The shell's aggregate is stale whenever attention can change; every write that touches the
+// month, orders, imports, strategies or the ledger refreshes it with this one call.
+function invalidatePortfolioStatus(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["portfolio", "status"] });
+}
+
 function invalidateLedgerReads(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["tickers"] });
   queryClient.invalidateQueries({ queryKey: ["month"] });
@@ -206,6 +223,7 @@ function invalidateLedgerReads(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["orders"] });
   queryClient.invalidateQueries({ queryKey: ["positions"] });
   queryClient.invalidateQueries({ queryKey: ["performance"] });
+  invalidatePortfolioStatus(queryClient);
 }
 
 export function useClassifyTicker(ticker: string) {
@@ -304,7 +322,10 @@ export function useOpenMonth() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (creation: MonthCreation) => api.openMonth(creation),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["month"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -312,7 +333,10 @@ export function useUpdateCurrentMonth() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (update: MonthUpdate) => api.updateCurrentMonth(update),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["month"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -320,7 +344,10 @@ export function useReplaceTargets() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (targets: Targets) => api.replaceCurrentTargets(targets),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["month"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -362,6 +389,7 @@ export function useCloseMonth() {
       queryClient.invalidateQueries({ queryKey: ["months"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["performance"] });
+      invalidatePortfolioStatus(queryClient);
     },
   });
 }
@@ -486,6 +514,7 @@ export function useRefreshOrders() {
     onSuccess: (list) => {
       queryClient.setQueryData(["orders"], list);
       queryClient.invalidateQueries({ queryKey: ["month"] });
+      invalidatePortfolioStatus(queryClient);
     },
   });
 }
@@ -496,7 +525,10 @@ export function useDecideTransfer() {
   return useMutation<TransferProposal, Error, { id: number; decision: "approve" | "reject" }>({
     mutationFn: ({ id, decision }) =>
       decision === "approve" ? api.approveTransfer(id) : api.rejectTransfer(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -513,7 +545,10 @@ export function useStageImport() {
   return useMutation({
     mutationFn: ({ source, file }: { source: ImportSource; file: File }) =>
       api.stageImport(source, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["imports"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imports"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -521,7 +556,10 @@ export function useReviewImport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (importId: number) => api.reviewImport(importId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["imports"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["imports"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -590,7 +628,10 @@ export function useImportEdition() {
   return useMutation({
     mutationFn: ({ strategyId, file }: { strategyId: number; file: File }) =>
       api.importEdition(strategyId, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -604,7 +645,10 @@ export function useActivateEdition() {
       strategyId: number;
       activation: EditionActivation;
     }) => api.activateEdition(strategyId, activation),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["strategies"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 
@@ -653,6 +697,7 @@ function invalidateHistoryReads(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["positions"] });
   queryClient.invalidateQueries({ queryKey: ["trades"] });
   queryClient.invalidateQueries({ queryKey: ["month"] });
+  invalidatePortfolioStatus(queryClient);
 }
 
 export function usePriceGap() {
@@ -698,6 +743,7 @@ export function useImportMovements() {
       queryClient.invalidateQueries({ queryKey: ["trades"] });
       queryClient.invalidateQueries({ queryKey: ["positions"] });
       queryClient.invalidateQueries({ queryKey: ["imports"] });
+      invalidatePortfolioStatus(queryClient);
     },
   });
 }

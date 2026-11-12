@@ -45,7 +45,7 @@ describe("agendaItems", () => {
     const items = agendaItems([], month(), [], "2026-10-01");
     expect(items.map((item) => item.kind)).toEqual(["CLOSE"]);
     expect(items[0]?.title).toContain("set/2026");
-    expect(items[0]?.to).toBe("/fechamento");
+    expect(items[0]?.to).toBe("/plan/close");
   });
 
   it("does not remind before the month turns", () => {

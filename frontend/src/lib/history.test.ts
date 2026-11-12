@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { Gap, Quote, Trade } from "../api/types.ts";
 import {
   adoptionDefaultDate,
-  historyAttentionCount,
   isMissingBuy,
   isValidAdoptionRow,
   latestClose,
@@ -105,10 +104,5 @@ describe("gaps", () => {
   it("tells a missing buy from a missing sale by the realized flag", () => {
     expect(isMissingBuy(gaps[0])).toBe(true);
     expect(isMissingBuy(gaps[2])).toBe(false);
-  });
-
-  it("sums negative custody and the open gap count into the nav badge", () => {
-    expect(historyAttentionCount(4, gaps)).toBe(7);
-    expect(historyAttentionCount(0, [])).toBe(0);
   });
 });

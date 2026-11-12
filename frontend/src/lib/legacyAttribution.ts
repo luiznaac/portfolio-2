@@ -9,6 +9,7 @@ import type {
   LegacyAttributionSkipReason,
 } from "../api/types.ts";
 import { formatCurrency } from "./format.ts";
+import { ROUTES, positionDetail } from "./routes.ts";
 
 // The custody the bulk action targets: the outside rows of every class. The unclassified line is a
 // data-quality state, not outside custody, so it never counts here.
@@ -89,11 +90,11 @@ export function noBucketSkips(skips: LegacyAttributionSkip[]): NoBucketSkip[] {
 export function skipAction(skip: LegacyAttributionSkip): SkipAction | undefined {
   switch (skip.reason) {
     case "UNCLASSIFIED":
-      return { to: `/trades/${encodeURIComponent(skip.ticker)}`, label: "Classificar" };
+      return { to: positionDetail(skip.ticker), label: "Classificar" };
     case "NO_BUCKET":
-      return { to: "/strategies", label: "Criar estratégia" };
+      return { to: ROUTES.strategies, label: "Criar estratégia" };
     case "HAS_ATTRIBUTION":
-      return { to: `/trades/${encodeURIComponent(skip.ticker)}`, label: "Ver ativo" };
+      return { to: positionDetail(skip.ticker), label: "Ver ativo" };
     case "WRITE_FAILED":
       return undefined;
   }

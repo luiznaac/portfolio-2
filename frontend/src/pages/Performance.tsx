@@ -37,6 +37,7 @@ import {
   valueKpi,
   xirrKpis,
 } from "../lib/performance.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 // Performance (issue #176): the closed months replayed from their immutable snapshots — the monthly
 // return decomposition, the since-inception XIRR, the target-weighted benchmark, the per-class and
@@ -50,14 +51,6 @@ export function Performance() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Performance</h1>
-        <p className="text-[13px] text-ink-dim">
-          O retorno mensal depois dos aportes e proventos, o XIRR desde o início e o benchmark
-          ponderado pelos alvos da política.
-        </p>
-      </div>
-
       {series.isLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : series.isError ? (
@@ -66,11 +59,11 @@ export function Performance() {
         <Panel title="Sem meses fechados">
           <p className="text-[13.5px] text-ink-dim">
             A performance nasce dos retratos dos meses fechados e do histórico importado.{" "}
-            <Link to="/imports" className="text-principal underline">
+            <Link to={ROUTES.imports} className="text-principal underline">
               Importe um extrato
             </Link>{" "}
             ou{" "}
-            <Link to="/fechamento" className="text-principal underline">
+            <Link to={ROUTES.planClose} className="text-principal underline">
               feche um mês
             </Link>{" "}
             para começar a série.

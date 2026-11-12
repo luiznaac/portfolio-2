@@ -23,6 +23,7 @@ import {
 } from "../lib/fechamento.ts";
 import { formatCurrency, formatNumber } from "../lib/format.ts";
 import { isBackdatedPeriod, monthPeriodLabel } from "../lib/month.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 // Fechamento (issue #176): the month's last ritual. The close is gated by the transfer inbox — a
 // pending Attribution Transfer blocks it — and the frozen snapshot of every closed month is the
@@ -56,14 +57,6 @@ export function Fechamento() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Fechamento</h1>
-        <p className="text-[13px] text-ink-dim">
-          O último passo do mês: o plano é recalculado, as transferências precisam estar decididas e
-          o estado do mês é congelado num retrato imutável.
-        </p>
-      </div>
-
       <div className="mb-4 grid items-start gap-3 lg:grid-cols-2">
         <Panel title="Antes de fechar">
           {current.isLoading || orders.isLoading ? (
@@ -75,7 +68,7 @@ export function Fechamento() {
           ) : current.data === null || current.data === undefined ? (
             <p className="text-[13.5px] text-ink-dim">
               Nenhum mês aberto.{" "}
-              <Link to="/month" className="text-principal underline">
+              <Link to={ROUTES.plan} className="text-principal underline">
                 Abra um mês
               </Link>{" "}
               para fechá-lo.
@@ -169,7 +162,7 @@ function CloseGate({
                 <Chip tone="rose">
                   {pendingCount} {pendingCount === 1 ? "pendente" : "pendentes"}
                 </Chip>
-                <Link to="/orders" className="text-[11.5px] text-principal underline">
+                <Link to={ROUTES.planOrders} className="text-[11.5px] text-principal underline">
                   resolver
                 </Link>
               </>

@@ -30,7 +30,7 @@ function renderOrders() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/orders"]}>
+      <MemoryRouter initialEntries={["/plan/orders"]}>
         <Orders />
       </MemoryRouter>
     </QueryClientProvider>,

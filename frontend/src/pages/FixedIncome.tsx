@@ -74,8 +74,6 @@ export function FixedIncome() {
 
   return (
     <section>
-      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Renda fixa</h1>
-
       <div className="mb-4">
         <Panel title="Produtos">
           {isLoading ? (

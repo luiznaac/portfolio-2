@@ -8,6 +8,7 @@ import type {
 } from "../api/types.ts";
 import { attributionPercent, remainingAttributable } from "../lib/attribution.ts";
 import { formatNumber } from "../lib/format.ts";
+import { ROUTES } from "../lib/routes.ts";
 import { Button } from "./Button.tsx";
 import { Chip } from "./Chip.tsx";
 import { Panel } from "./Panel.tsx";
@@ -157,7 +158,7 @@ function AttributionLedger({
         <p className="text-[12.5px] text-ink-faint">Carregando estratégias…</p>
       ) : strategies.length === 0 ? (
         <p className="text-[12.5px] text-ink-dim">
-          <Link to="/strategies" className="text-principal hover:underline">
+          <Link to={ROUTES.strategies} className="text-principal hover:underline">
             Cadastre uma estratégia
           </Link>{" "}
           para atribuir parte da custódia.

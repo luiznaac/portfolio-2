@@ -6,6 +6,7 @@ import type { Bond, Month } from "../api/types.ts";
 import { addDays, daysBetween, monthKey } from "./dates.ts";
 import { formatIsoDate } from "./format.ts";
 import { monthPeriodLabel } from "./month.ts";
+import { ROUTES } from "./routes.ts";
 
 export type AgendaKind = "MATURITY" | "CLOSE";
 
@@ -51,7 +52,7 @@ export function agendaItems(
       date: bond.maturity_date,
       title: `Vencimento de ${bond.name}`,
       detail: maturityDetail(bond.maturity_date, today),
-      to: "/fixed-income",
+      to: ROUTES.fixedIncome,
     });
   }
 
@@ -68,7 +69,7 @@ export function agendaItems(
       date: `${currentMonth}-01`,
       title: `Fechamento de ${monthPeriodLabel(month.period)} pendente`,
       detail: "O mês segue aberto",
-      to: "/fechamento",
+      to: ROUTES.planClose,
     });
   } else if (latestClosed !== undefined) {
     items.push({
@@ -77,7 +78,7 @@ export function agendaItems(
       date: `${currentMonth}-01`,
       title: `Fechamento de ${monthPeriodLabel(latestClosed.period)} concluído`,
       detail: "Marque como lida para tirar da agenda",
-      to: "/fechamento",
+      to: ROUTES.planClose,
     });
   }
 

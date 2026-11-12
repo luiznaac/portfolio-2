@@ -357,7 +357,7 @@ describe("attentionItems", () => {
     expect(outside?.severity).toBe("info");
     expect(outside?.text).toContain("Cotas fora da estratégia");
     expect(outside?.text).toContain("1.500,00");
-    expect(outside?.to).toBe("/allocation");
+    expect(outside?.to).toBe("/portfolio/allocation");
     expect(outside?.actionLabel).toBe("Atribuir");
   });
 
@@ -371,7 +371,7 @@ describe("attentionItems", () => {
     expect(quality?.text).toBe(
       "Dados da carteira: 0 sem cotação · 1 sem classe · 0 negativas · 0 lacunas",
     );
-    expect(quality?.to).toBe("/allocation");
+    expect(quality?.to).toBe("/portfolio/allocation");
     expect(quality?.actionLabel).toBe("Revisar");
   });
 

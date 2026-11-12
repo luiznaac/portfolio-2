@@ -56,8 +56,6 @@ export function Month() {
 
   return (
     <section>
-      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Mês</h1>
-
       {current.isLoading || (switching && range.isLoading) ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : current.isError ? (

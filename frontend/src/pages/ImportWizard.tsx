@@ -22,6 +22,7 @@ import { WizardStepper } from "../components/WizardStepper.tsx";
 import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatLocalDateTime, formatNumber, formatTradeSide } from "../lib/format.ts";
 import { summarizeSituations } from "../lib/importSituations.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 // The B3 Negociação extract is the only layout the backend parses today (see
 // B3NegotiationParser), so the wizard pins the source rather than offering options the pipeline
@@ -197,7 +198,6 @@ export function ImportWizard() {
 
   return (
     <section>
-      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Importar extrato</h1>
       <WizardStepper steps={STEPS} current={STEP_INDEX[state.step]} />
 
       {mutationError && <p className={`mb-4 ${CRIT_ALERT}`}>{mutationError.message}</p>}
@@ -309,7 +309,7 @@ export function ImportWizard() {
                 <p data-testid="import-quality-summary">
                   {importedEntries} entradas importadas · {heldPositions.length} posições na
                   carteira · {negativePositions}{" "}
-                  <Link to="/history" className="text-principal hover:underline">
+                  <Link to={ROUTES.gaps} className="text-principal hover:underline">
                     {negativePositions === 1 ? "negativa" : "negativas"}
                   </Link>{" "}
                   · {quality.unclassified} sem classe · {quality.unpriced} sem cotação
@@ -331,7 +331,7 @@ export function ImportWizard() {
             </Button>
             {state.upload.import.status === "APPLIED" && (
               <Link
-                to="/trades"
+                to={ROUTES.trades}
                 className="text-[13px] font-medium text-accent hover:text-accent-2"
               >
                 Ver negócios

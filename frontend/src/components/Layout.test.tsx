@@ -1,128 +1,176 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AttentionItem, PortfolioStatus } from "../api/types.ts";
 import { Layout } from "./Layout.tsx";
 
+const mock = vi.hoisted(() => ({ status: null as PortfolioStatus | null }));
+
 vi.mock("../api/queries.ts", () => ({
-  useCurrentMonth: () => ({
-    isLoading: false,
+  usePortfolioStatus: () => ({
+    data: mock.status,
+    isLoading: mock.status === null,
     isError: false,
-    data: {
-      month: {
-        id: 10,
-        period: "2026-10",
-        capital: 250_000,
-        floor: 20_000,
-        status: "OPEN",
-        aportes: 0,
-      },
-      targets: { classes: [], strategies: [], sub_classes: [], tickers: [] },
-    },
-  }),
-  useCurrentAllocation: () => ({
-    isLoading: false,
-    isError: false,
-    data: {
-      capital: 0,
-      floor: 0,
-      ideal: 0,
-      actual: 0,
-      deficit: 0,
-      drift: 0,
-      unattributed: 0,
-      negative: [{ ticker: "BCFF11", quantity: -10 }],
-      unpriced: [],
-      unclassified: { actual: 0, tickers: [] },
-      classes: [],
-    },
-  }),
-  useGaps: () => ({
-    isLoading: false,
-    isError: false,
-    data: [
-      {
-        id: 1,
-        ticker: "PETR4",
-        date: "2026-01-10",
-        quantity: 5,
-        status: "OPEN",
-        trade_watermark: 0,
-        action_watermark: 0,
-      },
-    ],
-  }),
-  useOrders: () => ({
-    isLoading: false,
-    isError: false,
-    data: {
-      period: "2026-10",
-      orders: [],
-      transfers: [
-        {
-          id: 7,
-          ticker: "ITUB4",
-          from_strategy_id: 1,
-          from_strategy: "Top Dividendos",
-          to_strategy_id: 2,
-          to_strategy: "Small Caps",
-          quantity: 10,
-          auto_approved: false,
-          status: "PENDING",
-        },
-      ],
-      unplanned_trades: [],
-    },
   }),
 }));
 
-function renderShell() {
+function attention(overrides: Partial<AttentionItem>): AttentionItem {
+  return {
+    kind: "PENDING_TRANSFER",
+    object: "MONTH",
+    severity: "ACTION",
+    ref: { type: "TRANSFER", id: 1 },
+    params: {},
+    ...overrides,
+  };
+}
+
+function status(overrides: Partial<PortfolioStatus> = {}): PortfolioStatus {
+  return {
+    as_of: "2026-11-02",
+    open_month: { id: 4, period: "2026-11" },
+    capital: 100_000,
+    invested: 70_000,
+    deficit: 30_000,
+    drift: 2.5,
+    month: {
+      open: true,
+      steps_done: 2,
+      steps_total: 6,
+      suggested_orders: 3,
+      pending_transfers: 1,
+    },
+    data: { quotes_as_of: "2026-10-30", stale_quotes: [], open_gaps: 0 },
+    attention: [
+      attention({ object: "MONTH" }),
+      attention({ object: "IMPORT", kind: "STAGED_IMPORT" }),
+      attention({ object: "CORPORATE_ACTION", severity: "WATCH" }),
+      attention({ object: "STRATEGY", severity: "WATCH", kind: "STAGED_EDITION" }),
+      attention({ object: "ASSET", severity: "WATCH", kind: "OPEN_GAP" }),
+    ],
+    ...overrides,
+  };
+}
+
+function renderShell(path = "/portfolio") {
   render(
-    <MemoryRouter initialEntries={["/taxes"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="taxes" element={<div>Impostos page</div>} />
+          <Route path="*" element={<div>page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mock.status = null;
+});
 
-describe("Layout shell", () => {
-  it("shows the open month and its pending transfers in the month pill", () => {
+describe("six-object sidebar", () => {
+  it("renders exactly the six objects in their three groups", () => {
+    mock.status = status();
     renderShell();
 
-    expect(screen.getByText("out/2026")).toBeDefined();
-    expect(screen.getByText("Aberto")).toBeDefined();
-    expect(screen.getByText("1 pendente")).toBeDefined();
+    const nav = screen.getByTestId("sidebar");
+    expect(within(nav).getByText("Posição")).toBeDefined();
+    expect(within(nav).getByText("Operações")).toBeDefined();
+    expect(within(nav).getByText("Resultados")).toBeDefined();
+
+    const links = within(nav)
+      .getAllByRole("link")
+      .map((link) => link.textContent?.replace(/\d+$/, "").trim());
+    expect(links).toEqual([
+      "Carteira",
+      "Estratégias",
+      "Ativos",
+      "Importações",
+      "Plano / Mês",
+      "Análise",
+    ]);
   });
 
-  it("opens the command palette with Ctrl+K and closes it on Escape", async () => {
-    const user = userEvent.setup();
+  it("never renders a sub-view as a sidebar item", () => {
+    mock.status = status();
     renderShell();
+
+    const nav = screen.getByTestId("sidebar");
+    for (const subView of ["Visão geral", "Alocação", "Posições", "Negócios", "Fontes"]) {
+      expect(within(nav).queryByRole("link", { name: new RegExp(subView) })).toBeNull();
+    }
+  });
+
+  it("mirrors the attention queue with per-object counts, marking action severity", () => {
+    mock.status = status();
+    renderShell();
+
+    expect(screen.getByTestId("nav-badge-plan").textContent).toBe("1");
+    expect(screen.getByTestId("nav-badge-plan").getAttribute("data-severity")).toBe("ACTION");
+    expect(screen.getByTestId("nav-badge-imports").textContent).toBe("2");
+    expect(screen.getByTestId("nav-badge-imports").getAttribute("data-severity")).toBe("ACTION");
+    expect(screen.getByTestId("nav-badge-strategies").textContent).toBe("1");
+    expect(screen.getByTestId("nav-badge-strategies").getAttribute("data-severity")).toBe("WATCH");
+    expect(screen.getByTestId("nav-badge-assets").textContent).toBe("1");
+    expect(screen.getByTestId("nav-badge-assets").getAttribute("data-severity")).toBe("WATCH");
+    expect(screen.queryByTestId("nav-badge-portfolio")).toBeNull();
+  });
+});
+
+describe("top bar", () => {
+  it("resolves group / object / sub-view in the breadcrumb", () => {
+    mock.status = status();
+    renderShell("/portfolio/allocation");
+
+    expect(screen.getByTestId("breadcrumb").textContent).toBe("Posição / Carteira / Alocação");
+  });
+
+  it("names the entity at depth on a detail route", () => {
+    mock.status = status();
+    renderShell("/ativos/positions/PETR4");
+
+    expect(screen.getByTestId("breadcrumb").textContent).toBe("Posição / Ativos / PETR4");
+  });
+
+  it("renders quote freshness and the open-month status from the aggregate", () => {
+    mock.status = status();
+    renderShell();
+
+    expect(screen.getByTestId("quote-freshness").textContent).toContain("cotações 30/10/2026");
+    expect(screen.getByTestId("open-month").textContent).toContain("nov/2026 · aberto");
+  });
+
+  it("says no month is open when the aggregate reports none", () => {
+    mock.status = status({
+      open_month: undefined,
+      month: {
+        open: false,
+        steps_done: 0,
+        steps_total: 6,
+        suggested_orders: 0,
+        pending_transfers: 0,
+      },
+    });
+    renderShell();
+
+    expect(screen.getByTestId("open-month").textContent).toContain("Nenhum mês aberto");
+    expect(screen.getByTestId("quote-freshness").textContent).toContain("cotações 30/10/2026");
+  });
+});
+
+describe("retired command palette", () => {
+  it("has no palette trigger and no Ctrl+K shortcut", async () => {
+    const user = userEvent.setup();
+    mock.status = status();
+    renderShell();
+
+    expect(screen.queryByRole("button", { name: /comandos/i })).toBeNull();
+    expect(screen.queryByText(/Ctrl K/)).toBeNull();
 
     await user.keyboard("{Control>}k{/Control}");
-    expect(screen.getByRole("dialog", { name: "Comandos" })).toBeDefined();
-
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Comandos" })).toBeNull();
-  });
-
-  it("sums negative custody and open lacunas into the Histórico nav badge", () => {
-    renderShell();
-
-    expect(screen.getByTestId("nav-history-badge").textContent).toBe("2");
-  });
-
-  it("opens the command palette from the topbar button", async () => {
-    const user = userEvent.setup();
-    renderShell();
-
-    await user.click(screen.getByRole("button", { name: /Comandos/ }));
-
-    expect(screen.getByRole("dialog", { name: "Comandos" })).toBeDefined();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

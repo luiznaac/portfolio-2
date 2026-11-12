@@ -34,6 +34,7 @@ import { todayIso } from "../lib/dates.ts";
 import { formatCurrency, formatIsoDate } from "../lib/format.ts";
 import { incomeTypeLabel } from "../lib/income.ts";
 import { monthPeriodLabel, monthStatusLabel } from "../lib/month.ts";
+import { ROUTES } from "../lib/routes.ts";
 import { reportDrivenStrategies } from "../lib/strategy.ts";
 
 // The Cockpit (issue #26/#177): where the month is and what to do now. Every figure is derived on
@@ -72,11 +73,10 @@ export function Cockpit() {
   if (month === null) {
     return (
       <section>
-        <CockpitHead period={null} />
         <Panel title="Nenhum mês aberto">
           <p className="text-[13.5px] text-ink-dim">
             O ritual mensal começa quando um mês é aberto.{" "}
-            <Link to="/month" className="text-principal underline">
+            <Link to={ROUTES.plan} className="text-principal underline">
               Abrir mês
             </Link>{" "}
             para definir Capital, reserva e alvos.
@@ -119,8 +119,6 @@ export function Cockpit() {
 
   return (
     <section>
-      <CockpitHead period={month.period} />
-
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi
           testId="cockpit-capital"
@@ -188,19 +186,6 @@ export function Cockpit() {
         </Panel>
       </div>
     </section>
-  );
-}
-
-function CockpitHead({ period }: { period: string | null }) {
-  return (
-    <div className="mb-4">
-      <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">
-        {period === null ? "Cockpit" : `Cockpit de ${monthPeriodLabel(period)}`}
-      </h1>
-      <p className="text-[13px] text-ink-dim">
-        Onde o mês está e o que fazer agora. O ritual tem 7 passos; quatro deles são decisões suas.
-      </p>
-    </div>
   );
 }
 

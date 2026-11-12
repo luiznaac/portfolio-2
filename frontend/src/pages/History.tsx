@@ -60,14 +60,6 @@ function HistoryScreen({
 
   return (
     <section className="space-y-4">
-      <div>
-        <h1 className="font-cond text-[24px] font-bold tracking-[.005em]">Histórico</h1>
-        <p className="text-[13px] text-ink-dim">
-          Torne um extrato importado utilizável: adote a custódia anterior, reconcilie o livro,
-          resolva as lacunas e confira a custódia.
-        </p>
-      </div>
-
       <AdoptionStep
         key={adoptionKey}
         initialNegative={initialNegative}

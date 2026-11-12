@@ -52,6 +52,7 @@ import {
   skipReasonLabel,
 } from "../lib/legacyAttribution.ts";
 import { assetClassLabel, monthPeriodLabel } from "../lib/month.ts";
+import { ROUTES } from "../lib/routes.ts";
 
 const HEADER =
   "sticky top-0 z-[1] bg-surface-2 px-3 py-2.5 font-mono text-[10px] font-medium tracking-[.09em] text-ink-faint uppercase whitespace-nowrap";
@@ -66,8 +67,6 @@ export function Allocation() {
 
   return (
     <section>
-      <h1 className="mb-4 font-cond text-[24px] font-bold tracking-[.005em]">Alocação</h1>
-
       {allocation.isLoading ? (
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : allocation.isError ? (
@@ -405,7 +404,7 @@ function TransferModal({
           <p data-testid="transfer-empty" className="text-[12.5px] text-ink-dim">
             Nenhuma estratégia com relatório da classe {assetClassLabel(assetClass)} tem uma edição
             ativa que atribua {ticker}.{" "}
-            <Link to="/strategies" className="text-principal hover:underline">
+            <Link to={ROUTES.strategies} className="text-principal hover:underline">
               Importe uma edição
             </Link>{" "}
             para transferir.
@@ -762,7 +761,7 @@ function SkipList({ skips }: { skips: LegacyAttributionSkip[] }) {
             {group.assetClass ? assetClassLabel(group.assetClass) : "—"}
           </span>
           <span className="text-ink-dim">Sem estratégia manual · {group.tickers.join(", ")}</span>
-          <Link to="/strategies" className="text-principal hover:underline">
+          <Link to={ROUTES.strategies} className="text-principal hover:underline">
             Criar estratégia
           </Link>
         </li>
