@@ -2,6 +2,8 @@
 // side groups, totals, the broker clipboard text and the CSV; all four are unit-tested here.
 
 import type {
+  FundingSource,
+  OrderPlan,
   OrderSide,
   Strategy,
   SuggestedOrder,
@@ -9,7 +11,7 @@ import type {
   TransferProposal,
   TransferStatus,
 } from "../api/types.ts";
-import { formatCurrency } from "./format.ts";
+import { formatCurrency, formatNumber } from "./format.ts";
 
 const SIDE_LABELS: Record<OrderSide, string> = {
   BUY: "Compra",
@@ -164,4 +166,145 @@ export function ordersCsv(orders: SuggestedOrder[]): string {
 
 function csvCell(value: string): string {
   return /[;"\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+// The order's display state. PARCIAL is derived from the executed quantity and is never a persisted
+// lifecycle state: a partially matched order stays SUGGESTED on the wire, and only the screen names
+// the partial execution. A quantity fully covered reads EXECUTED/IMPORTED from its persisted state.
+export type OrderExecutionState = "EXECUTED" | "PARTIAL" | "UNEXECUTED";
+
+export function orderExecutionState(order: SuggestedOrder): OrderExecutionState {
+  if (order.executed_quantity <= 0) return "UNEXECUTED";
+  if (order.executed_quantity < order.quantity) return "PARTIAL";
+  return "EXECUTED";
+}
+
+// The chip label: PARCIAL for a partial execution, the persisted lifecycle label otherwise.
+export function orderStateLabel(order: SuggestedOrder): string {
+  return orderExecutionState(order) === "PARTIAL" ? "PARCIAL" : orderStatusLabel(order.status);
+}
+
+export interface OrderExecutionSummary {
+  executed: SuggestedOrder[];
+  partial: SuggestedOrder[];
+  unexecuted: SuggestedOrder[];
+}
+
+// The month's execution buckets, in the progress rail's vocabulary: executed (fully matched),
+// partial (PARCIAL, display-only) and unexecuted. An unexecuted or partial order never blocks the
+// close, so this is a summary, not a gate.
+export function orderExecutionSummary(orders: SuggestedOrder[]): OrderExecutionSummary {
+  const summary: OrderExecutionSummary = { executed: [], partial: [], unexecuted: [] };
+  for (const order of orders) {
+    const state = orderExecutionState(order);
+    if (state === "EXECUTED") summary.executed.push(order);
+    else if (state === "PARTIAL") summary.partial.push(order);
+    else summary.unexecuted.push(order);
+  }
+  return summary;
+}
+
+const FUNDING_SOURCE_LABELS: Record<FundingSource, string> = {
+  NEUTRO: "Neutro",
+  OUTSIDE_STRATEGY: "Fora da estratégia",
+  SURPLUS: "Excedente",
+};
+
+export function fundingSourceLabel(source: FundingSource): string {
+  return FUNDING_SOURCE_LABELS[source];
+}
+
+// The funding source's tone: a neutro sale is the neutral case, an outside-strategy sale the action
+// blue, a surplus sale the amber surplus.
+export type FundingTone = "neutral" | "blue" | "amber";
+
+const FUNDING_TONES: Record<FundingSource, FundingTone> = {
+  NEUTRO: "neutral",
+  OUTSIDE_STRATEGY: "blue",
+  SURPLUS: "amber",
+};
+
+export function fundingSourceTone(source: FundingSource): FundingTone {
+  return FUNDING_TONES[source];
+}
+
+// The executed ratio the screen shows: matched units over the suggested quantity.
+export function orderProgressLabel(order: SuggestedOrder): string {
+  return `${formatNumber(order.executed_quantity)}/${formatNumber(order.quantity)}`;
+}
+
+export interface OrderStrategyContribution {
+  strategy: string;
+  // Signed whole units the plan moves for this (strategy, ticker) slice: positive adds, negative
+  // sells down. Derived as target quantity − attributed quantity.
+  quantity: number;
+}
+
+// What the computed plan says about one persisted order: which strategies the units belong to
+// (attribution context) and, for a funding sell, why the sale exists (funding context). The
+// persisted order read carries neither, so the screen joins the plan read by ticker.
+export interface OrderContext {
+  contributions: OrderStrategyContribution[];
+  fundingSource?: FundingSource;
+}
+
+// A ticker can carry both a buy and a funding sell in one month (a slice below target buying while
+// a NEUTRO slice sells), so the plan context is keyed by ticker and the order's trade direction.
+export function orderContextKey(order: Pick<SuggestedOrder, "ticker" | "side">): string {
+  return `${order.ticker}|${isBuySide(order.side) ? "BUY" : "SELL"}`;
+}
+
+export function orderContexts(plan: OrderPlan | null | undefined): Map<string, OrderContext> {
+  const contexts = new Map<string, OrderContext>();
+  if (plan === null || plan === undefined) return contexts;
+
+  for (const move of plan.attribution) {
+    const key = `${move.ticker}|${move.side === "ALLOCATE" ? "BUY" : "SELL"}`;
+    const context = contexts.get(key) ?? { contributions: [] };
+    context.contributions.push({
+      strategy: move.strategy,
+      quantity: move.side === "ALLOCATE" ? move.quantity : -move.quantity,
+    });
+    contexts.set(key, context);
+  }
+
+  for (const candidate of plan.candidates) {
+    if (candidate.funding_source === undefined) continue;
+    const key = orderContextKey(candidate);
+    const context = contexts.get(key) ?? { contributions: [] };
+    context.fundingSource = candidate.funding_source;
+    contexts.set(key, context);
+  }
+
+  return contexts;
+}
+
+// The plan is computed on read and the orders are the persisted snapshot, so the two can drift after
+// a capital or targets edit until the plan is recalculated. A computed candidate is only the row's
+// context when it still matches the persisted order exactly — same side, same quantity.
+export function planCoversOrder(
+  plan: OrderPlan | null | undefined,
+  order: SuggestedOrder,
+): boolean {
+  if (plan === null || plan === undefined) return false;
+  return plan.candidates.some(
+    (candidate) =>
+      candidate.ticker === order.ticker &&
+      candidate.side === order.side &&
+      candidate.quantity === order.quantity,
+  );
+}
+
+// The chip tone a display state wears. A partial execution carries the attention amber; every other
+// row keeps the tone of its persisted lifecycle state.
+export type OrderStateTone = "amber" | "blue" | "green";
+
+const STATUS_TONES: Record<SuggestedOrderStatus, OrderStateTone> = {
+  SUGGESTED: "amber",
+  EXECUTED: "blue",
+  IMPORTED: "green",
+};
+
+export function orderStateTone(order: SuggestedOrder): OrderStateTone {
+  return orderExecutionState(order) === "PARTIAL" ? "amber" : STATUS_TONES[order.status];
 }

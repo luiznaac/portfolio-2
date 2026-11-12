@@ -7,6 +7,7 @@
 import type { AssetClass, Month, OrderList, Targets } from "../api/types.ts";
 import { pendingTransfers } from "./fechamento.ts";
 import { formatCurrency } from "./format.ts";
+import { orderExecutionSummary } from "./orders.ts";
 
 export type PlanStepKey = "capital" | "targets" | "plan" | "execution" | "transfer" | "close";
 
@@ -81,11 +82,10 @@ export function planSteps({
   const plan = hasPersistedPlan(orders);
   const pending = pendingTransfers(orders);
   const orderCount = orders?.orders.length ?? 0;
-  const executed = (orders?.orders ?? []).filter((order) => order.status !== "SUGGESTED");
-  const partial = (orders?.orders ?? []).filter(
-    (order) => order.executed_quantity > 0 && order.executed_quantity < order.quantity,
-  );
-  const executionDone = plan && executed.length === orderCount;
+  // The same execution derivation the step-4 body renders, so the rail's `n de 6` and the body's
+  // buckets can never disagree on what is executed, partial or untouched.
+  const execution = orderExecutionSummary(orders?.orders ?? []);
+  const executionDone = plan && execution.executed.length === orderCount;
   const transferDone = plan && pending.length === 0;
   const closed = month.status === "CLOSED";
 
@@ -124,7 +124,7 @@ export function planSteps({
         ? "o plano ainda não foi calculado"
         : orderCount === 0
           ? "sem ordens sugeridas"
-          : `${executed.length}/${orderCount} executadas${partial.length > 0 ? ` · ${partial.length} parcial` : ""}`,
+          : `${execution.executed.length}/${orderCount} executadas${execution.partial.length > 0 ? ` · ${execution.partial.length} parcial` : ""}`,
     },
     {
       key: "transfer",
