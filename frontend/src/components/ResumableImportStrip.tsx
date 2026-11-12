@@ -1,17 +1,13 @@
 import { Link } from "react-router-dom";
 import { useImports } from "../api/queries.ts";
-import type { Import, ImportDestinationObject } from "../api/types.ts";
+import type { ImportDestinationObject } from "../api/types.ts";
 import { formatLocalDateTime } from "../lib/format.ts";
 import { DESTINATIONS, sessionPath, sessionStep } from "../lib/importDestinations.ts";
+import { isParkedImport } from "../lib/imports.ts";
 import { Panel } from "./Panel.tsx";
 
-// A parked import is the assistant session: STAGED or REVIEWED is still waiting for a decision.
-// The strip is the one-line resume affordance on the owning object and in the inbox; an applied
-// import is history, not a session.
-function parked(record: Import): boolean {
-  return record.status === "STAGED" || record.status === "REVIEWED";
-}
-
+// The strip is the one-line resume affordance on the owning object; the inbox renders the full
+// queue instead. A parked import is the assistant session, an applied one is history.
 export function ResumableImportStrip({
   destination,
 }: {
@@ -20,7 +16,7 @@ export function ResumableImportStrip({
   const imports = useImports();
   const sessions = (imports.data ?? []).filter(
     (record) =>
-      parked(record) &&
+      isParkedImport(record) &&
       (destination === undefined || record.destination.object_type === destination),
   );
 
