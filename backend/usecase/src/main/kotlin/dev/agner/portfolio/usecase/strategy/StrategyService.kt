@@ -9,6 +9,7 @@ import dev.agner.portfolio.usecase.strategy.model.EditionImport
 import dev.agner.portfolio.usecase.strategy.model.EditionStatus
 import dev.agner.portfolio.usecase.strategy.model.ParsedStrategyReport
 import dev.agner.portfolio.usecase.strategy.model.Strategy
+import dev.agner.portfolio.usecase.strategy.model.StrategyCatalogRow
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
@@ -28,7 +29,22 @@ class StrategyService(
     private val transaction: ITransactionTemplate,
 ) {
 
-    suspend fun fetchAll(): List<Strategy> = strategies.fetchAll()
+    // The catalog read: every Strategy plus its latest edition, fetched in one pass so the list
+    // never fans out one editions call per strategy. The latest is the highest reference month,
+    // staged or active — the staged badge is the caller's read of `status`.
+    suspend fun fetchAll(): List<StrategyCatalogRow> {
+        val all = strategies.fetchAll()
+        val latest = editions.fetchLatestByStrategy(all.map { it.id })
+        return all.map { strategy ->
+            StrategyCatalogRow(
+                id = strategy.id,
+                name = strategy.name,
+                assetClass = strategy.assetClass,
+                kind = strategy.kind,
+                latestEdition = latest[strategy.id],
+            )
+        }
+    }
 
     // The name is the strategy's natural key, so a second strategy under it is rejected here with a
     // domain error rather than surfacing the unique-index violation as a 500. The kind has no

@@ -308,7 +308,7 @@ function BackfillStep({ enabled }: { enabled: boolean }) {
   const [file, setFile] = useState<File | null>(null);
 
   return (
-    <Panel title="2 · Reconciliar histórico">
+    <Panel title="2 · Reconstruir histórico">
       <p className="mb-3 text-[12.5px] text-ink-dim">
         Reexecuta o histórico importado: aposenta as compras de abertura cobertas, substitui as
         lacunas explicadas por registros novos e reprojeta o livro. A Posição é opcional e serve de
@@ -322,7 +322,7 @@ function BackfillStep({ enabled }: { enabled: boolean }) {
           onClick={() => backfill.mutate(file ?? undefined)}
           disabled={!enabled || backfill.isPending}
         >
-          {backfill.isPending ? "Reconciliando…" : "Reconciliar histórico"}
+          {backfill.isPending ? "Reconstruindo…" : "Reconstruir histórico"}
         </Button>
       </div>
 

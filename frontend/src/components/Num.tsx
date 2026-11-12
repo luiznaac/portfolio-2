@@ -1,19 +1,10 @@
 import { cn } from "../lib/cn.ts";
 import { formatNumber, formatSignedValue } from "../lib/format.ts";
+import { type Tone, toneClass } from "../lib/tones.ts";
 
-export type NumTone = "default" | "muted" | "deficit" | "surplus" | "return-up" | "return-down";
-
-// The one place a numeric read maps its meaning to a token — callers name the role, never a colour.
-// Deficit/short is blue, surplus/attention amber, return+ green and return− red; the sign is text,
-// so colour never carries meaning alone.
-const TONES: Record<NumTone, string> = {
-  default: "text-text",
-  muted: "text-muted",
-  deficit: "text-deficit",
-  surplus: "text-surplus",
-  "return-up": "text-return-up",
-  "return-down": "text-return-down",
-};
+// The token vocabulary lives in lib/tones.ts; Num is its numeric consumer. `Num` keeps the narrower
+// name because a caller says "this number's tone", not "this token's tone".
+export type NumTone = Tone;
 
 const SIGNED_TONES: ReadonlySet<NumTone> = new Set([
   "deficit",
@@ -42,7 +33,11 @@ export function Num({
     <span
       data-testid={testId}
       data-tone={tone}
-      className={cn("font-mono text-num tabular-nums whitespace-nowrap", TONES[tone], className)}
+      className={cn(
+        "font-mono text-num tabular-nums whitespace-nowrap",
+        toneClass(tone),
+        className,
+      )}
     >
       {SIGNED_TONES.has(tone) ? formatSignedValue(value, format) : format(value)}
     </span>

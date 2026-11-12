@@ -59,6 +59,11 @@ A level's percentage-point deviation from its Target; the UI word for it.
 _UI:_ "Drift"
 _Avoid_: Deficit (that is in R$), error
 
+**Attention**:
+The derived queue of findings that need the owner to act (`ACTION`) or to watch (`WATCH`) — a pending transfer, a staged import or edition, a corporate-action review, an unclassified ticker, an open gap, a stale quote. It is computed on read from the book, never stored, so a finding leaves the queue the moment its cause is resolved.
+_UI:_ "Precisa de você" (the queue) / "Atenção" (its count)
+_Avoid_: Alert, alerta, notification, todo
+
 **Uninvested Balance**:
 Money in the Portfolio not held by any position: computed as Capital minus the value of all positions; never stored.
 _UI:_ "Caixa" (residual display only)
@@ -128,7 +133,7 @@ _Avoid_: Broker, corretora, bank
 
 **Backfill**:
 Replaying the exported trade history over the whole window it covers, then retiring the adoption seeds it explains, so the ledger reconstructs the Portfolio before adoption. Any quantity the replay still cannot explain becomes a GAP.
-_UI:_ "Histórico"
+_UI:_ "Reconstruir histórico"
 _Avoid_: Import (that stages a file), sync
 
 **Absorb**:

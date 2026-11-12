@@ -21,7 +21,7 @@ const mocked = vi.hoisted(() => ({
     mutateAsync: () => Promise.resolve(),
     reset: () => undefined,
   },
-  arrayHooks: new Set(["useTickerQuotesList", "useStrategyEditions", "useEditionCoverage"]),
+  arrayHooks: new Set(["useTickerQuotesList", "useStrategyEditions"]),
 }));
 
 vi.mock(import("./api/queries.ts"), async (importOriginal) => {
@@ -64,8 +64,10 @@ function sample(path: string): string {
     .split("/")
     .map((segment) => {
       if (!segment.startsWith(":")) return segment;
-      const value = SAMPLE_PARAM[segment.slice(1)];
-      if (value === undefined) throw new Error(`no smoke sample for route param ${segment}`);
+      // An optional segment (`:ticker?`) samples its present form so the detail route is walked too.
+      const name = segment.slice(1).replace(/\?$/, "");
+      const value = SAMPLE_PARAM[name];
+      if (value === undefined) throw new Error(`no smoke sample for route param ${name}`);
       return value;
     })
     .join("/");

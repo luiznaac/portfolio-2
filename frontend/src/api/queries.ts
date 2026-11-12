@@ -503,9 +503,9 @@ export function useOrders() {
   });
 }
 
-// The computed plan read (never the persisted lifecycle): the Cockpit reads the funding arithmetic
-// and the outside-strategy holdings the persisted list does not carry. The funding phase is the
-// shallowest depth that carries both, so the Cockpit does not pay for the pro-rata/attribution pass.
+// The computed plan read (never the persisted lifecycle): Alocação reads the funding arithmetic and
+// the outside-strategy holdings the persisted list does not carry. The funding phase is the
+// shallowest depth that carries both, so the screen does not pay for the pro-rata/attribution pass.
 export function useOrderPlan() {
   return useQuery({
     queryKey: ["month", "current", "orders", "funding"],
@@ -513,26 +513,20 @@ export function useOrderPlan() {
   });
 }
 
-// One editions read per strategy, sharing the `useEditions` cache key, so both the catalog's status
-// chips and the Cockpit's coverage count ask in parallel rather than opening each detail.
-function useEditionsFor(strategies: Strategy[], enabled: boolean) {
+// One editions read per strategy, sharing the `useEditions` cache key, so the catalog's status chips
+// ask in parallel rather than opening each detail.
+function useEditionsFor(strategies: Strategy[]) {
   return useQueries({
     queries: strategies.map((strategy) => ({
       queryKey: ["strategies", strategy.id, "editions"],
       queryFn: (): Promise<Edition[]> => api.getEditions(strategy.id),
-      enabled,
     })),
   });
 }
 
 // The catalog's chips always fetch: a chip shows the latest edition even when no month is open.
 export function useStrategyEditions(strategies: Strategy[]) {
-  return useEditionsFor(strategies, true);
-}
-
-// The Cockpit's coverage count only matters for an open month, so it skips the reads otherwise.
-export function useEditionCoverage(strategies: Strategy[], period: string | undefined) {
-  return useEditionsFor(strategies, period !== undefined);
+  return useEditionsFor(strategies);
 }
 
 export function useRefreshOrders() {
@@ -718,8 +712,8 @@ export function useCorporateActions() {
   });
 }
 
-// The open and replaced GAP records. The panel, the sidebar badge and the Cockpit card all read
-// this list, so one cache entry keeps their counts in step.
+// The open and replaced GAP records. The data-quality panel and the gaps screen share one cache
+// entry, so their counts stay in step.
 export function useGaps() {
   return useQuery({
     queryKey: ["gaps"],

@@ -1,5 +1,5 @@
 // Pure calendar helpers — no React imports here (see AGENTS.md). Pages pass an ISO day in, so the
-// agenda and the proventos window are deterministic under test; only `todayIso` reads the clock.
+// proventos window and the tax period are deterministic under test; only `todayIso` reads the clock.
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 

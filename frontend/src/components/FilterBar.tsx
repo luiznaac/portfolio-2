@@ -102,7 +102,7 @@ export function FilterBar<Row>({
             </label>
           );
         })}
-        <span className="ml-auto font-mono text-[11.5px] text-ink-dim">
+        <span data-testid="filter-count" className="ml-auto font-mono text-[11.5px] text-ink-dim">
           {filterCountLabel(shown, total)}
         </span>
         {narrowing && (

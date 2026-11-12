@@ -4,30 +4,24 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Edition, Strategy, StrategyHoldings } from "../api/types.ts";
+import type { EditionSummary, Strategy } from "../api/types.ts";
 import { Strategies } from "./Strategies.tsx";
 
 const mock = vi.hoisted(() => ({
   strategies: [] as Strategy[],
-  editions: {} as Record<number, Edition[]>,
-  holdings: {} as Record<number, StrategyHoldings>,
+  allocation: { classes: [] } as unknown,
+  editionsCalls: 0,
   createError: null as Error | null,
 }));
 
 vi.mock("../api/client.ts", () => ({
   api: {
     getStrategies: () => Promise.resolve(mock.strategies),
-    getEditions: (strategyId: number) => Promise.resolve(mock.editions[strategyId] ?? []),
-    getStrategyHoldings: (strategyId: number) =>
-      Promise.resolve(
-        mock.holdings[strategyId] ?? {
-          strategy_id: strategyId,
-          strategy_name: "",
-          total_value: 0,
-          holdings: [],
-        },
-      ),
-    getCurrentMonth: () => Promise.resolve({ month: { period: "2026-09" } }),
+    getCurrentAllocation: () => Promise.resolve(mock.allocation),
+    getEditions: () => {
+      mock.editionsCalls++;
+      return Promise.resolve([]);
+    },
     createStrategy: (creation: Omit<Strategy, "id">) => {
       if (mock.createError) return Promise.reject(mock.createError);
       const created = { id: 99, ...creation };
@@ -50,57 +44,94 @@ function renderStrategies(path = "/strategies") {
   );
 }
 
-function report(id: number, name: string): Strategy {
-  return { id, name, asset_class: "ACOES", kind: "REPORT_DRIVEN" };
+function report(
+  id: number,
+  name: string,
+  assetClass: Strategy["asset_class"] = "ACOES",
+  latest?: EditionSummary,
+): Strategy {
+  return {
+    id,
+    name,
+    asset_class: assetClass,
+    kind: "REPORT_DRIVEN",
+    latest_edition: latest,
+  };
 }
 
-function edition(strategyId: number, status: Edition["status"]): Edition {
-  return {
-    id: strategyId * 10,
-    strategy_id: strategyId,
-    reference_month: "2026-09",
-    status,
-    entries: [],
-  };
+function cellsOf(row: HTMLElement): (string | null)[] {
+  return within(row)
+    .getAllByRole("cell")
+    .map((cell) => cell.textContent);
+}
+
+function rows(): string[][] {
+  return screen
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) => cellsOf(row) as string[]);
 }
 
 afterEach(() => {
   cleanup();
   mock.strategies = [];
-  mock.editions = {};
-  mock.holdings = {};
+  mock.allocation = { classes: [] };
+  mock.editionsCalls = 0;
   mock.createError = null;
 });
 
-describe("Strategies catalog", () => {
-  it("lists the bucket last and counts report-driven coverage only", async () => {
+describe("Estratégias · Todas", () => {
+  it("compares every strategy by class, kind, latest edition, value and drift", async () => {
     mock.strategies = [
+      report(1, "Top Dividendos", "ACOES", {
+        id: 11,
+        reference_month: "2026-09",
+        status: "ACTIVE",
+      }),
+      report(2, "Small Caps", "FIIS", {
+        id: 12,
+        reference_month: "2026-10",
+        status: "STAGED",
+      }),
       { id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" },
-      report(1, "Top Dividendos"),
-      report(2, "Small Caps"),
       report(3, "Top Ações"),
     ];
-    mock.editions = {
-      1: [edition(1, "ACTIVE")],
-      2: [edition(2, "STAGED")],
+    mock.allocation = {
+      classes: [
+        {
+          strategies: [{ strategy: "Top Dividendos", actual: 12000, drift: 2.4 }],
+          manual: { strategy: "Legado", actual: 3000 },
+        },
+        { strategies: [{ strategy: "Small Caps", actual: 5000, drift: -1.2 }] },
+      ],
     };
 
     renderStrategies();
 
-    expect(await screen.findByText("2 de 3 com edição")).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Top Dividendos" })).toBeDefined();
+    expect(await screen.findByRole("row", { name: /Top Dividendos/ })).toBeDefined();
+    expect(rows()).toEqual([
+      ["Top Dividendos", "Ações", "Com relatório", "set/26 ✓", "R$ 12.000,00", "+2,4 p.p."],
+      ["Top Ações", "Ações", "Com relatório", "—", "—", "—"],
+      ["Legado", "Ações", "Manual (legado)", "—", "R$ 3.000,00", "—"],
+      [
+        "Small Caps",
+        "Fundos imob.",
+        "Com relatório",
+        "out/26 · revisão",
+        "R$ 5.000,00",
+        "-1,2 p.p.",
+      ],
+    ]);
+  });
 
-    const nav = screen.getByRole("navigation");
-    const rows = within(nav)
-      .getAllByRole("button")
-      .map((button) => button.textContent ?? "");
-    expect(rows.at(-1)).toContain("Legado");
-    expect(rows[0]).toContain("Top Dividendos");
-    expect(rows[0]).toContain("set/26 ✓");
-    expect(rows[1]).toContain("Small Caps");
-    expect(rows[1]).toContain("set/26 · revisão");
-    expect(rows[2]).toContain("Top Ações");
-    expect(rows[2]).toContain("sem edição");
+  it("navigates each row to the strategy detail without fanning out editions calls", async () => {
+    mock.strategies = [report(1, "Top Dividendos")];
+
+    renderStrategies();
+
+    const link = await screen.findByRole("link", { name: "Top Dividendos" });
+    expect(link.getAttribute("href")).toBe("/strategies/1");
+    expect(mock.editionsCalls).toBe(0);
   });
 });
 
@@ -120,47 +151,6 @@ describe("the report import", () => {
     expect(
       (screen.getByRole("button", { name: "Importar pendentes" }) as HTMLButtonElement).disabled,
     ).toBe(true);
-  });
-});
-
-describe("the manual Strategy detail", () => {
-  it("shows the bucket's read-only holdings, total and a link to Alocação", async () => {
-    mock.strategies = [{ id: 9, name: "Legado Ações", asset_class: "ACOES", kind: "MANUAL" }];
-    mock.holdings = {
-      9: {
-        strategy_id: 9,
-        strategy_name: "Legado Ações",
-        total_value: 200,
-        holdings: [
-          { ticker: "ITUB4", quantity: 20, value: 100, share: 50 },
-          { ticker: "VALE3", quantity: 10, value: 100, share: 50 },
-        ],
-      },
-    };
-
-    renderStrategies();
-
-    expect(await screen.findByRole("heading", { name: "Legado Ações" })).toBeDefined();
-    expect(screen.getByText("ITUB4")).toBeDefined();
-    expect(screen.getByText("VALE3")).toBeDefined();
-    expect(screen.getAllByText("50,00%")).toHaveLength(2);
-    expect(screen.getByText("Total do legado")).toBeDefined();
-    expect(screen.getByText("R$ 200,00")).toBeDefined();
-    expect(screen.getByRole("link", { name: /Alocação/ })).toBeDefined();
-    expect(screen.queryByRole("link", { name: "Importar relatório" })).toBeNull();
-    expect(screen.queryByText("Mudanças vs. edição anterior")).toBeNull();
-  });
-
-  it("shows the empty state when no position is attributed", async () => {
-    mock.strategies = [{ id: 9, name: "Legado Ações", asset_class: "ACOES", kind: "MANUAL" }];
-
-    renderStrategies();
-
-    expect(
-      await screen.findByText(
-        "Nenhuma posição atribuída. Use Atribuir posições fora da estratégia na Alocação.",
-      ),
-    ).toBeDefined();
   });
 });
 
@@ -200,7 +190,7 @@ describe("the create modal", () => {
     expect(screen.getByRole("dialog", { name: "Nova estratégia" })).toBeDefined();
   });
 
-  it("selects the new strategy after create", async () => {
+  it("closes on create and lists the new strategy", async () => {
     mock.strategies = [report(1, "Top Dividendos")];
 
     renderStrategies();
@@ -209,7 +199,7 @@ describe("the create modal", () => {
     await user.type(screen.getByLabelText("Nome"), "Small Caps");
     await user.click(screen.getByRole("button", { name: "Criar estratégia" }));
 
-    expect(await screen.findByRole("heading", { name: "Small Caps" })).toBeDefined();
+    expect(await screen.findByRole("link", { name: "Small Caps" })).toBeDefined();
     expect(screen.queryByRole("dialog", { name: "Nova estratégia" })).toBeNull();
   });
 });
