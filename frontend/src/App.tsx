@@ -4,7 +4,6 @@ import { ObjectPage } from "./components/ObjectPage.tsx";
 import { PendingSurface } from "./components/PendingSurface.tsx";
 import { ROUTES } from "./lib/routes.ts";
 import { Allocation } from "./pages/Allocation.tsx";
-import { Cockpit } from "./pages/Cockpit.tsx";
 import { CorporateActions } from "./pages/CorporateActions.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
@@ -14,6 +13,7 @@ import { ImportWizard } from "./pages/ImportWizard.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
+import { Overview } from "./pages/Overview.tsx";
 import { Performance } from "./pages/Performance.tsx";
 import { Positions } from "./pages/Positions.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
@@ -38,7 +38,7 @@ export const routes: RouteObject[] = [
         path: "portfolio",
         element: <ObjectPage objectKey="portfolio" />,
         children: [
-          { index: true, element: <Cockpit /> },
+          { index: true, element: <Overview /> },
           { path: "allocation", element: <Allocation /> },
           { path: "history", element: <PendingSurface /> },
         ],
