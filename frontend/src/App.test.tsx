@@ -21,7 +21,7 @@ const mocked = vi.hoisted(() => ({
     mutateAsync: () => Promise.resolve(),
     reset: () => undefined,
   },
-  arrayHooks: new Set(["useTickerQuotesList", "useStrategyEditions", "useEditionCoverage"]),
+  arrayHooks: new Set(["useTickerQuotesList", "useStrategyEditions"]),
 }));
 
 vi.mock(import("./api/queries.ts"), async (importOriginal) => {

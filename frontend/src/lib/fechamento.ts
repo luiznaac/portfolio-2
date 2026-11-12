@@ -14,10 +14,15 @@ export function pendingTransfers(orders: OrderList | null | undefined): Transfer
   return (orders?.transfers ?? []).filter((transfer) => transfer.status === "PENDING");
 }
 
+// The one owner of the pending-transfer noun, so the close button and the landing's month line
+// cannot describe the same queue with two different words.
+export function pendingTransferNoun(count: number): string {
+  return count === 1 ? "transferência pendente" : "transferências pendentes";
+}
+
 export function closeButtonLabel(pendingCount: number): string {
   if (pendingCount === 0) return "Fechar mês";
-  const noun = pendingCount === 1 ? "transferência pendente" : "transferências pendentes";
-  return `Bloqueado — ${pendingCount} ${noun}`;
+  return `Bloqueado — ${pendingCount} ${pendingTransferNoun(pendingCount)}`;
 }
 
 export interface ClosedMonthSummary {

@@ -196,7 +196,7 @@ describe("Histórico", () => {
     const user = userEvent.setup();
     renderHistory();
 
-    expect(screen.getByRole("button", { name: "Reconciliar histórico" })).toHaveProperty(
+    expect(screen.getByRole("button", { name: "Reconstruir histórico" })).toHaveProperty(
       "disabled",
       true,
     );
@@ -206,7 +206,7 @@ describe("Histórico", () => {
     expect(mock.seeds).toEqual([
       { ticker: "PETR4", quantity: 10, unit_price: 12, date: "2026-01-09" },
     ]);
-    expect(screen.getByRole("button", { name: "Reconciliar histórico" })).toHaveProperty(
+    expect(screen.getByRole("button", { name: "Reconstruir histórico" })).toHaveProperty(
       "disabled",
       false,
     );
@@ -218,7 +218,7 @@ describe("Histórico", () => {
 
     await user.click(screen.getByRole("button", { name: "Pular adoção" }));
 
-    expect(screen.getByRole("button", { name: "Reconciliar histórico" })).toHaveProperty(
+    expect(screen.getByRole("button", { name: "Reconstruir histórico" })).toHaveProperty(
       "disabled",
       false,
     );
@@ -229,7 +229,7 @@ describe("Histórico", () => {
     renderHistory();
     await user.click(screen.getByRole("button", { name: "Pular adoção" }));
 
-    await user.click(screen.getByRole("button", { name: "Reconciliar histórico" }));
+    await user.click(screen.getByRole("button", { name: "Reconstruir histórico" }));
 
     expect(mock.backfillRuns).toBe(1);
     expect(mock.backfillFile).toBeNull();
