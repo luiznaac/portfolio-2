@@ -45,6 +45,12 @@ class ImportController(
                 call.respond(if (staged.created) HttpStatusCode.Created else HttpStatusCode.OK, staged.record)
             }
 
+            // The per-source status read behind the sources screen. Declared before the id route so
+            // the constant segment is never read as an import id.
+            get("/sources") {
+                call.respond(HttpStatusCode.OK, service.fetchSourceStatus())
+            }
+
             get("/{import_id}") {
                 call.respondImport(service.fetchById(call.requiredInt("import_id")))
             }

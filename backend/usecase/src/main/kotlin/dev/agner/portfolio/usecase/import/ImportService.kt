@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportApplyResult
+import dev.agner.portfolio.usecase.import.model.ImportAttempt
 import dev.agner.portfolio.usecase.import.model.ImportCreation
 import dev.agner.portfolio.usecase.import.model.ImportDestination
 import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
@@ -13,8 +14,10 @@ import dev.agner.portfolio.usecase.import.model.ImportRowOutcome
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportRowSituation
 import dev.agner.portfolio.usecase.import.model.ImportSource
+import dev.agner.portfolio.usecase.import.model.ImportSourceStatus
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.model.StagingResult
+import dev.agner.portfolio.usecase.import.model.isPending
 import dev.agner.portfolio.usecase.import.repository.IImportRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
@@ -59,6 +62,28 @@ class ImportService(
 
     suspend fun fetchAll(status: ImportStatus? = null, source: ImportSource? = null) =
         repository.fetchAll(status, source)
+
+    // The per-source read behind the sources screen. Only a source with attempts gets an entry, so
+    // an empty log is an empty list. The latest attempt is the newest record by timestamp (id breaks
+    // a tie); the failure is that same attempt when it failed, never a stale one the source has
+    // since outgrown. Pending counts the sessions still waiting for a decision.
+    suspend fun fetchSourceStatus(): List<ImportSourceStatus> =
+        repository.fetchAll()
+            .groupBy { it.source }
+            .map { (source, records) ->
+                val newestFirst = records.sortedWith(
+                    compareByDescending<Import> { it.createdAt }.thenByDescending { it.id },
+                )
+                val lastAttempt = newestFirst.first().toAttempt()
+                ImportSourceStatus(
+                    source = source,
+                    lastAttempt = lastAttempt,
+                    lastSuccess = newestFirst.firstOrNull { it.status == ImportStatus.APPLIED }?.toAttempt(),
+                    pending = records.count { it.status.isPending },
+                    failure = lastAttempt.takeIf { it.status == ImportStatus.FAILED },
+                )
+            }
+            .sortedBy { it.source.ordinal }
 
     suspend fun fetchById(id: Int) = repository.fetchById(id)
 
@@ -194,6 +219,8 @@ class ImportService(
     // date; a stored row that breaks that invariant is a bug worth failing loudly on.
     private fun ImportRow.requireDate(): LocalDate =
         requireNotNull(date) { "Import row $id is error-free but has no date" }
+
+    private fun Import.toAttempt() = ImportAttempt(id, fileName, status, createdAt)
 
     private fun requireStatus(import: Import, expected: ImportStatus) {
         if (import.status != expected) throw InvalidImportStateException(import.id, expected, import.status)

@@ -34,8 +34,9 @@ function RailArrow({
 }
 
 // The one period control the Análise tabs share: presets, a month arrow each side and the month
-// anchor. Performance renders it now; Proventos and Impostos adopt it in their own slices. It only
-// describes the window; the provider owns the state so a tab switch keeps it.
+// anchor. Performance, Proventos and Impostos all read it; only Impostos passes a `grainNote` because
+// its read is monthly. It only describes the window; the provider owns the state so a tab switch
+// keeps it.
 export function PeriodRail({
   preset,
   anchor,
@@ -104,7 +105,11 @@ export function PeriodRail({
 
       <span className="flex-1" />
 
-      {grainNote !== undefined && <span className="text-[10.5px] text-muted">{grainNote}</span>}
+      {grainNote !== undefined && (
+        <span data-testid="rail-grain" className="text-[10.5px] text-muted">
+          {grainNote}
+        </span>
+      )}
       <span className="hidden rounded-full border border-line px-2 py-0.5 text-[10px] text-faint lg:inline">
         janela da Análise
       </span>

@@ -278,6 +278,27 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW());"
   ```
 
+- **Edições seed**: the strategy detail's Edições tab reads the edition timeline, the staged diff and both editions' entries. This scenario seeds one report Strategy (Top Dividendos, id 9301) with a superseded 2027-02 active edition, the current 2027-03 active edition, and a staged 2027-04 one whose stored diff enters CXSE3, exits B3SA3 and moves VALE3's weight and ITUB4's rating. The staged entries give the "alterada" rule one row per case — PETR4 unchanged, VALE3 weight-changed, ITUB4 rating-changed, EGIE3 target-price-only-changed and CXSE3 new. Run it alone.
+
+  ```
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+  DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+  INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+    (9301, 'Top Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW());
+  INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES
+    (9310, 9301, '2027-02', 'ACTIVE', NOW()),
+    (9311, 9301, '2027-03', 'ACTIVE', NOW()),
+    (9312, 9301, '2027-04', 'STAGED', NOW());
+  UPDATE edition SET diff_from_previous_stored = '{"entered":[{"ticker":"CXSE3","weight":12.5}],"exited":[{"ticker":"B3SA3","weight":0.00}],"changed":[{"ticker":"VALE3","weight_before":25,"weight_after":22.5,"rating_before":null,"rating_after":null},{"ticker":"ITUB4","weight_before":20,"weight_after":20,"rating_before":"BUY","rating_after":"SELL"}]}' WHERE id = 9312;
+  INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES
+    (9310,'PETR4',50,'BUY',58,FALSE), (9310,'VALE3',50,'NEUTRAL',80,FALSE),
+    (9311,'PETR4',25,'BUY',60,FALSE), (9311,'VALE3',25,'NEUTRAL',85,FALSE),
+    (9311,'ITUB4',20,'BUY',30,FALSE), (9311,'EGIE3',20,'BUY',48,FALSE), (9311,'B3SA3',10,'NEUTRAL',12,FALSE),
+    (9312,'PETR4',25,'BUY',60,FALSE), (9312,'VALE3',22.5,'NEUTRAL',85,FALSE),
+    (9312,'ITUB4',20,'SELL',30,FALSE), (9312,'EGIE3',20,'BUY',52,FALSE), (9312,'CXSE3',12.5,'BUY',20,FALSE);
+  SQL
+  ```
+
 - **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
 
   The carry state seeds the three bucket openings (SWING 500, DAY_TRADE 300, FII 250) at the 2027-02 close, so the roll starts at March. Two prior-month losses bank before April: a CSNA3 swing loss of R$100 in the exempt March month (gross R$900, so it stays under the meter) and a KNRI11 FII loss of R$1,000. April therefore opens with SWING 600 and FII 1,250; the SWING carry offsets R$600 of the month's R$4,600 gain (taxable R$4,000, tax R$600), the FII carry offsets the whole R$1,000 gain (closing R$250), and the day-trade bucket stays at R$300 because April's CSNA3 round trip is flat. That round trip is imported so the day-trade warning guard sees it:
@@ -725,6 +746,51 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 
 With a run in November 2026 the reads are deterministic: the window is `jan/2026 – dez/2026`, the KPIs read Recebidos R$ 254,00 / A receber R$ 160,00 / Próximo PETR4 / Média mensal R$ 21,17, the chart plots October's 254,00, and the ledger reads `5 de 5` with PETR4 and VALE3's receivables first and then the three October payments. Typing `petr` narrows the ledger to `2 de 5` while the KPIs and the rail stay put. Selecting the `Mês` preset moves the window to `dez/2026 – dez/2026`, leaves the November receivable in the ledger flagged "fora do recorte", and still reports the same KPIs. Opening `/portfolio/analysis/income?focus=9001` anchors the rail on `nov/2025 – out/2026` and shows the amber "do alerta" chip on the received PETR4 row. A missing KPI or chart, a ledger row order that puts a received payment before a receivable, a filter that changes the KPIs or the rail, a receivable that disappears when it falls outside the window, or a deep link that lands on another window without the highlight is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Análise · Impostos monthly read (issue [#394](https://github.com/luiznaac/portfolio-2/issues/394))
+
+**Scenario**: the run drives the monthly Impostos tab over the shared rail. Boot from `docker compose down -v` and apply this seed after the app is healthy; it leaves three closed months (January–March 2027) and one open month (April 2027), so the rail opens on 12 months ending the last close and the open month stays reachable through the harvest panel. The ledger marks CSNA3 and KNRI11 as STOCK and FII, so the March carry banks a R$ 100 swing loss and a R$ 1,000 FII loss; April then sells R$ 20,600 of stocks (B3SA3 R$ 600 + VALE3 R$ 20,000) over the R$ 20,000 cliff, offsets R$ 600 of swing loss, and leaves a R$ 3,400 taxable gain / R$ 510,00 DARF. The same-day CSNA3 round trip is the day-trade pendência, and the HGLG11 position gives the harvest pass its FII report (R$ 1,000 gain / R$ 200 estimate); April's headroom is zero, so the pass proposes no pair. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM snapshot; DELETE FROM harvest_pair; DELETE FROM harvest_opt_out; \
+      DELETE FROM transfer_proposal; DELETE FROM suggested_order; DELETE FROM target; DELETE FROM month; \
+      DELETE FROM gap; DELETE FROM attribution; DELETE FROM trade; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy; DELETE FROM ticker_catalog; \
+      DELETE FROM tax_carry_bucket; DELETE FROM corporate_action; DELETE FROM institution; \
+      INSERT INTO institution (name, created_at) VALUES ('XP', NOW()); \
+      SET @inst := LAST_INSERT_ID(); \
+      INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('B3SA3','B3','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW()), \
+        ('KNRI11','KINEA RENDA','12',NULL,'FII','FIIS','2027-01-01','2027-04-30',NOW()), \
+        ('HGLG11','CSHG LOG','12',NULL,'FII','FIIS','2027-01-01','2027-04-30',NOW()); \
+      INSERT INTO tax_carry_bucket (kind, opening_balance, as_of_period, created_at) VALUES \
+        ('SWING', 500, '2027-02', NOW()), ('DAY_TRADE', 300, '2027-02', NOW()), ('FII', 250, '2027-02', NOW()); \
+      INSERT INTO month (id, period, capital, \`floor\`, status, created_at) VALUES \
+        (9401,'2027-01',0,0,'CLOSED',NOW()), (9402,'2027-02',0,0,'CLOSED',NOW()), \
+        (9403,'2027-03',0,0,'CLOSED',NOW()), (9404,'2027-04',0,0,'OPEN',NOW()); \
+      INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES \
+        ('ITUB4','2027-01-05','B3', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('VALE3','2027-02-10','B3', 2000, 8, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('KNRI11','2027-02-10','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('CSNA3','2027-03-01','B3', 100, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('CSNA3','2027-03-15','B3',-100, 9, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('KNRI11','2027-03-15','B3',-100, 90, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('B3SA3','2027-04-01','B3', 60, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('HGLG11','2027-04-02','B3', 100, 100, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('VALE3','2027-04-07','B3',-2000, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('B3SA3','2027-04-08','B3',-60, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW()), \
+        ('CSNA3','2027-04-09','B3', 1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()), \
+        ('CSNA3','2027-04-09','B3',-1000, 10, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4', 100, 10), ('HGLG11', 100, 100); \
+      REPLACE INTO quote (ticker, date, close, source, created_at) VALUES \
+        ('ITUB4','2027-04-30',10,'COTAHIST',NOW()), ('HGLG11','2027-04-30',110,'COTAHIST',NOW());"
+```
+
+With a run whose calendar month is before 2027-04, `/analysis/tax` opens on the anchored `mar/2027` apuração: the rail reads `abr/2026 – mar/2027` and states `mês-âncora mar/2027 · apuração mensal; a janela filtra a lista`, the side panel lists three apurações (jan/2027, fev/2027, mar/2027) all chipped `fechado`, and the anchored panel reads `Apuração de mar/2027` with the R$ 900,00 stock meter, the swing loss, and the carry KPIs at R$ 600,00 (swing) and R$ 1.250,00 (FII). Selecting the `Mês` preset moves the window to `mar/2027 – mar/2027`, leaves the anchored apuração on mar/2027, and narrows the side panel to one row. **Ir para o mês aberto · abr/2027** anchors April: the panel reads `Apuração de abr/2027`, the meter is `Teto estourado` at R$ 20.600,00, the DARF KPI reads R$ 510,00, the Pendências panel carries the CSNA3 day-trade warning, and the harvest pass renders with zero headroom and the HGLG11 FII report. A rail without the monthly grain note, a side list that changes with the preset while the anchored apuração changes too, a meter/DARF/carry that disagrees with the seed, a missing pendência, or a harvest pass unreachable from the anchored historical month is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — shared filter bar and page-scoped filter state (issue [#367](https://github.com/luiznaac/portfolio-2/issues/367))
 
 > The Proventos half of this scenario predates the Análise · Proventos slice ([#393](https://github.com/luiznaac/portfolio-2/issues/393)): the forecast panel is now the window KPIs, the status control is labelled Estado, and a settled status narrows the ledger rather than emptying it. Use the Análise · Proventos scenario above for Proventos acceptance; the Ativos · Negócios half stands.
@@ -928,3 +994,37 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 ```
 
 On `/portfolio/allocation` the tree reads: Capital Actual **R$ 1.550,00** against the R$ 100.000,00 Ideal (worded **faltam R$ 98.450,00**); Ações target 40%, Ideal R$ 40.000,00, Actual R$ 1.500,00, distance **faltam R$ 38.500,00**, split into Top Dividendos R$ 1.000,00 (**faltam R$ 39.000,00**), the Legado Ações bucket R$ 400,00 and Fora da estratégia R$ 100,00 (1.000 + 400 + 100 = 1.500); Fundos imob. with no target and Actual R$ 0,00 (**no alvo**); Renda fixa target 60%, Ideal R$ 60.000,00, Actual R$ 0,00 (**faltam R$ 60.000,00**), whose Pós-fixado sub-class holds the whole R$ 60.000,00 Ideal and the same worded shortfall. The Legado Ações bucket shows **—** in Alvo, Ideal, Déficit / distância and Δ p.p. and no bar in the Atual × Ideal column. Sem classe follows the class rows at R$ 50,00. Top Dividendos and Legado Ações link to `/strategies/9001` and `/strategies/9002`. The legacy banner reads R$ 100,00 outside; its preview lists PETR4 under Ações and skips ZZZZ9, and Confirmar reports **1 posição atribuída ao legado.** (the bucket then holds R$ 500,00 and the banner disappears). Expanding Sem classe exposes ZZZZ9's **Classificar** link to `/ativos/positions/ZZZZ9`. A tree missing the RF sub-class rung, a bucket target/bar, a signed Δ R$ instead of the worded distance, a class whose rows do not sum to its Actual, a dead strategy link, a bulk action that does not preview or apply, or an unreachable classification link is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — Carteira · Histórico (issue [#372](https://github.com/luiznaac/portfolio-2/issues/372))
+
+**Scenario**: the run drives the closed-month records list and the frozen detail on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the close and allocation tables and seeds two closed months (April and May 2027) with their immutable snapshots, while the live book quotes VALE3 at R$ 12,00 instead of the snapshot's R$ 10,00. May's detail must therefore render the frozen R$ 11.000,00 Actual, never the live allocation's R$ 13.000,00. May's snapshot carries one partially executed order (ITUB4, PARCIAL), one executed order (B3SA3), one unplanned trade (VALE3), the two frozen strategy slices (Top Dividendos and the Legado Ações bucket), R$ 85,00 of income and a R$ 250,00 DARF. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()),
+  (9002,'Legado Ações','ACOES','MANUAL',NOW());
+INSERT INTO `month` (id, period, capital, `floor`, aportes, status, created_at) VALUES
+  (9401,'2027-04',90000,20000,0,'CLOSED',NOW()),
+  (9402,'2027-05',95000,20000,0,'CLOSED',NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES
+  ('VALE3',1000,8), ('ITUB4',100,8);
+INSERT INTO attribution (ticker, strategy_id, quantity) VALUES
+  ('VALE3',9001,1000), ('ITUB4',9002,100);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+  ('VALE3','2027-06-30',12,'COTAHIST',NOW()),
+  ('ITUB4','2027-06-30',10,'COTAHIST',NOW());
+REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()),
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW());
+INSERT INTO snapshot (month_id, state, created_at) VALUES
+  (9401, '{"period":"2027-04","capital":90000,"floor":20000,"aportes":0,"caixa":80000,"holdings":[],"attributions":[],"classes":[],"strategies":[],"income":{"gross":0,"retained":0,"net":0},"orders":{"orders":[],"transfers":[],"unplanned_trades":[]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":0}}}', NOW()),
+  (9402, '{"period":"2027-05","capital":95000,"floor":20000,"aportes":0,"caixa":84000,"holdings":[{"ticker":"ITUB4","quantity":100,"average_price":8},{"ticker":"VALE3","quantity":1000,"average_price":8}],"attributions":[{"ticker":"VALE3","strategy_id":9001,"strategy":"Top Dividendos","quantity":1000},{"ticker":"ITUB4","strategy_id":9002,"strategy":"Legado Ações","quantity":100}],"classes":[{"asset_class":"ACOES","target":60,"ideal":57000,"actual":11000,"deficit":46000,"drift":-48.4211,"unattributed":0}],"strategies":[{"strategy_id":9001,"strategy":"Top Dividendos","kind":"REPORT_DRIVEN","value_end":10000,"flow":200},{"strategy_id":9002,"strategy":"Legado Ações","kind":"MANUAL","value_end":1000,"flow":-100}],"income":{"gross":100,"retained":15,"net":85},"orders":{"orders":[{"id":9601,"ticker":"ITUB4","side":"BUY","quantity":10,"suggested_price":30,"executed_quantity":5,"status":"SUGGESTED","matched_trade_id":null},{"id":9602,"ticker":"B3SA3","side":"SELL","quantity":10,"suggested_price":null,"executed_quantity":10,"status":"EXECUTED","matched_trade_id":null}],"transfers":[],"unplanned_trades":[{"id":9603,"ticker":"VALE3","side":"SELL","quantity":3}]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":250}}}', NOW());
+SQL
+```
+
+The reads are then deterministic: `GET /months` lists 2027-05 (id 9402) first; `GET /months/9402` carries the snapshot above. On `/portfolio/history` the page head reads `Carteira`, the Histórico tab is active, and the table has exactly two rows — `mai/2027` with Capital R$ 95.000,00 and `abr/2027` with R$ 90.000,00. Clicking `mai/2027` opens `/portfolio/history/2027-05`: the head reads `Histórico · mai/2027` and the KPI row reads Capital R$ 95.000,00 (piso R$ 20.000,00), Aportes R$ 0,00, Caixa R$ 84.000,00, Proventos R$ 85,00 and DARF R$ 250,00. Classes congeladas reads Ações, Alvo 60,0%, Ideal R$ 57.000,00, Atual R$ 11.000,00, Déficit +R$ 46.000,00 and Drift −48,4 p.p. — the live allocation's R$ 13.000,00 never appears. Ordens e negócios do mês reads ITUB4 · Compra · 10 · R$ 30,00 · PARCIAL, B3SA3 · Venda · 10 · — · Executado and VALE3 · Venda · 3 · — · Não planejada. Estratégias no fechamento reads Top Dividendos · Com relatório · R$ 10.000,00 · R$ 200,00 and Legado Ações · Manual (legado) · R$ 1.000,00 · -R$ 100,00, and the `O que este snapshot congela` caption states that nothing is recomputed. The surface offers no button. A list with a row per live month instead of per closed month, a detail that renders R$ 13.000,00 or any other live value, a missing PARCIAL/unplanned row, a missing strategy slice or caption, or any write action is an automatic red; the evidence names the first failing intent.

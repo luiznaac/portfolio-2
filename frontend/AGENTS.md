@@ -13,11 +13,14 @@ The product frontend runs on the six-object shell: **Posição** (Carteira, Estr
 ```
 src/
   api/          client.ts (typed fetch wrapper), queries.ts (useQuery hooks), types.ts (DTO mirror)
-  components/   Layout.tsx, TopBar.tsx, Sidebar.tsx, ObjectPage.tsx, PendingSurface.tsx — shell;
+  components/   Layout.tsx, TopBar.tsx, Sidebar.tsx, ObjectPage.tsx, ObjectTabs.tsx, PendingSurface.tsx
+                — shell (ObjectTabs is the one object tab strip, shared by the frame and detail pages);
                 PageHead/PageTabs — the object head and sub-view tab strip; Panel/Chip/Badge/
                 Button/Table/FilterBar/WizardStepper/Kpi/Num/ClassBadge — the token-based
                 primitive layer; TickerDrawer — the Ativos ticker detail opened from a Posições row
-                or its deep link; PeriodRail — the Análise period rail; icons.tsx; *Chip.tsx
+                or its deep link; EditionDiffPanel — the edition diff chips shared by the report
+                import drawer and the strategy detail's Edições tab; PeriodRail — the Análise
+                period rail; icons.tsx; *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
                 Análise rail's shared window, kept across the three tabs and reset on area re-entry;
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
@@ -25,8 +28,10 @@ src/
                 read and full total behind the inbox queue and the import log)
   pages/        route-level components (`/portfolio` is Overview.tsx, the landing; Positions.tsx
                 owns the Posições table and its optional ticker drawer route; StrategyDetail.tsx is
-                the Estratégias detail shell at /strategies/:id/:tab?; ImportInbox.tsx and
-                ImportHistory.tsx are Importações' queue and log over the same filter bar;
+                the Estratégias detail shell at /strategies/:id/:tab?; PortfolioHistory.tsx and
+                PortfolioHistoryDetail.tsx are Carteira · Histórico's closed-month list and frozen
+                detail; ImportInbox.tsx and ImportHistory.tsx are Importações' queue and log over the
+                same filter bar;
                 Dashboard.tsx is the off-nav health-check example at /health); a page that needs a
                 behaviour test gets a co-located *.test.tsx render test
   lib/          pure helpers, unit-tested in lib/**/*.test.ts — no React imports here
@@ -41,7 +46,11 @@ src/
                 `GET /imports` parameters); imports.ts names the sources/states and defines the
                 parked session and the record age; position.ts builds the Posições rows and their
                 filtered total;
-                analysisWindow.ts is the Análise rail's preset/range/window math)
+                analysisWindow.ts is the Análise rail's preset/range/window math; taxes.ts is
+                Impostos' monthly apuração derivation — the window-filtered apuração list, the
+                grain note and the DARF/carry/harvest helpers; portfolioHistory.ts derives the
+                closed-month list and the frozen detail's rows, reading
+                only the snapshot's own values)
 ```
 
 New API call: typed function in `api/client.ts` → hook in `api/queries.ts` → consumed from a `pages/` component. Don't call `fetch` directly from a component.

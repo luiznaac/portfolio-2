@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportApplyResult
+import dev.agner.portfolio.usecase.import.model.ImportAttempt
 import dev.agner.portfolio.usecase.import.model.ImportCreation
 import dev.agner.portfolio.usecase.import.model.ImportDestination
 import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
@@ -12,6 +13,7 @@ import dev.agner.portfolio.usecase.import.model.ImportRowOutcome
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportRowSituation
 import dev.agner.portfolio.usecase.import.model.ImportSource
+import dev.agner.portfolio.usecase.import.model.ImportSourceStatus
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.model.StagingResult
 import dev.agner.portfolio.usecase.import.repository.IImportRepository
@@ -252,6 +254,58 @@ class ImportServiceTest : StringSpec({
         service.fetchAll(ImportStatus.STAGED, ImportSource.B3_TRADES) shouldBe listOf(stagedImport)
     }
 
+    "fetchSourceStatus should read the latest attempt, last success and pending count per source" {
+        coEvery { repository.fetchAll(null, null) } returns
+            listOf(
+                appliedImport.copy(id = 1, source = ImportSource.B3_TRADES),
+                stagedImport.copy(id = 2, source = ImportSource.B3_TRADES),
+                reviewedImport.copy(id = 3, source = ImportSource.B3_TRADES),
+                failedImport.copy(id = 4, source = ImportSource.B3_TRADES),
+                appliedImport.copy(id = 5, source = ImportSource.XP_REPORT),
+            )
+
+        service.fetchSourceStatus() shouldBe listOf(
+            ImportSourceStatus(
+                source = ImportSource.B3_TRADES,
+                lastAttempt = ImportAttempt(4, "neg.xlsx", ImportStatus.FAILED, LATER_AT),
+                lastSuccess = ImportAttempt(1, "neg.xlsx", ImportStatus.APPLIED, STAGED_AT),
+                pending = 2,
+                failure = ImportAttempt(4, "neg.xlsx", ImportStatus.FAILED, LATER_AT),
+            ),
+            ImportSourceStatus(
+                source = ImportSource.XP_REPORT,
+                lastAttempt = ImportAttempt(5, "neg.xlsx", ImportStatus.APPLIED, STAGED_AT),
+                lastSuccess = ImportAttempt(5, "neg.xlsx", ImportStatus.APPLIED, STAGED_AT),
+                pending = 0,
+                failure = null,
+            ),
+        )
+    }
+
+    "fetchSourceStatus should leave a source healthy when the latest attempt applied" {
+        coEvery { repository.fetchAll(null, null) } returns
+            listOf(
+                failedImport.copy(id = 1, source = ImportSource.B3_TRADES),
+                appliedImport.copy(id = 2, source = ImportSource.B3_TRADES, createdAt = LATER_AT),
+            )
+
+        service.fetchSourceStatus() shouldBe listOf(
+            ImportSourceStatus(
+                source = ImportSource.B3_TRADES,
+                lastAttempt = ImportAttempt(2, "neg.xlsx", ImportStatus.APPLIED, LATER_AT),
+                lastSuccess = ImportAttempt(2, "neg.xlsx", ImportStatus.APPLIED, LATER_AT),
+                pending = 0,
+                failure = null,
+            ),
+        )
+    }
+
+    "fetchSourceStatus should return an empty list when nothing was ever staged" {
+        coEvery { repository.fetchAll(null, null) } returns emptyList()
+
+        service.fetchSourceStatus() shouldBe emptyList()
+    }
+
     "fetchRows should annotate new rows, in-file repeats and errors" {
         coEvery { repository.fetchById(1) } returns reviewedImport
         coEvery { repository.fetchRows(1) } returns
@@ -312,6 +366,8 @@ class ImportServiceTest : StringSpec({
 })
 
 private const val HASH = "a1b2c3"
+private val STAGED_AT = LocalDateTime.parse("2026-10-14T10:00:00")
+private val LATER_AT = LocalDateTime.parse("2026-10-15T10:00:00")
 private val ORIGINAL = "the original workbook".toByteArray()
 private val destination = ImportDestination(ImportDestinationObject.TRADES)
 
@@ -332,11 +388,12 @@ private val stagedImport = Import(
     status = ImportStatus.STAGED,
     destination = destination,
     hasOriginal = true,
-    createdAt = LocalDateTime.parse("2026-10-14T10:00:00"),
+    createdAt = STAGED_AT,
 )
 
 private val reviewedImport = stagedImport.copy(status = ImportStatus.REVIEWED)
 private val appliedImport = stagedImport.copy(status = ImportStatus.APPLIED)
+private val failedImport = stagedImport.copy(status = ImportStatus.FAILED, createdAt = LATER_AT)
 
 private val row = ImportRow(
     id = 10,

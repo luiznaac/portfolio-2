@@ -29,6 +29,7 @@ import type {
   ImportDestinationObject,
   ImportRow,
   ImportSource,
+  ImportSourceStatus,
   ImportStatus,
   Income,
   IncomeQuery,
@@ -159,6 +160,11 @@ export const api = {
 
   getImport(importId: number): Promise<Import> {
     return request(`/imports/${importId}`);
+  },
+
+  // The per-source status read behind Importações · Fontes: one entry per source with attempts.
+  getImportSources(): Promise<ImportSourceStatus[]> {
+    return request("/imports/sources");
   },
 
   // The retained original, served as an attachment; a link/download target, not a JSON read.

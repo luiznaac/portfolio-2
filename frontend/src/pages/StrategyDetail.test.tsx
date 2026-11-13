@@ -13,6 +13,7 @@ const mock = vi.hoisted(() => ({
   editions: [] as Edition[],
   months: [] as Month[],
   performance: null as MonthPerformance | null,
+  promotions: [] as { referenceMonth: string; tickers: string[] }[],
 }));
 
 vi.mock("../api/client.ts", () => ({
@@ -22,6 +23,24 @@ vi.mock("../api/client.ts", () => ({
     getEditions: () => Promise.resolve(mock.editions),
     getClosedMonths: () => Promise.resolve(mock.months),
     getMonthPerformance: () => Promise.resolve(mock.performance),
+    activateEdition: (
+      _strategyId: number,
+      activation: { reference_month: string; entries: { ticker: string }[] },
+    ) => {
+      mock.promotions.push({
+        referenceMonth: activation.reference_month,
+        tickers: activation.entries.map((entry) => entry.ticker),
+      });
+      mock.editions = mock.editions.map((edition) =>
+        edition.reference_month === activation.reference_month
+          ? { ...edition, status: "ACTIVE" as const }
+          : edition,
+      );
+      const promoted = mock.editions.find(
+        (edition) => edition.reference_month === activation.reference_month,
+      );
+      return Promise.resolve(promoted);
+    },
   },
 }));
 
@@ -89,12 +108,29 @@ const allocation: Allocation = {
   ],
 };
 
+const historicalEdition: Edition = {
+  id: 3,
+  strategy_id: 1,
+  reference_month: "2026-08",
+  status: "ACTIVE",
+  entries: [
+    { ticker: "PETR4", weight: 50, rating: "BUY", target_price: 58, do_not_trade: false },
+    { ticker: "VALE3", weight: 50, rating: "NEUTRAL", target_price: 80, do_not_trade: false },
+  ],
+};
+
 const activeEdition: Edition = {
   id: 1,
   strategy_id: 1,
   reference_month: "2026-09",
   status: "ACTIVE",
-  entries: [],
+  entries: [
+    { ticker: "PETR4", weight: 25, rating: "BUY", target_price: 60, do_not_trade: false },
+    { ticker: "VALE3", weight: 25, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+    { ticker: "ITUB4", weight: 20, rating: "BUY", target_price: 30, do_not_trade: false },
+    { ticker: "EGIE3", weight: 20, rating: "BUY", target_price: 48, do_not_trade: false },
+    { ticker: "B3SA3", weight: 10, rating: "NEUTRAL", target_price: 12, do_not_trade: false },
+  ],
 };
 
 const stagedEdition: Edition = {
@@ -102,7 +138,27 @@ const stagedEdition: Edition = {
   strategy_id: 1,
   reference_month: "2026-10",
   status: "STAGED",
-  entries: [],
+  diff_from_previous: {
+    entered: [{ ticker: "CXSE3", weight: 12.5 }],
+    exited: [{ ticker: "B3SA3", weight: 0 }],
+    changed: [
+      { ticker: "VALE3", weight_before: 25, weight_after: 22.5 },
+      {
+        ticker: "ITUB4",
+        weight_before: 20,
+        weight_after: 20,
+        rating_before: "BUY",
+        rating_after: "SELL",
+      },
+    ],
+  },
+  entries: [
+    { ticker: "PETR4", weight: 25, rating: "BUY", target_price: 60, do_not_trade: false },
+    { ticker: "VALE3", weight: 22.5, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+    { ticker: "ITUB4", weight: 20, rating: "SELL", target_price: 30, do_not_trade: false },
+    { ticker: "EGIE3", weight: 20, rating: "BUY", target_price: 52, do_not_trade: false },
+    { ticker: "CXSE3", weight: 12.5, rating: "BUY", target_price: 20, do_not_trade: false },
+  ],
 };
 
 const month: Month = {
@@ -170,6 +226,7 @@ afterEach(() => {
   mock.editions = [];
   mock.months = [];
   mock.performance = null;
+  mock.promotions = [];
 });
 
 describe("the strategy detail shell", () => {
@@ -245,5 +302,120 @@ describe("the strategy detail shell", () => {
     renderDetail("/strategies/999");
 
     expect(await screen.findByText("Estratégia não encontrada")).toBeDefined();
+  });
+});
+
+describe("the strategy detail's Edições tab", () => {
+  const timelineRows = () => {
+    const timeline = screen.getByTestId("edition-timeline");
+    return within(timeline)
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => cellsOf(row));
+  };
+
+  it("lists the edition timeline newest-first with only the current edition marked active", async () => {
+    mock.strategies = [strategy];
+    mock.editions = [historicalEdition, activeEdition, stagedEdition];
+
+    renderDetail("/strategies/1/edicoes");
+
+    await screen.findByTestId("edition-timeline");
+    expect(timelineRows()).toEqual([
+      ["out/26", "revisão", "5 ativos"],
+      ["set/26", "ativa", "5 ativos"],
+      ["ago/26", "anterior", "2 ativos"],
+    ]);
+  });
+
+  it("shows the staged diff summary and the full table, calling only real moves alterada", async () => {
+    mock.strategies = [strategy];
+    mock.editions = [historicalEdition, activeEdition, stagedEdition];
+
+    renderDetail("/strategies/1/edicoes");
+
+    expect(await screen.findByText("+1 −1 ~2")).toBeDefined();
+    expect(screen.getByText("+ CXSE3 12.5%")).toBeDefined();
+    expect(screen.getByText("VALE3 25%→22.5%")).toBeDefined();
+
+    const table = screen.getByTestId("edition-entries");
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual(["Ativo", "Peso", "Rating", "Preço-alvo", "Situação"]);
+
+    expect(
+      within(table)
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => cellsOf(row)),
+    ).toEqual([
+      ["PETR4", "25,0%", "Compra", "R$ 60,00", "—"],
+      ["VALE3", "22,5%", "Neutro", "R$ 85,00", "alterada"],
+      ["ITUB4", "20,0%", "Venda", "R$ 30,00", "alterada"],
+      ["EGIE3", "20,0%", "Compra", "R$ 52,00", "alterada"],
+      ["CXSE3", "12,5%", "Compra", "R$ 20,00", "nova"],
+    ]);
+  });
+
+  it("promotes the staged edition and names the next recompute", async () => {
+    mock.strategies = [strategy];
+    mock.editions = [historicalEdition, activeEdition, stagedEdition];
+
+    renderDetail("/strategies/1/edicoes");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Promover edição" }));
+
+    const note = await screen.findByTestId("edition-decision-note");
+    expect(note.textContent).toContain("próximo recálculo");
+    expect(mock.promotions).toEqual([
+      { referenceMonth: "2026-10", tickers: ["PETR4", "VALE3", "ITUB4", "EGIE3", "CXSE3"] },
+    ]);
+
+    await waitFor(() =>
+      expect(timelineRows()).toEqual([
+        ["out/26", "ativa", "5 ativos"],
+        ["set/26", "anterior", "5 ativos"],
+        ["ago/26", "anterior", "2 ativos"],
+      ]),
+    );
+    expect(screen.queryByTestId("staged-edition-review")).toBeNull();
+  });
+
+  it("discards without promoting and still names the next recompute", async () => {
+    mock.strategies = [strategy];
+    mock.editions = [historicalEdition, activeEdition, stagedEdition];
+
+    renderDetail("/strategies/1/edicoes");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Descartar" }));
+
+    const note = await screen.findByTestId("edition-decision-note");
+    expect(note.textContent).toContain("próximo recálculo");
+    expect(mock.promotions).toEqual([]);
+
+    expect(timelineRows()).toEqual([
+      ["out/26", "revisão", "5 ativos"],
+      ["set/26", "ativa", "5 ativos"],
+      ["ago/26", "anterior", "2 ativos"],
+    ]);
+    expect(screen.getByTestId("staged-edition-review")).toBeDefined();
+  });
+
+  it("keeps a manual strategy on Carteira and Fatia, with no Edições tab", async () => {
+    mock.strategies = [{ id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" }];
+
+    renderDetail("/strategies/9/edicoes");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Legado" })).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Edições" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Carteira" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Fatia no portfólio" })).toBeDefined();
+    expect(
+      screen.getByText("A cadeia do mês não carrega ativos para esta estratégia."),
+    ).toBeDefined();
   });
 });
