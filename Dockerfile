@@ -53,11 +53,13 @@ RUN apt-get update \
 
 # The container-internal sides stay canonical: application.yaml's host-side default (8110) and
 # backend's dev mysql default (8112) are for a local run, so the image pins the container ports the
-# publish mapping and nginx/health probes target.
+# publish mapping and nginx/health probes target. API_PORT is the one API-port knob: the prod
+# profile reads it for ktor.port and app-own-host, and nginx/health read it too. KTOR_PORT stays the
+# host-dev override in application.yaml, never a second container authority.
 ENV API_PORT=8080 \
     WEB_PORT=8081 \
-    KTOR_PORT=8080 \
-    MYSQL_PORT=3306
+    MYSQL_PORT=3306 \
+    SPRING_PROFILES_ACTIVE=prod
 
 COPY --from=builder /home/gradle/project/build/distributions/app/ /opt/app/
 COPY --from=frontend /fe/dist /var/www/portfolio
