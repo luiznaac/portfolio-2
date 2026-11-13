@@ -4,7 +4,7 @@ import { useGaps, useRefreshCatalog } from "../api/queries.ts";
 import type { Allocation, HeldTicker } from "../api/types.ts";
 import { dataQualityCounts } from "../lib/dataQuality.ts";
 import { formatNumber } from "../lib/format.ts";
-import { pendingProceedsGaps } from "../lib/history.ts";
+import { pendingProceedsGaps } from "../lib/gaps.ts";
 import { ROUTES, positionDetail } from "../lib/routes.ts";
 import { BenchmarkRefresh } from "./BenchmarkRefresh.tsx";
 import { CatalogRefreshButton, CatalogRefreshReport } from "./CatalogRefresh.tsx";

@@ -12,7 +12,7 @@ import type {
   TransferProposal,
 } from "../api/types.ts";
 import { formatLocalDateTime, formatNumber } from "./format.ts";
-import { openGaps } from "./history.ts";
+import { openGaps } from "./gaps.ts";
 import { orderExecutionSummary } from "./orders.ts";
 import { ROUTES } from "./routes.ts";
 

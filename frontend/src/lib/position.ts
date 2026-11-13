@@ -1,11 +1,11 @@
 import type { Allocation, AssetClass, Gap, Position, Quote } from "../api/types.ts";
 import { heldTickerLeaves } from "./allocation.ts";
-import { openGaps } from "./history.ts";
+import { openGaps } from "./gaps.ts";
 
 // The "current" quote is the latest stored EOD close — the quote table is keyed on (ticker, date)
 // and COTAHIST is authoritative. This is deliberately the max date, not the array's last
 // element: the API's ordering is not part of the contract's promise.
-export function latestQuote(quotes: Quote[]): Quote | undefined {
+export function latestQuote(quotes: readonly Quote[]): Quote | undefined {
   return quotes.reduce<Quote | undefined>(
     (latest, candidate) => (!latest || candidate.date > latest.date ? candidate : latest),
     undefined,
@@ -36,7 +36,7 @@ export interface PositionRow {
 
 function openGapCounts(gaps: readonly Gap[]): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const gap of openGaps([...gaps])) {
+  for (const gap of openGaps(gaps)) {
     counts.set(gap.ticker, (counts.get(gap.ticker) ?? 0) + 1);
   }
   return counts;

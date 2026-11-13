@@ -1,7 +1,6 @@
 import { Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout.tsx";
 import { ObjectPage } from "./components/ObjectPage.tsx";
-import { PendingSurface } from "./components/PendingSurface.tsx";
 import { AnalysisWindowProvider } from "./hooks/useAnalysisWindow.tsx";
 import { ROUTES } from "./lib/routes.ts";
 import { Allocation } from "./pages/Allocation.tsx";
@@ -9,7 +8,7 @@ import { CorporateActions } from "./pages/CorporateActions.tsx";
 import { Dashboard } from "./pages/Dashboard.tsx";
 import { Fechamento } from "./pages/Fechamento.tsx";
 import { FixedIncome } from "./pages/FixedIncome.tsx";
-import { History } from "./pages/History.tsx";
+import { Gaps } from "./pages/Gaps.tsx";
 import { ImportAssistant } from "./pages/ImportAssistant.tsx";
 import { ImportHistory } from "./pages/ImportHistory.tsx";
 import { ImportInbox } from "./pages/ImportInbox.tsx";
@@ -22,6 +21,7 @@ import { Performance } from "./pages/Performance.tsx";
 import { PortfolioHistory } from "./pages/PortfolioHistory.tsx";
 import { PortfolioHistoryDetail } from "./pages/PortfolioHistoryDetail.tsx";
 import { Positions } from "./pages/Positions.tsx";
+import { Quotes } from "./pages/Quotes.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { StrategyDetail } from "./pages/StrategyDetail.tsx";
 import { Taxes } from "./pages/Taxes.tsx";
@@ -29,11 +29,10 @@ import { Trades } from "./pages/Trades.tsx";
 import { Transfers } from "./pages/Transfers.tsx";
 
 // The six-object route table (issue #369). Every object's sub-views are page tabs under an
-// ObjectPage frame; sub-views whose own slice has not landed yet render PendingSurface so no
-// surface is stranded. Production screens are remounted under their new homes until their slice
-// replaces them. Detail routes (strategy detail, frozen month, the import assistant) land with
-// their own slices and extend the smoke harness beside their page. The landing is Carteira ·
-// Visão geral; health stays off-nav.
+// ObjectPage frame, and every registered sub-view now has its own slice. Production screens are
+// remounted under their new homes until their slice replaces them. Detail routes (strategy detail,
+// frozen month, the import assistant) land with their own slices and extend the smoke harness beside
+// their page. The landing is Carteira · Visão geral; health stays off-nav.
 export const routes: RouteObject[] = [
   {
     path: "/",
@@ -76,8 +75,8 @@ export const routes: RouteObject[] = [
           { path: "positions/:ticker?", element: <Positions /> },
           { path: "trades", element: <Trades /> },
           { path: "fixed", element: <FixedIncome /> },
-          { path: "quotes", element: <PendingSurface /> },
-          { path: "gaps", element: <History /> },
+          { path: "quotes", element: <Quotes /> },
+          { path: "gaps", element: <Gaps /> },
         ],
       },
       {
