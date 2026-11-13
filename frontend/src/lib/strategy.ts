@@ -561,25 +561,11 @@ export function referenceMonthLabel(referenceMonth: string): string {
   return `${label}/${year.slice(2)}`;
 }
 
-// The import table's Diff column: "+2 −1 ~2" entered/exited/changed, or the first-edition case.
+// The edition diff chips' summary: "+2 −1 ~2" entered/exited/changed, or the first-edition case.
 export function editionDiffSummary(diff?: EditionDiff): string {
   if (!diff) return "primeira edição";
   if (diff.entered.length + diff.exited.length + diff.changed.length === 0) return "sem mudanças";
   return `+${diff.entered.length} −${diff.exited.length} ~${diff.changed.length}`;
-}
-
-// The table's Sum column: weights should total 100, rounded to drop floating-point noise.
-export function editionWeightSum(entries: EditionEntry[]): number {
-  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-  return Math.round(total * 100) / 100;
-}
-
-// The weight rule the server also enforces (editionWeightProblem): a portfolio sums to 100 within a
-// cent. The import table and the preview drawer both read it, so the tolerance lives in one place.
-const WEIGHT_TOLERANCE = 0.01;
-
-export function isWeightSumValid(entries: EditionEntry[]): boolean {
-  return Math.abs(editionWeightSum(entries) - 100) <= WEIGHT_TOLERANCE;
 }
 
 export function ratingLabel(rating?: Rating): string {
@@ -593,34 +579,4 @@ export function ratingLabel(rating?: Rating): string {
     default:
       return "—";
   }
-}
-
-// Inline override in the preview drawer: replace one entry immutably, leaving the rest identical.
-export function overrideEntry(
-  entries: EditionEntry[],
-  index: number,
-  patch: Partial<EditionEntry>,
-): EditionEntry[] {
-  return entries.map((entry, position) => (position === index ? { ...entry, ...patch } : entry));
-}
-
-// File-name hints, most specific first: "Top Dividendos Plus" must not match plain "Dividendos".
-const FILE_HINTS: { pattern: RegExp; name: string }[] = [
-  { pattern: /plus/i, name: "Dividendos Plus" },
-  { pattern: /small\s*caps?/i, name: "Small Caps" },
-  { pattern: /fundamentalista|fii/i, name: "Fundamentalista" },
-  { pattern: /top\s*a[cç][oõ]es/i, name: "Top Ações" },
-  { pattern: /dividendos/i, name: "Top Dividendos" },
-];
-
-// Suggests the strategy a dropped report belongs to, from its file name. Only report-driven
-// Strategies can receive a report, so the bucket is never a candidate; an unrecognised name falls
-// back to the first report-driven Strategy.
-export function suggestStrategy(strategies: Strategy[], fileName: string): Strategy | undefined {
-  const report = reportDrivenStrategies(strategies);
-  const hint = FILE_HINTS.find(({ pattern }) => pattern.test(fileName));
-  const match = hint
-    ? report.find((strategy) => strategy.name.toLowerCase().includes(hint.name.toLowerCase()))
-    : undefined;
-  return match ?? report[0];
 }
