@@ -653,10 +653,11 @@ export function useApplyImport() {
   });
 }
 
-export function useStrategies() {
+export function useStrategies(enabled = true) {
   return useQuery({
     queryKey: ["strategies"],
     queryFn: api.getStrategies,
+    enabled,
   });
 }
 

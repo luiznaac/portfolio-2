@@ -578,6 +578,16 @@ describe("the strategy detail's Edições tab", () => {
     expect(screen.getByTestId("staged-edition-review")).toBeDefined();
   });
 
+  it("opens the XP assistant to import a new report for this strategy", async () => {
+    mock.strategies = [strategy];
+    mock.editions = [historicalEdition, activeEdition, stagedEdition];
+
+    renderDetail("/strategies/1/edicoes");
+
+    const link = await screen.findByRole("link", { name: "Importar relatório" });
+    expect(link.getAttribute("href")).toBe("/imports/assistant?object=STRATEGY_EDITION&strategy=1");
+  });
+
   it("keeps a manual strategy on Carteira and Fatia, with no Edições tab", async () => {
     mock.strategies = [{ id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" }];
 

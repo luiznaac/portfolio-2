@@ -6,7 +6,7 @@
 
 import type { AssetClass, Month, OrderList, Targets } from "../api/types.ts";
 import { pendingTransfers } from "./fechamento.ts";
-import { formatCurrency } from "./format.ts";
+import { formatCurrency, plural } from "./format.ts";
 import { orderExecutionSummary } from "./orders.ts";
 
 export type PlanStepKey = "capital" | "targets" | "plan" | "execution" | "transfer" | "close";
@@ -58,10 +58,6 @@ function targetsMeta(targets: Targets): string {
   ];
   if (targets.tickers.length > 0) parts.push(plural(targets.tickers.length, "ticker", "tickers"));
   return parts.join(" · ");
-}
-
-function plural(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 // A persisted suggestion or transfer is the only evidence the refresh ran: the read carries no plan

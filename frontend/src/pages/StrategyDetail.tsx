@@ -32,9 +32,11 @@ import {
   formatPercent,
   formatSignedValue,
 } from "../lib/format.ts";
+import { editionAssistantPath } from "../lib/importDestinations.ts";
 import { assetClassLabel } from "../lib/month.ts";
 import { ROUTES, strategyDetail, strategyDetailTab } from "../lib/routes.ts";
 import {
+  type EditionDecision,
   type EditionEntryChange,
   type EditionReviewRow,
   type EditionTimelineRow,
@@ -154,6 +156,7 @@ export function StrategyDetail() {
 
       {tab === "edicoes" && report ? (
         <EdicoesTab
+          strategyId={strategy.id}
           editions={editions.data ?? []}
           loading={editions.isLoading}
           error={editions.error?.message}
@@ -345,13 +348,13 @@ function StagedEditionStrip({ edition }: { edition: Edition }) {
 // report's diff summary and full weight/rating/target-price table, and the promote/discard decision.
 // "Alterada" is reserved for a row whose weight, rating or target price actually moved against the
 // active edition — a target price the fixture merely restates never earns the label.
-type EditionDecision = "promoted" | "discarded";
-
 function EdicoesTab({
+  strategyId,
   editions,
   loading,
   error,
 }: {
+  strategyId: number;
   editions: Edition[];
   loading: boolean;
   error?: string;
@@ -397,6 +400,12 @@ function EdicoesTab({
 
   return (
     <div className="space-y-3.5">
+      <div className="flex items-center justify-end">
+        <Link to={editionAssistantPath(strategyId)}>
+          <Button variant="default">Importar relatório</Button>
+        </Link>
+      </div>
+
       <Panel title="Linha do tempo">
         {loading ? (
           <p className="text-[12.5px] text-muted">Carregando…</p>
@@ -405,7 +414,7 @@ function EdicoesTab({
         ) : timeline.length === 0 ? (
           <p className="text-[12.5px] text-muted">
             Nenhuma edição importada.{" "}
-            <Link to={ROUTES.strategiesImport} className="text-action hover:underline">
+            <Link to={editionAssistantPath(strategyId)} className="text-action hover:underline">
               Importar relatório
             </Link>
           </p>

@@ -13,6 +13,11 @@ export function formatNumber(value: number): string {
   return NUMBER.format(value);
 }
 
+// "1 peso" / "2 pesos" — a count with its agreeing noun, shared by the console copy.
+export function plural(count: number, singular: string, many: string): string {
+  return `${count} ${count === 1 ? singular : many}`;
+}
+
 const CURRENCY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 // Intl renders the pt-BR currency with a non-breaking space after the symbol; normalise it to a

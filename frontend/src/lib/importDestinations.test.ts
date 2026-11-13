@@ -3,6 +3,7 @@ import {
   DESTINATIONS,
   assistantPath,
   destinationRoute,
+  editionAssistantPath,
   resolveDestination,
   sessionPath,
   sessionStep,
@@ -31,12 +32,35 @@ describe("import destinations", () => {
   it("keeps a typed destination's own route even before its assistant variant lands", () => {
     expect(DESTINATIONS.POSITIONS.label).toBe("Ativos · Posições");
     expect(destinationRoute("POSITIONS")).toBe("/ativos/positions");
-    expect(DESTINATIONS.STRATEGY_EDITION.supported).toBe(false);
+    expect(DESTINATIONS.POSITIONS.supported).toBe(false);
+  });
+
+  it("names the XP edition destination with its strategy-edition pipeline", () => {
+    const edition = DESTINATIONS.STRATEGY_EDITION;
+
+    expect(edition.label).toBe("Estratégias · Edições");
+    expect(edition.source).toBe("XP_REPORT");
+    expect(edition.supported).toBe(true);
+    expect(edition.changes.map((change) => change.object)).toEqual([
+      "Estratégias · Edições",
+      "Plano / Mês",
+    ]);
+    expect(edition.mapping.map((cell) => cell.from)).toEqual([
+      "ticker",
+      "peso",
+      "preço-alvo",
+      "rating",
+      "não operar",
+    ]);
   });
 
   it("builds the contextual and resumed assistant paths", () => {
     expect(assistantPath("TRADES")).toBe("/imports/assistant?object=TRADES");
     expect(sessionPath(7)).toBe("/imports/assistant/7");
+  });
+
+  it("builds the XP assistant path with the strategy it stages against", () => {
+    expect(editionAssistantPath(7)).toBe("/imports/assistant?object=STRATEGY_EDITION&strategy=7");
   });
 
   it("resumes a parked session at the material and a reviewed one at apply", () => {
