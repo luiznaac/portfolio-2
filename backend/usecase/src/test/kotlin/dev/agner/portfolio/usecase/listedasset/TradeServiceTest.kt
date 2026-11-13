@@ -1,11 +1,15 @@
 package dev.agner.portfolio.usecase.listedasset
 
+import dev.agner.portfolio.usecase.buy
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
+import dev.agner.portfolio.usecase.sell
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -129,6 +133,64 @@ class TradeServiceTest : StringSpec({
         service.fetchAllBy("petr4f")
 
         coVerify(exactly = 1) { repository.fetchAllBy("PETR4") }
+    }
+
+    "fetchLedger normalizes the ticker and exposes the filter's total beside the page" {
+        val captured = slot<TradeLedgerFilter>()
+        coEvery { repository.fetchLedger(capture(captured)) } returns
+            listOf(
+                sell(id = 3, date = "2026-10-03"),
+                buy(id = 2, date = "2026-10-02"),
+                buy(id = 1, date = "2026-10-01"),
+            )
+        coEvery { repository.countLedger(any()) } returns 7
+        coEvery { repository.sumLedgerFinancial(any()) } returns BigDecimal("1234.56")
+
+        val page = service.fetchLedger(TradeLedgerFilter(ticker = "petr4f", limit = 2))
+
+        captured.captured.ticker shouldBe "PETR4"
+        page.rows.map { it.id } shouldBe listOf(3, 2)
+        page.nextCursor shouldBe "2026-10-02:2"
+        page.total shouldBe 7
+        page.financialTotal shouldBe BigDecimal("1234.56")
+    }
+
+    "fetchLedger leaves the cursor absent on the last page" {
+        coEvery { repository.fetchLedger(any()) } returns
+            listOf(buy(id = 2, date = "2026-10-02"), buy(id = 1, date = "2026-10-01"))
+        coEvery { repository.countLedger(any()) } returns 2
+        coEvery { repository.sumLedgerFinancial(any()) } returns BigDecimal("200")
+
+        val page = service.fetchLedger(TradeLedgerFilter(limit = 2))
+
+        page.rows.map { it.id } shouldBe listOf(2, 1)
+        page.nextCursor shouldBe null
+        page.total shouldBe 2
+        page.financialTotal shouldBe BigDecimal("200")
+    }
+
+    "fetchLedger sends a blank ticker as no ticker filter" {
+        val captured = slot<TradeLedgerFilter>()
+        coEvery { repository.fetchLedger(capture(captured)) } returns emptyList()
+        coEvery { repository.countLedger(any()) } returns 0
+        coEvery { repository.sumLedgerFinancial(any()) } returns BigDecimal.ZERO
+
+        service.fetchLedger(TradeLedgerFilter(ticker = "   "))
+
+        captured.captured.ticker shouldBe null
+    }
+
+    "fetchLedger passes the cursor and side through unchanged" {
+        val captured = slot<TradeLedgerFilter>()
+        coEvery { repository.fetchLedger(capture(captured)) } returns emptyList()
+        coEvery { repository.countLedger(any()) } returns 0
+        coEvery { repository.sumLedgerFinancial(any()) } returns BigDecimal.ZERO
+        val cursor = TradeLedgerCursor(LocalDate.parse("2026-10-02"), 2)
+
+        service.fetchLedger(TradeLedgerFilter(side = TradeSide.SELL, after = cursor))
+
+        captured.captured.side shouldBe TradeSide.SELL
+        captured.captured.after shouldBe cursor
     }
 })
 

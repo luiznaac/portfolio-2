@@ -1028,3 +1028,26 @@ SQL
 ```
 
 The reads are then deterministic: `GET /months` lists 2027-05 (id 9402) first; `GET /months/9402` carries the snapshot above. On `/portfolio/history` the page head reads `Carteira`, the Histórico tab is active, and the table has exactly two rows — `mai/2027` with Capital R$ 95.000,00 and `abr/2027` with R$ 90.000,00. Clicking `mai/2027` opens `/portfolio/history/2027-05`: the head reads `Histórico · mai/2027` and the KPI row reads Capital R$ 95.000,00 (piso R$ 20.000,00), Aportes R$ 0,00, Caixa R$ 84.000,00, Proventos R$ 85,00 and DARF R$ 250,00. Classes congeladas reads Ações, Alvo 60,0%, Ideal R$ 57.000,00, Atual R$ 11.000,00, Déficit +R$ 46.000,00 and Drift −48,4 p.p. — the live allocation's R$ 13.000,00 never appears. Ordens e negócios do mês reads ITUB4 · Compra · 10 · R$ 30,00 · PARCIAL, B3SA3 · Venda · 10 · — · Executado and VALE3 · Venda · 3 · — · Não planejada. Estratégias no fechamento reads Top Dividendos · Com relatório · R$ 10.000,00 · R$ 200,00 and Legado Ações · Manual (legado) · R$ 1.000,00 · -R$ 100,00, and the `O que este snapshot congela` caption states that nothing is recomputed. The surface offers no button. A list with a row per live month instead of per closed month, a detail that renders R$ 13.000,00 or any other live value, a missing PARCIAL/unplanned row, a missing strategy slice or caption, or any write action is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — Ativos · Negócios ledger and Reconstruir histórico (issue #379)
+
+**Scenario**: the run drives the paged trade ledger, its server-side filters and the reconstruction section on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the HTTP/Browser intents. It resets the ledger tables and seeds one institution, four named executions and 51 generated PETR4 buys so the first page ends with a next cursor. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+DELETE FROM trade;
+DELETE FROM institution;
+INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+SET @inst := LAST_INSERT_ID();
+INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+  ('PETR4', '2026-10-01', 'VISTA',  100, 10, @inst, NULL, 'MANUAL',    FALSE, 1, NOW()),
+  ('VALE3', '2026-10-02', 'VISTA', -100, 20, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+  ('PETR4', '2026-10-03', 'VISTA',  -50, 12, @inst, NULL, 'B3_IMPORT', FALSE, 1, NOW()),
+  ('ITUB4', '2026-10-04', 'VISTA',   30, 30, @inst, NULL, 'OPENING',   FALSE, 1, NOW());
+INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at)
+SELECT 'PETR4', DATE_ADD('2026-08-01', INTERVAL seq.day DAY), 'VISTA', seq.day, 1, @inst, NULL, 'MANUAL', FALSE, 1, NOW()
+FROM (SELECT ROW_NUMBER() OVER () AS day FROM information_schema.columns LIMIT 51) seq;
+SQL
+```
+
+The ledger holds 55 executions: the first page reads `50 de 55` with a next cursor, and the total row covers all 55 (R$ 5.826,00 — the four named rows total R$ 4.500,00 and the generated quantities sum to R$ 1.326,00). `ticker=VALE3` narrows to one row (R$ 2.000,00); `side=SELL` and the window `2026-10-02..2026-10-03` each narrow to the two named rows (R$ 2.600,00). Clearing a filter returns to the first page (`50 de 55`), never the pages loaded before the filter. Ativos · Negócios also hosts **Reconstruir histórico**: skipping adoption unlocks the replay; the backfill renders its report; the custody cross-check accepts `posicao-custodia-2020.xlsx` and renders the drift table.

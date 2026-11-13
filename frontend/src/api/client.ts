@@ -1,3 +1,4 @@
+import { TRADE_LEDGER_PARAM_KEYS, type TradeLedgerRequest } from "../lib/tradeFilters.ts";
 import type {
   Allocation,
   AssetClass,
@@ -63,6 +64,7 @@ import type {
   TickerClassification,
   TickerRefreshResult,
   Trade,
+  TradeLedgerPage,
   TransferProposal,
 } from "./types.ts";
 
@@ -207,6 +209,17 @@ export const api = {
 
   getTrades(): Promise<Trade[]> {
     return request("/trades");
+  },
+
+  // The paged, filtered ledger. Blank filters are omitted so clearing a field widens the read.
+  getTradeLedger(query: TradeLedgerRequest): Promise<TradeLedgerPage> {
+    const params = new URLSearchParams();
+    for (const key of TRADE_LEDGER_PARAM_KEYS) {
+      const value = query[key];
+      if (value !== undefined && value.length > 0) params.set(key, value);
+    }
+    const suffix = params.toString();
+    return request(`/trades/ledger${suffix.length > 0 ? `?${suffix}` : ""}`);
   },
 
   getPosition(ticker: string): Promise<PositionDetail> {
@@ -457,8 +470,9 @@ export const api = {
     return upload("/corporate-actions/import", form);
   },
 
-  // Histórico: the backend operations the screen owns. The backfill body is optional — no file
-  // means "absorb the seeds only", a Posição export rides along as the custody cross-check.
+  // Reconstruir histórico: the backend operations Ativos · Negócios owns. The backfill body is
+  // optional — no file means "absorb the seeds only", a Posição export rides along as the custody
+  // cross-check.
   getGaps(): Promise<Gap[]> {
     return request("/gaps");
   },

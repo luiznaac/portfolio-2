@@ -5,6 +5,9 @@ import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerPage
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import org.springframework.stereotype.Service
@@ -65,6 +68,28 @@ class TradeService(
     suspend fun fetchAll() = repository.fetchAll()
 
     suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())
+
+    // The ledger's paged read. The repository returns one extra row, which is the "is there another
+    // page" signal; the last row of the page it returns becomes the next cursor. The two aggregates
+    // cover the whole filter, so the page can state "n de m" and a total while it loads more.
+    suspend fun fetchLedger(filter: TradeLedgerFilter): TradeLedgerPage {
+        val normalized = filter.copy(
+            ticker = filter.ticker
+                ?.normalizedTicker()
+                ?.takeIf { it.isNotEmpty() },
+        )
+        val fetched = repository.fetchLedger(normalized)
+        val page = fetched.take(normalized.limit)
+        val nextCursor = page.lastOrNull()
+            ?.let { TradeLedgerCursor(it.date, it.id).encode() }
+            ?.takeIf { fetched.size > normalized.limit }
+        return TradeLedgerPage(
+            rows = page,
+            nextCursor = nextCursor,
+            total = repository.countLedger(normalized),
+            financialTotal = repository.sumLedgerFinancial(normalized),
+        )
+    }
 
     // The ticker is the ledger's canonical key, so it is normalized at this boundary (ALUP11F and
     // ALUP11 are the same paper) before the repository persists it.

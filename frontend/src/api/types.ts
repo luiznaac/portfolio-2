@@ -186,6 +186,16 @@ export interface Trade {
   absorbed_quantity: number;
 }
 
+// The paged, filtered trade ledger (GET /trades/ledger). `next_cursor` is null on the last page;
+// `total` and `financial_total` cover every row the filter matches, so the page can state "n de m"
+// and a total while it loads more.
+export interface TradeLedgerPage {
+  rows: Trade[];
+  next_cursor: string | null;
+  total: number;
+  financial_total: number;
+}
+
 export interface TradeCreation {
   ticker: string;
   side: TradeSide;

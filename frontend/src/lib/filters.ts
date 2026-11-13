@@ -15,8 +15,14 @@ export type FilterControl =
   | { kind: "date"; key: string; label: string }
   | { kind: "select"; key: string; label: string; emptyLabel: string; options: FilterOption[] };
 
-export interface FilterField<Row> {
+// What the bar needs from a declared field: the control alone. A list narrowed locally extends this
+// with a matcher (`FilterField`); a list narrowed by the server stops here, because the request
+// carries the filter and there is no local predicate to apply.
+export interface FilterBarField {
   control: FilterControl;
+}
+
+export interface FilterField<Row> extends FilterBarField {
   match: (row: Row, value: string) => boolean;
 }
 
@@ -27,7 +33,7 @@ export function matchesText(query: string, ...values: (string | null | undefined
   return values.some((value) => (value ?? "").toLowerCase().includes(needle));
 }
 
-export function emptyFilterValues<Row>(fields: readonly FilterField<Row>[]): FilterValues {
+export function emptyFilterValues(fields: readonly FilterBarField[]): FilterValues {
   return Object.fromEntries(fields.map((field) => [field.control.key, ""]));
 }
 

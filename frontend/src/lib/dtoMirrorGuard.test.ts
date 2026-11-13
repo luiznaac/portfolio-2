@@ -71,6 +71,7 @@ describe("frontend DTO mirror", () => {
     "HealthCheckResult",
     "Income",
     "Trade",
+    "TradeLedgerPage",
     "Bond",
     "Allocation",
     "OrderPlan",

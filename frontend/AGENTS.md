@@ -18,9 +18,10 @@ src/
                 PageHead/PageTabs — the object head and sub-view tab strip; Panel/Chip/Badge/
                 Button/Table/FilterBar/WizardStepper/Kpi/Num/ClassBadge — the token-based
                 primitive layer; TickerDrawer — the Ativos ticker detail opened from a Posições row
-                or its deep link; EditionDiffPanel — the edition diff chips shared by the report
-                import drawer and the strategy detail's Edições tab; PeriodRail — the Análise
-                period rail; icons.tsx; *Chip.tsx
+                or its deep link; RebuildHistory — the Ativos · Negócios reconstruction steps
+                (adoption, backfill, custody check); EditionDiffPanel — the edition diff chips
+                shared by the report import drawer and the strategy detail's Edições tab;
+                PeriodRail — the Análise period rail; icons.tsx; *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
                 Análise rail's shared window, kept across the three tabs and reset on area re-entry;
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and
@@ -40,12 +41,13 @@ src/
                 the top bar's freshness/month lines; overview.ts derives the landing's status strip,
                 month line, standfirst, class rows, attention queue and data panel; tones.ts is the
                 one meaning→token class map; plan.ts derives the six-step month tool; dates.ts is the
-                shared calendar arithmetic; filters.ts is the shared filter model, with
-                tradeFilters.ts/incomeFilters.ts/positionFilters.ts/importFilters.ts declaring each
-                list's fields + matcher (the import bar also maps fonte/estado to the additive
-                `GET /imports` parameters); imports.ts names the sources/states and defines the
-                parked session and the record age; position.ts builds the Posições rows and their
-                filtered total;
+                shared calendar arithmetic; filters.ts is the shared filter model — the bar needs
+                controls only, while a locally narrowed list adds its matcher; tradeFilters.ts
+                declares the server-narrowed ledger's controls plus its request mapping, while
+                incomeFilters.ts/positionFilters.ts/importFilters.ts declare fields + matcher (the
+                import bar also maps fonte/estado to the additive `GET /imports` parameters);
+                imports.ts names the sources/states and defines the parked session and the record
+                age; position.ts builds the Posições rows and their filtered total;
                 analysisWindow.ts is the Análise rail's preset/range/window math; taxes.ts is
                 Impostos' monthly apuração derivation — the window-filtered apuração list, the
                 grain note and the DARF/carry/harvest helpers; portfolioHistory.ts derives the

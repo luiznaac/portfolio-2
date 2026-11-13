@@ -9,6 +9,7 @@ import {
   formatSignedPercent,
   formatSignedValue,
   formatTradeSide,
+  formatTradeSource,
   isWeekend,
 } from "./format.ts";
 
@@ -39,6 +40,14 @@ describe("formatTradeSide", () => {
 
   it("labels a sell", () => {
     expect(formatTradeSide("SELL")).toBe("Venda");
+  });
+});
+
+describe("formatTradeSource", () => {
+  it("distinguishes a manual row, a B3 import and an adoption seed", () => {
+    expect(formatTradeSource("MANUAL")).toBe("Manual");
+    expect(formatTradeSource("B3_IMPORT")).toBe("B3");
+    expect(formatTradeSource("OPENING")).toBe("Abertura");
   });
 });
 

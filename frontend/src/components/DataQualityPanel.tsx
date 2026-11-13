@@ -13,8 +13,8 @@ import { Panel } from "./Panel.tsx";
 // The single place to see and fix what makes the book wrong: unpriced positions, held tickers with
 // no class, negative custody and open GAPs. Its header carries the one combined catalog-and-quotes
 // refresh; the unpriced rows repeat that action, the unclassified rows and the bulk action link to
-// the Ativos · Posições classification surface, and the negative/lacuna rows deep-link to the
-// Histórico screen that adopts and prices them.
+// the Ativos · Posições classification surface, the negative rows deep-link to Ativos · Negócios
+// ("Reconstruir histórico", which adopts them), and the lacuna rows to Ativos · Lacunas.
 export function DataQualityPanel({ allocation }: { allocation: Allocation }) {
   const refresh = useRefreshCatalog();
   const gaps = useGaps();
@@ -90,11 +90,11 @@ export function DataQualityPanel({ allocation }: { allocation: Allocation }) {
             rows={negative}
             renderAction={() => (
               <Link
-                to={ROUTES.gaps}
-                data-testid="negative-history-link"
+                to={ROUTES.trades}
+                data-testid="negative-rebuild-link"
                 className="font-mono text-[10px] text-principal hover:underline"
               >
-                Histórico
+                Reconstruir histórico
               </Link>
             )}
           />

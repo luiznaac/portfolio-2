@@ -6,12 +6,27 @@ import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeExecutionRange
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
+import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import kotlinx.datetime.LocalDateTime
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.functions.math.AbsFunction
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.like
+import org.jetbrains.exposed.v1.core.lowerCase
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.sum
+import org.jetbrains.exposed.v1.core.times
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
@@ -77,6 +92,32 @@ class TradeRepository(
             .map { it.toModel() }
     }
 
+    // The page and its count are built from the same filter predicate, so they can never disagree
+    // about what the filter means. Ordering by (date, id) descending makes the cursor a stable
+    // boundary even when executions share a date, and the extra row tells the service whether
+    // another page exists.
+    override suspend fun fetchLedger(filter: TradeLedgerFilter): List<Trade> = transaction {
+        TradeEntity.find { filter.condition() }
+            .orderBy(TradeTable.date to SortOrder.DESC, TradeTable.id to SortOrder.DESC)
+            .limit(filter.limit + 1)
+            .map { it.toModel() }
+    }
+
+    // The aggregates are the filter's whole size, never the remaining page size, so the cursor is
+    // dropped: neither "n de m" nor the total row may shrink as the owner pages forward. The
+    // stored quantity is signed, so the financial value takes its magnitude before multiplying.
+    override suspend fun countLedger(filter: TradeLedgerFilter): Int = transaction {
+        TradeEntity.find { filter.copy(after = null).condition() }.count().toInt()
+    }
+
+    override suspend fun sumLedgerFinancial(filter: TradeLedgerFilter): BigDecimal = transaction {
+        val financial = AbsFunction(TradeTable.quantity) times TradeTable.unitPrice
+        val total = financial.sum()
+        TradeTable.select(total)
+            .where { filter.copy(after = null).condition() }
+            .first()[total] ?: BigDecimal.ZERO
+    }
+
     override suspend fun confirmByB3(id: Int): Trade? = transaction {
         TradeEntity.findById(id)
             ?.apply { confirmedByB3 = true }
@@ -105,3 +146,25 @@ class TradeRepository(
                 ?.toModel()
         }
 }
+
+// The ledger filter as one predicate. The ticker is a case-insensitive substring, the date window is
+// inclusive and the side is the sign of the stored quantity, so the read shares the table's own
+// encoding. A filter with no values is the always-true id predicate, which keeps the builder total.
+private fun TradeLedgerFilter.condition(): Op<Boolean> =
+    listOfNotNull(
+        ticker?.let { TradeTable.ticker.lowerCase() like "%${it.lowercase()}%" },
+        from?.let { TradeTable.date greaterEq it },
+        to?.let { TradeTable.date lessEq it },
+        side?.let { it.condition() },
+        after?.let { it.condition() },
+    ).reduceOrNull { left, right -> left and right } ?: (TradeTable.id greater 0)
+
+private fun TradeSide.condition(): Op<Boolean> =
+    if (this == TradeSide.BUY) {
+        TradeTable.quantity greater BigDecimal.ZERO
+    } else {
+        TradeTable.quantity less BigDecimal.ZERO
+    }
+
+private fun TradeLedgerCursor.condition(): Op<Boolean> =
+    (TradeTable.date less date) or ((TradeTable.date eq date) and (TradeTable.id less id))
