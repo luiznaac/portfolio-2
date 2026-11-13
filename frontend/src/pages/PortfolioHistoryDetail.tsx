@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useClosedMonths, useMonthSnapshot } from "../api/queries.ts";
 import type { Snapshot } from "../api/types.ts";
-import { Chip } from "../components/Chip.tsx";
+import { FrozenOrders } from "../components/FrozenOrders.tsx";
 import { Kpi } from "../components/Kpi.tsx";
 import { Num } from "../components/Num.tsx";
 import { ObjectTabs } from "../components/ObjectTabs.tsx";
@@ -10,16 +10,14 @@ import { PageHead } from "../components/PageHead.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { formatPoints, formatTarget } from "../lib/allocation.ts";
-import { formatCurrency, formatNumber } from "../lib/format.ts";
+import { formatCurrency } from "../lib/format.ts";
 import { monthPeriodLabel } from "../lib/month.ts";
 import {
   FROZEN_CAPTION,
   type FrozenClassRow,
-  type FrozenOrderRow,
   type FrozenSliceRow,
   type SnapshotSummary,
   frozenClassRows,
-  frozenOrderRows,
   frozenSliceRows,
   snapshotSummary,
 } from "../lib/portfolioHistory.ts";
@@ -124,7 +122,6 @@ function BackToHistory() {
 
 function FrozenMonth({ snapshot, summary }: { snapshot: Snapshot; summary: SnapshotSummary }) {
   const classes = frozenClassRows(snapshot.state.classes);
-  const orders = frozenOrderRows(snapshot.state.orders);
   const slices = frozenSliceRows(snapshot.state.strategies);
 
   return (
@@ -178,7 +175,7 @@ function FrozenMonth({ snapshot, summary }: { snapshot: Snapshot; summary: Snaps
           </Panel>
 
           <Panel title="Ordens e negócios do mês">
-            <Table columns={ORDER_COLUMNS} rows={orders} rowKey={(row) => row.key} />
+            <FrozenOrders orders={snapshot.state.orders} />
           </Panel>
         </div>
 
@@ -233,37 +230,6 @@ const CLASS_COLUMNS: Column<FrozenClassRow>[] = [
     header: "Drift",
     align: "right",
     render: (row) => <Num value={row.drift} format={formatPoints} tone={driftTone(row.drift)} />,
-  },
-];
-
-const ORDER_COLUMNS: Column<FrozenOrderRow>[] = [
-  {
-    key: "ticker",
-    header: "Ativo",
-    render: (row) => <span className="font-mono font-semibold text-text">{row.ticker}</span>,
-  },
-  { key: "side", header: "Lado", render: (row) => <Chip tone="neutral">{row.sideLabel}</Chip> },
-  {
-    key: "quantity",
-    header: "Qtd.",
-    align: "right",
-    render: (row) => <span className="font-mono">{formatNumber(row.quantity)}</span>,
-  },
-  {
-    key: "price",
-    header: "Preço",
-    align: "right",
-    render: (row) =>
-      row.price === undefined ? (
-        <span className="text-faint">—</span>
-      ) : (
-        <span className="font-mono">{formatCurrency(row.price)}</span>
-      ),
-  },
-  {
-    key: "state",
-    header: "Estado",
-    render: (row) => <Chip tone={row.stateTone}>{row.stateLabel}</Chip>,
   },
 ];
 

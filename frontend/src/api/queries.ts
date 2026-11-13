@@ -451,6 +451,12 @@ export function useCloseMonth() {
       queryClient.invalidateQueries({ queryKey: ["performance"] });
       invalidatePortfolioStatus(queryClient);
     },
+    // A refused close still ran the plan refresh before the gate decided, so the inbox and its
+    // attention can differ from the pre-close read even though the month did not lock.
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 

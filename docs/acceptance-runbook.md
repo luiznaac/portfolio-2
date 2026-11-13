@@ -438,6 +438,70 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   curl -s -X POST http://localhost:8110/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
 
+- **Fechamentos seed (#391)**: the close screen's own scenario. It seeds the current calendar month as
+  the open month (so the close is allowed), a full strategy/ticker chain whose refresh proposes one
+  auto-approved transfer and two pending ones, a previous closed month with its snapshot, and the
+  five "não trava" states: an unexecuted-order plan (the refresh leaves the ITUB4 buy partial and the
+  B3SA3 sell unexecuted), an open gap, a corporate-action review, stale quotes and a receivable
+  income dated in the open month. The pre-close inbox is empty, so the first close attempt runs the
+  refresh, creates the two
+  pending transfers and is refused by the server; rejecting both and closing again locks the month
+  and writes the snapshot. Run it alone.
+
+  ```bash
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+  DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade;
+  DELETE FROM gap; DELETE FROM corporate_action; DELETE FROM cash_movement;
+  DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote;
+  DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution;
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01'),DATE_FORMAT(CURDATE(), '%Y-%m-01'),NOW()),
+    ('B3SA3','B3','02',NULL,'STOCK','ACOES',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01'),DATE_FORMAT(CURDATE(), '%Y-%m-01'),NOW()),
+    ('CSNA3','CSN','02',NULL,'STOCK','ACOES',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01'),DATE_FORMAT(CURDATE(), '%Y-%m-01'),NOW());
+  INSERT INTO strategy (name, asset_class, kind, created_at) VALUES
+    ('Dividendos','ACOES','REPORT_DRIVEN',NOW()), ('Small Caps','ACOES','REPORT_DRIVEN',NOW());
+  SET @div := (SELECT id FROM strategy WHERE name='Dividendos');
+  INSERT INTO month (id, period, capital, `floor`, aportes, status, created_at) VALUES
+    (9002, '2026-02', 103500, 0, 2000, 'CLOSED', NOW());
+  INSERT INTO snapshot (month_id, state, created_at) VALUES
+    (9002, '{"period":"2026-02","capital":103500,"floor":0,"aportes":2000,"caixa":45000,"holdings":[{"ticker":"PETR4","quantity":6210,"average_price":10}],"attributions":[],"classes":[{"asset_class":"ACOES","target":0,"ideal":0,"actual":62100,"deficit":0,"drift":0,"unattributed":0},{"asset_class":"RENDA_FIXA","target":100,"ideal":103500,"actual":41400,"deficit":0,"drift":0,"unattributed":0}],"income":{"gross":0,"retained":0,"net":0},"orders":{"orders":[{"id":1,"ticker":"PETR4","side":"BUY","quantity":100,"suggested_price":10,"executed_quantity":100,"status":"IMPORTED"},{"id":2,"ticker":"PETR4","side":"BUY","quantity":100,"suggested_price":10,"executed_quantity":100,"status":"EXECUTED"}],"transfers":[],"unplanned_trades":[]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":0}}}', NOW());
+  INSERT INTO month (period, capital, `floor`, status, created_at) VALUES
+    (DATE_FORMAT(CURDATE(), '%Y-%m'), 4000, 0, 'OPEN', NOW());
+  SET @month := LAST_INSERT_ID();
+  INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+    (@month,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()),
+    (@month,'STRATEGY','ACOES','Dividendos',NULL,NULL,50,NOW()),
+    (@month,'STRATEGY','ACOES','Small Caps',NULL,NULL,50,NOW()),
+    (@month,'TICKER','ACOES','Dividendos',NULL,'ITUB4',40,NOW()),
+    (@month,'TICKER','ACOES','Dividendos',NULL,'B3SA3',30,NOW()),
+    (@month,'TICKER','ACOES','Dividendos',NULL,'CSNA3',30,NOW()),
+    (@month,'TICKER','ACOES','Small Caps',NULL,'ITUB4',40,NOW()),
+    (@month,'TICKER','ACOES','Small Caps',NULL,'B3SA3',30,NOW()),
+    (@month,'TICKER','ACOES','Small Caps',NULL,'CSNA3',30,NOW());
+  REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8), ('B3SA3',260,8), ('CSNA3',150,8);
+  INSERT INTO attribution (ticker, strategy_id, quantity) VALUES
+    ('ITUB4',@div,120), ('B3SA3',@div,260), ('CSNA3',@div,150);
+  REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+    ('ITUB4',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-28'),10,'COTAHIST',NOW()),
+    ('B3SA3',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-28'),10,'COTAHIST',NOW()),
+    ('CSNA3',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-28'),10,'COTAHIST',NOW());
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('ITUB4',DATE_FORMAT(CURDATE(), '%Y-%m-05'),'B3', 30, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW());
+  INSERT INTO gap (id, ticker, `date`, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES
+    (9003, 'CSNA3', DATE_FORMAT(CURDATE(), '%Y-%m-20'), 'SELL', 40, NULL, 'OPEN', 0, 0, NOW());
+  INSERT INTO corporate_action (ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES
+    ('ITUB4','SPLIT',DATE_FORMAT(CURDATE(), '%Y-%m-15'),NULL,2,NULL,NULL,'B3_MOVEMENTS',NULL,NULL,1,NULL,'NEEDS_REVIEW',NOW());
+  INSERT INTO cash_movement (ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES
+    ('ITUB4', DATE_FORMAT(CURDATE(), '%Y-%m-20'), 100, 0, 100, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW());
+  SQL
+  ```
+
+  The first close attempt answers `409 pending-transfers` after creating the two pending proposals;
+  after both are rejected, the next close answers `200` with the snapshot and the month locks.
+
 - **Computed performance era seed (#308)**: run this seed alone, immediately before the
   computed-era intents; it resets the ledger and leaves **no Snapshot and no Month**, so the
   performance series is the pre-planning computed era only. Dates are relative to `CURDATE()` so the

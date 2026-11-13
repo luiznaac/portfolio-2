@@ -4,8 +4,14 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "./client.ts";
-import { useApplyImport, useCurrentAllocation, usePositions } from "./queries.ts";
-import type { Allocation, Position } from "./types.ts";
+import {
+  useApplyImport,
+  useCloseMonth,
+  useCurrentAllocation,
+  useOrders,
+  usePositions,
+} from "./queries.ts";
+import type { Allocation, OrderList, Position } from "./types.ts";
 
 const empty: Allocation = {
   capital: 0,
@@ -76,5 +82,60 @@ describe("useApplyImport", () => {
 
     await waitFor(() => expect(book.result.current.data).toEqual(positions));
     await waitFor(() => expect(allocation.result.current.data).toEqual(applied));
+  });
+});
+
+// A refused close is not a no-op: the server refreshed the plan and finalised transfers before the
+// gate refused, so the inbox must be re-read even though the month did not lock.
+describe("useCloseMonth", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("refetches the transfer inbox after a refused close", async () => {
+    const pendingTransfer = {
+      id: 1,
+      ticker: "ITUB4",
+      from_strategy_id: 1,
+      from_strategy: "Dividendos",
+      to_strategy_id: 2,
+      to_strategy: "Small Caps",
+      quantity: 20,
+      amount: 600,
+      auto_approved: false,
+      status: "PENDING" as const,
+    };
+    const pending: OrderList = {
+      period: "2026-10",
+      orders: [],
+      transfers: [pendingTransfer],
+      unplanned_trades: [],
+    };
+    const rejected: OrderList = {
+      ...pending,
+      transfers: [{ ...pendingTransfer, status: "REJECTED" }],
+    };
+
+    vi.spyOn(api, "getOrders").mockResolvedValueOnce(pending).mockResolvedValue(rejected);
+    vi.spyOn(api, "closeCurrentMonth").mockRejectedValue(new Error("pending-transfers"));
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const orders = renderHook(() => useOrders(), { wrapper });
+    const close = renderHook(() => useCloseMonth(), { wrapper });
+
+    await waitFor(() => expect(orders.result.current.data).toEqual(pending));
+
+    await act(async () => {
+      close.result.current.mutate();
+    });
+
+    await waitFor(() => expect(orders.result.current.data).toEqual(rejected));
   });
 });
