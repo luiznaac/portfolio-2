@@ -176,6 +176,18 @@ describe("planSteps", () => {
     expect(steps.find((step) => step.key === "execution")?.meta).toBe("1/2 executadas · 1 parcial");
   });
 
+  it("marks every step done for a closed month even when its targets are not in the snapshot", () => {
+    const steps = planSteps({
+      month: month({ status: "CLOSED" }),
+      targets: targets(),
+      orders: orders({ orders: [order("IMPORTED", 10)] }),
+    });
+
+    expect(doneStepCount(steps)).toBe(PLAN_STEPS_TOTAL);
+    expect(steps.find((step) => step.key === "targets")?.meta).toBe("congelado no snapshot");
+    expect(steps.find((step) => step.key === "close")?.meta).toBe("snapshot gravado");
+  });
+
   it("returns the last step when the whole month is done", () => {
     const steps = planSteps({
       month: month({ status: "CLOSED" }),
