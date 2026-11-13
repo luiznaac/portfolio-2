@@ -20,7 +20,9 @@ import dev.agner.portfolio.usecase.import.repository.IImportRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.Institution
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
+import dev.agner.portfolio.usecase.listedasset.CustodySnapshotService
 import dev.agner.portfolio.usecase.listedasset.TradeService
+import dev.agner.portfolio.usecase.listedasset.model.CustodyPosition
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -39,12 +41,14 @@ class ImportServiceTest : StringSpec({
     val tradeService = mockk<TradeService>(relaxed = true)
     val institutionService = mockk<InstitutionService>(relaxed = true)
     val catalogService = mockk<CatalogService>(relaxed = true)
+    val custodySnapshot = mockk<CustodySnapshotService>(relaxed = true)
     val transaction = CountingTransaction()
     val service = ImportService(
         repository,
         tradeService,
         institutionService,
         catalogService,
+        custodySnapshot,
         transaction,
     )
 
@@ -85,15 +89,31 @@ class ImportServiceTest : StringSpec({
 
         shouldThrow<UnsupportedImportDestinationException> {
             service.stage(
-                ImportSource.B3_TRADES,
-                "neg.xlsx",
+                ImportSource.B3_MOVEMENTS,
+                "mov.xlsx",
                 HASH,
                 listOf(payload),
-                ImportDestination(ImportDestinationObject.POSITIONS),
+                ImportDestination(ImportDestinationObject.INCOME),
             )
         }
 
         coVerify(exactly = 0) { repository.save(any()) }
+    }
+
+    "stage should accept a custody snapshot for the POSITIONS pipeline" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+        val captured = slot<ImportCreation>()
+        coEvery { repository.save(capture(captured)) } returns stagedImport
+
+        service.stage(
+            ImportSource.B3_POSITION,
+            "posicao.xlsx",
+            HASH,
+            listOf(payload),
+            ImportDestination(ImportDestinationObject.POSITIONS),
+        ) shouldBe StagingResult(stagedImport, created = true)
+
+        captured.captured.destination shouldBe ImportDestination(ImportDestinationObject.POSITIONS)
     }
 
     "review should move a staged import to reviewed" {
@@ -229,12 +249,35 @@ class ImportServiceTest : StringSpec({
 
     "apply should refuse a record whose destination has no pipeline" {
         coEvery { repository.fetchById(1) } returns
-            reviewedImport.copy(destination = ImportDestination(ImportDestinationObject.POSITIONS))
+            reviewedImport.copy(destination = ImportDestination(ImportDestinationObject.INCOME))
 
         shouldThrow<UnsupportedImportDestinationException> { service.apply(1) }
 
         coVerify(exactly = 0) { tradeService.reconcile(any(), any()) }
         coVerify(exactly = 0) { repository.updateStatus(any(), any()) }
+    }
+
+    "apply should record a custody snapshot and mark its rows applied" {
+        val custodyImport = reviewedImport.copy(
+            destination = ImportDestination(ImportDestinationObject.POSITIONS),
+        )
+        val appliedCustody = custodyImport.copy(status = ImportStatus.APPLIED)
+        val snapshot = slot<List<CustodyPosition>>()
+        coEvery { repository.fetchById(1) } returns custodyImport
+        coEvery { repository.fetchRows(1) } returns listOf(row, errorRow)
+        coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedCustody
+        coEvery { custodySnapshot.apply(capture(snapshot)) } returns Unit
+
+        service.apply(1) shouldBe ImportApplyResult(
+            record = appliedCustody,
+            applied = 1,
+            rejected = 1,
+            skippedDuplicate = 0,
+        )
+
+        snapshot.captured shouldBe listOf(CustodyPosition("PETR4", BigDecimal("100")))
+        coVerify(exactly = 1) { catalogService.upsertTicker("PETR4") }
+        coVerify(exactly = 0) { tradeService.reconcile(any(), any()) }
     }
 
     "apply should run the whole batch inside one transaction" {
@@ -362,6 +405,22 @@ class ImportServiceTest : StringSpec({
         coEvery { repository.fetchById(1) } returns null
 
         service.fetchRows(1) shouldBe null
+    }
+
+    "fetchRows should not walk the trade ledger for a custody import" {
+        coEvery { repository.fetchById(1) } returns
+            reviewedImport.copy(destination = ImportDestination(ImportDestinationObject.POSITIONS))
+        coEvery { repository.fetchRows(1) } returns listOf(row, row.copy(id = 12), errorRow)
+
+        service.fetchRows(1)!!.map { it.situation } shouldBe
+            listOf(
+                ImportRowSituation.NEW,
+                ImportRowSituation.NEW,
+                ImportRowSituation.ERROR,
+            )
+
+        coVerify(exactly = 0) { institutionService.fetchByName(any()) }
+        coVerify(exactly = 0) { tradeService.countByKey(any()) }
     }
 })
 

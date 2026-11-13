@@ -12,6 +12,7 @@ import type {
   ImportApplyResult,
   ImportRow,
   ImportRowSituation,
+  Position,
   Strategy,
 } from "../api/types.ts";
 import { activeEdition as newestActiveEdition } from "../lib/strategy.ts";
@@ -28,6 +29,7 @@ const state = vi.hoisted(() => ({
   applyCalls: 0,
   strategies: [] as Strategy[],
   editions: [] as Edition[],
+  positions: [] as Position[],
   editionInput: null as { strategyId: number; file: File } | null,
   importedEdition: null as EditionImport | null,
   activations: [] as { strategyId: number; activation: EditionActivation }[],
@@ -44,6 +46,7 @@ vi.mock("../api/queries.ts", () => ({
   }),
   useImport: () => ({ data: state.record ?? undefined, isLoading: false }),
   useImportRows: () => ({ data: state.rows, isLoading: false }),
+  usePositions: () => ({ data: state.positions, isLoading: false }),
   useReviewImport: () => ({
     mutate: (_id: number, options?: { onSuccess?: (value: unknown) => void }) => {
       state.reviewCalls += 1;
@@ -94,14 +97,17 @@ vi.mock("../api/queries.ts", () => ({
   }),
 }));
 
-function importRecord(status: Import["status"]): Import {
+function importRecord(
+  status: Import["status"],
+  object: Import["destination"]["object_type"] = "TRADES",
+): Import {
   return {
     id: 7,
-    source: "B3_TRADES",
-    file_name: "neg.xlsx",
+    source: object === "POSITIONS" ? "B3_POSITION" : "B3_TRADES",
+    file_name: object === "POSITIONS" ? "posicao.xlsx" : "neg.xlsx",
     file_hash: "0123456789abcdef",
     status,
-    destination: { object_type: "TRADES" },
+    destination: { object_type: object },
     has_original: true,
     created_at: "2026-10-14T10:00:00",
   };
@@ -157,6 +163,25 @@ const stagedEdition: Edition = {
   ],
 };
 
+function custodyRow(id: number, ticker: string, quantity: number): ImportRow {
+  return {
+    id,
+    import_id: 7,
+    date: "2026-11-13",
+    side: "BUY",
+    venue: "CUSTODIA",
+    ticker,
+    quantity,
+    unit_price: 0,
+    institution_name: "CUSTODIA",
+    situation: "new",
+  };
+}
+
+function custodyPosition(ticker: string, quantity: number): Position {
+  return { ticker, quantity, average_price: 10 };
+}
+
 function LocationProbe() {
   const location = useLocation();
   return <p data-testid="location">{location.pathname}</p>;
@@ -187,6 +212,7 @@ beforeEach(() => {
   state.applyCalls = 0;
   state.strategies = [];
   state.editions = [];
+  state.positions = [];
   state.editionInput = null;
   state.importedEdition = null;
   state.activations = [];
@@ -277,6 +303,64 @@ describe("the import assistant", () => {
 
     expect(screen.getByTestId("location").textContent).toBe("/imports");
     expect(state.applyCalls).toBe(0);
+  });
+
+  it("stages a custody upload as the POSITIONS destination", async () => {
+    state.staged = { import: importRecord("STAGED", "POSITIONS"), created: true };
+    state.record = importRecord("STAGED", "POSITIONS");
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant?object=POSITIONS");
+
+    expect(screen.getAllByText("Ativos · Posições").length).toBeGreaterThan(0);
+    expect(screen.getByText(/B3 — posição em custódia/)).toBeDefined();
+
+    await user.upload(screen.getByLabelText("Arquivo"), new File(["x"], "posicao.xlsx"));
+    await user.click(screen.getByRole("button", { name: "Enviar e revisar" }));
+
+    expect(state.stageInput).toEqual({
+      source: "B3_POSITION",
+      file: expect.any(File),
+      destination: "POSITIONS",
+    });
+    expect(state.reviewCalls).toBe(0);
+    expect(state.applyCalls).toBe(0);
+    expect(screen.getByTestId("location").textContent).toBe("/imports/assistant/7");
+  });
+
+  it("renders the custody divergences and still allows apply", async () => {
+    state.record = importRecord("STAGED", "POSITIONS");
+    state.reviewed = importRecord("REVIEWED", "POSITIONS");
+    state.applied = {
+      record: importRecord("APPLIED", "POSITIONS"),
+      applied: 2,
+      rejected: 0,
+      skipped_duplicate: 0,
+    };
+    state.rows = [custodyRow(1, "PETR4", 150), custodyRow(2, "VALE3", 20)];
+    state.positions = [custodyPosition("PETR4", 100), custodyPosition("VALE3", 50)];
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant/7");
+
+    expect(screen.getByRole("heading", { name: "Divergências" })).toBeDefined();
+    expect(screen.getByText("+50")).toBeDefined();
+    expect(screen.getByText("−30")).toBeDefined();
+    expect(screen.getByText("compra faltante")).toBeDefined();
+    expect(screen.getByText("venda faltante · proventos pendentes")).toBeDefined();
+    expect(screen.getByText(/Uma divergência não bloqueia a aplicação/)).toBeDefined();
+    expect(screen.getByText("2 divergências")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Continuar →" }));
+
+    expect(state.reviewCalls).toBe(1);
+    expect(screen.getByRole("heading", { name: "O que esta importação muda" })).toBeDefined();
+    expect(screen.getAllByText("Ativos · Lacunas").length).toBeGreaterThan(0);
+    const applyButton = screen.getByRole("button", { name: "Aplicar 2 posições" });
+    expect((applyButton as HTMLButtonElement).disabled).toBe(false);
+
+    await user.click(applyButton);
+
+    expect(state.applyCalls).toBe(1);
+    expect(screen.getByTestId("location").textContent).toBe("/ativos/positions");
   });
 
   it("stages an XP report against its strategy and renders the edition diff", async () => {

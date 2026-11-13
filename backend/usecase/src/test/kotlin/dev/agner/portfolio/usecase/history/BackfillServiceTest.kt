@@ -2,16 +2,13 @@ package dev.agner.portfolio.usecase.history
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
-import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
-import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.history.model.BackfillReport
+import dev.agner.portfolio.usecase.listedasset.CustodySnapshotService
 import dev.agner.portfolio.usecase.listedasset.GapService
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
-import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
-import dev.agner.portfolio.usecase.quotes.QuoteService
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -137,18 +134,12 @@ private fun service(
 ): BackfillService {
     val transaction = mockk<ITransactionTemplate>()
     coEvery { transaction.execute<Any?>(any()) } coAnswers { firstArg<suspend () -> Any?>().invoke() }
-    val gaps = mockk<IGapRepository>(relaxed = true)
-    val quotes = mockk<QuoteService>(relaxed = true)
     return BackfillService(
         trades = repository,
         positions = positions,
-        gaps = gaps,
         gapService = mockk<GapService>(relaxed = true),
-        corporateActions = mockk<ICorporateActionRepository>(relaxed = true).also {
-            coEvery { it.fetchAll() } returns emptyList<CorporateAction>()
-        },
+        custodySnapshot = mockk<CustodySnapshotService>(relaxed = true),
         institutions = mockk(relaxed = true),
-        quotes = quotes,
         transaction = transaction,
     )
 }

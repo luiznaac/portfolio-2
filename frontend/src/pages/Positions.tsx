@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCurrentAllocation, useGaps, usePositions } from "../api/queries.ts";
 import { BulkClassifyModal } from "../components/BulkClassifyModal.tsx";
 import { Button } from "../components/Button.tsx";
@@ -11,6 +11,7 @@ import { type Column, Table } from "../components/Table.tsx";
 import { TickerDrawer } from "../components/TickerDrawer.tsx";
 import { usePageFilters } from "../hooks/usePageFilters.ts";
 import { formatCurrency, formatIsoDate, formatNumber } from "../lib/format.ts";
+import { assistantPath } from "../lib/importDestinations.ts";
 import {
   type PositionRow,
   type PositionsTotal,
@@ -142,11 +143,19 @@ export function Positions() {
       <Panel
         title="Posições"
         action={
-          hasUnclassified ? (
-            <Button variant="ghost" onClick={() => setBulkOpen(true)}>
-              Classificar sem classe
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-3">
+            {hasUnclassified && (
+              <Button variant="ghost" onClick={() => setBulkOpen(true)}>
+                Classificar sem classe
+              </Button>
+            )}
+            <Link
+              to={assistantPath("POSITIONS")}
+              className="text-[12px] font-medium text-accent hover:underline"
+            >
+              Importar custódia →
+            </Link>
+          </div>
         }
       >
         {rows.length === 0 ? (

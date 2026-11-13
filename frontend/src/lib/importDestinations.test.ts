@@ -29,10 +29,21 @@ describe("import destinations", () => {
     expect(resolveDestination("nope")).toBe(DESTINATIONS.TRADES);
   });
 
-  it("keeps a typed destination's own route even before its assistant variant lands", () => {
-    expect(DESTINATIONS.POSITIONS.label).toBe("Ativos · Posições");
+  it("names the custody destination with its snapshot pipeline", () => {
+    const custody = DESTINATIONS.POSITIONS;
+
+    expect(custody.label).toBe("Ativos · Posições");
     expect(destinationRoute("POSITIONS")).toBe("/ativos/positions");
-    expect(DESTINATIONS.POSITIONS.supported).toBe(false);
+    expect(custody.source).toBe("B3_POSITION");
+    expect(custody.supported).toBe(true);
+    expect(custody.changes.map((change) => change.object)).toEqual([
+      "Ativos · Posições",
+      "Ativos · Lacunas",
+    ]);
+    expect(custody.mapping.map((cell) => cell.from)).toEqual([
+      "Código de Negociação",
+      "Quantidade",
+    ]);
   });
 
   it("names the XP edition destination with its strategy-edition pipeline", () => {

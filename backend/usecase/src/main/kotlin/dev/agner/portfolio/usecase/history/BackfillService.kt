@@ -1,51 +1,38 @@
 package dev.agner.portfolio.usecase.history
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
-import dev.agner.portfolio.usecase.commons.logger
-import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
-import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.history.model.BackfillReport
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
+import dev.agner.portfolio.usecase.listedasset.CustodySnapshotService
 import dev.agner.portfolio.usecase.listedasset.GapService
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.CustodyPosition
-import dev.agner.portfolio.usecase.listedasset.model.Gap
-import dev.agner.portfolio.usecase.listedasset.model.GapCreation
 import dev.agner.portfolio.usecase.listedasset.model.OpeningSeedCreation
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.model.isImported
-import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
-import dev.agner.portfolio.usecase.quotes.QuoteService
-import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.time.Clock
 
 // The history backfill: it turns the adoption seeds and the custody cross-check into a ledger the
 // series can be replayed from. Absorb retires each OPENING seed the imported history now covers;
-// reconcile retires a GAP a true trade has replaced; detect records a GAP for a custody delta still
-// unexplained. Every touched ticker's projection is replayed once, so Position, average price and
-// the GAP replay agree before the run returns.
+// reconcile retires a GAP a true trade has replaced; the custody snapshot records a GAP for a delta
+// still unexplained. Every touched ticker's projection is replayed once, so Position, average price
+// and the GAP replay agree before the run returns.
 @Service
 class BackfillService(
     private val trades: ITradeRepository,
     private val positions: PositionService,
-    private val gaps: IGapRepository,
     private val gapService: GapService,
-    private val corporateActions: ICorporateActionRepository,
+    private val custodySnapshot: CustodySnapshotService,
     private val institutions: InstitutionService,
-    private val quotes: QuoteService,
     private val transaction: ITransactionTemplate,
-    private val clock: Clock = Clock.systemDefaultZone(),
 ) {
-
-    private val log = logger()
 
     // Absorbing and detecting share one transaction: a run either leaves the ledger and its
     // projections consistent or changes nothing. `custody` is the end-of-window Posição export;
@@ -63,7 +50,7 @@ class BackfillService(
         // absorbed nothing would otherwise read as a no-op.
         val ledgerTrades = trades.fetchAll()
         val ledgerTickers = ledgerTrades.map { it.ticker }.toSet()
-        val created = detectGaps(custody, ledgerTrades)
+        val created = custodySnapshot.openGaps(custody)
         val touched = absorbed.tickers.toSet() + ledgerTickers + created.map { it.ticker }
         touched.forEach { positions.reproject(it) }
 
@@ -139,80 +126,6 @@ class BackfillService(
             .fold(BigDecimal.ZERO) { quantity, trade ->
                 if (trade is Trade.Buy) quantity + trade.quantity else quantity - trade.quantity
             }
-
-    // Custody minus ledger, per ticker: what the ledger holds but no record explains becomes a GAP.
-    // An upward delta is a missing buy, priced at the current market close; a downward delta is a
-    // missing sale whose proceeds are unknown, so it stays unpriced and its realized result pending.
-    private suspend fun detectGaps(
-        custody: List<CustodyPosition>,
-        ledgerTrades: List<Trade>,
-    ): List<Gap> {
-        if (custody.isEmpty()) return emptyList()
-
-        val ledger = positions.fetchAll().associateBy { it.ticker }
-        val tradeWatermark = ledgerTrades.maxOfOrNull { it.id } ?: 0
-        val actionWatermark = corporateActions.fetchAll().maxOfOrNull { it.id } ?: 0
-        val custodyByTicker = custody
-            .groupBy { it.ticker.normalizedTicker() }
-            .mapValues { (_, rows) -> rows.map { it.quantity }.fold(BigDecimal.ZERO, BigDecimal::add) }
-
-        return (ledger.keys + custodyByTicker.keys).sorted().mapNotNull { ticker ->
-            val delta = (custodyByTicker[ticker] ?: BigDecimal.ZERO) - (ledger[ticker]?.quantity ?: BigDecimal.ZERO)
-            when {
-                delta.signum() > 0 -> upwardGap(
-                    ticker = ticker,
-                    quantity = delta,
-                    fallbackPrice = ledger[ticker]?.averagePrice,
-                    tradeWatermark = tradeWatermark,
-                    actionWatermark = actionWatermark,
-                )
-                delta.signum() < 0 -> downwardGap(ticker, delta.negate(), tradeWatermark, actionWatermark)
-                else -> null
-            }
-        }
-    }
-
-    private suspend fun upwardGap(
-        ticker: String,
-        quantity: BigDecimal,
-        fallbackPrice: BigDecimal?,
-        tradeWatermark: Int,
-        actionWatermark: Int,
-    ): Gap? {
-        // The placeholder is a market price (D9: Preço de Fechamento). With no close and no ledger
-        // average there is no honest cost: leave the delta unexplained rather than fabricating zero.
-        val price = quotes.latestClose(ticker) ?: fallbackPrice
-        if (price == null || price.signum() == 0) {
-            log.warn("No market price for {} — leaving the custody delta open instead of pricing it at zero", ticker)
-            return null
-        }
-
-        return gaps.save(
-            GapCreation.MissingBuy(
-                ticker = ticker,
-                date = LocalDate.today(clock),
-                quantity = quantity,
-                unitPrice = price,
-                tradeWatermark = tradeWatermark,
-                actionWatermark = actionWatermark,
-            ),
-        )
-    }
-
-    private suspend fun downwardGap(
-        ticker: String,
-        quantity: BigDecimal,
-        tradeWatermark: Int,
-        actionWatermark: Int,
-    ) = gaps.save(
-        GapCreation.MissingSale(
-            ticker = ticker,
-            date = LocalDate.today(clock),
-            quantity = quantity,
-            tradeWatermark = tradeWatermark,
-            actionWatermark = actionWatermark,
-        ),
-    )
 }
 
 private const val ADOPTION_INSTITUTION = "ADOPTION"

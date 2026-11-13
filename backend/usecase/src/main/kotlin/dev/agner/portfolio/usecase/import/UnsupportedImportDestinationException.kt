@@ -4,8 +4,8 @@ import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.import.model.ImportDestination
 
 // The typed destination is recorded for every pipeline, but only the ones whose assistant variant
-// has landed can stage and apply. Refusing early keeps a POSITIONS/INCOME record from silently
-// writing trades.
+// has landed can stage and apply. Refusing early keeps an INCOME/CORPORATE_ACTIONS record from
+// silently writing trades.
 class UnsupportedImportDestinationException(
     destination: ImportDestination,
 ) : DomainException(

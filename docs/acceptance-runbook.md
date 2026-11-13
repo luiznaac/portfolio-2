@@ -1121,6 +1121,36 @@ SQL
 
 A diff that omits a weight, rating or target-price move, an alert rendered only as a colour, a discard that changes the editions, a promote that leaves the active edition unchanged, an active edition that changes before the promote action, or a missing next-recompute note is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — import assistant custody variant (issue [#383](https://github.com/luiznaac/portfolio-2/issues/383))
+
+**Scenario**: the run drives the custody variant of the import assistant on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the ledger, import, gap and month tables and seeds six held tickers with their trades and stored projections. The committed custody fixture then diverges on two of them: PETR4 carries 250 units in the ledger against 200 in custody (a missing sale whose proceeds stay pending) and ALUP11 carries 100 against 150 (a missing buy priced at the ledger's average). Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade;
+DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote;
+DELETE FROM gap; DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution;
+DELETE FROM import_file; DELETE FROM import_row; DELETE FROM import;
+INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+SET @inst := LAST_INSERT_ID();
+INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+  ('PETR4','2020-02-10','VISTA',250,10,@inst,NULL,'B3_IMPORT',FALSE,1,NOW()),
+  ('ALUP11','2020-02-10','VISTA',100,10,@inst,NULL,'B3_IMPORT',FALSE,1,NOW()),
+  ('HGLG11','2020-02-10','VISTA',60,10,@inst,NULL,'B3_IMPORT',FALSE,1,NOW()),
+  ('KNCR11','2020-02-10','VISTA',40,10,@inst,NULL,'B3_IMPORT',FALSE,1,NOW()),
+  ('VISC11','2020-02-10','VISTA',25,10,@inst,NULL,'B3_IMPORT',FALSE,1,NOW()),
+  ('XPML11','2020-02-10','VISTA',20,10,@inst,NULL,'B3_IMPORT',FALSE,1,NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES
+  ('PETR4',250,10), ('ALUP11',100,10), ('HGLG11',60,10),
+  ('KNCR11',40,10), ('VISC11',25,10), ('XPML11',20,10);
+SQL
+```
+
+[`posicao-custodia-2020.xlsx`](acceptance/fixtures/posicao-custodia-2020.xlsx) — the committed B3 Posição export (ALUP11 150, PETR4 200, HGLG11 60, KNCR11 40, VISC11 25, XPML11 20), pinned by `B3CustodyAcceptanceFixtureTest` — is staged through the assistant's own file input via the browser capability's `upload` action. In order: Ativos · Posições carries the `Importar custódia →` link, which opens `/imports/assistant?object=POSITIONS` on step 1 `Arquivo` with Ativos · Posições and the B3 posição parser pre-filled; choosing the workbook enables `Enviar e revisar`, which stages the snapshot and opens step 2 `Destino` with Aplicação `aplicar as linhas válidas`; `Continuar →` reaches step 3 `Divergências`, whose panel lists the six tickers with PETR4 `250 → 200` as `−50` / `venda faltante · proventos pendentes`, ALUP11 `100 → 150` as `+50` / `compra faltante` and the four FIIs as `confere`, and whose callout states that a divergence does not block the apply; `Continuar →` reaches step 4 `Aplicar`, whose "O que esta importação muda" card names Ativos · Posições and Ativos · Lacunas and whose `Aplicar 6 posições` action stays enabled. Applying lands on `/ativos/positions`, where PETR4 reads 200 and ALUP11 reads 150; `/ativos/gaps` then lists the two new gaps — PETR4 as `pendente` (a missing sale's realized result is pending) and ALUP11 as `aproximado` (a missing buy at the market placeholder) — while the four FIIs have no gap.
+
+The HTTP reads are the same evidence at the wire: after the apply, `GET /positions` carries PETR4 200 and ALUP11 150, and `GET /gaps` carries one gap per divergence — PETR4 quantity 50 with `realized_pending: true`, ALUP11 quantity 50 with a `unit_price`. An apply that stays on the assistant, a divergence that disables the apply action, a position that is not the custody quantity, a missing gap, or a pending flag on the missing-buy gap is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — Importações · Fontes failed-beside-accepted (issue [#417](https://github.com/luiznaac/portfolio-2/issues/417))
 
 **Scenario**: the run drives the Fontes card's failed-file-beside-accepted state — the one state no staging path can produce, because ADR 0003 makes an unreadable file a 4xx that stages nothing. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the import tables and seeds one `B3_TRADES` source with an older `APPLIED` record (id 9501, `b3-negociacao.xlsx`) and a newer `FAILED` record (id 9502, `b3-negociacao-failed.xlsx`) under the committed fixtures' own SHA-256s, so the failed attempt is the latest and the applied one is the last success. Run it independently of the other seeds.

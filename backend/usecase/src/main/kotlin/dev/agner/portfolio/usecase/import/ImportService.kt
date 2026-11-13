@@ -22,7 +22,9 @@ import dev.agner.portfolio.usecase.import.repository.IImportRepository
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
 import dev.agner.portfolio.usecase.institution.model.normalizedInstitutionName
+import dev.agner.portfolio.usecase.listedasset.CustodySnapshotService
 import dev.agner.portfolio.usecase.listedasset.TradeService
+import dev.agner.portfolio.usecase.listedasset.model.CustodyPosition
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
@@ -36,6 +38,7 @@ class ImportService(
     private val tradeService: TradeService,
     private val institutionService: InstitutionService,
     private val catalogService: CatalogService,
+    private val custodySnapshot: CustodySnapshotService,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -90,7 +93,23 @@ class ImportService(
     suspend fun fetchOriginal(id: Int) = repository.fetchOriginal(id)
 
     suspend fun fetchRows(id: Int): List<ImportRow>? =
-        repository.fetchById(id)?.let { repository.fetchRows(id).withSituations() }
+        repository.fetchById(id)?.let { import ->
+            val rows = repository.fetchRows(id)
+            // The trade occurrence walk only means something for a ledger import; a custody row is
+            // a snapshot line, so its situation is `new` (or `error`) by shape.
+            when (import.destination.objectType) {
+                ImportDestinationObject.POSITIONS -> rows.map { row ->
+                    row.copy(
+                        situation = if (row.error != null) {
+                            ImportRowSituation.ERROR
+                        } else {
+                            ImportRowSituation.NEW
+                        },
+                    )
+                }
+                else -> rows.withSituations()
+            }
+        }
 
     suspend fun review(id: Int): Import? {
         val import = repository.fetchById(id) ?: return null
@@ -98,51 +117,86 @@ class ImportService(
         return repository.updateStatus(id, ImportStatus.REVIEWED)
     }
 
-    // Apply materializes the reviewed rows into the ledger: each error-free row becomes a trade
-    // unless reconciliation says the ledger already holds it. Unknown tickers auto-enter the
-    // catalog and institutions auto-create on first sight. Rows are grouped by institution name to
-    // create/fetch each institution once, and by natural tuple so the occurrence walk sees one
-    // tuple's rows together. A manual trade the import matches is skipped and marked confirmed by
-    // B3; an occurrence the ledger already holds is skipped (dedup). Flagged rows are skipped, so a
-    // row-level problem never blocks the batch. Every row's outcome is persisted, so the rejected
-    // rows stay visible as the retry batch. The whole batch runs in one transaction, so a failure
-    // part way through cannot leave a half-applied ledger behind a still-REVIEWED import.
+    // Apply materializes the reviewed rows into the destination named by the record. A ledger
+    // import writes trades; a custody snapshot overwrites positions and opens a GAP per divergence.
     suspend fun apply(id: Int): ImportApplyResult? {
         val import = repository.fetchById(id) ?: return null
         requireStatus(import, ImportStatus.REVIEWED)
-        requireSupported(import.destination)
 
-        return transaction.execute {
-            val rows = repository.fetchRows(id).withSituations()
-            val errorFreeRows = rows.filter { it.error == null }
-            // Auto-enter unknown tickers into the catalog before creating trades.
-            errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
-                catalogService.upsertTicker(ticker)
+        return when (import.destination.objectType) {
+            ImportDestinationObject.TRADES -> applyTrades(import)
+            ImportDestinationObject.POSITIONS -> applyCustody(import)
+            else -> throw UnsupportedImportDestinationException(import.destination)
+        }
+    }
+
+    // Each error-free row becomes a trade unless reconciliation says the ledger already holds it.
+    // Unknown tickers auto-enter the catalog and institutions auto-create on first sight. Rows are
+    // grouped by institution name to create/fetch each institution once, and by natural tuple so
+    // the occurrence walk sees one tuple's rows together. A manual trade the import matches is
+    // skipped and marked confirmed by B3; an occurrence the ledger already holds is skipped (dedup).
+    // Flagged rows are skipped, so a row-level problem never blocks the batch. Every row's outcome
+    // is persisted, so the rejected rows stay visible as the retry batch. The whole batch runs in one
+    // transaction, so a failure part way through cannot leave a half-applied ledger behind a
+    // still-REVIEWED import.
+    private suspend fun applyTrades(import: Import): ImportApplyResult = transaction.execute {
+        val rows = repository.fetchRows(import.id).withSituations()
+        val errorFreeRows = rows.filter { it.error == null }
+        // Auto-enter unknown tickers into the catalog before creating trades.
+        errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
+            catalogService.upsertTicker(ticker)
+        }
+
+        // Each institution is created/fetched once from its group's own normalized key — the
+        // rows in that group map through the institution id the key resolved to.
+        val creations = errorFreeRows
+            .groupBy { it.institutionName.normalizedInstitutionName() }
+            .flatMap { (name, grouped) ->
+                val institution = institutionService.create(InstitutionCreation(name))
+                grouped.map { it.toCreation(institution.id) }
             }
 
-            // Each institution is created/fetched once from its group's own normalized key — the
-            // rows in that group map through the institution id the key resolved to.
-            val creations = errorFreeRows
-                .groupBy { it.institutionName.normalizedInstitutionName() }
-                .flatMap { (name, grouped) ->
-                    val institution = institutionService.create(InstitutionCreation(name))
-                    grouped.map { it.toCreation(institution.id) }
-                }
+        creations
+            .groupBy { it.naturalKey() }
+            .forEach { (key, grouped) -> tradeService.reconcile(key, grouped) }
 
-            creations
-                .groupBy { it.naturalKey() }
-                .forEach { (key, grouped) -> tradeService.reconcile(key, grouped) }
+        completeApply(import.id, rows.outcomes())
+    }
 
-            val outcomes = rows.outcomes()
-            repository.saveOutcomes(id, outcomes)
-            val applied = repository.updateStatus(id, ImportStatus.APPLIED)
-            ImportApplyResult(
-                record = requireNotNull(applied) { "Import $id disappeared during apply" },
-                applied = outcomes.count { it.value == ImportRowOutcome.APPLIED },
-                rejected = outcomes.count { it.value == ImportRowOutcome.REJECTED },
-                skippedDuplicate = outcomes.count { it.value == ImportRowOutcome.SKIPPED_DUPLICATE },
-            )
+    // A custody snapshot is state-like: every error-free line overwrites its ticker's position and
+    // a delta the ledger cannot explain opens a GAP. A divergence never blocks the batch — the GAP
+    // is the reconciliation queue (Ativos · Lacunas), not a failure.
+    private suspend fun applyCustody(import: Import): ImportApplyResult = transaction.execute {
+        val rows = repository.fetchRows(import.id)
+        val errorFreeRows = rows.filter { it.error == null }
+        errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
+            catalogService.upsertTicker(ticker)
         }
+
+        custodySnapshot.apply(errorFreeRows.map { CustodyPosition(it.ticker, it.quantity) })
+
+        completeApply(
+            import.id,
+            rows.associate { row ->
+                row.id to if (row.error == null) ImportRowOutcome.APPLIED else ImportRowOutcome.REJECTED
+            },
+        )
+    }
+
+    // The shared tail of an apply: persist each row's decision, mark the record applied and report
+    // the counts over those decisions.
+    private suspend fun completeApply(
+        importId: Int,
+        outcomes: Map<Int, ImportRowOutcome>,
+    ): ImportApplyResult {
+        repository.saveOutcomes(importId, outcomes)
+        val applied = repository.updateStatus(importId, ImportStatus.APPLIED)
+        return ImportApplyResult(
+            record = requireNotNull(applied) { "Import $importId disappeared during apply" },
+            applied = outcomes.count { it.value == ImportRowOutcome.APPLIED },
+            rejected = outcomes.count { it.value == ImportRowOutcome.REJECTED },
+            skippedDuplicate = outcomes.count { it.value == ImportRowOutcome.SKIPPED_DUPLICATE },
+        )
     }
 
     // The review's per-row verdict, computed on read with the same natural tuple + occurrence walk
@@ -226,14 +280,19 @@ class ImportService(
         if (import.status != expected) throw InvalidImportStateException(import.id, expected, import.status)
     }
 
-    // The trades pipeline is the only destination variant that has landed; the typed destination
+    // Only the destinations whose own pipeline has landed can stage and apply; the typed destination
     // keeps the others nameable so their own slices can add the pipeline without a schema change.
     private fun requireSupported(destination: ImportDestination) {
-        if (destination.objectType != ImportDestinationObject.TRADES) {
+        if (destination.objectType !in SUPPORTED_DESTINATIONS) {
             throw UnsupportedImportDestinationException(destination)
         }
     }
 }
+
+private val SUPPORTED_DESTINATIONS = setOf(
+    ImportDestinationObject.TRADES,
+    ImportDestinationObject.POSITIONS,
+)
 
 // The occurrence identity of one staged row within its file: the natural tuple, with the
 // institution kept as its normalized name because a staged row has no institution id until apply

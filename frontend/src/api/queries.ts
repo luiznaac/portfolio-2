@@ -168,11 +168,13 @@ export function useTradeLedger(query: TradeLedgerQuery) {
 }
 
 // The stored custody projection — the import result counts how many positions the book holds and
-// how many are negative, which trades alone cannot answer.
-export function usePositions() {
+// how many are negative, which trades alone cannot answer. The custody assistant enables it only
+// for a POSITIONS session, so a ledger upload never pays for the read.
+export function usePositions(enabled = true) {
   return useQuery({
     queryKey: ["positions"],
     queryFn: api.getPositions,
+    enabled,
   });
 }
 
@@ -678,10 +680,12 @@ export function useApplyImport() {
   return useMutation<ImportApplyResult, Error, number>({
     mutationFn: (importId: number) => api.applyImport(importId),
     // Apply writes the ledger and auto-enters unknown tickers into the catalog, so the result's
-    // custody and data-quality counts must refresh alongside the import and trade lists.
+    // custody and data-quality counts must refresh alongside the import and trade lists. A custody
+    // snapshot also opens gaps, so the Lacunas read is stale too.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["imports"] });
       queryClient.invalidateQueries({ queryKey: ["trades"] });
+      queryClient.invalidateQueries({ queryKey: ["gaps"] });
       invalidateLedgerReads(queryClient);
     },
   });
