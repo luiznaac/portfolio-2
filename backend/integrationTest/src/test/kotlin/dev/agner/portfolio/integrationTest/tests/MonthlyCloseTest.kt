@@ -18,6 +18,8 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.monthlyclose.SnapshotAlreadyExistsException
 import dev.agner.portfolio.usecase.monthlyclose.repository.ISnapshotRepository
+import dev.agner.portfolio.usecase.order.OrderLifecycleService
+import dev.agner.portfolio.usecase.order.model.TransferStatus
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.ClassTarget
 import dev.agner.portfolio.usecase.portfolio.model.MonthCreation
@@ -105,6 +107,23 @@ class MonthlyCloseTest : StringSpec({
         val acoes = persisted.state.classes.first { it.assetClass == AssetClass.ACOES }
         acoes.actual.compareTo(BigDecimal("1000.00")) shouldBe 0
         acoes.unattributed.compareTo(BigDecimal.ZERO) shouldBe 0
+    }
+
+    "rejecting the pending transfer releases the close gate" {
+        val monthId = openMonthWithPendingTransfer()
+        val orders = getBean<OrderLifecycleService>()
+        orders.refresh()
+        val pending = orders.fetch()!!.transfers.single { it.status == TransferStatus.PENDING }
+        val client = getBean<HttpClient>()
+
+        client.post("${appBaseUrl()}/orders/transfers/${pending.id}/reject").status shouldBe
+            HttpStatusCode.OK
+
+        val closed = client.post("${appBaseUrl()}/month/current/close")
+
+        closed.status shouldBe HttpStatusCode.OK
+        (getBean<ISnapshotRepository>().fetchByMonth(monthId) != null) shouldBe true
+        getBean<MonthService>().fetchCurrent() shouldBe null
     }
 
     "a pending transfer blocks the close and leaves the month open" {

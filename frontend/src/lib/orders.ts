@@ -72,6 +72,24 @@ export function transferCopy(
     : `evita vender ${formatCurrency(transfer.amount)}`;
 }
 
+// A transfer's quantity with its unit — one slice moves as a cota.
+export function transferQuantityLabel(quantity: number): string {
+  return `${formatNumber(quantity)} ${quantity === 1 ? "cota" : "cotas"}`;
+}
+
+// The decision is atomic, so the effect has exactly two readings: an approval moves the proposal's
+// whole quantity and a rejection moves none. There is no partial wording to offer.
+export function transferEffect(quantity: number): string {
+  return `aprovar move ${transferQuantityLabel(quantity)} · rejeitar não move nenhuma`;
+}
+
+// The outcome a decided row shows: an approval moved its whole quantity, a rejection moved none.
+export function transferOutcome(transfer: TransferProposal): string {
+  return transfer.status === "APPROVED"
+    ? `moveu ${transferQuantityLabel(transfer.quantity)}`
+    : "não moveu nenhuma cota";
+}
+
 export interface OrderGroup {
   label: string;
   orders: SuggestedOrder[];
