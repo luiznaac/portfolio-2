@@ -3,7 +3,7 @@
 // missing list is an empty one.
 
 import type { Allocation, Gap } from "../api/types.ts";
-import { openGaps } from "./history.ts";
+import { openGaps } from "./gaps.ts";
 
 export interface DataQualityCounts {
   unpriced: number;

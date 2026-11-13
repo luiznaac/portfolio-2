@@ -1107,3 +1107,35 @@ SQL
 ```
 
 The ledger holds 55 executions: the first page reads `50 de 55` with a next cursor, and the total row covers all 55 (R$ 5.826,00 — the four named rows total R$ 4.500,00 and the generated quantities sum to R$ 1.326,00). `ticker=VALE3` narrows to one row (R$ 2.000,00); `side=SELL` and the window `2026-10-02..2026-10-03` each narrow to the two named rows (R$ 2.600,00). Clearing a filter returns to the first page (`50 de 55`), never the pages loaded before the filter. Ativos · Negócios also hosts **Reconstruir histórico**: skipping adoption unlocks the replay; the backfill renders its report; the custody cross-check accepts `posicao-custodia-2020.xlsx` and renders the drift table.
+
+## Acceptance scenario — Ativos · Cotações and Lacunas (issue [#381](https://github.com/luiznaac/portfolio-2/issues/381))
+
+**Scenario**: the run drives the two bounded Ativos lists on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents. It resets the ledger and gap tables and seeds five held tickers — four with a close (two of them 20 days old, so the status aggregate marks them stale) and one with no close — plus three gaps: an open missing sale whose proceeds are pending, an open missing buy priced at the market close, and a replaced missing buy. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM gap; DELETE FROM quote; DELETE FROM position; DELETE FROM ticker_catalog;
+DELETE FROM trade; DELETE FROM institution; DELETE FROM attribution;
+DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('VALE3','VALE','02',NULL,'STOCK','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('MSFT34','MICROSOFT','02',NULL,'BDR','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('NVDC34','NVIDIA','02',NULL,'BDR','ACOES',CURDATE(),CURDATE(),NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES
+  ('PETR4',100,30), ('VALE3',50,52), ('ITUB4',20,8), ('MSFT34',10,80), ('NVDC34',10,20);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+  ('PETR4',CURDATE(),39,'COTAHIST',NOW()),
+  ('VALE3',DATE_SUB(CURDATE(), INTERVAL 20 DAY),61.2,'COTAHIST',NOW()),
+  ('ITUB4',CURDATE(),9,'COTAHIST',NOW()),
+  ('MSFT34',DATE_SUB(CURDATE(), INTERVAL 20 DAY),84.2,'COTAHIST',NOW());
+INSERT INTO gap (ticker, date, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES
+  ('VALE3',DATE_SUB(CURDATE(), INTERVAL 2 DAY),'SELL',5,NULL,'OPEN',0,0,NOW()),
+  ('ITUB4',DATE_SUB(CURDATE(), INTERVAL 3 DAY),'BUY',8,9,'OPEN',0,0,NOW()),
+  ('MSFT34',DATE_SUB(CURDATE(), INTERVAL 30 DAY),'BUY',2,84.2,'REPLACED',0,0,NOW());
+SQL
+```
+
+On `/ativos/positions` the Ativos head and its five tabs are visible. Clicking **Cotações** opens `/ativos/quotes`: the table lists PETR4 (today's close, COTAHIST, **ok**), VALE3 and MSFT34 (**desatualizada · há 20 dias**), ITUB4 (today's close, **ok**) and NVDC34 (**sem cotação**), and the panel hosts the **Atualizar catálogo e cotações** action. Clicking **Lacunas** opens `/ativos/gaps`: the table lists VALE3 (**pendente**, **aberta**) with its proceeds field, ITUB4 (**aproximado**, **aberta**) at R$ 9,00 and MSFT34 (**resolvido**, **substituída**) at R$ 84,20. Filling VALE3's field with `61.20` and clicking **Salvar** flips that row to **resolvido** without a page reload; the pending chip disappears and two rows read resolvido. A Cotações table that hides the stale or unpriced state, a missing refresh action, a Lacunas list without the pending/approximate/replaced states or the pricing field, or a save that leaves the row pending is an automatic red; the evidence names the first failing intent.

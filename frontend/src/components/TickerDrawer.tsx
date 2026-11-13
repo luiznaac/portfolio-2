@@ -15,7 +15,7 @@ import {
 import type { AssetClass, Gap, Position, Quote, Trade } from "../api/types.ts";
 import { classificationNote, effectiveAssetClass } from "../lib/catalog.ts";
 import { formatCurrency, formatIsoDate, formatNumber, formatTradeSide } from "../lib/format.ts";
-import { openGaps } from "../lib/history.ts";
+import { openGaps } from "../lib/gaps.ts";
 import { latestQuote, positionValue } from "../lib/position.ts";
 import { ROUTES } from "../lib/routes.ts";
 import { AttributionPanel } from "./AttributionPanel.tsx";
