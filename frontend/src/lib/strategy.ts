@@ -5,6 +5,7 @@ import type {
   Edition,
   EditionDiff,
   EditionEntry,
+  EditionStatus,
   EditionSummary,
   ManualAllocation,
   MonthPerformance,
@@ -343,12 +344,93 @@ export function strategyFatiaView(
   };
 }
 
+// The newest edition in one lifecycle state. The strategy's current edition is its newest ACTIVE
+// one: promoting a further report leaves the older active editions ACTIVE as history, so a bare
+// status check would mark them all "ativa".
+function newestEdition(editions: Edition[], status: EditionStatus): Edition | undefined {
+  return [...editions]
+    .filter((edition) => edition.status === status)
+    .sort((left, right) => right.reference_month.localeCompare(left.reference_month))[0];
+}
+
 // The Carteira strip's edition: the newest staged report, if any. The active edition is not shown
 // here — the list already carries it, and the strip only asks for a review decision.
 export function stagedEdition(editions: Edition[]): Edition | undefined {
+  return newestEdition(editions, "STAGED");
+}
+
+export function activeEdition(editions: Edition[]): Edition | undefined {
+  return newestEdition(editions, "ACTIVE");
+}
+
+// The tone an edition chip carries; the timeline and the comparison list both draw from it.
+export type EditionChipTone = "green" | "amber" | "neutral";
+
+// One Edições timeline row: the edition, whether it is the current active one, and the chip the row
+// carries — "ativa", still-staged "revisão", or a superseded "anterior".
+export interface EditionTimelineRow {
+  edition: Edition;
+  active: boolean;
+  statusLabel: string;
+  tone: EditionChipTone;
+}
+
+export function editionTimeline(editions: Edition[]): EditionTimelineRow[] {
+  const current = activeEdition(editions);
   return [...editions]
-    .filter((edition) => edition.status === "STAGED")
-    .sort((left, right) => right.reference_month.localeCompare(left.reference_month))[0];
+    .sort((left, right) => {
+      const byMonth = right.reference_month.localeCompare(left.reference_month);
+      return byMonth !== 0
+        ? byMonth
+        : Number(right.status === "STAGED") - Number(left.status === "STAGED");
+    })
+    .map((edition) => {
+      const active = edition.id === current?.id;
+      if (active) {
+        return { edition, active, statusLabel: "ativa", tone: "green" };
+      }
+      return edition.status === "STAGED"
+        ? { edition, active, statusLabel: "revisão", tone: "amber" }
+        : { edition, active, statusLabel: "anterior", tone: "neutral" };
+    });
+}
+
+// One row of the staged edition's full table. `change` is the "alterada" rule of the review: a row
+// is changed only when its weight, rating or target price differs from the current active edition;
+// a ticker the active edition does not carry is new, never a fabricated change.
+export type EditionEntryChange = "new" | "changed" | "unchanged";
+
+export interface EditionReviewRow {
+  ticker: string;
+  weight: number;
+  rating?: Rating;
+  targetPrice?: number;
+  change: EditionEntryChange;
+}
+
+function entryChanged(before: EditionEntry, after: EditionEntry): boolean {
+  return (
+    before.weight !== after.weight ||
+    before.rating !== after.rating ||
+    before.target_price !== after.target_price
+  );
+}
+
+export function editionReviewRows(staged: Edition, active?: Edition): EditionReviewRow[] {
+  const previous = new Map((active?.entries ?? []).map((entry) => [entry.ticker, entry]));
+
+  return staged.entries.map((entry) => {
+    const before = previous.get(entry.ticker);
+    const change: EditionEntryChange =
+      before === undefined ? "new" : entryChanged(before, entry) ? "changed" : "unchanged";
+    return {
+      ticker: entry.ticker,
+      weight: entry.weight,
+      rating: entry.rating,
+      targetPrice: entry.target_price,
+      change,
+    };
+  });
 }
 
 export function isReportDriven(strategy: Strategy | null | undefined): boolean {
@@ -361,7 +443,7 @@ export function reportDrivenStrategies(strategies: Strategy[]): Strategy[] {
 
 export interface EditionStatusChip {
   label: string;
-  tone: "green" | "amber" | "neutral";
+  tone: EditionChipTone;
 }
 
 // The comparison row's edition cell: the latest edition's month, ✓ when active and a "revisão"

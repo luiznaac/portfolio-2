@@ -9,8 +9,11 @@ import type {
 } from "../api/types.ts";
 import {
   type StrategyPricing,
+  activeEdition,
   editionDiffSummary,
+  editionReviewRows,
   editionSummaryChip,
+  editionTimeline,
   editionWeightSum,
   findStrategyPerformance,
   groupStrategiesByClass,
@@ -639,5 +642,107 @@ describe("stagedEdition", () => {
   it("is absent when only active editions exist", () => {
     expect(stagedEdition([active])).toBeUndefined();
     expect(stagedEdition([])).toBeUndefined();
+  });
+});
+
+const timeline: Edition[] = [
+  { id: 1, strategy_id: 1, reference_month: "2026-08", status: "ACTIVE", entries: [] },
+  { id: 2, strategy_id: 1, reference_month: "2026-09", status: "ACTIVE", entries: [] },
+  { id: 3, strategy_id: 1, reference_month: "2026-10", status: "STAGED", entries: [] },
+];
+
+describe("editionTimeline", () => {
+  it("lists the editions newest-first and marks only the current active one", () => {
+    expect(
+      editionTimeline(timeline).map((row) => [row.edition.reference_month, row.statusLabel]),
+    ).toEqual([
+      ["2026-10", "revisão"],
+      ["2026-09", "ativa"],
+      ["2026-08", "anterior"],
+    ]);
+    expect(editionTimeline(timeline).map((row) => row.active)).toEqual([false, true, false]);
+  });
+
+  it("never mutates the read it was handed", () => {
+    editionTimeline(timeline);
+    expect(timeline.map((edition) => edition.reference_month)).toEqual([
+      "2026-08",
+      "2026-09",
+      "2026-10",
+    ]);
+  });
+});
+
+describe("activeEdition", () => {
+  it("is the newest active edition, not a historical one", () => {
+    expect(activeEdition(timeline)?.reference_month).toBe("2026-09");
+  });
+
+  it("is absent when nothing has been promoted", () => {
+    expect(activeEdition([timeline[2]])).toBeUndefined();
+  });
+});
+
+describe("editionReviewRows", () => {
+  const previous: Edition = {
+    id: 1,
+    strategy_id: 1,
+    reference_month: "2026-09",
+    status: "ACTIVE",
+    entries: [
+      { ticker: "PETR4", weight: 10, rating: "BUY", target_price: 60, do_not_trade: false },
+      { ticker: "VALE3", weight: 12, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+      { ticker: "ITUB4", weight: 8, rating: "BUY", target_price: 30, do_not_trade: false },
+      { ticker: "EGIE3", weight: 9, rating: "BUY", target_price: 48, do_not_trade: false },
+      { ticker: "B3SA3", weight: 6, rating: "NEUTRAL", target_price: 12, do_not_trade: false },
+    ],
+  };
+  const staged: Edition = {
+    id: 2,
+    strategy_id: 1,
+    reference_month: "2026-10",
+    status: "STAGED",
+    entries: [
+      { ticker: "PETR4", weight: 10, rating: "BUY", target_price: 60, do_not_trade: false },
+      { ticker: "VALE3", weight: 12.5, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+      { ticker: "ITUB4", weight: 8, rating: "SELL", target_price: 30, do_not_trade: false },
+      { ticker: "EGIE3", weight: 9, rating: "BUY", target_price: 52, do_not_trade: false },
+      { ticker: "CXSE3", weight: 5, rating: "BUY", target_price: 20, do_not_trade: false },
+    ],
+  };
+
+  it("marks a row alterada only when weight, rating or target price moved", () => {
+    expect(editionReviewRows(staged, previous).map((row) => [row.ticker, row.change])).toEqual([
+      ["PETR4", "unchanged"],
+      ["VALE3", "changed"],
+      ["ITUB4", "changed"],
+      ["EGIE3", "changed"],
+      ["CXSE3", "new"],
+    ]);
+  });
+
+  it("carries the staged weight, rating and target price for the table", () => {
+    const [vale] = editionReviewRows(staged, previous).filter((row) => row.ticker === "VALE3");
+
+    expect(vale).toEqual({
+      ticker: "VALE3",
+      weight: 12.5,
+      rating: "NEUTRAL",
+      targetPrice: 85,
+      change: "changed",
+    });
+  });
+
+  it("treats a target price that appeared or vanished as a change", () => {
+    const priced: Edition = {
+      ...staged,
+      entries: [{ ticker: "PETR4", weight: 10, rating: "BUY", do_not_trade: false }],
+    };
+
+    expect(editionReviewRows(priced, previous)[0].change).toBe("changed");
+  });
+
+  it("marks every row new when there is no active edition to compare against", () => {
+    expect(editionReviewRows(staged, undefined).every((row) => row.change === "new")).toBe(true);
   });
 });

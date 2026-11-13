@@ -278,6 +278,27 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
           ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-04-30',NOW());"
   ```
 
+- **Edições seed**: the strategy detail's Edições tab reads the edition timeline, the staged diff and both editions' entries. This scenario seeds one report Strategy (Top Dividendos, id 9301) with a superseded 2027-02 active edition, the current 2027-03 active edition, and a staged 2027-04 one whose stored diff enters CXSE3, exits B3SA3 and moves VALE3's weight and ITUB4's rating. The staged entries give the "alterada" rule one row per case — PETR4 unchanged, VALE3 weight-changed, ITUB4 rating-changed, EGIE3 target-price-only-changed and CXSE3 new. Run it alone.
+
+  ```
+  docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+  DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+  INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+    (9301, 'Top Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW());
+  INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES
+    (9310, 9301, '2027-02', 'ACTIVE', NOW()),
+    (9311, 9301, '2027-03', 'ACTIVE', NOW()),
+    (9312, 9301, '2027-04', 'STAGED', NOW());
+  UPDATE edition SET diff_from_previous_stored = '{"entered":[{"ticker":"CXSE3","weight":12.5}],"exited":[{"ticker":"B3SA3","weight":0.00}],"changed":[{"ticker":"VALE3","weight_before":25,"weight_after":22.5,"rating_before":null,"rating_after":null},{"ticker":"ITUB4","weight_before":20,"weight_after":20,"rating_before":"BUY","rating_after":"SELL"}]}' WHERE id = 9312;
+  INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES
+    (9310,'PETR4',50,'BUY',58,FALSE), (9310,'VALE3',50,'NEUTRAL',80,FALSE),
+    (9311,'PETR4',25,'BUY',60,FALSE), (9311,'VALE3',25,'NEUTRAL',85,FALSE),
+    (9311,'ITUB4',20,'BUY',30,FALSE), (9311,'EGIE3',20,'BUY',48,FALSE), (9311,'B3SA3',10,'NEUTRAL',12,FALSE),
+    (9312,'PETR4',25,'BUY',60,FALSE), (9312,'VALE3',22.5,'NEUTRAL',85,FALSE),
+    (9312,'ITUB4',20,'SELL',30,FALSE), (9312,'EGIE3',20,'BUY',52,FALSE), (9312,'CXSE3',12.5,'BUY',20,FALSE);
+  SQL
+  ```
+
 - **Tax seed**: the stock-sale meter reads the catalog's asset kind, so the tax scenario seeds the catalog alongside trades and one corporate action. The catalog marks ITUB4/B3SA3/VALE3/CSNA3 as STOCK, HGLG11/KNRI11 as FII, SANB11 as UNIT, BOVA11 as ETF and AAPL34 as BDR. The month's metered stock sales are B3SA3 (R$600) plus VALE3 (R$20,000) for a R$20,600 meter over the cliff, while the FII, unit, ETF, BDR and the CSNA3 same-day round trip stay out. The VALE3 buy carries a fee (stored, ignored by the gross basis) and the ITUB4 2:1 split turns the R$10 average into R$5.
 
   The carry state seeds the three bucket openings (SWING 500, DAY_TRADE 300, FII 250) at the 2027-02 close, so the roll starts at March. Two prior-month losses bank before April: a CSNA3 swing loss of R$100 in the exempt March month (gross R$900, so it stays under the meter) and a KNRI11 FII loss of R$1,000. April therefore opens with SWING 600 and FII 1,250; the SWING carry offsets R$600 of the month's R$4,600 gain (taxable R$4,000, tax R$600), the FII carry offsets the whole R$1,000 gain (closing R$250), and the day-trade bucket stays at R$300 because April's CSNA3 round trip is flat. That round trip is imported so the day-trade warning guard sees it:

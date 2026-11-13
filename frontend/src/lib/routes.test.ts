@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { NAV_GROUPS, OBJECTS, activeSub, incomeRow, resolveCrumb } from "./routes.ts";
+import {
+  NAV_GROUPS,
+  OBJECTS,
+  activeSub,
+  incomeRow,
+  resolveCrumb,
+  strategyDetailTab,
+} from "./routes.ts";
 
 describe("OBJECTS", () => {
   it("holds exactly six objects in the three console groups", () => {
@@ -140,5 +147,13 @@ describe("activeSub", () => {
     const strategies = OBJECTS.find((object) => object.key === "strategies");
     if (strategies === undefined) throw new Error("strategies object missing");
     expect(activeSub(strategies, "/strategies/import")?.label).toBe("Todas");
+  });
+});
+
+describe("strategyDetailTab", () => {
+  it("gives the Edições tab its own route under the strategy detail", () => {
+    expect(strategyDetailTab(7, "carteira")).toBe("/strategies/7");
+    expect(strategyDetailTab(7, "edicoes")).toBe("/strategies/7/edicoes");
+    expect(strategyDetailTab(7, "fatia")).toBe("/strategies/7/fatia");
   });
 });
