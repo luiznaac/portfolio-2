@@ -13,11 +13,14 @@ import { History } from "./pages/History.tsx";
 import { ImportAssistant } from "./pages/ImportAssistant.tsx";
 import { ImportHistory } from "./pages/ImportHistory.tsx";
 import { ImportInbox } from "./pages/ImportInbox.tsx";
+import { ImportSources } from "./pages/ImportSources.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
 import { Overview } from "./pages/Overview.tsx";
 import { Performance } from "./pages/Performance.tsx";
+import { PortfolioHistory } from "./pages/PortfolioHistory.tsx";
+import { PortfolioHistoryDetail } from "./pages/PortfolioHistoryDetail.tsx";
 import { Positions } from "./pages/Positions.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { StrategyDetail } from "./pages/StrategyDetail.tsx";
@@ -44,9 +47,12 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Overview /> },
           { path: "allocation", element: <Allocation /> },
-          { path: "history", element: <PendingSurface /> },
+          { path: "history", element: <PortfolioHistory /> },
         ],
       },
+      // The frozen month is a detail with its own page head and the object's tab strip, so it sits
+      // beside the object frame instead of inside its tabbed children (#372).
+      { path: "portfolio/history/:period", element: <PortfolioHistoryDetail /> },
       {
         path: "strategies",
         element: <ObjectPage objectKey="strategies" />,
@@ -78,7 +84,7 @@ export const routes: RouteObject[] = [
         element: <ObjectPage objectKey="imports" />,
         children: [
           { index: true, element: <ImportInbox /> },
-          { path: "sources", element: <PendingSurface /> },
+          { path: "sources", element: <ImportSources /> },
           { path: "corporate", element: <CorporateActions /> },
           { path: "history", element: <ImportHistory /> },
         ],
