@@ -3,7 +3,13 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrderList, Strategy, SuggestedOrder, Targets } from "../api/types.ts";
+import type {
+  OrderList,
+  Strategy,
+  SuggestedOrder,
+  Targets,
+  TransferProposal,
+} from "../api/types.ts";
 import { Month } from "./Month.tsx";
 
 // Pin "today" so the month's backdated chip is deterministic: the page compares the open month's
@@ -315,6 +321,82 @@ describe("Execution step", () => {
   });
 });
 
+describe("Transfer step", () => {
+  it("reflects the pending proposals, their quantities, and links to Transferências", async () => {
+    const user = userEvent.setup();
+    mock.orders = monthOrders({
+      transfers: [
+        transfer({ id: 1, ticker: "ITUB4", quantity: 60 }),
+        transfer({ id: 2, ticker: "VALE3", quantity: 30, to_strategy: "Small Caps" }),
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId("plan-step-rail-transfer"));
+
+    expect(screen.getByTestId("plan-step-transfer")).toBeDefined();
+    expect(screen.getByTestId("transfer-pending-summary").textContent).toBe(
+      "2 transferências pendentes · 90 cotas a mover",
+    );
+    const first = screen.getByTestId("transfer-step-row-1");
+    expect(within(first).getByText("ITUB4")).toBeDefined();
+    expect(within(first).getByText("60 cotas")).toBeDefined();
+    expect(within(first).getByText("Top Dividendos → Small Caps")).toBeDefined();
+    expect(
+      within(first).getByText("aprovar move 60 cotas · rejeitar não move nenhuma"),
+    ).toBeDefined();
+
+    const link = screen.getByRole("link", { name: /Abrir Transferências/ });
+    expect(link.getAttribute("href")).toBe("/plan/transfers");
+  });
+
+  it("marks the step decided once nothing is pending and still links to the inbox", async () => {
+    const user = userEvent.setup();
+    mock.orders = monthOrders({
+      transfers: [
+        transfer({ id: 1, quantity: 60, status: "APPROVED" }),
+        transfer({ id: 2, ticker: "VALE3", quantity: 30, status: "REJECTED" }),
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId("plan-step-rail-transfer"));
+
+    const cleared = screen.getByTestId("transfer-cleared");
+    expect(cleared.textContent).toContain("Nenhuma transferência pendente");
+    expect(cleared.textContent).toContain("liberado");
+    expect(screen.getByText("2 transferências decididas no histórico")).toBeDefined();
+    expect(screen.getByRole("link", { name: /Abrir Transferências/ }).getAttribute("href")).toBe(
+      "/plan/transfers",
+    );
+  });
+
+  it("asks for a plan before there is a transfer to decide", async () => {
+    const user = userEvent.setup();
+    mock.orders = null;
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId("plan-step-rail-transfer"));
+
+    expect(screen.getByText(/Recalcule o plano/)).toBeDefined();
+    expect(screen.getByRole("link", { name: /Abrir Transferências/ }).getAttribute("href")).toBe(
+      "/plan/transfers",
+    );
+  });
+});
+
 function order(overrides: Partial<SuggestedOrder> = {}): SuggestedOrder {
   return {
     id: 1,
@@ -330,4 +412,20 @@ function order(overrides: Partial<SuggestedOrder> = {}): SuggestedOrder {
 
 function monthOrders(overrides: Partial<OrderList> = {}): OrderList {
   return { period: "2026-10", orders: [], transfers: [], unplanned_trades: [], ...overrides };
+}
+
+function transfer(overrides: Partial<TransferProposal> = {}): TransferProposal {
+  return {
+    id: 1,
+    ticker: "ITUB4",
+    from_strategy_id: 1,
+    from_strategy: "Top Dividendos",
+    to_strategy_id: 2,
+    to_strategy: "Small Caps",
+    quantity: 60,
+    amount: 2100,
+    auto_approved: false,
+    status: "PENDING",
+    ...overrides,
+  };
 }

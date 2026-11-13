@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  useDecideTransfer,
   useOrderPlan,
   useOrders,
   useOverrideOrderMatch,
   useRefreshOrders,
-  useStrategies,
 } from "../api/queries.ts";
-import type { OrderList, Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
+import type { OrderList, SuggestedOrder } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Panel } from "../components/Panel.tsx";
@@ -31,14 +29,12 @@ import {
   ordersCsv,
   planCoversOrder,
   toTradeId,
-  transferCopy,
-  transferStatusLabel,
 } from "../lib/orders.ts";
 import { ROUTES } from "../lib/routes.ts";
 
-// The month's Orders screen: the persisted plan (never recomputed on read), the Attribution
-// Transfer inbox with its approve/reject decisions, and the copy/CSV exits. "Recalcular" is the one
-// action that recomputes and rewrites the plan.
+// The month's Orders screen: the persisted plan (never recomputed on read) and the copy/CSV exits.
+// The Attribution Transfer inbox lives on its own surface (Plano / Mês · Transferências).
+// "Recalcular" is the one action that recomputes and rewrites the plan.
 export function Orders() {
   const orders = useOrders();
 
@@ -67,8 +63,6 @@ export function Orders() {
 
 function OrdersView({ list }: { list: OrderList }) {
   const refresh = useRefreshOrders();
-  // The catalog resolves a transfer row's source kind: a MANUAL Strategy means a legacy move.
-  const strategies = useStrategies().data;
   // The persisted list carries no funding/attribution context, so a row's context joins the full
   // computed plan (its attribution moves) by ticker. The join only holds while the computed plan
   // still matches the persisted order — a stale plan renders no context rather than the wrong one.
@@ -78,8 +72,6 @@ function OrdersView({ list }: { list: OrderList }) {
     planCoversOrder(plan, order) ? contexts.get(orderContextKey(order)) : undefined;
   const groups = groupOrders(list.orders);
   const totals = orderTotals(list.orders);
-  const pending = list.transfers.filter((transfer) => transfer.status === "PENDING");
-  const decided = list.transfers.filter((transfer) => transfer.status !== "PENDING");
 
   function copyOrders() {
     void navigator.clipboard.writeText(orderClipboardText(list.orders));
@@ -132,34 +124,6 @@ function OrdersView({ list }: { list: OrderList }) {
         <Summary label="Ordens" value={formatNumber(list.orders.length)} />
       </div>
 
-      {list.transfers.length > 0 && (
-        <div className="mb-4">
-          <Panel title="Transferências a decidir">
-            {pending.length === 0 ? (
-              <p className="text-[13px] text-ink-dim">Todas decididas.</p>
-            ) : (
-              <div className="divide-y divide-line-soft">
-                {pending.map((transfer) => (
-                  <TransferRow key={transfer.id} transfer={transfer} strategies={strategies} />
-                ))}
-              </div>
-            )}
-            {decided.length > 0 && (
-              <div className="mt-3 border-t border-line-soft pt-2">
-                <h3 className="mb-1 font-mono text-[10px] tracking-[.1em] text-ink-faint uppercase">
-                  Decididas ({decided.length})
-                </h3>
-                <div className="divide-y divide-line-soft">
-                  {decided.map((transfer) => (
-                    <TransferRow key={transfer.id} transfer={transfer} strategies={strategies} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </Panel>
-        </div>
-      )}
-
       <div className="space-y-4">
         {groups.length > 0 && (
           <p className="text-[11.5px] text-ink-faint">
@@ -208,61 +172,6 @@ function Summary({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-line bg-surface px-3 py-2.5">
       <div className="font-mono text-[10px] tracking-[.1em] text-ink-faint uppercase">{label}</div>
       <div className="mt-1 font-mono text-[16px] text-ink">{value}</div>
-    </div>
-  );
-}
-
-function TransferRow({
-  transfer,
-  strategies,
-}: {
-  transfer: TransferProposal;
-  strategies: Strategy[] | undefined;
-}) {
-  const decide = useDecideTransfer();
-  const isPending = transfer.status === "PENDING";
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-2.5">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[12.5px] font-semibold text-ink">{transfer.ticker}</span>
-          <Chip>{transfer.from_strategy}</Chip>
-          <span className="text-ink-faint">→</span>
-          <Chip tone="blue">{transfer.to_strategy}</Chip>
-          <span className="text-[11.5px] text-ink-faint">{transferCopy(transfer, strategies)}</span>
-        </div>
-        <div className="mt-1 text-[12px] text-ink-dim">
-          {formatNumber(transfer.quantity)} cotas
-          {transfer.auto_approved && " · aprovada automaticamente"}
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {isPending ? (
-          <>
-            <Button
-              variant="primary"
-              data-testid={`transfer-approve-${transfer.id}`}
-              onClick={() => decide.mutate({ id: transfer.id, decision: "approve" })}
-              disabled={decide.isPending}
-            >
-              Aprovar
-            </Button>
-            <Button
-              variant="ghost"
-              data-testid={`transfer-reject-${transfer.id}`}
-              onClick={() => decide.mutate({ id: transfer.id, decision: "reject" })}
-              disabled={decide.isPending}
-            >
-              Rejeitar
-            </Button>
-          </>
-        ) : (
-          <Chip tone={transfer.status === "APPROVED" ? "green" : "rose"}>
-            {transferStatusLabel(transfer.status)}
-          </Chip>
-        )}
-      </div>
     </div>
   );
 }

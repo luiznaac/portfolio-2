@@ -14,10 +14,21 @@ export function pendingTransfers(orders: OrderList | null | undefined): Transfer
   return (orders?.transfers ?? []).filter((transfer) => transfer.status === "PENDING");
 }
 
+// A decided proposal is a decision, not a pending one — the inbox history and the step-5 summary
+// read the same partition the close does.
+export function decidedTransfers(orders: OrderList | null | undefined): TransferProposal[] {
+  return (orders?.transfers ?? []).filter((transfer) => transfer.status !== "PENDING");
+}
+
 // The one owner of the pending-transfer noun, so the close button and the landing's month line
 // cannot describe the same queue with two different words.
 export function pendingTransferNoun(count: number): string {
   return count === 1 ? "transferência pendente" : "transferências pendentes";
+}
+
+// The decided counterpart, shared by the inbox history and step 5's one-line summary.
+export function decidedTransferNoun(count: number): string {
+  return count === 1 ? "transferência decidida" : "transferências decididas";
 }
 
 export function closeButtonLabel(pendingCount: number): string {

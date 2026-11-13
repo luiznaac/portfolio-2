@@ -27,7 +27,12 @@ import { PeriodSelect } from "../components/PeriodSelect.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { cn } from "../lib/cn.ts";
 import { monthKey, todayIso } from "../lib/dates.ts";
-import { pendingTransfers } from "../lib/fechamento.ts";
+import {
+  decidedTransferNoun,
+  decidedTransfers,
+  pendingTransferNoun,
+  pendingTransfers,
+} from "../lib/fechamento.ts";
 import { subClassLabel } from "../lib/fixedIncome.ts";
 import { formatCurrency, formatNumber, formatPercent } from "../lib/format.ts";
 import {
@@ -58,6 +63,8 @@ import {
   orderStateLabel,
   orderStateTone,
   orderStatusLabel,
+  transferEffect,
+  transferQuantityLabel,
 } from "../lib/orders.ts";
 import {
   type ChainPreviewRow,
@@ -76,7 +83,8 @@ const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px
 
 // Plano / Mês · Mês atual (issue #388): the six-step month, opened on its first unfinished step. The
 // rail is the only step list — the body renders the active step's form, and a concluded step
-// collapses to its one-line summary with its meta. Steps 4–6 land with their own slices.
+// collapses to its one-line summary with its meta. Step 4 (execution) and step 5 (transfers) carry
+// their own bodies; step 6 lands with its slice.
 export function Month() {
   const current = useCurrentMonth();
   const orders = useOrders();
@@ -190,7 +198,8 @@ function MonthPlan({
             <PlanStepBody orders={orders} stale={stale} onRefreshed={() => setStale(false)} />
           )}
           {active.key === "execution" && <ExecutionStep orders={orders} />}
-          {(active.key === "transfer" || active.key === "close") && <PendingStep step={active} />}
+          {active.key === "transfer" && <TransferStep orders={orders} />}
+          {active.key === "close" && <PendingStep step={active} />}
         </div>
       </div>
     </div>
@@ -395,7 +404,7 @@ function PlanStepBody({
           <p className="text-[12.5px] text-ink-dim">
             {formatNumber(orders.orders.length)}{" "}
             {orders.orders.length === 1 ? "ordem sugerida" : "ordens sugeridas"} · {pending.length}{" "}
-            {pending.length === 1 ? "transferência pendente" : "transferências pendentes"}
+            {pendingTransferNoun(pending.length)}
           </p>
           {orders.orders.length > 0 && (
             <Table columns={PLAN_COLUMNS} rows={orders.orders} rowKey={(order) => order.id} />
@@ -531,7 +540,76 @@ const EXECUTION_COLUMNS: Column<SuggestedOrder>[] = [
   },
 ];
 
-// Steps 5–6 keep their rail row and their meta; the bodies land with the slices that own them.
+// Step 5 — Transferência decidida: the inbox summary. The decisions themselves live on
+// Transferências; a pending proposal is what blocks the close, and rejecting it releases the gate.
+function TransferStep({ orders }: { orders: OrderList | null }) {
+  const plan = hasPersistedPlan(orders);
+  const pending = pendingTransfers(orders);
+  const decided = decidedTransfers(orders);
+  const pendingQuantity = pending.reduce((sum, transfer) => sum + transfer.quantity, 0);
+
+  return (
+    <Panel
+      title="Transferência decidida"
+      action={
+        <Link to={ROUTES.planTransfers} className="text-principal underline">
+          Abrir Transferências →
+        </Link>
+      }
+    >
+      {!plan || orders === null ? (
+        <p className="text-[13px] text-ink-dim">
+          Nenhum plano persistido para este mês. Recalcule o plano para gerar as transferências.
+        </p>
+      ) : (
+        <>
+          {pending.length === 0 ? (
+            <p data-testid="transfer-cleared" className="text-[13px] text-ink-dim">
+              Nenhuma transferência pendente. O fechamento está liberado.
+            </p>
+          ) : (
+            <>
+              <p data-testid="transfer-pending-summary" className="mb-2 text-[12.5px] text-ink-dim">
+                {pending.length} {pendingTransferNoun(pending.length)} ·{" "}
+                {formatNumber(pendingQuantity)}{" "}
+                {pendingQuantity === 1 ? "cota a mover" : "cotas a mover"}
+              </p>
+              <div className="divide-y divide-line-soft">
+                {pending.map((transfer) => (
+                  <div
+                    key={transfer.id}
+                    data-testid={`transfer-step-row-${transfer.id}`}
+                    className="flex flex-wrap items-center justify-between gap-3 py-2 text-[12px]"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono font-semibold text-ink">{transfer.ticker}</span>
+                      <span className="text-ink-dim">
+                        {`${transfer.from_strategy} → ${transfer.to_strategy}`}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-ink">
+                        {transferQuantityLabel(transfer.quantity)}
+                      </span>
+                      <span className="text-ink-faint">{transferEffect(transfer.quantity)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {decided.length > 0 && (
+            <p className="mt-2 text-[12px] text-ink-faint">
+              {formatNumber(decided.length)} {decidedTransferNoun(decided.length)} no histórico
+            </p>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+// Step 6 keeps its rail row and its meta; the body lands with the slice that owns it.
 function PendingStep({ step }: { step: PlanStep }) {
   return (
     <Panel title={step.label}>

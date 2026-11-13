@@ -150,14 +150,14 @@ function renderPage() {
 }
 
 describe("Fechamento", () => {
-  it("blocks the close while a transfer is pending and links to Ordens", () => {
+  it("blocks the close while a transfer is pending and links to Transferências", () => {
     renderPage();
 
     const close = screen.getByTestId("close-month") as HTMLButtonElement;
     expect(close.disabled).toBe(true);
     expect(close.textContent).toContain("Bloqueado — 1 transferência pendente");
     expect(screen.getByRole("link", { name: "resolver" }).getAttribute("href")).toBe(
-      "/plan/orders",
+      "/plan/transfers",
     );
   });
 

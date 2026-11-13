@@ -151,6 +151,22 @@ class MonthlyCloseServiceTest : StringSpec({
         coVerify(exactly = 0) { snapshots.save(any(), any()) }
     }
 
+    "a rejected transfer releases the close gate" {
+        val rejected = transferProposal(8, TransferStatus.REJECTED)
+        coEvery { orders.refresh() } returns orderList(transfers = listOf(rejected))
+        coEvery { orders.fetch() } returns orderList(transfers = listOf(rejected))
+        val state = slot<CloseState>()
+        coEvery { snapshots.save(month.id, capture(state)) } answers {
+            Snapshot(id = 9, monthId = month.id, state = state.captured, createdAt = closedAt)
+        }
+
+        service.closeCurrent()!!.id shouldBe 9
+
+        // A rejection is a decision: the month locks and the frozen inbox records the outcome.
+        coVerify { months.close(month.id) }
+        state.captured.orders.transfers.single().status shouldBe TransferStatus.REJECTED
+    }
+
     "re-checks the inbox inside the close transaction" {
         coEvery { orders.fetch() } returns orderList(
             transfers = listOf(transferProposal(9, TransferStatus.PENDING)),

@@ -4,13 +4,11 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrderPlan, Strategy, SuggestedOrder, TransferProposal } from "../api/types.ts";
+import type { OrderPlan, SuggestedOrder } from "../api/types.ts";
 import { Orders } from "./Orders.tsx";
 
 const mock = vi.hoisted(() => ({
   orders: [] as SuggestedOrder[],
-  transfers: [] as TransferProposal[],
-  strategies: [] as Strategy[],
   plan: undefined as unknown as OrderPlan,
   override: vi.fn(),
 }));
@@ -21,11 +19,10 @@ vi.mock("../api/client.ts", () => ({
       Promise.resolve({
         period: "2026-10",
         orders: mock.orders,
-        transfers: mock.transfers,
+        transfers: [],
         unplanned_trades: [],
       }),
     getOrderPlan: () => Promise.resolve(mock.plan),
-    getStrategies: () => Promise.resolve(mock.strategies),
     overrideOrderMatch: (orderId: number, payload: { trade_id?: number | null }) => {
       mock.override(orderId, payload);
       return Promise.resolve(mock.orders[0]);
@@ -46,57 +43,14 @@ function renderOrders() {
   );
 }
 
-function transfer(overrides: Partial<TransferProposal> = {}): TransferProposal {
-  return {
-    id: 1,
-    ticker: "ITUB4",
-    from_strategy_id: 1,
-    from_strategy: "Top",
-    to_strategy_id: 2,
-    to_strategy: "Small",
-    quantity: 10,
-    amount: 600,
-    auto_approved: false,
-    status: "PENDING",
-    ...overrides,
-  };
-}
-
 afterEach(() => {
   cleanup();
   mock.orders = [];
-  mock.transfers = [];
-  mock.strategies = [];
   mock.override.mockReset();
 });
 
 beforeEach(() => {
   mock.plan = plan();
-});
-
-describe("Orders inbox", () => {
-  it("reads a bucket-sourced row as a move from the legacy book and a report row as avoided selling", async () => {
-    mock.strategies = [
-      { id: 1, name: "Top", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
-      { id: 3, name: "Legado", asset_class: "ACOES", kind: "MANUAL" },
-    ];
-    mock.transfers = [
-      transfer({
-        id: 1,
-        from_strategy_id: 3,
-        from_strategy: "Legado",
-        to_strategy_id: 1,
-        to_strategy: "Top",
-        amount: 100,
-      }),
-      transfer({ id: 2, from_strategy_id: 1, from_strategy: "Top", amount: 600 }),
-    ];
-
-    renderOrders();
-
-    expect(await screen.findByText("move R$ 100,00 do legado")).toBeTruthy();
-    expect(screen.getByText("evita vender R$ 600,00")).toBeTruthy();
-  });
 });
 
 describe("Orders list", () => {
