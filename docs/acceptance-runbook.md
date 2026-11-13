@@ -949,6 +949,48 @@ SQL
 
 The reads are then deterministic: `GET /strategies` opens the list; `GET /strategies/9001/editions` carries the 2027-06 `STAGED` edition; `GET /months` lists 2027-05 first; `GET /months/9402/performance` carries Top Dividendos' decomposition (`value_start` 9.000, `value_end` 10.000, `return_percentage` 11,1111). On `/strategies` clicking **Top Dividendos** opens `/strategies/9001`: the page head reads `Top Dividendos`, the KPI row reads Fatia R$ 10.000,00 (62,5% da carteira), Alvo 60,0% da classe Ações, Ideal R$ 36.000,00 (faltam R$ 26.000,00), Drift -26,0 p.p. and Retorno mai/27 +11,11%; the tab strip reads `Carteira` and `Fatia no portfólio`. Carteira lists VALE3 with 1.000 units, R$ 10,00, R$ 10.000,00, 100,0% target, R$ 36.000,00 Ideal and -26,0 p.p. drift, and the `Edição em revisão · jun/27` strip sits above the table. Switching to Fatia reads Fatia na carteira 62,5%, Fatia na classe 90,9%, Alvo na classe 60,0%, Drift -26,0 p.p. and the return decomposition Início R$ 9.000,00 / Fim R$ 10.000,00 / Aportes R$ 0,00 / Proventos R$ 0,00 / Retorno +11,11%, with no edition strip. `/strategies/999999` renders `Estratégia não encontrada` instead of crashing. A missing KPI, a Carteira row without its target weight or units, a missing stage strip, a Fatia without the class and portfolio shares or the decomposition, a repeated edition strip on Fatia, a detail that crashes on an unknown id, or a value that disagrees with the seed is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Estratégias detail · Atribuição (issue [#376](https://github.com/luiznaac/portfolio-2/issues/376))
+
+**Scenario**: the run drives the strategy detail's Atribuição tab — titled "Custódia × atribuição" with its reconciliation caption — on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the plan and allocation tables and seeds one report strategy (Top Dividendos, id 9001) and one manual bucket (Legado Ações, id 9002), an open 2027-06 month whose Ações chain targets VALE3, ITUB4, CSNA3 and WEGE3 inside Top Dividendos, and four positions and quotes at R$ 10. The ledger is seeded to exercise every state: VALE3 is fully attributed to Top Dividendos (reconciled), ITUB4 is wholly in the Legado bucket (a chain ticker with nothing in Top Dividendos), CSNA3 has 100 of its 150 units attributed (an attribution gap), and WEGE3 carries 1.200 units attributed against 1.000 in custody (an over-attribution the write path refuses but a custody overwrite can leave behind). Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()),
+  (9002,'Legado Ações','ACOES','MANUAL',NOW());
+INSERT INTO `month` (id, period, capital, `floor`, aportes, status, created_at) VALUES
+  (9300,'2027-06',100000,0,0,'OPEN',NOW());
+INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+  (9300,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()),
+  (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,100,NOW()),
+  (9300,'TICKER','ACOES','Top Dividendos',NULL,'VALE3',25,NOW()),
+  (9300,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',25,NOW()),
+  (9300,'TICKER','ACOES','Top Dividendos',NULL,'CSNA3',25,NOW()),
+  (9300,'TICKER','ACOES','Top Dividendos',NULL,'WEGE3',25,NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES
+  ('VALE3',1000,8), ('ITUB4',100,8), ('CSNA3',150,8), ('WEGE3',1000,8);
+INSERT INTO attribution (ticker, strategy_id, quantity) VALUES
+  ('VALE3',9001,1000), ('ITUB4',9002,100), ('CSNA3',9001,100), ('WEGE3',9001,1200);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+  ('VALE3','2027-06-30',10,'COTAHIST',NOW()),
+  ('ITUB4','2027-06-30',10,'COTAHIST',NOW()),
+  ('CSNA3','2027-06-30',10,'COTAHIST',NOW()),
+  ('WEGE3','2027-06-30',10,'COTAHIST',NOW());
+REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()),
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()),
+  ('CSNA3','CSN','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()),
+  ('WEGE3','WEG','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW());
+SQL
+```
+
+The reads are then deterministic: `GET /strategies/9001/holdings` carries the ledger slices, and the per-ticker `GET /positions/{ticker}/attribution` reads custody and slices. On `/strategies` clicking **Top Dividendos** opens `/strategies/9001`; the tab strip reads `Carteira`, `Edições`, `Atribuição` and `Fatia no portfólio`. The **Atribuição** tab renders the panel `Custódia × atribuição` with the caption "A coluna Fora mostra o que está na custódia mas não nesta fatia. Tudo que aparece fora de toda estratégia é lacuna de atribuição, não de custódia." and the table `Ativo / Custódia / Nesta estratégia / Fora / Outra estratégia / Situação` with four rows in ticker order: `CSNA3` 150 / 100 / 50 / — / `50 cotas fora de toda estratégia`; `ITUB4` 100 / 0 / 100 / `Legado Ações · 100` / `confere`; `VALE3` 1.000 / 1.000 / 0 / — / `confere`; `WEGE3` 1.000 / 1.200 / −200 / — / `atribuição 200 cotas acima da custódia`. The `Reconciliação` panel states the finding in words: "2 de 4 tickers divergem da custódia · CSNA3 (50 cotas fora de toda estratégia); WEGE3 (atribuição 200 cotas acima da custódia)". A manual strategy keeps only `Carteira` and `Fatia no portfólio`. A missing or differently titled panel, a missing caption, a table missing a chain ticker (ITUB4, held wholly by the bucket), a divergence shown only as a colour, or a row that disagrees with the seed is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — import assistant core (issue [#382](https://github.com/luiznaac/portfolio-2/issues/382))
 
 **Scenario**: the run drives the full-screen four-step import assistant on the combined image. Boot from `docker compose down -v` and apply **no seed section**: the workbook the scenario uploads is the whole book. [`b3-negociacao.xlsx`](../backend/http-api/src/test/resources/b3-negociacao.xlsx) — the two-row 2026-10-14 B3 Negociação workbook (ALUP11 BUY 100 @ 48.92, PETR4 SELL 50 @ 35.10) — is staged through the assistant's own file input via the browser capability's `upload` action. In order: `/imports` reads `Caixa de entrada` with the upload entry and the parked-session area; `Enviar arquivo →` opens the assistant on step 1 `Arquivo` with Ativos · Negócios and the B3 negociação parser pre-filled; choosing the workbook enables `Enviar e revisar`, which stages the file and opens step 2 `Destino` without applying anything; `Continuar →` reaches step 3 `Linhas`; `Sair` parks the staged session and the inbox shows the `Sessão em revisão` strip with the workbook name and a `Retomar →` link; Ativos · Negócios shows the same strip above the trade ledger and its `Retomar →` reopens the assistant on `Linhas`; `Continuar →` reaches step 4, whose "O que esta importação muda" card names Ativos · Negócios and Ativos · Posições above the apply action; `Aplicar 2 linha(s) válida(s)` writes both rows and lands on `/ativos/trades` with the applied-import banner and provenance.

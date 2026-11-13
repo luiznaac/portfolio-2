@@ -57,7 +57,7 @@ export function strategyDetail(strategyId: number): string {
 }
 
 // The detail's own tabs are routes under the id; Carteira is the detail's landing tab.
-export type StrategyDetailTab = "carteira" | "edicoes" | "fatia";
+export type StrategyDetailTab = "carteira" | "edicoes" | "atribuicao" | "fatia";
 
 export function strategyDetailTab(strategyId: number, tab: StrategyDetailTab): string {
   return tab === "carteira" ? strategyDetail(strategyId) : `${strategyDetail(strategyId)}/${tab}`;

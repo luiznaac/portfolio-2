@@ -11,6 +11,7 @@ import type { TradeLedgerQuery } from "../lib/tradeFilters.ts";
 import { ApiError, api } from "./client.ts";
 import type {
   AssetClass,
+  Attribution,
   AttributionSliceCreation,
   AttributionTransferCreation,
   BackfillReport,
@@ -170,12 +171,24 @@ export function usePosition(ticker: string) {
   });
 }
 
-export function useAttribution(ticker: string) {
-  return useQuery({
+// The one attribution read, shared by the Ativos detail's single-ticker panel and the strategy
+// detail's per-ticker reconciliation, so both resolve to the same cache entry.
+function attributionQuery(ticker: string) {
+  return {
     queryKey: ["positions", ticker, "attribution"],
-    queryFn: () => api.getAttribution(ticker),
+    queryFn: (): Promise<Attribution> => api.getAttribution(ticker),
     enabled: ticker.length > 0,
-  });
+  };
+}
+
+export function useAttribution(ticker: string) {
+  return useQuery(attributionQuery(ticker));
+}
+
+// The strategy detail's Atribuição tab reconciles custody against the ledger for every ticker the
+// strategy holds: one read per ticker, sharing the single-ticker cache key the Ativos detail uses.
+export function useAttributions(tickers: string[]) {
+  return useQueries({ queries: tickers.map(attributionQuery) });
 }
 
 // Both attribution writes invalidate the whole `positions/{ticker}` branch, so the detail and its

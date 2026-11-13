@@ -3,13 +3,16 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useActivateEdition,
+  useAttributions,
   useClosedMonths,
   useCurrentAllocation,
   useEditions,
   useMonthPerformance,
+  usePositions,
   useStrategies,
+  useStrategyHoldings,
 } from "../api/queries.ts";
-import type { Edition, Strategy } from "../api/types.ts";
+import type { Attribution, Edition, Strategy } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { EditionDiffPanel } from "../components/EditionDiffPanel.tsx";
@@ -20,8 +23,15 @@ import { PageTabs } from "../components/PageTabs.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { formatPoints, formatTarget } from "../lib/allocation.ts";
+import { type StrategyAttributionRow, strategyAttributionView } from "../lib/attribution.ts";
 import { cn } from "../lib/cn.ts";
-import { formatCurrency, formatIsoDate, formatNumber, formatPercent } from "../lib/format.ts";
+import {
+  formatCurrency,
+  formatIsoDate,
+  formatNumber,
+  formatPercent,
+  formatSignedValue,
+} from "../lib/format.ts";
 import { assetClassLabel } from "../lib/month.ts";
 import { ROUTES, strategyDetail, strategyDetailTab } from "../lib/routes.ts";
 import {
@@ -46,9 +56,10 @@ import {
 } from "../lib/strategy.ts";
 import { type Tone, driftTone, toneClass } from "../lib/tones.ts";
 
-// Estratégias · detail (issues #374, #375): the shell the row opens into — a KPI row and its own tab
-// strip over Carteira, Edições and Fatia. Edições owns the edition timeline, the staged diff and the
-// promote/discard decision; the later slices add Atribuição and the Manual variant.
+// Estratégias · detail (issues #374, #375, #376): the shell the row opens into — a KPI row and its
+// own tab strip over Carteira, Edições, Atribuição and Fatia. Edições owns the edition timeline, the
+// staged diff and the promote/discard decision; Atribuição owns the custody × attribution
+// reconciliation. The Manual variant's reduced tab set is the remaining slice.
 export function StrategyDetail() {
   const { id, tab } = useParams();
   const strategyId = Number(id);
@@ -130,7 +141,12 @@ export function StrategyDetail() {
       <PageTabs
         tabs={[
           { to: strategyDetail(strategy.id), label: "Carteira", end: true },
-          ...(report ? [{ to: strategyDetailTab(strategy.id, "edicoes"), label: "Edições" }] : []),
+          ...(report
+            ? [
+                { to: strategyDetailTab(strategy.id, "edicoes"), label: "Edições" },
+                { to: strategyDetailTab(strategy.id, "atribuicao"), label: "Atribuição" },
+              ]
+            : []),
           { to: strategyDetailTab(strategy.id, "fatia"), label: "Fatia no portfólio" },
         ]}
         trailing={report ? "relatório" : "sem alvo"}
@@ -142,6 +158,8 @@ export function StrategyDetail() {
           loading={editions.isLoading}
           error={editions.error?.message}
         />
+      ) : tab === "atribuicao" && report ? (
+        <AtribuicaoTab strategy={strategy} chainRows={positions} />
       ) : tab === "fatia" ? (
         <FatiaTab strategy={strategy} view={fatia} positions={positions} />
       ) : (
@@ -537,6 +555,129 @@ function EntryChange({ change }: { change: EditionEntryChange }) {
   if (change === "new") return <Chip tone="green">nova</Chip>;
   if (change === "changed") return <Chip tone="amber">alterada</Chip>;
   return <Unknown />;
+}
+
+// The Atribuição tab (issue #376): "Custódia × atribuição" — the split-custody check, not a repeat
+// of the strategy's holdings. Its tickers are the strategy's own set: the chain's targets plus the
+// ledger slices it holds, so a target it holds nothing of still appears, showing its custody under
+// another strategy. Each held ticker is joined to its attribution read, so the table shows what
+// custody holds, what this slice holds, what sits outside it and where, and states the divergence
+// when the ledger does not explain custody.
+function AtribuicaoTab({
+  strategy,
+  chainRows,
+}: {
+  strategy: Strategy;
+  chainRows: StrategyPositionRow[];
+}) {
+  const holdings = useStrategyHoldings(strategy.id);
+  const positions = usePositions();
+  const held = new Set(positions.data?.map((position) => position.ticker) ?? []);
+  const tickers = [
+    ...new Set([
+      ...chainRows.map((row) => row.ticker),
+      ...(holdings.data?.holdings.map((holding) => holding.ticker) ?? []),
+    ]),
+  ].filter((ticker) => held.has(ticker));
+  const attributions = useAttributions(tickers);
+  const view = strategyAttributionView(
+    strategy.id,
+    attributions
+      .map((query) => query.data)
+      .filter((attribution): attribution is Attribution => attribution !== undefined),
+  );
+  const loading =
+    holdings.isLoading || positions.isLoading || attributions.some((query) => query.isLoading);
+  const error =
+    holdings.error ?? positions.error ?? attributions.find((query) => query.error)?.error ?? null;
+
+  const columns: Column<StrategyAttributionRow>[] = [
+    {
+      key: "ticker",
+      header: "Ativo",
+      render: (row) => <span className="font-mono font-semibold text-text">{row.ticker}</span>,
+    },
+    {
+      key: "custody",
+      header: "Custódia",
+      align: "right",
+      render: (row) => <span className="font-mono">{formatNumber(row.custody)}</span>,
+    },
+    {
+      key: "own",
+      header: "Nesta estratégia",
+      align: "right",
+      render: (row) => <span className="font-mono">{formatNumber(row.own)}</span>,
+    },
+    {
+      key: "outside",
+      header: "Fora",
+      align: "right",
+      render: (row) => (
+        <span className="font-mono text-muted">
+          {row.outsideSlice < 0
+            ? formatSignedValue(row.outsideSlice, formatNumber)
+            : formatNumber(row.outsideSlice)}
+        </span>
+      ),
+    },
+    {
+      key: "others",
+      header: "Outra estratégia",
+      render: (row) =>
+        row.others.length === 0 ? (
+          <Unknown />
+        ) : (
+          <span className="text-muted">
+            {row.others
+              .map((other) => `${other.strategyName} · ${formatNumber(other.quantity)}`)
+              .join(" · ")}
+          </span>
+        ),
+    },
+    {
+      key: "situation",
+      header: "Situação",
+      render: (row) => <Chip tone={row.tone}>{row.statement ?? "confere"}</Chip>,
+    },
+  ];
+
+  return (
+    <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_330px]">
+      <Panel
+        title="Custódia × atribuição"
+        action={
+          <span className="font-mono text-label text-faint">
+            a custódia não se move numa transferência
+          </span>
+        }
+      >
+        {loading ? (
+          <p className="text-[12.5px] text-muted">Carregando…</p>
+        ) : error !== null ? (
+          <p className="text-[12.5px] text-return-down">{error.message}</p>
+        ) : view.rows.length === 0 ? (
+          <p className="text-[12.5px] text-muted">Nenhum ativo atribuído a esta estratégia.</p>
+        ) : (
+          <div data-testid="attribution-reconciliation-table">
+            <Table columns={columns} rows={view.rows} rowKey={(row) => row.ticker} />
+          </div>
+        )}
+      </Panel>
+
+      <aside className="flex min-w-0 flex-col gap-3.5">
+        <Panel title="Reconciliação">
+          <p data-testid="attribution-finding" className="text-[12.5px] text-text">
+            {view.finding}
+          </p>
+          <p data-testid="attribution-caption" className="mt-2 text-[12.5px] text-muted">
+            A coluna <b className="text-text">Fora</b> mostra o que está na custódia mas não nesta
+            fatia. Tudo que aparece fora de toda estratégia é lacuna de atribuição, não de custódia.
+          </p>
+        </Panel>
+      </aside>
+    </div>
+  );
 }
 
 function FatiaTab({
