@@ -6,11 +6,13 @@ import dev.agner.portfolio.httpapi.import.ImportParserResolver
 import dev.agner.portfolio.usecase.import.ImportService
 import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportApplyResult
+import dev.agner.portfolio.usecase.import.model.ImportAttempt
 import dev.agner.portfolio.usecase.import.model.ImportDestination
 import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRow
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.import.model.ImportSource
+import dev.agner.portfolio.usecase.import.model.ImportSourceStatus
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.model.StagingResult
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
@@ -80,6 +82,84 @@ class ImportControllerTest : DescribeSpec({
                 ObjectMapper().readTree(response.bodyAsText()).get("error").asText() shouldBe
                     "invalid-parameter"
                 coVerify(exactly = 0) { service.fetchAll(any(), any()) }
+            }
+        }
+    }
+
+    describe("reading the per-source status") {
+
+        it("returns the latest attempt, last success, pending count and failure per source") {
+            val service = mockk<ImportService>()
+            coEvery { service.fetchSourceStatus() } returns listOf(
+                ImportSourceStatus(
+                    source = ImportSource.B3_TRADES,
+                    lastAttempt = ImportAttempt(
+                        4,
+                        "negocios-falho.xlsx",
+                        ImportStatus.FAILED,
+                        LocalDateTime.parse("2026-10-20T09:00:00"),
+                    ),
+                    lastSuccess = ImportAttempt(
+                        1,
+                        "neg.xlsx",
+                        ImportStatus.APPLIED,
+                        LocalDateTime.parse("2026-10-14T10:00:00"),
+                    ),
+                    pending = 2,
+                    failure = ImportAttempt(
+                        4,
+                        "negocios-falho.xlsx",
+                        ImportStatus.FAILED,
+                        LocalDateTime.parse("2026-10-20T09:00:00"),
+                    ),
+                ),
+            )
+
+            testApplication {
+                application { installRoutes(ImportController(service, ImportParserResolver(emptyList()))) }
+
+                val response = client.get("/imports/sources")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText()).get(0)
+                body.get("source").asText() shouldBe "B3_TRADES"
+                body.get("pending").asInt() shouldBe 2
+                body.get("last_attempt").get("import_id").asInt() shouldBe 4
+                body.get("last_attempt").get("file_name").asText() shouldBe "negocios-falho.xlsx"
+                body.get("last_attempt").get("status").asText() shouldBe "FAILED"
+                body.get("last_attempt").get("created_at").asText() shouldBe "2026-10-20T09:00"
+                body.get("last_success").get("import_id").asInt() shouldBe 1
+                body.get("failure").get("import_id").asInt() shouldBe 4
+            }
+        }
+
+        it("omits the failure and last success when the source has neither") {
+            val service = mockk<ImportService>()
+            coEvery { service.fetchSourceStatus() } returns listOf(
+                ImportSourceStatus(
+                    source = ImportSource.B3_POSITION,
+                    lastAttempt = ImportAttempt(
+                        7,
+                        "posicao.xlsx",
+                        ImportStatus.STAGED,
+                        LocalDateTime.parse("2026-10-21T09:00:00"),
+                    ),
+                    lastSuccess = null,
+                    pending = 1,
+                    failure = null,
+                ),
+            )
+
+            testApplication {
+                application { installRoutes(ImportController(service, ImportParserResolver(emptyList()))) }
+
+                val body = ObjectMapper()
+                    .readTree(client.get("/imports/sources").bodyAsText())
+                    .get(0)
+
+                body.has("failure") shouldBe false
+                body.has("last_success") shouldBe false
+                body.get("pending").asInt() shouldBe 1
             }
         }
     }

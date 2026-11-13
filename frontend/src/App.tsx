@@ -13,6 +13,7 @@ import { History } from "./pages/History.tsx";
 import { ImportAssistant } from "./pages/ImportAssistant.tsx";
 import { ImportHistory } from "./pages/ImportHistory.tsx";
 import { ImportInbox } from "./pages/ImportInbox.tsx";
+import { ImportSources } from "./pages/ImportSources.tsx";
 import { Income } from "./pages/Income.tsx";
 import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
@@ -78,7 +79,7 @@ export const routes: RouteObject[] = [
         element: <ObjectPage objectKey="imports" />,
         children: [
           { index: true, element: <ImportInbox /> },
-          { path: "sources", element: <PendingSurface /> },
+          { path: "sources", element: <ImportSources /> },
           { path: "corporate", element: <CorporateActions /> },
           { path: "history", element: <ImportHistory /> },
         ],
