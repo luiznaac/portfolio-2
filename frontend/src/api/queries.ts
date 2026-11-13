@@ -97,6 +97,15 @@ export function useImports(filters: ImportFilterInput = {}) {
   });
 }
 
+// The per-source status read behind Importações · Fontes; an empty list means no source has an
+// attempt yet, which the page renders as its empty state.
+export function useImportSources() {
+  return useQuery({
+    queryKey: ["imports", "sources"],
+    queryFn: () => api.getImportSources(),
+  });
+}
+
 export function useImport(importId: number | null) {
   return useQuery({
     queryKey: ["imports", importId],
@@ -361,7 +370,7 @@ export function useCurrentMonth() {
   });
 }
 
-// The same window every month picker reads: the opener, its validation and Impostos' period picker.
+// The same window every month picker reads: the opener, its validation and Impostos' apuração bounds.
 export function useMonthPeriodRange() {
   return useQuery({
     queryKey: ["month", "period-range"],

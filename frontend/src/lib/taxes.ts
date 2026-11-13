@@ -11,8 +11,9 @@ import type {
   StockTaxReport,
   TaxUnclassifiedStatus,
 } from "../api/types.ts";
+import { type WindowRange, inWindow } from "./analysisWindow.ts";
 import { formatCurrency, formatIsoDate, isWeekend } from "./format.ts";
-import { isBackdatedPeriod } from "./month.ts";
+import { isBackdatedPeriod, monthPeriodLabel } from "./month.ts";
 
 const REALIZED_KIND_LABELS: Record<RealizedKind, string> = {
   SWING: "Swing",
@@ -75,6 +76,43 @@ export function taxPeriodChip(
   if (closedPeriods.includes(period)) return { label: "fechado", tone: "neutral" };
   if (isBackdatedPeriod(period, currentPeriod)) return { label: "histórico", tone: "amber" };
   return null;
+}
+
+// Impostos is a monthly read: the month anchor selects the apuração, while the shared window only
+// filters which apurações the side panel lists. Every month the server can read is an apuração, so
+// the list is the window's months, each carrying its state chip.
+export interface TaxApuracaoRow {
+  period: string;
+  label: string;
+  chip: TaxPeriodChip | null;
+}
+
+export function taxApuracoes(
+  periods: readonly string[],
+  range: WindowRange,
+  currentPeriod: string,
+  openPeriod: string | null,
+  closedPeriods: readonly string[],
+): TaxApuracaoRow[] {
+  return periods
+    .filter((period) => inWindow(period, range))
+    .map((period) => ({
+      period,
+      label: monthPeriodLabel(period),
+      chip: taxPeriodChip(period, currentPeriod, openPeriod, closedPeriods),
+    }));
+}
+
+// The rail's own label states the grain difference: Impostos keeps a monthly apuração even though
+// the window (and the sibling tabs) are window reads.
+export function taxGrainNote(anchor: string): string {
+  return `mês-âncora ${monthPeriodLabel(anchor)} · apuração mensal; a janela filtra a lista`;
+}
+
+// A carry bucket's closing balance; null before the bucket's adoption boundary, so the KPI renders a
+// dash instead of a fabricated zero.
+export function carryClosing(tax: StockTaxReport, kind: RealizedKind): number | null {
+  return tax.carry.find((bucket) => bucket.kind === kind)?.closing_balance ?? null;
 }
 
 // The empty state is about sales, not about the realized rows: the backend always returns the three

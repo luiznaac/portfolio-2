@@ -119,6 +119,25 @@ export interface Import {
 // batch after the import is APPLIED.
 export type ImportRowOutcome = "applied" | "rejected" | "skipped_duplicate";
 
+// One attempt at a source: the record's own identity, its state and when it was staged. The failed
+// file is an attempt like any other and keeps its own import record.
+export interface ImportAttempt {
+  import_id: number;
+  file_name: string;
+  status: ImportStatus;
+  created_at: string;
+}
+
+// GET /imports/sources: the latest attempt, the last applied one, how many sessions still wait for
+// a decision, and the failure of the latest attempt (absent when the source is healthy).
+export interface ImportSourceStatus {
+  source: ImportSource;
+  last_attempt: ImportAttempt;
+  last_success?: ImportAttempt;
+  pending: number;
+  failure?: ImportAttempt;
+}
+
 // The apply response: the applied record beside the counts over its rows.
 export interface ImportApplyResult {
   record: Import;
