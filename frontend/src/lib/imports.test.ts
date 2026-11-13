@@ -4,6 +4,7 @@ import {
   IMPORT_SOURCES,
   IMPORT_STATUSES,
   importAge,
+  importSourceDetail,
   importSourceLabel,
   importStatusLabel,
   isParkedImport,
@@ -35,6 +36,15 @@ describe("import labels", () => {
     expect(importStatusLabel("REVIEWED")).toBe("Revisada");
     expect(importStatusLabel("APPLIED")).toBe("Aplicada");
     expect(importStatusLabel("FAILED")).toBe("Falhou");
+  });
+
+  it("describes what each source carries", () => {
+    expect(IMPORT_SOURCES.map(importSourceDetail)).toEqual([
+      "Extrato de negócios fechados",
+      "Snapshot de posição em custódia",
+      "Negócios, proventos e eventos",
+      "Relatório mensal por estratégia",
+    ]);
   });
 
   it("declares the sources and states in reading order", () => {

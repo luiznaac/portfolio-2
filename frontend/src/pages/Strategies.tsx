@@ -10,7 +10,6 @@ import {
 import type {
   AssetClass,
   Edition,
-  EditionDiff,
   EditionEntry,
   EditionSummary,
   Rating,
@@ -19,6 +18,7 @@ import type {
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
+import { EditionDiffPanel } from "../components/EditionDiffPanel.tsx";
 import { Field, Input } from "../components/Field.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
@@ -302,36 +302,6 @@ function CreateStrategyModal({
         </div>
       </div>
     </dialog>
-  );
-}
-
-function DiffPanel({ diff }: { diff: EditionDiff }) {
-  const hasMoves = diff.entered.length + diff.exited.length + diff.changed.length > 0;
-
-  return (
-    <Panel title="Mudanças vs. edição anterior">
-      <div className="flex flex-wrap gap-1.5">
-        {diff.entered.map((entry) => (
-          <Chip key={`entered-${entry.ticker}`} tone="green">
-            + {entry.ticker} {entry.weight}%
-          </Chip>
-        ))}
-        {diff.exited.map((entry) => (
-          <Chip key={`exited-${entry.ticker}`} tone="rose">
-            − {entry.ticker}
-          </Chip>
-        ))}
-        {diff.changed.map((change) => (
-          <Chip key={`changed-${change.ticker}`} tone="neutral">
-            {change.ticker} {change.weight_before}%→{change.weight_after}%
-            {change.rating_before === change.rating_after
-              ? ""
-              : ` · ${ratingLabel(change.rating_before)}→${ratingLabel(change.rating_after)}`}
-          </Chip>
-        ))}
-        {!hasMoves && <span className="text-[12.5px] text-ink-dim">Sem mudanças.</span>}
-      </div>
-    </Panel>
   );
 }
 
@@ -620,7 +590,7 @@ function PreviewDrawer({
               </div>
             ) : (
               <div className="mb-4">
-                <DiffPanel diff={edition.diff_from_previous} />
+                <EditionDiffPanel diff={edition.diff_from_previous} />
               </div>
             ))}
 

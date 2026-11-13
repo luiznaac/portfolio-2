@@ -401,7 +401,15 @@ function StepApply({
         </Link>
       </Panel>
 
-      <Panel title={record.status === "APPLIED" ? "Aplicada" : "Aplicar"}>
+      <Panel
+        title={
+          record.status === "APPLIED"
+            ? "Aplicada"
+            : record.status === "FAILED"
+              ? "Falhou"
+              : "Aplicar"
+        }
+      >
         {record.status === "APPLIED" ? (
           <div className="text-[12.5px] text-ink">
             <ImportOutcomeSummary
@@ -410,6 +418,11 @@ function StepApply({
               skippedDuplicate={outcomes.skipped_duplicate}
             />
           </div>
+        ) : record.status === "FAILED" ? (
+          <p className="text-[12.5px] text-tax">
+            Esta tentativa falhou e não pode ser aplicada. O arquivo fica no registro da fonte;
+            reenvie-o para abrir uma nova sessão.
+          </p>
         ) : (
           <div className="space-y-3 text-[12.5px] text-ink">
             <p>

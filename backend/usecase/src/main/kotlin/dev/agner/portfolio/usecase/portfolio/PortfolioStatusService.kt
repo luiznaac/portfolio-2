@@ -6,7 +6,7 @@ import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.corporateaction.CorporateActionService
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
 import dev.agner.portfolio.usecase.import.ImportService
-import dev.agner.portfolio.usecase.import.model.ImportStatus
+import dev.agner.portfolio.usecase.import.model.isPending
 import dev.agner.portfolio.usecase.listedasset.GapService
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.GapStatus
@@ -69,8 +69,7 @@ class PortfolioStatusService(
                 positions = allPositions,
                 latestQuotes = latestQuotes,
                 openGaps = gaps.fetchAll().filter { it.status == GapStatus.OPEN },
-                pendingImports = imports.fetchAll()
-                    .filter { it.status == ImportStatus.STAGED || it.status == ImportStatus.REVIEWED },
+                pendingImports = imports.fetchAll().filter { it.status.isPending },
                 stagedEditions = stagedEditions,
                 unclassifiedTickers = classificationQueue.fetchQueue(),
                 reviewActions = corporateActions.fetchAll()
