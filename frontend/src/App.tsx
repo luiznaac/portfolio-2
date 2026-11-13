@@ -19,6 +19,8 @@ import { Month } from "./pages/Month.tsx";
 import { Orders } from "./pages/Orders.tsx";
 import { Overview } from "./pages/Overview.tsx";
 import { Performance } from "./pages/Performance.tsx";
+import { PortfolioHistory } from "./pages/PortfolioHistory.tsx";
+import { PortfolioHistoryDetail } from "./pages/PortfolioHistoryDetail.tsx";
 import { Positions } from "./pages/Positions.tsx";
 import { Strategies } from "./pages/Strategies.tsx";
 import { StrategyDetail } from "./pages/StrategyDetail.tsx";
@@ -45,9 +47,12 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Overview /> },
           { path: "allocation", element: <Allocation /> },
-          { path: "history", element: <PendingSurface /> },
+          { path: "history", element: <PortfolioHistory /> },
         ],
       },
+      // The frozen month is a detail with its own page head and the object's tab strip, so it sits
+      // beside the object frame instead of inside its tabbed children (#372).
+      { path: "portfolio/history/:period", element: <PortfolioHistoryDetail /> },
       {
         path: "strategies",
         element: <ObjectPage objectKey="strategies" />,

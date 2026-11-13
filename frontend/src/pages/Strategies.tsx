@@ -38,6 +38,7 @@ import {
   ratingLabel,
   referenceMonthLabel,
   reportDrivenStrategies,
+  strategyKindLabel,
   strategyRows,
   suggestStrategy,
 } from "../lib/strategy.ts";
@@ -88,7 +89,7 @@ function StrategyListView() {
     {
       key: "kind",
       header: "Tipo",
-      render: (row) => (isReportDriven(row.strategy) ? "Com relatório" : "Manual (legado)"),
+      render: (row) => strategyKindLabel(row.strategy.kind),
     },
     {
       key: "edition",

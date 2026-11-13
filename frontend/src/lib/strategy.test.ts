@@ -25,6 +25,7 @@ import {
   stagedEdition,
   strategyComposition,
   strategyFatiaView,
+  strategyKindLabel,
   strategyKpis,
   strategyPositionRows,
   strategyRows,
@@ -245,6 +246,13 @@ describe("reportDrivenStrategies", () => {
       "Fundamentalista FII",
       "Top Ações",
     ]);
+  });
+});
+
+describe("strategyKindLabel", () => {
+  it("names a report Strategy and the legacy bucket", () => {
+    expect(strategyKindLabel("REPORT_DRIVEN")).toBe("Com relatório");
+    expect(strategyKindLabel("MANUAL")).toBe("Manual (legado)");
   });
 });
 

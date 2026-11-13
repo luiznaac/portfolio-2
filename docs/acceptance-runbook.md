@@ -949,3 +949,37 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 ```
 
 On `/portfolio/allocation` the tree reads: Capital Actual **R$ 1.550,00** against the R$ 100.000,00 Ideal (worded **faltam R$ 98.450,00**); Ações target 40%, Ideal R$ 40.000,00, Actual R$ 1.500,00, distance **faltam R$ 38.500,00**, split into Top Dividendos R$ 1.000,00 (**faltam R$ 39.000,00**), the Legado Ações bucket R$ 400,00 and Fora da estratégia R$ 100,00 (1.000 + 400 + 100 = 1.500); Fundos imob. with no target and Actual R$ 0,00 (**no alvo**); Renda fixa target 60%, Ideal R$ 60.000,00, Actual R$ 0,00 (**faltam R$ 60.000,00**), whose Pós-fixado sub-class holds the whole R$ 60.000,00 Ideal and the same worded shortfall. The Legado Ações bucket shows **—** in Alvo, Ideal, Déficit / distância and Δ p.p. and no bar in the Atual × Ideal column. Sem classe follows the class rows at R$ 50,00. Top Dividendos and Legado Ações link to `/strategies/9001` and `/strategies/9002`. The legacy banner reads R$ 100,00 outside; its preview lists PETR4 under Ações and skips ZZZZ9, and Confirmar reports **1 posição atribuída ao legado.** (the bucket then holds R$ 500,00 and the banner disappears). Expanding Sem classe exposes ZZZZ9's **Classificar** link to `/ativos/positions/ZZZZ9`. A tree missing the RF sub-class rung, a bucket target/bar, a signed Δ R$ instead of the worded distance, a class whose rows do not sum to its Actual, a dead strategy link, a bulk action that does not preview or apply, or an unreachable classification link is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — Carteira · Histórico (issue [#372](https://github.com/luiznaac/portfolio-2/issues/372))
+
+**Scenario**: the run drives the closed-month records list and the frozen detail on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the close and allocation tables and seeds two closed months (April and May 2027) with their immutable snapshots, while the live book quotes VALE3 at R$ 12,00 instead of the snapshot's R$ 10,00. May's detail must therefore render the frozen R$ 11.000,00 Actual, never the live allocation's R$ 13.000,00. May's snapshot carries one partially executed order (ITUB4, PARCIAL), one executed order (B3SA3), one unplanned trade (VALE3), the two frozen strategy slices (Top Dividendos and the Legado Ações bucket), R$ 85,00 of income and a R$ 250,00 DARF. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()),
+  (9002,'Legado Ações','ACOES','MANUAL',NOW());
+INSERT INTO `month` (id, period, capital, `floor`, aportes, status, created_at) VALUES
+  (9401,'2027-04',90000,20000,0,'CLOSED',NOW()),
+  (9402,'2027-05',95000,20000,0,'CLOSED',NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES
+  ('VALE3',1000,8), ('ITUB4',100,8);
+INSERT INTO attribution (ticker, strategy_id, quantity) VALUES
+  ('VALE3',9001,1000), ('ITUB4',9002,100);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+  ('VALE3','2027-06-30',12,'COTAHIST',NOW()),
+  ('ITUB4','2027-06-30',10,'COTAHIST',NOW());
+REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('VALE3','VALE','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW()),
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW());
+INSERT INTO snapshot (month_id, state, created_at) VALUES
+  (9401, '{"period":"2027-04","capital":90000,"floor":20000,"aportes":0,"caixa":80000,"holdings":[],"attributions":[],"classes":[],"strategies":[],"income":{"gross":0,"retained":0,"net":0},"orders":{"orders":[],"transfers":[],"unplanned_trades":[]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":0}}}', NOW()),
+  (9402, '{"period":"2027-05","capital":95000,"floor":20000,"aportes":0,"caixa":84000,"holdings":[{"ticker":"ITUB4","quantity":100,"average_price":8},{"ticker":"VALE3","quantity":1000,"average_price":8}],"attributions":[{"ticker":"VALE3","strategy_id":9001,"strategy":"Top Dividendos","quantity":1000},{"ticker":"ITUB4","strategy_id":9002,"strategy":"Legado Ações","quantity":100}],"classes":[{"asset_class":"ACOES","target":60,"ideal":57000,"actual":11000,"deficit":46000,"drift":-48.4211,"unattributed":0}],"strategies":[{"strategy_id":9001,"strategy":"Top Dividendos","kind":"REPORT_DRIVEN","value_end":10000,"flow":200},{"strategy_id":9002,"strategy":"Legado Ações","kind":"MANUAL","value_end":1000,"flow":-100}],"income":{"gross":100,"retained":15,"net":85},"orders":{"orders":[{"id":9601,"ticker":"ITUB4","side":"BUY","quantity":10,"suggested_price":30,"executed_quantity":5,"status":"SUGGESTED","matched_trade_id":null},{"id":9602,"ticker":"B3SA3","side":"SELL","quantity":10,"suggested_price":null,"executed_quantity":10,"status":"EXECUTED","matched_trade_id":null}],"transfers":[],"unplanned_trades":[{"id":9603,"ticker":"VALE3","side":"SELL","quantity":3}]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":250}}}', NOW());
+SQL
+```
+
+The reads are then deterministic: `GET /months` lists 2027-05 (id 9402) first; `GET /months/9402` carries the snapshot above. On `/portfolio/history` the page head reads `Carteira`, the Histórico tab is active, and the table has exactly two rows — `mai/2027` with Capital R$ 95.000,00 and `abr/2027` with R$ 90.000,00. Clicking `mai/2027` opens `/portfolio/history/2027-05`: the head reads `Histórico · mai/2027` and the KPI row reads Capital R$ 95.000,00 (piso R$ 20.000,00), Aportes R$ 0,00, Caixa R$ 84.000,00, Proventos R$ 85,00 and DARF R$ 250,00. Classes congeladas reads Ações, Alvo 60,0%, Ideal R$ 57.000,00, Atual R$ 11.000,00, Déficit +R$ 46.000,00 and Drift −48,4 p.p. — the live allocation's R$ 13.000,00 never appears. Ordens e negócios do mês reads ITUB4 · Compra · 10 · R$ 30,00 · PARCIAL, B3SA3 · Venda · 10 · — · Executado and VALE3 · Venda · 3 · — · Não planejada. Estratégias no fechamento reads Top Dividendos · Com relatório · R$ 10.000,00 · R$ 200,00 and Legado Ações · Manual (legado) · R$ 1.000,00 · -R$ 100,00, and the `O que este snapshot congela` caption states that nothing is recomputed. The surface offers no button. A list with a row per live month instead of per closed month, a detail that renders R$ 13.000,00 or any other live value, a missing PARCIAL/unplanned row, a missing strategy slice or caption, or any write action is an automatic red; the evidence names the first failing intent.

@@ -4,6 +4,7 @@ import {
   OBJECTS,
   activeSub,
   incomeRow,
+  portfolioHistoryDetail,
   resolveCrumb,
   strategyDetailTab,
 } from "./routes.ts";
@@ -133,6 +134,12 @@ describe("resolveCrumb", () => {
 describe("incomeRow", () => {
   it("builds the Proventos deep link with the target row id", () => {
     expect(incomeRow(24)).toBe("/analysis/income?focus=24");
+  });
+});
+
+describe("portfolioHistoryDetail", () => {
+  it("nests the frozen month under Histórico with the period as the entity segment", () => {
+    expect(portfolioHistoryDetail("2026-10")).toBe("/portfolio/history/2026-10");
   });
 });
 

@@ -13,6 +13,7 @@ import type {
   Rating,
   Strategy,
   StrategyAllocation,
+  StrategyKind,
   StrategyPerformance,
 } from "../api/types.ts";
 import { distanceText, formatPoints, formatTarget } from "./allocation.ts";
@@ -435,6 +436,12 @@ export function editionReviewRows(staged: Edition, active?: Edition): EditionRev
 
 export function isReportDriven(strategy: Strategy | null | undefined): boolean {
   return strategy?.kind === "REPORT_DRIVEN";
+}
+
+// The one rendering of a Strategy's kind: a report Strategy is "Com relatório", the legacy bucket
+// is "Manual (legado)". Shared by the comparison list and the frozen clips so the labels cannot drift.
+export function strategyKindLabel(kind: StrategyKind): string {
+  return kind === "MANUAL" ? "Manual (legado)" : "Com relatório";
 }
 
 export function reportDrivenStrategies(strategies: Strategy[]): Strategy[] {
