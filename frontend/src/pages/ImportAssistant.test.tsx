@@ -4,7 +4,17 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StagedImport } from "../api/client.ts";
-import type { Import, ImportApplyResult, ImportRow, ImportRowSituation } from "../api/types.ts";
+import type {
+  Edition,
+  EditionActivation,
+  EditionImport,
+  Import,
+  ImportApplyResult,
+  ImportRow,
+  ImportRowSituation,
+  Strategy,
+} from "../api/types.ts";
+import { activeEdition as newestActiveEdition } from "../lib/strategy.ts";
 import { ImportAssistant } from "./ImportAssistant.tsx";
 
 const state = vi.hoisted(() => ({
@@ -16,6 +26,11 @@ const state = vi.hoisted(() => ({
   applied: null as ImportApplyResult | null,
   reviewCalls: 0,
   applyCalls: 0,
+  strategies: [] as Strategy[],
+  editions: [] as Edition[],
+  editionInput: null as { strategyId: number; file: File } | null,
+  importedEdition: null as EditionImport | null,
+  activations: [] as { strategyId: number; activation: EditionActivation }[],
 }));
 
 vi.mock("../api/queries.ts", () => ({
@@ -27,7 +42,7 @@ vi.mock("../api/queries.ts", () => ({
     isPending: false,
     error: null,
   }),
-  useImport: () => ({ data: state.record, isLoading: false }),
+  useImport: () => ({ data: state.record ?? undefined, isLoading: false }),
   useImportRows: () => ({ data: state.rows, isLoading: false }),
   useReviewImport: () => ({
     mutate: (_id: number, options?: { onSuccess?: (value: unknown) => void }) => {
@@ -41,6 +56,38 @@ vi.mock("../api/queries.ts", () => ({
     mutate: (_id: number, options?: { onSuccess?: (value: unknown) => void }) => {
       state.applyCalls += 1;
       if (state.applied) options?.onSuccess?.(state.applied);
+    },
+    isPending: false,
+    error: null,
+  }),
+  useStrategies: () => ({ data: state.strategies, isLoading: false }),
+  useEditions: () => ({ data: state.editions, isLoading: false }),
+  useImportEdition: () => ({
+    mutate: (
+      input: { strategyId: number; file: File },
+      options?: { onSuccess?: (value: EditionImport) => void },
+    ) => {
+      state.editionInput = input;
+      if (state.importedEdition) options?.onSuccess?.(state.importedEdition);
+    },
+    isPending: false,
+    error: null,
+  }),
+  useActivateEdition: () => ({
+    mutate: (
+      input: { strategyId: number; activation: EditionActivation },
+      options?: { onSuccess?: (value: Edition) => void },
+    ) => {
+      state.activations.push(input);
+      const promoted = state.editions.find(
+        (edition) => edition.reference_month === input.activation.reference_month,
+      );
+      state.editions = state.editions.map((edition) =>
+        edition.reference_month === input.activation.reference_month
+          ? { ...edition, status: "ACTIVE" as const }
+          : edition,
+      );
+      if (promoted !== undefined) options?.onSuccess?.(promoted);
     },
     isPending: false,
     error: null,
@@ -75,6 +122,41 @@ function row(id: number, situation: ImportRowSituation): ImportRow {
   };
 }
 
+const editionStrategy: Strategy = {
+  id: 1,
+  name: "Top Dividendos",
+  asset_class: "ACOES",
+  kind: "REPORT_DRIVEN",
+};
+
+const activeEdition: Edition = {
+  id: 10,
+  strategy_id: 1,
+  reference_month: "2026-09",
+  status: "ACTIVE",
+  entries: [
+    { ticker: "PETR4", weight: 25, rating: "BUY", target_price: 60, do_not_trade: false },
+    { ticker: "VALE3", weight: 25, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+    { ticker: "ITUB4", weight: 20, rating: "BUY", target_price: 30, do_not_trade: false },
+    { ticker: "EGIE3", weight: 20, rating: "BUY", target_price: 48, do_not_trade: false },
+    { ticker: "B3SA3", weight: 10, rating: "NEUTRAL", target_price: 12, do_not_trade: false },
+  ],
+};
+
+const stagedEdition: Edition = {
+  id: 11,
+  strategy_id: 1,
+  reference_month: "2026-10",
+  status: "STAGED",
+  entries: [
+    { ticker: "PETR4", weight: 25, rating: "BUY", target_price: 60, do_not_trade: false },
+    { ticker: "VALE3", weight: 22.5, rating: "NEUTRAL", target_price: 85, do_not_trade: true },
+    { ticker: "ITUB4", weight: 20, rating: "SELL", target_price: 30, do_not_trade: false },
+    { ticker: "EGIE3", weight: 20, rating: "BUY", target_price: 52, do_not_trade: false },
+    { ticker: "CXSE3", weight: 12.5, rating: "BUY", target_price: 20, do_not_trade: false },
+  ],
+};
+
 function LocationProbe() {
   const location = useLocation();
   return <p data-testid="location">{location.pathname}</p>;
@@ -103,6 +185,11 @@ beforeEach(() => {
   state.applied = null;
   state.reviewCalls = 0;
   state.applyCalls = 0;
+  state.strategies = [];
+  state.editions = [];
+  state.editionInput = null;
+  state.importedEdition = null;
+  state.activations = [];
 });
 
 afterEach(cleanup);
@@ -190,5 +277,92 @@ describe("the import assistant", () => {
 
     expect(screen.getByTestId("location").textContent).toBe("/imports");
     expect(state.applyCalls).toBe(0);
+  });
+
+  it("stages an XP report against its strategy and renders the edition diff", async () => {
+    state.strategies = [editionStrategy];
+    state.editions = [activeEdition];
+    state.importedEdition = { parser: "XpEquityCarteira", edition: stagedEdition };
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant?object=STRATEGY_EDITION&strategy=1");
+
+    expect(screen.getAllByText("Estratégias · Edições").length).toBeGreaterThan(0);
+    expect(screen.getByText("Top Dividendos")).toBeDefined();
+    expect(screen.getByText(/XP — relatório de carteira/)).toBeDefined();
+
+    await user.upload(screen.getByLabelText("Arquivo"), new File(["x"], "relatorio.pdf"));
+    await user.click(screen.getByRole("button", { name: "Enviar e revisar" }));
+
+    expect(state.editionInput).toEqual({ strategyId: 1, file: expect.any(File) });
+    expect(screen.getByRole("heading", { name: "Destino" })).toBeDefined();
+    expect(screen.getByText("promover a edição a ativa")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Continuar →" }));
+
+    expect(screen.getByRole("heading", { name: "Diff da edição" })).toBeDefined();
+    expect(screen.getByText("25,0% → 22,5%")).toBeDefined();
+    expect(screen.getByText("Compra → Venda")).toBeDefined();
+    expect(screen.getByText("R$ 48,00 → R$ 52,00")).toBeDefined();
+    expect(screen.getByText("1 peso alterado")).toBeDefined();
+    expect(screen.getByText("1 preço-alvo alterado")).toBeDefined();
+    expect(screen.getByText("1 rating alterado")).toBeDefined();
+    expect(screen.getByText("1 saída")).toBeDefined();
+    expect(screen.getByText("− B3SA3 10,0%")).toBeDefined();
+    expect(screen.getByText(/VALE3 passa a não operar nesta edição/)).toBeDefined();
+    expect(state.activations).toEqual([]);
+  });
+
+  it("promotes the staged edition explicitly and names the next recompute", async () => {
+    state.strategies = [editionStrategy];
+    state.editions = [activeEdition, stagedEdition];
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant?object=STRATEGY_EDITION&strategy=1");
+
+    expect(screen.getByRole("heading", { name: "Diff da edição" })).toBeDefined();
+    await user.click(screen.getByRole("button", { name: "Continuar →" }));
+
+    expect(screen.getByText(/os novos pesos entram no próximo recálculo/)).toBeDefined();
+    expect(state.activations).toEqual([]);
+    expect(newestActiveEdition(state.editions)?.reference_month).toBe("2026-09");
+
+    await user.click(screen.getByRole("button", { name: "Promover a ativa" }));
+
+    expect(state.activations).toHaveLength(1);
+    expect(state.activations[0]?.strategyId).toBe(1);
+    expect(state.activations[0]?.activation.reference_month).toBe("2026-10");
+    expect(state.activations[0]?.activation.entries.map((entry) => entry.ticker)).toEqual([
+      "PETR4",
+      "VALE3",
+      "ITUB4",
+      "EGIE3",
+      "CXSE3",
+    ]);
+    const promotedNote = screen.getByTestId("edition-decision-note");
+    expect(promotedNote.textContent).toContain("Edição promovida");
+    expect(promotedNote.textContent).toContain("próximo recálculo");
+    expect(state.editions.find((edition) => edition.reference_month === "2026-10")?.status).toBe(
+      "ACTIVE",
+    );
+    expect(newestActiveEdition(state.editions)?.reference_month).toBe("2026-10");
+  });
+
+  it("discards the staged edition without touching the active one", async () => {
+    state.strategies = [editionStrategy];
+    state.editions = [activeEdition, stagedEdition];
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant?object=STRATEGY_EDITION&strategy=1");
+
+    await user.click(await screen.findByRole("button", { name: "Continuar →" }));
+    await user.click(screen.getByRole("button", { name: "Descartar" }));
+
+    expect(state.activations).toEqual([]);
+    const discardedNote = screen.getByTestId("edition-decision-note");
+    expect(discardedNote.textContent).toContain("Edição não promovida");
+    expect(discardedNote.textContent).toContain("próximo recálculo");
+    expect(state.editions.find((edition) => edition.reference_month === "2026-10")?.status).toBe(
+      "STAGED",
+    );
+    expect(newestActiveEdition(state.editions)?.reference_month).toBe("2026-09");
+    expect(screen.getByRole("button", { name: "Promover a ativa" })).toBeDefined();
   });
 });

@@ -438,6 +438,70 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   curl -s -X POST http://localhost:8110/history/backfill  # absorb the OPENING seed: absorbed_seeds 1
   ```
 
+- **Fechamentos seed (#391)**: the close screen's own scenario. It seeds the current calendar month as
+  the open month (so the close is allowed), a full strategy/ticker chain whose refresh proposes one
+  auto-approved transfer and two pending ones, a previous closed month with its snapshot, and the
+  five "não trava" states: an unexecuted-order plan (the refresh leaves the ITUB4 buy partial and the
+  B3SA3 sell unexecuted), an open gap, a corporate-action review, stale quotes and a receivable
+  income dated in the open month. The pre-close inbox is empty, so the first close attempt runs the
+  refresh, creates the two
+  pending transfers and is refused by the server; rejecting both and closing again locks the month
+  and writes the snapshot. Run it alone.
+
+  ```bash
+  docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+  DELETE FROM snapshot; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+  DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade;
+  DELETE FROM gap; DELETE FROM corporate_action; DELETE FROM cash_movement;
+  DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote;
+  DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution;
+  INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+    ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01'),DATE_FORMAT(CURDATE(), '%Y-%m-01'),NOW()),
+    ('B3SA3','B3','02',NULL,'STOCK','ACOES',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01'),DATE_FORMAT(CURDATE(), '%Y-%m-01'),NOW()),
+    ('CSNA3','CSN','02',NULL,'STOCK','ACOES',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y-%m-01'),DATE_FORMAT(CURDATE(), '%Y-%m-01'),NOW());
+  INSERT INTO strategy (name, asset_class, kind, created_at) VALUES
+    ('Dividendos','ACOES','REPORT_DRIVEN',NOW()), ('Small Caps','ACOES','REPORT_DRIVEN',NOW());
+  SET @div := (SELECT id FROM strategy WHERE name='Dividendos');
+  INSERT INTO month (id, period, capital, `floor`, aportes, status, created_at) VALUES
+    (9002, '2026-02', 103500, 0, 2000, 'CLOSED', NOW());
+  INSERT INTO snapshot (month_id, state, created_at) VALUES
+    (9002, '{"period":"2026-02","capital":103500,"floor":0,"aportes":2000,"caixa":45000,"holdings":[{"ticker":"PETR4","quantity":6210,"average_price":10}],"attributions":[],"classes":[{"asset_class":"ACOES","target":0,"ideal":0,"actual":62100,"deficit":0,"drift":0,"unattributed":0},{"asset_class":"RENDA_FIXA","target":100,"ideal":103500,"actual":41400,"deficit":0,"drift":0,"unattributed":0}],"income":{"gross":0,"retained":0,"net":0},"orders":{"orders":[{"id":1,"ticker":"PETR4","side":"BUY","quantity":100,"suggested_price":10,"executed_quantity":100,"status":"IMPORTED"},{"id":2,"ticker":"PETR4","side":"BUY","quantity":100,"suggested_price":10,"executed_quantity":100,"status":"EXECUTED"}],"transfers":[],"unplanned_trades":[]},"tax":{"carry":[],"meter":{"gross_sales":0,"exemption_limit":20000,"exceeded":false,"realized_gain":0,"taxable_gain":0,"rate":15,"tax":0}}}', NOW());
+  INSERT INTO month (period, capital, `floor`, status, created_at) VALUES
+    (DATE_FORMAT(CURDATE(), '%Y-%m'), 4000, 0, 'OPEN', NOW());
+  SET @month := LAST_INSERT_ID();
+  INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+    (@month,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()),
+    (@month,'STRATEGY','ACOES','Dividendos',NULL,NULL,50,NOW()),
+    (@month,'STRATEGY','ACOES','Small Caps',NULL,NULL,50,NOW()),
+    (@month,'TICKER','ACOES','Dividendos',NULL,'ITUB4',40,NOW()),
+    (@month,'TICKER','ACOES','Dividendos',NULL,'B3SA3',30,NOW()),
+    (@month,'TICKER','ACOES','Dividendos',NULL,'CSNA3',30,NOW()),
+    (@month,'TICKER','ACOES','Small Caps',NULL,'ITUB4',40,NOW()),
+    (@month,'TICKER','ACOES','Small Caps',NULL,'B3SA3',30,NOW()),
+    (@month,'TICKER','ACOES','Small Caps',NULL,'CSNA3',30,NOW());
+  REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8), ('B3SA3',260,8), ('CSNA3',150,8);
+  INSERT INTO attribution (ticker, strategy_id, quantity) VALUES
+    ('ITUB4',@div,120), ('B3SA3',@div,260), ('CSNA3',@div,150);
+  REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+    ('ITUB4',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-28'),10,'COTAHIST',NOW()),
+    ('B3SA3',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-28'),10,'COTAHIST',NOW()),
+    ('CSNA3',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-28'),10,'COTAHIST',NOW());
+  INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+  SET @inst := LAST_INSERT_ID();
+  INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+    ('ITUB4',DATE_FORMAT(CURDATE(), '%Y-%m-05'),'B3', 30, 10, @inst, NULL, 'MANUAL', FALSE, 1, NOW());
+  INSERT INTO gap (id, ticker, `date`, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES
+    (9003, 'CSNA3', DATE_FORMAT(CURDATE(), '%Y-%m-20'), 'SELL', 40, NULL, 'OPEN', 0, 0, NOW());
+  INSERT INTO corporate_action (ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES
+    ('ITUB4','SPLIT',DATE_FORMAT(CURDATE(), '%Y-%m-15'),NULL,2,NULL,NULL,'B3_MOVEMENTS',NULL,NULL,1,NULL,'NEEDS_REVIEW',NOW());
+  INSERT INTO cash_movement (ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, created_at) VALUES
+    ('ITUB4', DATE_FORMAT(CURDATE(), '%Y-%m-20'), 100, 0, 100, 'INCOME', 'B3', 'ANNOUNCED', 'DIVIDEND', NOW());
+  SQL
+  ```
+
+  The first close attempt answers `409 pending-transfers` after creating the two pending proposals;
+  after both are rejected, the next close answers `200` with the snapshot and the month locks.
+
 - **Computed performance era seed (#308)**: run this seed alone, immediately before the
   computed-era intents; it resets the ledger and leaves **no Snapshot and no Month**, so the
   performance series is the pre-planning computed era only. Dates are relative to `CURDATE()` so the
@@ -949,6 +1013,40 @@ SQL
 
 The reads are then deterministic: `GET /strategies` opens the list; `GET /strategies/9001/editions` carries the 2027-06 `STAGED` edition; `GET /months` lists 2027-05 first; `GET /months/9402/performance` carries Top Dividendos' decomposition (`value_start` 9.000, `value_end` 10.000, `return_percentage` 11,1111). On `/strategies` clicking **Top Dividendos** opens `/strategies/9001`: the page head reads `Top Dividendos`, the KPI row reads Fatia R$ 10.000,00 (62,5% da carteira), Alvo 60,0% da classe Ações, Ideal R$ 36.000,00 (faltam R$ 26.000,00), Drift -26,0 p.p. and Retorno mai/27 +11,11%; the tab strip reads `Carteira` and `Fatia no portfólio`. Carteira lists VALE3 with 1.000 units, R$ 10,00, R$ 10.000,00, 100,0% target, R$ 36.000,00 Ideal and -26,0 p.p. drift, and the `Edição em revisão · jun/27` strip sits above the table. Switching to Fatia reads Fatia na carteira 62,5%, Fatia na classe 90,9%, Alvo na classe 60,0%, Drift -26,0 p.p. and the return decomposition Início R$ 9.000,00 / Fim R$ 10.000,00 / Aportes R$ 0,00 / Proventos R$ 0,00 / Retorno +11,11%, with no edition strip. `/strategies/999999` renders `Estratégia não encontrada` instead of crashing. A missing KPI, a Carteira row without its target weight or units, a missing stage strip, a Fatia without the class and portfolio shares or the decomposition, a repeated edition strip on Fatia, a detail that crashes on an unknown id, or a value that disagrees with the seed is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Manual Strategy detail variant (issue #377)
+
+**Scenario**: the run drives the Manual Strategy detail's reduced tab set, its no-target columns and the donation of a ledger slice to a report Strategy on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the plan, close and allocation tables and seeds an open 2027-06 month at Capital R$ 1.250,00 whose Ações 100 chain gives Top Dividendos 60% and its ITUB4 ticker 100%. ITUB4 custody is 100 units at R$ 10,00: 60 attributed to Top Dividendos (which has an active 2027-05 edition weighing ITUB4) and 40 to the Legado Ações bucket. The plan's ITUB4 target is therefore 75 units against 60 attributed, so the donation defaults to the 15-unit shortfall, capped by the bucket's 40-unit slice. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()),
+  (9003,'Legado Ações','ACOES','MANUAL',NOW());
+INSERT INTO `month` (id, period, capital, `floor`, aportes, status, created_at) VALUES
+  (9300,'2027-06',1250,0,0,'OPEN',NOW());
+INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+  (9300,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()),
+  (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,60,NOW()),
+  (9300,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',100,NOW());
+INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES
+  (9501,9001,'2027-05','ACTIVE',NOW());
+INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES
+  (9501,'ITUB4',100,NULL,NULL,FALSE);
+REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8);
+INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4',9001,60), ('ITUB4',9003,40);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES ('ITUB4','2027-06-30',10,'COTAHIST',NOW());
+REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW());
+SQL
+```
+
+On `/strategies/9003` the page head reads `Legado Ações` with the subtitle `bucket manual · Ações`; the tab strip carries exactly `Carteira` and `Fatia no portfólio`, and the KPI row reads Fatia R$ 400,00 (40,0% da carteira), Alvo `sem alvo` (bucket manual), Ideal `—`, Drift `—` and Retorno `—`. Carteira lists ITUB4 with 40 units, R$ 10,00, R$ 400,00 and `sem alvo` in Alvo, `—` in Ideal and `—` in Drift, plus the `Transferir` action. Fatia reads Fatia na carteira 40,0%, Fatia na classe 40,0%, Alvo na classe `sem alvo`, Drift `—` and no edition strip. The `Transferir` action opens `Transferir do legado` with the destination `Top Dividendos · falta 15 cotas`, the quantity pre-filled `15` and the caption `A custódia não muda: só a atribuição.`; confirming moves the 15 units, closes the dialog and the Carteira row reads 25 units and R$ 250,00. `GET /positions/ITUB4/attribution` afterwards reads custody 100, Top Dividendos 75 and Legado Ações 25; `/portfolio/allocation` reads the Top Dividendos rung R$ 750,00, the Legado Ações bucket R$ 250,00 and the Conciliação caption `R$ 0,00 de custódia fora de qualquer estratégia.` A missing or extra tab, a target column carrying a number or a bar, a donation that changes custody or leaves the row/slice unchanged, or a reconciliation that drops the unattributed caption is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — Estratégias detail · Atribuição (issue [#376](https://github.com/luiznaac/portfolio-2/issues/376))
 
 **Scenario**: the run drives the strategy detail's Atribuição tab — titled "Custódia × atribuição" with its reconciliation caption — on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the plan and allocation tables and seeds one report strategy (Top Dividendos, id 9001) and one manual bucket (Legado Ações, id 9002), an open 2027-06 month whose Ações chain targets VALE3, ITUB4, CSNA3 and WEGE3 inside Top Dividendos, and four positions and quotes at R$ 10. The ledger is seeded to exercise every state: VALE3 is fully attributed to Top Dividendos (reconciled), ITUB4 is wholly in the Legado bucket (a chain ticker with nothing in Top Dividendos), CSNA3 has 100 of its 150 units attributed (an attribution gap), and WEGE3 carries 1.200 units attributed against 1.000 in custody (an over-attribution the write path refuses but a custody overwrite can leave behind). Run it independently of the other seeds.
@@ -998,6 +1096,30 @@ The reads are then deterministic: `GET /strategies/9001/holdings` carries the le
 Both clauses stay terminal and single-per-intent. The step 3 clause (`material-rows`) names the copy the screen renders: the header reads `2 aceitas` / `0 com atenção`, and each of the two rows carries the `Novo` chip (the `new` situation) — never "accepted"/`aceito`, and no rejected row. The Ativos · Negócios strip check (`strip-on-object`) is two intents, not one: a navigation intent whose after gate asserts `Sessão em revisão` and declares no visual, then a **static** intent anchored on the strip that carries the single terminal vision clause. A static intent asserts before its after-capture, so the trade ledger's `Carregando…` placeholder can never be the screenshot the vision verifier reads.
 
 A clause whose copy disagrees with the screen (a row asserted as "accepted"/`aceito`), a strip screenshot taken while `Carregando…` is still up, more than one vision clause on an intent, or an apply that does not land on `/ativos/trades` is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — import assistant XP edition-diff variant (issue [#384](https://github.com/luiznaac/portfolio-2/issues/384))
+
+**Scenario**: the run drives the XP report variant of the import assistant on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the strategy and edition tables and seeds one report Strategy (Top Dividendos, id 9001) with an active 2026-09 edition whose VALE3 slice is `não operar` — the flip the uploaded October report turns off. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001, 'Top Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW());
+INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES
+  (9510, 9001, '2026-09', 'ACTIVE', NOW());
+INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES
+  (9510,'PETR4',25,'BUY',60,FALSE),
+  (9510,'VALE3',25,'NEUTRAL',85,TRUE),
+  (9510,'ITUB4',20,'BUY',30,FALSE),
+  (9510,'EGIE3',20,'BUY',48,FALSE),
+  (9510,'B3SA3',10,'NEUTRAL',12,FALSE);
+SQL
+```
+
+[`xp-relatorio-2026-10.pdf`](fixtures/xp-relatorio-2026-10.pdf) — the committed XP Top Dividendos report for October 2026, pinned by `XpAcceptanceFixtureTest` — is staged through the assistant's own file input via the browser capability's `upload` action. The backend's XP resolver reads the report PDF; the prototype's CSV wording is a re-export narrative, so this fixture is the PDF the parser actually claims. In order: `/strategies/9001/edicoes` reads the timeline `set/26 · ativa · 5 ativos` and the `Importar relatório` button; it opens `/imports/assistant?object=STRATEGY_EDITION&strategy=9001` on step 1 `Arquivo` with Estratégias · Edições, Top Dividendos and the XP parser pre-filled; choosing the PDF enables `Enviar e revisar`, which stages the edition and opens step 2 `Destino` with Aplicação `promover a edição a ativa`; `Continuar →` reaches step 3 `Diff da edição`. The panel reads the summary `1 peso alterado` / `1 preço-alvo alterado` / `1 rating alterado` / `1 alerta` / `1 saída` against the active set/26, the table carries PETR4 unchanged, VALE3 `25,0% → 22,5%` with `deixa de não operar`, ITUB4 `Compra → Venda`, EGIE3 `R$ 48,00 → R$ 52,00` and CXSE3 `nova`, and the exits list carries `− B3SA3 10,0%`; the alert banner reads `VALE3 deixa de não operar nesta edição…`, and the note states that the new weights enter the plan on its next recompute. `Continuar →` reaches step 4 `Promover`, whose "O que esta importação muda" card names Estratégias · Edições and Plano / Mês above the `Promover a ativa` and `Descartar` actions. `Descartar` shows `Edição não promovida` (the staged edition stays in review until replaced) and leaves `GET /strategies/9001/editions` with 2026-09 the only ACTIVE edition and 2026-10 STAGED; `Sair` returns to the Edições tab, whose `Importar relatório` resumes the staged session on the diff. `Continuar →` then `Promover a ativa` shows `Edição promovida` with the next-recompute note, and `GET /strategies/9001/editions` carries 2026-10 as the newest ACTIVE edition with 2026-09 as history; the timeline marks `out/26` ativa and `set/26` anterior.
+
+A diff that omits a weight, rating or target-price move, an alert rendered only as a colour, a discard that changes the editions, a promote that leaves the active edition unchanged, an active edition that changes before the promote action, or a missing next-recompute note is an automatic red; the evidence names the first failing intent.
 
 ## Acceptance scenario — Importações · Fontes failed-beside-accepted (issue [#417](https://github.com/luiznaac/portfolio-2/issues/417))
 
@@ -1107,6 +1229,38 @@ SQL
 ```
 
 The ledger holds 55 executions: the first page reads `50 de 55` with a next cursor, and the total row covers all 55 (R$ 5.826,00 — the four named rows total R$ 4.500,00 and the generated quantities sum to R$ 1.326,00). `ticker=VALE3` narrows to one row (R$ 2.000,00); `side=SELL` and the window `2026-10-02..2026-10-03` each narrow to the two named rows (R$ 2.600,00). Clearing a filter returns to the first page (`50 de 55`), never the pages loaded before the filter. Ativos · Negócios also hosts **Reconstruir histórico**: skipping adoption unlocks the replay; the backfill renders its report; the custody cross-check accepts `posicao-custodia-2020.xlsx` and renders the drift table.
+
+## Acceptance scenario — Ativos · Cotações and Lacunas (issue [#381](https://github.com/luiznaac/portfolio-2/issues/381))
+
+**Scenario**: the run drives the two bounded Ativos lists on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents. It resets the ledger and gap tables and seeds five held tickers — four with a close (two of them 20 days old, so the status aggregate marks them stale) and one with no close — plus three gaps: an open missing sale whose proceeds are pending, an open missing buy priced at the market close, and a replaced missing buy. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM gap; DELETE FROM quote; DELETE FROM position; DELETE FROM ticker_catalog;
+DELETE FROM trade; DELETE FROM institution; DELETE FROM attribution;
+DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('PETR4','PETROBRAS','02',NULL,'STOCK','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('VALE3','VALE','02',NULL,'STOCK','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('MSFT34','MICROSOFT','02',NULL,'BDR','ACOES',CURDATE(),CURDATE(),NOW()),
+  ('NVDC34','NVIDIA','02',NULL,'BDR','ACOES',CURDATE(),CURDATE(),NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES
+  ('PETR4',100,30), ('VALE3',50,52), ('ITUB4',20,8), ('MSFT34',10,80), ('NVDC34',10,20);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES
+  ('PETR4',CURDATE(),39,'COTAHIST',NOW()),
+  ('VALE3',DATE_SUB(CURDATE(), INTERVAL 20 DAY),61.2,'COTAHIST',NOW()),
+  ('ITUB4',CURDATE(),9,'COTAHIST',NOW()),
+  ('MSFT34',DATE_SUB(CURDATE(), INTERVAL 20 DAY),84.2,'COTAHIST',NOW());
+INSERT INTO gap (ticker, date, side, quantity, unit_price, status, trade_watermark, action_watermark, created_at) VALUES
+  ('VALE3',DATE_SUB(CURDATE(), INTERVAL 2 DAY),'SELL',5,NULL,'OPEN',0,0,NOW()),
+  ('ITUB4',DATE_SUB(CURDATE(), INTERVAL 3 DAY),'BUY',8,9,'OPEN',0,0,NOW()),
+  ('MSFT34',DATE_SUB(CURDATE(), INTERVAL 30 DAY),'BUY',2,84.2,'REPLACED',0,0,NOW());
+SQL
+```
+
+On `/ativos/positions` the Ativos head and its five tabs are visible. Clicking **Cotações** opens `/ativos/quotes`: the table lists PETR4 (today's close, COTAHIST, **ok**), VALE3 and MSFT34 (**desatualizada · há 20 dias**), ITUB4 (today's close, **ok**) and NVDC34 (**sem cotação**), and the panel hosts the **Atualizar catálogo e cotações** action. Clicking **Lacunas** opens `/ativos/gaps`: the table lists VALE3 (**pendente**, **aberta**) with its proceeds field, ITUB4 (**aproximado**, **aberta**) at R$ 9,00 and MSFT34 (**resolvido**, **substituída**) at R$ 84,20. Filling VALE3's field with `61.20` and clicking **Salvar** flips that row to **resolvido** without a page reload; the pending chip disappears and two rows read resolvido. A Cotações table that hides the stale or unpriced state, a missing refresh action, a Lacunas list without the pending/approximate/replaced states or the pricing field, or a save that leaves the row pending is an automatic red; the evidence names the first failing intent.
 
 ## Acceptance scenario — Importações · Ações corporativas (issue #387)
 

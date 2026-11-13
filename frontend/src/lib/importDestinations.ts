@@ -25,6 +25,14 @@ const TRADES_MAPPING = [
   { from: "Instituição", to: "Corretora" },
 ];
 
+const EDITION_MAPPING = [
+  { from: "ticker", to: "Código" },
+  { from: "peso", to: "Peso alvo" },
+  { from: "preço-alvo", to: "Preço-alvo" },
+  { from: "rating", to: "Recomendação" },
+  { from: "não operar", to: "Não operar" },
+];
+
 export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
   TRADES: {
     object: "TRADES",
@@ -64,10 +72,18 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     label: "Estratégias · Edições",
     route: ROUTES.strategies,
     source: "XP_REPORT",
-    parser: "XP — relatório de carteira (csv)",
-    supported: false,
-    changes: [],
-    mapping: [],
+    // The backend's XP resolver reads the report PDF; the prototype's CSV wording is a re-export
+    // narrative, not a second format this slice introduces.
+    parser: "XP — relatório de carteira (pdf)",
+    supported: true,
+    changes: [
+      {
+        object: "Estratégias · Edições",
+        what: "a edição promovida substitui a edição ativa da estratégia",
+      },
+      { object: "Plano / Mês", what: "o plano usa os novos pesos no próximo recálculo" },
+    ],
+    mapping: EDITION_MAPPING,
   },
   CORPORATE_ACTIONS: {
     object: "CORPORATE_ACTIONS",
@@ -97,6 +113,12 @@ export function destinationRoute(object: ImportDestinationObject): string {
 
 export function assistantPath(object: ImportDestinationObject): string {
   return `${ROUTES.importAssistant}?object=${object}`;
+}
+
+// The XP variant stages against one Strategy's edition, so its context carries the strategy id
+// beside the destination object.
+export function editionAssistantPath(strategyId: number): string {
+  return `${assistantPath("STRATEGY_EDITION")}&strategy=${strategyId}`;
 }
 
 export function sessionPath(importId: number): string {

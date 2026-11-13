@@ -30,6 +30,8 @@ class BondService(
 
     suspend fun fetchAll() = bondRepository.fetchAll()
 
+    suspend fun fetchStandalone() = bondRepository.fetchStandalone()
+
     suspend fun fetchConsolidatableBonds() = bondRepository.fetchBondsWithoutFullRedemptionOrMaturity()
 
     suspend fun fetchByCheckingAccountId(checkingAccountId: Int) = bondRepository.fetchByCheckingAccountId(

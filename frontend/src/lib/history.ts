@@ -1,7 +1,8 @@
-// Pure Histórico helpers — no React imports here (see AGENTS.md). The adoption defaults and the GAP
-// reading are unit-tested without a browser; the page only renders them.
+// Pure Reconstruir histórico helpers — no React imports here (see AGENTS.md). The adoption defaults
+// and the latest-close price are unit-tested without a browser; the Negócios steps render them. The
+// Lacunas helpers live in gaps.ts.
 
-import type { Gap, HeldTicker, Quote, Trade } from "../api/types.ts";
+import type { HeldTicker, Quote, Trade } from "../api/types.ts";
 import { addDays, todayIso } from "./dates.ts";
 
 export interface AdoptionRow {
@@ -61,18 +62,4 @@ function isIsoDate(value: string): boolean {
     date.getUTCMonth() === Number(month) - 1 &&
     date.getUTCDate() === Number(day)
   );
-}
-
-export function openGaps(gaps: Gap[]): Gap[] {
-  return gaps.filter((gap) => gap.status === "OPEN");
-}
-
-// A missing sale serialises `realized_pending`; a missing buy does not. That flag is the variant
-// discriminator the wire shape carries, so the UI never guesses from a nullable price.
-export function isMissingBuy(gap: Gap): boolean {
-  return gap.realized_pending === undefined;
-}
-
-export function pendingProceedsGaps(gaps: Gap[]): Gap[] {
-  return openGaps(gaps).filter((gap) => gap.realized_pending === true);
 }

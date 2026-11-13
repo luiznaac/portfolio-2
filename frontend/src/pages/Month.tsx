@@ -1,9 +1,11 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  useCloseMonth,
+  useClosedMonths,
   useCurrentMonth,
   useMonthPeriodRange,
-  useOpenMonth,
+  useMonthSnapshot,
   useOrders,
   useRefreshOrders,
   useReplaceTargets,
@@ -16,22 +18,30 @@ import type {
   Month as MonthModel,
   MonthPeriodRange,
   OrderList,
+  Snapshot,
   SuggestedOrder,
   Targets,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
+import { CLOSE_NON_BLOCKING_NOTE, CloseGateReason } from "../components/CloseGateReason.tsx";
+import { ClosedMonthStats } from "../components/ClosedMonthStats.tsx";
+import { FrozenOrders } from "../components/FrozenOrders.tsx";
 import { Kpi } from "../components/Kpi.tsx";
+import { MonthOpener } from "../components/MonthOpener.tsx";
+import { FIELD, NumberField } from "../components/NumberField.tsx";
 import { Panel } from "../components/Panel.tsx";
-import { PeriodSelect } from "../components/PeriodSelect.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { cn } from "../lib/cn.ts";
 import { monthKey, todayIso } from "../lib/dates.ts";
 import {
+  closeGateView,
+  closedMonthSummary,
   decidedTransferNoun,
   decidedTransfers,
   pendingTransferNoun,
   pendingTransfers,
+  snapshotOrderList,
 } from "../lib/fechamento.ts";
 import { subClassLabel } from "../lib/fixedIncome.ts";
 import { formatCurrency, formatNumber, formatPercent } from "../lib/format.ts";
@@ -42,7 +52,6 @@ import {
   addStrategyRow,
   addTickerRow,
   assetClassLabel,
-  emptyMonthForm,
   isBackdatedPeriod,
   monthFormFrom,
   monthPeriodLabel,
@@ -52,7 +61,6 @@ import {
   removeStrategyRow,
   removeTickerRow,
   targetsFormFrom,
-  toMonthCreation,
   toMonthUpdate,
   toTargets,
 } from "../lib/month.ts";
@@ -77,9 +85,7 @@ import {
   hasPersistedPlan,
   planSteps,
 } from "../lib/plan.ts";
-import { ROUTES } from "../lib/routes.ts";
-
-const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px] text-ink";
+import { ROUTES, portfolioHistoryDetail } from "../lib/routes.ts";
 
 // Plano / Mês · Mês atual (issue #388): the six-step month, opened on its first unfinished step. The
 // rail is the only step list — the body renders the active step's form, and a concluded step
@@ -89,10 +95,32 @@ export function Month() {
   const current = useCurrentMonth();
   const orders = useOrders();
   const periodRange = useMonthPeriodRange();
+  const closedMonths = useClosedMonths();
+  const [closedMonthId, setClosedMonthId] = useState<number | null>(null);
   const [switching, setSwitching] = useState(false);
   const currentPeriod = monthKey(todayIso());
 
-  const loading = current.isLoading || (current.data !== null && orders.isLoading);
+  // After a close the current-month read answers 404; the closed view reads the immutable snapshot
+  // the close cached by id. A later visit rebuilds it from the newest closed month's snapshot.
+  const lastClosed =
+    closedMonthId === null
+      ? current.data === null
+        ? closedMonths.data?.[0]
+        : undefined
+      : closedMonths.data?.find((month) => month.id === closedMonthId);
+  const lastSnapshot = useMonthSnapshot(closedMonthId ?? lastClosed?.id ?? null);
+  const closed =
+    lastSnapshot.data !== null && lastSnapshot.data !== undefined
+      ? {
+          month: lastClosed ?? monthFromSnapshot(lastSnapshot.data),
+          snapshot: lastSnapshot.data,
+        }
+      : null;
+
+  const loading =
+    current.isLoading ||
+    (current.data !== null && orders.isLoading) ||
+    (current.data === null && (closedMonths.isLoading || lastSnapshot.isLoading));
   const error = current.error ?? (current.data !== null ? orders.error : null);
 
   return (
@@ -108,6 +136,13 @@ export function Month() {
           orders={orders.data ?? null}
           currentPeriod={currentPeriod}
           onSwitch={() => setSwitching(true)}
+          onClosed={(snapshot) => setClosedMonthId(snapshot.month_id)}
+        />
+      ) : closed !== null && !switching ? (
+        <ClosedMonthView
+          month={closed.month}
+          snapshot={closed.snapshot}
+          range={periodRange.data ?? null}
         />
       ) : periodRange.isError ? (
         <p className="text-[13.5px] text-tax">{periodRange.error.message}</p>
@@ -130,11 +165,13 @@ function MonthPlan({
   orders,
   currentPeriod,
   onSwitch,
+  onClosed,
 }: {
   current: CurrentMonth;
   orders: OrderList | null;
   currentPeriod: string;
   onSwitch: () => void;
+  onClosed: (snapshot: Snapshot) => void;
 }) {
   const [stale, setStale] = useState(false);
   const steps = planSteps({
@@ -199,7 +236,9 @@ function MonthPlan({
           )}
           {active.key === "execution" && <ExecutionStep orders={orders} />}
           {active.key === "transfer" && <TransferStep orders={orders} />}
-          {active.key === "close" && <PendingStep step={active} />}
+          {active.key === "close" && (
+            <CloseStep orders={orders} backdated={backdated} onClosed={onClosed} />
+          )}
         </div>
       </div>
     </div>
@@ -212,10 +251,12 @@ function PlanRail({
   steps,
   activeKey,
   onSelect,
+  interactive = true,
 }: {
   steps: PlanStep[];
   activeKey: PlanStepKey;
   onSelect: (key: PlanStepKey) => void;
+  interactive?: boolean;
 }) {
   return (
     <Panel
@@ -244,10 +285,12 @@ function PlanRail({
               type="button"
               data-testid={`plan-step-rail-${step.key}`}
               aria-current={step.key === activeKey ? "step" : undefined}
+              disabled={!interactive}
               onClick={() => onSelect(step.key)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-xs px-1.5 py-1.5 text-left",
-                step.key === activeKey ? "bg-panel-2" : "hover:bg-panel-2",
+                step.key === activeKey ? "bg-panel-2" : interactive && "hover:bg-panel-2",
+                !interactive && "cursor-default",
               )}
             >
               <span
@@ -609,14 +652,157 @@ function TransferStep({ orders }: { orders: OrderList | null }) {
   );
 }
 
-// Step 6 keeps its rail row and its meta; the body lands with the slice that owns it.
-function PendingStep({ step }: { step: PlanStep }) {
+// Step 6 — Mês fechado: the last step. The close itself refreshes the plan first (the refresh is
+// what finalises the transfers), so only an undecided transfer refuses it; every other state the
+// snapshot freezes is named here and never blocks. The write lands on Fechamentos, but the step can
+// close the month without leaving Mês atual.
+function CloseStep({
+  orders,
+  backdated,
+  onClosed,
+}: {
+  orders: OrderList | null;
+  backdated: boolean;
+  onClosed: (snapshot: Snapshot) => void;
+}) {
+  const close = useCloseMonth();
+  const pending = pendingTransfers(orders);
+  const gate = closeGateView({
+    hasOpenMonth: true,
+    backdated,
+    gateReady: true,
+    pendingCount: pending.length,
+  });
+  const canClose = gate.canClose && !close.isPending;
+
+  function handleClose() {
+    close.mutate(undefined, { onSuccess: onClosed });
+  }
+
   return (
-    <Panel title={step.label}>
-      <p className="text-[13px] text-ink-dim">
-        Esta etapa é construída na fatia que a detalha. O rail já acompanha o estado do mês.
-      </p>
+    <Panel
+      title="Mês fechado"
+      action={
+        <Link to={ROUTES.planClose} className="text-principal underline">
+          Abrir Fechamentos →
+        </Link>
+      }
+    >
+      <CloseGateReason gate={gate} />
+
+      {gate.blocked && (
+        <p className="mb-3 text-[12px] text-ink-dim">
+          {pending.length} {pendingTransferNoun(pending.length)} ·{" "}
+          <Link to={ROUTES.planTransfers} className="text-principal underline">
+            Abrir Transferências →
+          </Link>
+        </p>
+      )}
+
+      <Button
+        variant="primary"
+        data-testid="step-close-month"
+        disabled={!canClose}
+        onClick={handleClose}
+      >
+        {close.isPending
+          ? "Fechando…"
+          : gate.state === "backdated"
+            ? "Só o mês atual pode ser fechado"
+            : "Fechar mês"}
+      </Button>
+
+      {close.error && <p className="mt-2 text-[12.5px] text-tax">{close.error.message}</p>}
+
+      <p className="mt-2 text-[11.5px] text-ink-faint">{CLOSE_NON_BLOCKING_NOTE}</p>
     </Panel>
+  );
+}
+
+// The close returns the snapshot, not the month it locked; the frozen state carries everything the
+// closed view needs to name the period and its Capital/Floor/Aportes.
+function monthFromSnapshot(snapshot: Snapshot): MonthModel {
+  return {
+    id: snapshot.month_id,
+    period: snapshot.state.period,
+    capital: snapshot.state.capital,
+    floor: snapshot.state.floor,
+    status: "CLOSED",
+    aportes: snapshot.state.aportes,
+  };
+}
+
+// The closed month still shows the six-step frame: the rail reads 6 de 6 from the frozen month and
+// the snapshot's orders, and step 6 is the body. The opener sits below it for the next month.
+function ClosedMonthView({
+  month,
+  snapshot,
+  range,
+}: {
+  month: MonthModel;
+  snapshot: Snapshot;
+  range: MonthPeriodRange | null;
+}) {
+  const steps = planSteps({
+    month,
+    targets: { classes: [], strategies: [], sub_classes: [], tickers: [] },
+    orders: snapshotOrderList(snapshot),
+    planStale: false,
+  });
+
+  return (
+    <div className="space-y-3">
+      <PlanRail steps={steps} activeKey="close" onSelect={() => {}} interactive={false} />
+      <MonthClosed month={month} snapshot={snapshot} />
+      {range !== null && <MonthOpener range={range} onOpened={() => {}} />}
+    </div>
+  );
+}
+
+// The closed state Mês atual shows once the month is locked: the step 6 body reads the immutable
+// snapshot, never the live reads, and the opener sits below it for the next month.
+function MonthClosed({ month, snapshot }: { month: MonthModel; snapshot: Snapshot }) {
+  const summary = closedMonthSummary(snapshot);
+
+  return (
+    <div data-testid="month-closed" className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip tone="neutral">Fechado</Chip>
+        <span className="font-cond text-[15px] font-semibold">
+          {monthPeriodLabel(month.period)}
+        </span>
+        <span className="font-mono text-[11px] text-ink-faint">{summary.closedAt}</span>
+        <Link to={ROUTES.planClose} className="ml-auto text-[11.5px] text-principal underline">
+          Abrir Fechamentos →
+        </Link>
+      </div>
+
+      <Panel title="Mês fechado">
+        <p className="mb-3 text-[12.5px] leading-[1.5] text-ink-dim">
+          O mês não reabre; a evolução é construída a partir dos snapshots. Abra o próximo mês
+          abaixo para continuar o plano.
+        </p>
+
+        <div className="mb-3">
+          <ClosedMonthStats summary={summary} />
+        </div>
+
+        <FrozenOrders
+          orders={snapshot.state.orders}
+          testId="month-closed-orders"
+          title="Plano congelado"
+        />
+
+        <div className="mt-3">
+          <Link
+            to={portfolioHistoryDetail(summary.period)}
+            className="text-[11.5px] text-principal underline"
+          >
+            Ver o mês congelado em Carteira · Histórico →
+          </Link>
+        </div>
+      </Panel>
+    </div>
   );
 }
 
@@ -833,73 +1019,6 @@ function TargetsStep({ targets, onSaved }: { targets: Targets; onSaved: () => vo
   );
 }
 
-// Opening a month closes any month still open (the backend owns that invariant), so the copy warns
-// before the button. The period selects are bounded by the server's window, never a ±2-year guess.
-function MonthOpener({
-  range,
-  onOpened,
-  onCancel,
-}: {
-  range: MonthPeriodRange;
-  onOpened: () => void;
-  onCancel?: () => void;
-}) {
-  const [form, setForm] = useState<MonthFormState>(() => emptyMonthForm(range.default));
-  const open = useOpenMonth();
-  const creation = toMonthCreation(form);
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!creation) return;
-    open.mutate(creation, { onSuccess: onOpened });
-  }
-
-  return (
-    <Panel title="Abrir mês">
-      <form onSubmit={handleSubmit} data-testid="month-opener" className="space-y-4">
-        <div className="flex flex-wrap gap-3">
-          {/* Two selects rather than a native month input: Firefox/Safari have no month picker. */}
-          <div className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
-            <span>Período</span>
-            <PeriodSelect
-              range={range}
-              period={form.period}
-              onChange={(period) => setForm((current) => ({ ...current, period }))}
-            />
-            <span className="text-[11.5px] text-ink-faint">
-              Histórico desde {monthPeriodLabel(range.min)}
-            </span>
-          </div>
-          <NumberField
-            label="Capital (R$)"
-            value={form.capital}
-            onChange={(value) => setForm((current) => ({ ...current, capital: value }))}
-          />
-          <NumberField
-            label="Reserva (piso, R$)"
-            value={form.floor}
-            onChange={(value) => setForm((current) => ({ ...current, floor: value }))}
-          />
-        </div>
-
-        {open.error && <p className="text-[12.5px] text-tax">{open.error.message}</p>}
-
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="primary" disabled={!creation || open.isPending}>
-            {open.isPending ? "Abrindo…" : "Abrir mês"}
-          </Button>
-          {onCancel && (
-            <Button type="button" variant="ghost" onClick={onCancel}>
-              Cancelar
-            </Button>
-          )}
-        </div>
-        <p className="text-[11.5px] text-ink-faint">Abrir um mês fecha o mês aberto atual.</p>
-      </form>
-    </Panel>
-  );
-}
-
 // A labelled read in a step's mini summary.
 function MiniRow({ label, value }: { label: string; value: string }) {
   return (
@@ -920,30 +1039,6 @@ function Rung({ title, children }: { title: string; children: ReactNode }) {
       </h3>
       <div className="flex flex-wrap gap-3">{children}</div>
     </div>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-1 text-[12.5px] text-ink-dim">
-      {label}
-      <input
-        type="number"
-        step="0.01"
-        placeholder="0,00"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={FIELD}
-      />
-    </label>
   );
 }
 

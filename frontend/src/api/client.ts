@@ -8,6 +8,7 @@ import type {
   BackfillReport,
   BenchmarkStatusReport,
   Bond,
+  BondPosition,
   CatalogEntry,
   CheckingAccount,
   CheckingAccountCreation,
@@ -322,6 +323,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(creation),
     });
+  },
+
+  // A product's accrual history, oldest first. A product with no consolidated position reads as an
+  // empty list (the `/last` variant would 500 on it), so the page can show an unknown value.
+  getBondPositions(bondId: number): Promise<BondPosition[]> {
+    return request(`/fixed-income/bonds/${bondId}/positions`);
+  },
+
+  getCheckingAccountPositions(checkingAccountId: number): Promise<BondPosition[]> {
+    return request(`/fixed-income/accounts/${checkingAccountId}/positions`);
   },
 
   getCurrentMonth(): Promise<CurrentMonth> {

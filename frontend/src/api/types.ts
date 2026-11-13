@@ -345,6 +345,15 @@ export interface CheckingAccountCreation {
   maturity_duration: string;
 }
 
+// One day's consolidated accrual for a fixed-income product — the read behind a product's value
+// (GET /fixed-income/bonds/{id}/positions and the checking-account equivalent).
+export interface BondPosition {
+  date: string;
+  principal: number;
+  yield: number;
+  taxes: number;
+}
+
 export type MonthStatus = "OPEN" | "CLOSED";
 
 export interface Month {
