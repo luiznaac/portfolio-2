@@ -273,7 +273,7 @@ _UI:_ "Negócio"
 _Avoid_: Order (that is a suggested order), movimentação (the umbrella file word)
 
 **Corporate Action**:
-An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue.
+An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue, where the owner resolves it by supplying the data the export lacked (the factor, the per-share value, the new code) or, for a kind the engine never computes, acknowledges it as handled without a ledger effect.
 _UI:_ "Evento corporativo"
 _Avoid_: Provento (that is cash income), trade, movimentação (the umbrella file word)
 

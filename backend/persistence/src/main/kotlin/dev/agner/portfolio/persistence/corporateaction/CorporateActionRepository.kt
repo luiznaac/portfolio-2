@@ -31,6 +31,10 @@ class CorporateActionRepository(
             .map { it.toModel() }
     }
 
+    override suspend fun fetchById(id: Int): CorporateAction? = transaction {
+        CorporateActionEntity.findById(id)?.toModel()
+    }
+
     override suspend fun fetchByTicker(ticker: String): List<CorporateAction> = transaction {
         CorporateActionEntity.find { CorporateActionTable.ticker eq ticker }
             .orderBy(
@@ -56,21 +60,38 @@ class CorporateActionRepository(
         status: CorporateActionStatus,
     ): CorporateAction = transaction {
         CorporateActionEntity.new {
-            ticker = creation.ticker
-            kind = creation.kind
-            exDate = creation.exDate
-            approvalDate = creation.approvalDate
-            ratio = creation.ratio
-            declaredValuePerShare = creation.declaredValuePerShare
-            targetTicker = creation.targetTicker
-            sourceType = creation.source
-            processNumber = creation.processNumber
-            rawType = creation.rawType
-            ordinal = creation.ordinal
-            fileHash = creation.fileHash
-            this.status = status
+            applyCreation(creation, status)
             createdAt = LocalDateTime.now(clock)
         }.toModel()
+    }
+
+    override suspend fun update(
+        id: Int,
+        creation: CorporateActionCreation,
+        status: CorporateActionStatus,
+    ): CorporateAction? = transaction {
+        CorporateActionEntity.findById(id)?.apply { applyCreation(creation, status) }?.toModel()
+    }
+
+    // The stored shape of one event, shared by the insert and the in-place resolve: the template
+    // columns plus the engine's (or the owner's) decision.
+    private fun CorporateActionEntity.applyCreation(
+        creation: CorporateActionCreation,
+        status: CorporateActionStatus,
+    ) {
+        ticker = creation.ticker
+        kind = creation.kind
+        exDate = creation.exDate
+        approvalDate = creation.approvalDate
+        ratio = creation.ratio
+        declaredValuePerShare = creation.declaredValuePerShare
+        targetTicker = creation.targetTicker
+        sourceType = creation.source
+        processNumber = creation.processNumber
+        rawType = creation.rawType
+        ordinal = creation.ordinal
+        fileHash = creation.fileHash
+        this.status = status
     }
 
     // Corporate-action cash shares the `cash_movement` table with income but carries a non-INCOME

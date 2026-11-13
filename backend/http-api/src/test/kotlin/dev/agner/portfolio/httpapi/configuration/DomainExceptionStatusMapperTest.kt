@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.configuration
 
 import dev.agner.portfolio.usecase.commons.DomainException
+import dev.agner.portfolio.usecase.corporateaction.CorporateActionNotFoundException
 import dev.agner.portfolio.usecase.monthlyclose.PendingTransfersException
 import dev.agner.portfolio.usecase.transferProposal
 import io.kotest.core.spec.style.StringSpec
@@ -17,5 +18,9 @@ class DomainExceptionStatusMapperTest : StringSpec({
 
     "should map the pending-transfer block to 409" {
         mapper.statusFor(PendingTransfersException(listOf(transferProposal()))) shouldBe HttpStatusCode.Conflict
+    }
+
+    "should map a missing corporate action to 404" {
+        mapper.statusFor(CorporateActionNotFoundException(7)) shouldBe HttpStatusCode.NotFound
     }
 })
