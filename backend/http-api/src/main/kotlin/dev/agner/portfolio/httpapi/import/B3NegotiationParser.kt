@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.import
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
+import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
 import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import kotlinx.datetime.LocalDate
@@ -30,6 +31,8 @@ private enum class Column(val aliases: Set<String>) {
 
 @Component
 class B3NegotiationParser : IImportParser {
+
+    override val destination = ImportDestinationObject.TRADES
 
     // Recognition is by the header row alone, independent of filename: the layout *is* the column
     // set, and a name that merely contains "neg" is not evidence of anything. A file we cannot

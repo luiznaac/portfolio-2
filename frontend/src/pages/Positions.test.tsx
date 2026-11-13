@@ -298,6 +298,15 @@ describe("Ativos · Posições", () => {
     expect(screen.getByRole("button", { name: "Classificar sem classe" })).toBeDefined();
   });
 
+  it("links to the custody import assistant", async () => {
+    seedPositions();
+    renderPositions();
+
+    const link = await screen.findByRole("link", { name: "Importar custódia →" });
+
+    expect(link.getAttribute("href")).toBe("/imports/assistant?object=POSITIONS");
+  });
+
   it("shows the shared empty state when no row matches", async () => {
     seedPositions();
     renderPositions();

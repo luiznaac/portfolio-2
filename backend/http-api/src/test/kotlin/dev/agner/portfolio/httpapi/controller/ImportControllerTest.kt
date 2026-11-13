@@ -31,6 +31,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.datetime.LocalDate
@@ -169,6 +170,7 @@ class ImportControllerTest : DescribeSpec({
         it("returns 201 with the staged import and passes the source, name, hash and destination") {
             val service = mockk<ImportService>()
             val parser = mockk<IImportParser>()
+            every { parser.destination } returns ImportDestinationObject.TRADES
             val captured = slot<List<ImportRowPayload>>()
             coEvery {
                 service.stage(
@@ -199,6 +201,7 @@ class ImportControllerTest : DescribeSpec({
         it("returns 200 with the existing import untouched when the hash is already known") {
             val service = mockk<ImportService>()
             val parser = mockk<IImportParser>()
+            every { parser.destination } returns ImportDestinationObject.TRADES
             coEvery { service.stage(any(), any(), any(), any(), any(), any()) } returns
                 StagingResult(appliedImport, created = false)
             coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
@@ -236,6 +239,7 @@ class ImportControllerTest : DescribeSpec({
         it("returns 400 when the destination is missing") {
             val service = mockk<ImportService>()
             val parser = mockk<IImportParser>()
+            every { parser.destination } returns ImportDestinationObject.TRADES
             coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
             coEvery { parser.parse("neg.xlsx", any()) } returns emptyList()
 
@@ -256,6 +260,7 @@ class ImportControllerTest : DescribeSpec({
         it("stages the rows a parser produced for the file") {
             val service = mockk<ImportService>()
             val parser = mockk<IImportParser>()
+            every { parser.destination } returns ImportDestinationObject.TRADES
             coEvery { parser.shouldExecute("neg.xlsx", any()) } returns true
             coEvery { parser.parse("neg.xlsx", any()) } returns listOf(payload)
             coEvery { service.stage(any(), any(), any(), any(), any(), any()) } returns

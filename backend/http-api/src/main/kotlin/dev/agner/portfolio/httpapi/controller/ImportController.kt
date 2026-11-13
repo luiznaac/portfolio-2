@@ -94,7 +94,7 @@ class ImportController(
             source,
             upload.fileName,
             upload.content.sha256Hex(),
-            parsers.resolve(upload.fileName, upload.content),
+            parsers.resolve(upload.fileName, upload.content, destinationObject),
             destination,
             upload.content,
         )

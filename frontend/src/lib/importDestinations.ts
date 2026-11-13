@@ -33,6 +33,11 @@ const EDITION_MAPPING = [
   { from: "não operar", to: "Não operar" },
 ];
 
+const CUSTODY_MAPPING = [
+  { from: "Código de Negociação", to: "Ticker" },
+  { from: "Quantidade", to: "Quantidade em custódia" },
+];
+
 export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
   TRADES: {
     object: "TRADES",
@@ -53,9 +58,18 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     route: ROUTES.positions,
     source: "B3_POSITION",
     parser: "B3 — posição em custódia (xlsx)",
-    supported: false,
-    changes: [],
-    mapping: [],
+    supported: true,
+    changes: [
+      {
+        object: "Ativos · Posições",
+        what: "a quantidade de cada ticker passa a ser a da custódia",
+      },
+      {
+        object: "Ativos · Lacunas",
+        what: "cada divergência abre uma lacuna; a venda faltante fica com resultado pendente",
+      },
+    ],
+    mapping: CUSTODY_MAPPING,
   },
   INCOME: {
     object: "INCOME",
