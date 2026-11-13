@@ -12,7 +12,9 @@ import type {
   Month,
   MonthPerformance,
   OrderPlan,
+  Position,
   Strategy,
+  StrategyHoldings,
 } from "../api/types.ts";
 import { StrategyDetail } from "./StrategyDetail.tsx";
 
@@ -26,6 +28,9 @@ const mock = vi.hoisted(() => ({
   attribution: null as Attribution | null,
   orderPlan: null as OrderPlan | null,
   transfers: [] as AttributionTransferCreation[],
+  holdings: null as StrategyHoldings | null,
+  positions: [] as Position[],
+  attributions: {} as Record<string, Attribution>,
   promotions: [] as { referenceMonth: string; tickers: string[] }[],
 }));
 
@@ -37,7 +42,10 @@ vi.mock("../api/client.ts", () => ({
       Promise.resolve(mock.editionsByStrategy[strategyId] ?? mock.editions),
     getClosedMonths: () => Promise.resolve(mock.months),
     getMonthPerformance: () => Promise.resolve(mock.performance),
-    getAttribution: () => Promise.resolve(mock.attribution),
+    getStrategyHoldings: () => Promise.resolve(mock.holdings),
+    getPositions: () => Promise.resolve(mock.positions),
+    getAttribution: (ticker: string) =>
+      Promise.resolve(mock.attributions[ticker] ?? mock.attribution ?? undefined),
     getOrderPlan: () => Promise.resolve(mock.orderPlan),
     transferAttribution: (_ticker: string, creation: AttributionTransferCreation) => {
       mock.transfers.push(creation);
@@ -250,6 +258,9 @@ afterEach(() => {
   mock.attribution = null;
   mock.orderPlan = null;
   mock.transfers = [];
+  mock.holdings = null;
+  mock.positions = [];
+  mock.attributions = {};
   mock.promotions = [];
 });
 
@@ -326,6 +337,161 @@ describe("the strategy detail shell", () => {
     renderDetail("/strategies/999");
 
     expect(await screen.findByText("Estratégia não encontrada")).toBeDefined();
+  });
+});
+
+describe("the strategy detail's Atribuição tab", () => {
+  const attribution = (
+    ticker: string,
+    custody: number,
+    slices: Attribution["slices"],
+  ): Attribution => {
+    const attributed = slices.reduce((sum, slice) => sum + slice.quantity, 0);
+    return {
+      ticker,
+      custody_quantity: custody,
+      attributed_quantity: attributed,
+      unattributed_quantity: custody - attributed,
+      slices,
+    };
+  };
+  const position = (ticker: string, quantity: number): Position => ({
+    ticker,
+    quantity,
+    average_price: 0,
+  });
+
+  // The chain carries WEGE3 (a target this strategy holds nothing of): its whole custody sits in the
+  // manual bucket, so the reconciliation shows it through "Outra estratégia" rather than dropping it.
+  const chainWithWege: Allocation = {
+    ...allocation,
+    classes: [
+      {
+        ...allocation.classes[0],
+        strategies: [
+          {
+            ...allocation.classes[0].strategies[0],
+            tickers: [
+              ...allocation.classes[0].strategies[0].tickers,
+              {
+                ticker: "WEGE3",
+                quantity: 0,
+                target: 5,
+                ideal: 5000,
+                actual: 0,
+                deficit: 5000,
+                drift: -2.5,
+                price: 52.4,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const reconciledHoldings: StrategyHoldings = {
+    strategy_id: 1,
+    strategy_name: "Top Dividendos",
+    total_value: 8400,
+    holdings: [
+      { ticker: "PETR4", quantity: 100, value: 6000, share: 71.43 },
+      { ticker: "VALE3", quantity: 20, value: 2400, share: 28.57 },
+    ],
+  };
+  const reconciledAttributions: Record<string, Attribution> = {
+    PETR4: attribution("PETR4", 100, [
+      { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 100 },
+    ]),
+    VALE3: attribution("VALE3", 50, [
+      { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 20 },
+      { strategy_id: 4, strategy_name: "Legado Ações", quantity: 30 },
+    ]),
+    WEGE3: attribution("WEGE3", 1000, [
+      { strategy_id: 4, strategy_name: "Legado Ações", quantity: 1000 },
+    ]),
+  };
+  const reconciledPositions = [
+    position("PETR4", 100),
+    position("VALE3", 50),
+    position("WEGE3", 1000),
+  ];
+  const divergentHoldings: StrategyHoldings = {
+    strategy_id: 1,
+    strategy_name: "Top Dividendos",
+    total_value: 12000,
+    holdings: [
+      { ticker: "PETR4", quantity: 60, value: 3600, share: 30 },
+      { ticker: "VALE3", quantity: 70, value: 8400, share: 70 },
+    ],
+  };
+  const divergentAttributions: Record<string, Attribution> = {
+    PETR4: attribution("PETR4", 100, [
+      { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 60 },
+    ]),
+    VALE3: attribution("VALE3", 50, [
+      { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 70 },
+    ]),
+  };
+  const divergentPositions = [position("PETR4", 100), position("VALE3", 50)];
+
+  const tableRows = () => {
+    const table = screen.getByTestId("attribution-reconciliation-table");
+    return within(table)
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => cellsOf(row));
+  };
+
+  it("titles the view Custódia × atribuição and reconciles split custody", async () => {
+    mock.strategies = [strategy];
+    mock.allocation = chainWithWege;
+    mock.holdings = reconciledHoldings;
+    mock.positions = reconciledPositions;
+    mock.attributions = reconciledAttributions;
+
+    renderDetail("/strategies/1/atribuicao");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Top Dividendos" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Atribuição" })).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Custódia × atribuição" }),
+    ).toBeDefined();
+    expect(screen.getByTestId("attribution-caption").textContent).toContain(
+      "A coluna Fora mostra o que está na custódia mas não nesta fatia.",
+    );
+
+    expect(
+      within(screen.getByTestId("attribution-reconciliation-table"))
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual(["Ativo", "Custódia", "Nesta estratégia", "Fora", "Outra estratégia", "Situação"]);
+    expect(tableRows()).toEqual([
+      ["PETR4", "100", "100", "0", "—", "confere"],
+      ["VALE3", "50", "20", "30", "Legado Ações · 30", "confere"],
+      ["WEGE3", "1.000", "0", "1.000", "Legado Ações · 1.000", "confere"],
+    ]);
+    expect(screen.getByTestId("attribution-finding").textContent).toBe(
+      "Custódia e atribuição conferem em todos os tickers.",
+    );
+  });
+
+  it("states the divergence the reconciliation finds instead of only tinting it", async () => {
+    mock.strategies = [strategy];
+    mock.holdings = divergentHoldings;
+    mock.positions = divergentPositions;
+    mock.attributions = divergentAttributions;
+
+    renderDetail("/strategies/1/atribuicao");
+
+    await screen.findByTestId("attribution-reconciliation-table");
+    expect(tableRows()).toEqual([
+      ["PETR4", "100", "60", "40", "—", "40 cotas fora de toda estratégia"],
+      ["VALE3", "50", "70", "−20", "—", "atribuição 20 cotas acima da custódia"],
+    ]);
+    expect(screen.getByTestId("attribution-finding").textContent).toBe(
+      "2 de 2 tickers divergem da custódia · PETR4 (40 cotas fora de toda estratégia); " +
+        "VALE3 (atribuição 20 cotas acima da custódia)",
+    );
   });
 });
 
@@ -436,6 +602,7 @@ describe("the strategy detail's Edições tab", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Legado" })).toBeDefined();
     expect(screen.queryByRole("link", { name: "Edições" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Atribuição" })).toBeNull();
     expect(screen.getByRole("link", { name: "Carteira" })).toBeDefined();
     expect(screen.getByRole("link", { name: "Fatia no portfólio" })).toBeDefined();
     expect(
