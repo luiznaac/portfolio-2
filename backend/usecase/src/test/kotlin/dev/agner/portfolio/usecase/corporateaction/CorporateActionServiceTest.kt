@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionResolution
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateCashMovement
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
@@ -17,6 +18,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.toModel
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -250,6 +252,120 @@ class CorporateActionServiceTest : StringSpec({
         service.importEvents(listOf(split(ratio = "2").copy(ticker = "petr4f")))
 
         saved.captured.ticker shouldBe "PETR4"
+    }
+
+    "resolving a parked quantity event applies the supplied factor and its ledger effects" {
+        coEvery { repository.fetchById(7) } returns
+            action(creation = split(ratio = null), status = CorporateActionStatus.NEEDS_REVIEW)
+        coEvery { repository.update(7, any(), CorporateActionStatus.APPLIED) } returns
+            action(creation = split(ratio = "2"), status = CorporateActionStatus.APPLIED)
+        coEvery { attributions.fetchBy("PETR4") } returns listOf(
+            Attribution("PETR4", strategyId = 1, quantity = BigDecimal("60")),
+        )
+        val saved = slot<CorporateActionCreation>()
+
+        service.resolve(7, CorporateActionResolution(ratio = BigDecimal("2")))
+
+        coVerify { repository.update(7, capture(saved), CorporateActionStatus.APPLIED) }
+        saved.captured.ratio?.compareTo(BigDecimal("2")) shouldBe 0
+        coVerify { attributions.save(Attribution("PETR4", 1, BigDecimal("120"))) }
+        coVerify(exactly = 1) { positionService.reproject("PETR4") }
+    }
+
+    "resolving a parked cash event records its per-share movement" {
+        coEvery { repository.fetchById(7) } returns
+            action(
+                creation = cash(CorporateActionKind.CAPITAL_RETURN, perShare = "0"),
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            )
+        coEvery { repository.update(7, any(), CorporateActionStatus.APPLIED) } returns
+            action(
+                creation = cash(CorporateActionKind.CAPITAL_RETURN, perShare = "1.5"),
+                status = CorporateActionStatus.APPLIED,
+            )
+        val movement = slot<CorporateCashMovement>()
+
+        service.resolve(7, CorporateActionResolution(declaredValuePerShare = BigDecimal("1.5")))
+
+        coVerify { repository.saveCashMovement(capture(movement)) }
+        movement.captured.amount.compareTo(BigDecimal("150")) shouldBe 0
+        movement.captured.taxNature shouldBe TaxNature.COST_REDUCTION
+        coVerify(exactly = 1) { positionService.reproject("PETR4") }
+    }
+
+    "resolving a parked ticker change remaps the catalog with the supplied code" {
+        coEvery { repository.fetchById(7) } returns
+            action(
+                creation = actionCreation(CorporateActionKind.TICKER_CHANGE),
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            )
+        coEvery { repository.update(7, any(), CorporateActionStatus.APPLIED) } returns
+            action(
+                creation = actionCreation(CorporateActionKind.TICKER_CHANGE, targetTicker = "VALE3"),
+                status = CorporateActionStatus.APPLIED,
+            )
+
+        service.resolve(7, CorporateActionResolution(targetTicker = "VALE3"))
+
+        coVerify { catalog.remapTicker("PETR4", "VALE3") }
+    }
+
+    "a ticker change whose source is absent from the catalog is rejected" {
+        coEvery { catalog.fetchBy(any()) } returns null
+        coEvery { repository.fetchById(7) } returns
+            action(
+                creation = actionCreation(CorporateActionKind.TICKER_CHANGE, targetTicker = "VALE3"),
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            )
+
+        shouldThrow<InvalidCorporateActionResolutionException> {
+            service.resolve(7, CorporateActionResolution(targetTicker = "VALE3"))
+        }
+
+        coVerify(exactly = 0) { repository.update(any(), any(), any()) }
+    }
+
+    "resolving a manual review kind records it as handled without ledger effects" {
+        coEvery { repository.fetchById(7) } returns
+            action(creation = review(CorporateActionKind.RIGHTS_ISSUE), status = CorporateActionStatus.NEEDS_REVIEW)
+        coEvery { repository.update(7, any(), CorporateActionStatus.APPLIED) } returns
+            action(creation = review(CorporateActionKind.RIGHTS_ISSUE), status = CorporateActionStatus.APPLIED)
+
+        service.resolve(7, CorporateActionResolution())
+
+        coVerify { repository.update(7, any(), CorporateActionStatus.APPLIED) }
+        coVerify(exactly = 0) { positionService.reproject(any()) }
+        coVerify(exactly = 0) { repository.saveCashMovement(any()) }
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
+
+    "resolving without the missing factor is rejected and nothing is written" {
+        coEvery { repository.fetchById(7) } returns
+            action(creation = split(ratio = null), status = CorporateActionStatus.NEEDS_REVIEW)
+
+        shouldThrow<InvalidCorporateActionResolutionException> {
+            service.resolve(7, CorporateActionResolution())
+        }
+
+        coVerify(exactly = 0) { repository.update(any(), any(), any()) }
+    }
+
+    "resolving an already applied event is rejected" {
+        coEvery { repository.fetchById(7) } returns action(creation = split(ratio = "2"))
+
+        shouldThrow<InvalidCorporateActionResolutionException> {
+            service.resolve(7, CorporateActionResolution(ratio = BigDecimal("2")))
+        }
+
+        coVerify(exactly = 0) { repository.update(any(), any(), any()) }
+    }
+
+    "resolving an unknown id is rejected" {
+        coEvery { repository.fetchById(7) } returns null
+
+        shouldThrow<CorporateActionNotFoundException> {
+            service.resolve(7, CorporateActionResolution())
+        }
     }
 })
 

@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionResolution
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateCashMovement
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
@@ -50,6 +51,39 @@ class CorporateActionService(
             fresh.map { apply(it) }
         }
 
+    // The owner's decision on a parked event. The supplied data fills the columns the B3 export
+    // lacked and the engine then applies the event exactly as an import would; a kind the engine can
+    // never compute (a rights issue, a merger) is the owner's acknowledgement that it was handled
+    // outside the app, so it joins the applied history with no ledger effect.
+    suspend fun resolve(id: Int, resolution: CorporateActionResolution): CorporateAction =
+        transaction.execute {
+            val parked = repository.fetchById(id) ?: throw CorporateActionNotFoundException(id)
+            if (parked.status != CorporateActionStatus.NEEDS_REVIEW) {
+                throw InvalidCorporateActionResolutionException(id, "the event is already ${parked.status}")
+            }
+            val creation = resolution.mergedWith(parked)
+            // A computable kind still needs its missing column; an incomplete decision is rejected
+            // rather than silently acknowledging an event the position replay cannot apply.
+            if (creation.needsReview() && !creation.kind.requiresReview) {
+                throw InvalidCorporateActionResolutionException(
+                    id,
+                    "the event still lacks the data the engine needs",
+                )
+            }
+            // A remap with no source entry would be recorded as applied and change nothing; the
+            // missing catalog row has to be repaired before the decision can land.
+            if (creation.kind == CorporateActionKind.TICKER_CHANGE && catalog.fetchBy(creation.ticker) == null) {
+                throw InvalidCorporateActionResolutionException(
+                    id,
+                    "ticker ${creation.ticker} is absent from the catalog",
+                )
+            }
+            val resolved = repository.update(id, creation, CorporateActionStatus.APPLIED)
+                ?: throw CorporateActionNotFoundException(id)
+            if (creation.kind.requiresReview) return@execute resolved
+            settle(resolved)
+        }
+
     private suspend fun apply(creation: CorporateActionCreation): CorporateAction {
         val status = when {
             creation.needsReview() -> CorporateActionStatus.NEEDS_REVIEW
@@ -61,7 +95,12 @@ class CorporateActionService(
         }
         val action = repository.save(creation, status)
         if (status == CorporateActionStatus.NEEDS_REVIEW) return action
+        return settle(action)
+    }
 
+    // The ledger effects of an applied event, shared by the import and the human resolve: the remap
+    // or the quantity scaling, the cash entitlement, and the reprojection the position read needs.
+    private suspend fun settle(action: CorporateAction): CorporateAction {
         when {
             action.kind == CorporateActionKind.TICKER_CHANGE -> remapTicker(action)
             action.kind.isQuantityEvent -> scaleAttributions(action)

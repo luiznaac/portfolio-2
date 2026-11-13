@@ -13,6 +13,8 @@ interface ICorporateActionRepository {
     // Newest first — the log page's order.
     suspend fun fetchAll(): List<CorporateAction>
 
+    suspend fun fetchById(id: Int): CorporateAction?
+
     // Oldest first with the replay's deterministic tie-break (ex date, ordinal, id).
     suspend fun fetchByTicker(ticker: String): List<CorporateAction>
 
@@ -23,6 +25,15 @@ interface ICorporateActionRepository {
         creation: CorporateActionCreation,
         status: CorporateActionStatus,
     ): CorporateAction
+
+    // Rewrites an existing row's template and decision in place — a resolve supplies the data the
+    // export lacked without minting a second event, so the natural key never changes. Null when the
+    // row disappeared between the read and the write.
+    suspend fun update(
+        id: Int,
+        creation: CorporateActionCreation,
+        status: CorporateActionStatus,
+    ): CorporateAction?
 
     // Persists a corporate-action cash movement into the shared `cash_movement` ledger, linked to
     // the event that produced it.

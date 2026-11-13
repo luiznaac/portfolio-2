@@ -20,6 +20,8 @@ import type {
   BondPosition,
   CheckingAccount,
   CheckingAccountCreation,
+  CorporateAction,
+  CorporateActionResolution,
   Edition,
   EditionActivation,
   FixedRateBondCreation,
@@ -785,6 +787,24 @@ export function useCorporateActions() {
     queryKey: ["corporate-actions"],
     queryFn: api.getCorporateActions,
   });
+}
+
+// The owner's decision on a parked event: an applied event reprojects the position and may write a
+// cash movement, and either outcome removes the row from the review queue and its attention item.
+export function useResolveCorporateAction() {
+  const queryClient = useQueryClient();
+  return useMutation<CorporateAction, Error, { id: number; resolution: CorporateActionResolution }>(
+    {
+      mutationFn: ({ id, resolution }) => api.resolveCorporateAction(id, resolution),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["corporate-actions"] });
+        queryClient.invalidateQueries({ queryKey: ["positions"] });
+        queryClient.invalidateQueries({ queryKey: ["income"] });
+        queryClient.invalidateQueries({ queryKey: ["month"] });
+        invalidatePortfolioStatus(queryClient);
+      },
+    },
+  );
 }
 
 // The open and replaced GAP records. The data-quality panel and the gaps screen share one cache

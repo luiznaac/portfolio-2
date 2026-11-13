@@ -1029,6 +1029,15 @@ export interface CorporateAction {
   is_applied: boolean;
 }
 
+// The POST /corporate-actions/{id}/resolve body: the template data the B3 export did not carry. A
+// field left out keeps the stored value, and an empty body acknowledges a kind the engine cannot
+// compute on its own — either way the event joins the applied history.
+export interface CorporateActionResolution {
+  ratio?: number;
+  declared_value_per_share?: number;
+  target_ticker?: string;
+}
+
 // The POST /corporate-actions/import response: how many rows each destination absorbed and the
 // corporate-action rows the log now holds. `trade_import` is the import the file's trade rows
 // staged or matched (absent when the file carried no trades), and `reuploaded` says its hash was
