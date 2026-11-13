@@ -162,7 +162,7 @@ function CloseGate({
                 <Chip tone="rose">
                   {pendingCount} {pendingCount === 1 ? "pendente" : "pendentes"}
                 </Chip>
-                <Link to={ROUTES.planOrders} className="text-[11.5px] text-principal underline">
+                <Link to={ROUTES.planTransfers} className="text-[11.5px] text-principal underline">
                   resolver
                 </Link>
               </>

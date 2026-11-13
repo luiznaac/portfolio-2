@@ -319,6 +319,17 @@ class OrderLifecycleServiceTest : StringSpec({
         coVerify { transfers.decide(7, TransferStatus.APPROVED) }
     }
 
+    "a second approval does not move the same quantity again" {
+        coEvery { transfers.fetchById(7) } returns
+            persistedTransfer(7, pendingCreation(status = TransferStatus.APPROVED))
+
+        service.approveTransfer(7)!!.status shouldBe TransferStatus.APPROVED
+
+        // The whole quantity moved exactly once; a second call cannot move it again.
+        coVerify(exactly = 0) { attributionService.transfer(any(), any()) }
+        coVerify(exactly = 0) { transfers.decide(any(), any()) }
+    }
+
     "an approval whose slice vanished is rejected instead of recording the decision" {
         coEvery { transfers.fetchById(7) } returns pendingTransfer(7)
         coEvery { attributionService.transfer(any(), any()) } returns null

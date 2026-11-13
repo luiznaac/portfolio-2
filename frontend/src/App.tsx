@@ -23,6 +23,7 @@ import { Strategies } from "./pages/Strategies.tsx";
 import { StrategyDetail } from "./pages/StrategyDetail.tsx";
 import { Taxes } from "./pages/Taxes.tsx";
 import { Trades } from "./pages/Trades.tsx";
+import { Transfers } from "./pages/Transfers.tsx";
 
 // The six-object route table (issue #369). Every object's sub-views are page tabs under an
 // ObjectPage frame; sub-views whose own slice has not landed yet render PendingSurface so no
@@ -88,10 +89,8 @@ export const routes: RouteObject[] = [
         element: <ObjectPage objectKey="plan" />,
         children: [
           { index: true, element: <Month /> },
-          // The production Orders screen carries both the order list and the transfer inbox until
-          // the dedicated Transferências slice lands.
           { path: "orders", element: <Orders /> },
-          { path: "transfers", element: <Orders /> },
+          { path: "transfers", element: <Transfers /> },
           { path: "close", element: <Fechamento /> },
         ],
       },
