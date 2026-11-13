@@ -17,6 +17,7 @@ import type {
   BackfillReport,
   BenchmarkStatusReport,
   Bond,
+  BondPosition,
   CheckingAccount,
   CheckingAccountCreation,
   Edition,
@@ -54,6 +55,16 @@ export type FixedIncomeProductInput =
   | { kind: "FIXED_BOND"; creation: FixedRateBondCreation }
   | { kind: "FLOATING_BOND"; creation: FloatingRateBondCreation }
   | { kind: "ACCOUNT"; creation: CheckingAccountCreation };
+
+export type FixedIncomeProductKind = "bond" | "account";
+
+// A product's identity across the two RF lists. An id is unique only within its kind, so the key
+// carries the kind too — the same key names the row, the value read and the cache entry.
+export interface FixedIncomeProductRef {
+  key: string;
+  kind: FixedIncomeProductKind;
+  id: number;
+}
 
 // No open month is a normal state, not an error — every month-scoped read resolves to null so the
 // page points at the month opener instead of rendering a failure.
@@ -354,6 +365,21 @@ export function useCheckingAccounts() {
   return useQuery({
     queryKey: ["fixed-income", "accounts"],
     queryFn: api.getCheckingAccounts,
+  });
+}
+
+// The RF list values each product from its own accrual history: one read per product, sharing the
+// per-product cache key, so a product's value fills in as its position read lands. A product with no
+// consolidated position simply has no value yet.
+export function useFixedIncomePositions(products: FixedIncomeProductRef[]) {
+  return useQueries({
+    queries: products.map((product) => ({
+      queryKey: ["fixed-income", "positions", product.kind, product.id],
+      queryFn: (): Promise<BondPosition[]> =>
+        product.kind === "bond"
+          ? api.getBondPositions(product.id)
+          : api.getCheckingAccountPositions(product.id),
+    })),
   });
 }
 
