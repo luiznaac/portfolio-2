@@ -1,29 +1,19 @@
-import type { Trade } from "../api/types.ts";
-import {
-  type FilterField,
-  type FilterValues,
-  applyFilters,
-  emptyFilterValues,
-  matchesText,
-} from "./filters.ts";
+import type { TradeSide } from "../api/types.ts";
+import type { FilterBarField, FilterValues } from "./filters.ts";
 import { formatTradeSide } from "./format.ts";
 
-// The Ativos · Negócios filter (#367): ticker, an inclusive date range and the side. Declared once so
-// the shared bar and the ledger narrowing read the same fields.
-export const TRADE_FILTER_FIELDS: FilterField<Trade>[] = [
+// The Ativos · Negócios filter (#367): the controls are declared once here and fed to the shared bar.
+// The ledger is narrowed by the server through GET /trades/ledger, so these are control-only fields
+// and `tradeLedgerQuery` turns the page's values into the request.
+export const TRADE_FILTER_FIELDS: FilterBarField[] = [
   {
     control: { kind: "text", key: "ticker", label: "Ticker", placeholder: "Ticker" },
-    match: (trade, value) => matchesText(value, trade.ticker),
   },
   {
     control: { kind: "date", key: "from", label: "De" },
-    // ISO `YYYY-MM-DD` dates compare lexicographically, which is the calendar order; both bounds
-    // are inclusive.
-    match: (trade, value) => trade.date >= value,
   },
   {
     control: { kind: "date", key: "to", label: "Até" },
-    match: (trade, value) => trade.date <= value,
   },
   {
     control: {
@@ -36,12 +26,36 @@ export const TRADE_FILTER_FIELDS: FilterField<Trade>[] = [
         label: formatTradeSide(side),
       })),
     },
-    match: (trade, value) => trade.side === value,
   },
 ];
 
-export const emptyTradeFilters: FilterValues = emptyFilterValues(TRADE_FILTER_FIELDS);
+export interface TradeLedgerQuery {
+  ticker?: string;
+  from?: string;
+  to?: string;
+  side?: TradeSide;
+}
 
-export function filterTrades(trades: Trade[], values: FilterValues): Trade[] {
-  return applyFilters(trades, values, TRADE_FILTER_FIELDS);
+export interface TradeLedgerRequest extends TradeLedgerQuery {
+  cursor?: string;
+}
+
+// The request's query-string keys, drawn from the declared controls plus the cursor; the client
+// reads them from here so adding a filter field edits the field list rather than a second list.
+export const TRADE_LEDGER_PARAM_KEYS: readonly (keyof TradeLedgerRequest)[] = [
+  ...TRADE_FILTER_FIELDS.map((field) => field.control.key as keyof TradeLedgerQuery),
+  "cursor",
+];
+
+// The page's filter values as the ledger request: blank controls are omitted, so clearing a field
+// widens the read instead of sending an empty predicate.
+export function tradeLedgerQuery(values: FilterValues): TradeLedgerQuery {
+  const ticker = values.ticker?.trim() ?? "";
+  const side = values.side ?? "";
+  return {
+    ticker: ticker.length > 0 ? ticker : undefined,
+    from: values.from?.trim() || undefined,
+    to: values.to?.trim() || undefined,
+    side: side === "BUY" || side === "SELL" ? side : undefined,
+  };
 }

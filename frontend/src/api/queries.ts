@@ -1,10 +1,13 @@
 import {
   type QueryClient,
+  keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import type { TradeLedgerQuery } from "../lib/tradeFilters.ts";
 import { ApiError, api } from "./client.ts";
 import type {
   AssetClass,
@@ -132,6 +135,24 @@ export function useTrades() {
   });
 }
 
+// The paged, filtered ledger. The filter is part of the key, so changing a control starts a fresh
+// first page; the cursor is the page parameter, so loading more appends without refetching the head.
+export function useTradeLedger(query: TradeLedgerQuery) {
+  return useInfiniteQuery({
+    queryKey: ["trades", "ledger", query],
+    queryFn: ({ pageParam }) => api.getTradeLedger({ ...query, cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    // Keep the loaded page while a new filter is in flight, so the bar stays mounted under the caret
+    // and typing never rebuilds it; the rows swap in when the server answers.
+    placeholderData: keepPreviousData,
+    // A filter's pages are page state, not a cache: dropping the inactive filter's entries means
+    // returning to a filter (clearing it, or retyping an earlier value) starts at the first page
+    // instead of restoring pages loaded before.
+    gcTime: 0,
+  });
+}
+
 // The stored custody projection — the import result counts how many positions the book holds and
 // how many are negative, which trades alone cannot answer.
 export function usePositions() {
@@ -223,7 +244,7 @@ export function useTickerQuotes(ticker: string) {
   });
 }
 
-// The Histórico adoption rows need every draft ticker's latest close at once: one read per ticker,
+// The adoption rows need every draft ticker's latest close at once: one read per ticker,
 // sharing the single-ticker cache key, so the default price is in place before the form is saved.
 export function useTickerQuotesList(tickers: string[]) {
   return useQueries({

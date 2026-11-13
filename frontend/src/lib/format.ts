@@ -1,7 +1,7 @@
 // Pure formatting helpers — no React imports here (see AGENTS.md). This is what gets unit-tested
 // in src/lib/**, since these repos don't have component-render tests yet.
 
-import type { TradeSide } from "../api/types.ts";
+import type { TradeSide, TradeSource } from "../api/types.ts";
 
 export function formatHealthStatus(isHealthy: boolean): string {
   return isHealthy ? "healthy" : "unhealthy";
@@ -23,6 +23,19 @@ export function formatCurrency(value: number): string {
 
 export function formatTradeSide(side: TradeSide): string {
   return side === "BUY" ? "Compra" : "Venda";
+}
+
+// The ledger's origin column: a manual entry, a B3 import, or the adoption seed the reconstruction
+// creates. The three are distinct records, so none collapses into another.
+export function formatTradeSource(source: TradeSource): string {
+  switch (source) {
+    case "MANUAL":
+      return "Manual";
+    case "B3_IMPORT":
+      return "B3";
+    case "OPENING":
+      return "Abertura";
+  }
 }
 
 function percentFormatter(digits: number): Intl.NumberFormat {

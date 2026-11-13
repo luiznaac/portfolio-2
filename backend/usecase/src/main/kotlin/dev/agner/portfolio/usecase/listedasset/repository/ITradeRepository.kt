@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeExecutionRange
 import dev.agner.portfolio.usecase.listedasset.model.TradeKey
+import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import java.math.BigDecimal
 
@@ -26,6 +27,17 @@ interface ITradeRepository {
     // Every trade matching the natural tuple, ordered by ordinal ascending — the list's position is
     // the occurrence the reconciliation walks.
     suspend fun fetchByKey(key: TradeKey): List<Trade>
+
+    // One page of the filtered ledger, newest execution first, after the cursor's (date, id). Returns
+    // up to `limit + 1` rows so the service can tell whether another page exists.
+    suspend fun fetchLedger(filter: TradeLedgerFilter): List<Trade>
+
+    // Every row the ledger filter matches, independent of paging — the page's "n de m" denominator.
+    suspend fun countLedger(filter: TradeLedgerFilter): Int
+
+    // The absolute financial value of every row the ledger filter matches, independent of paging —
+    // the page's total row, which must reflect the whole filter rather than the loaded page.
+    suspend fun sumLedgerFinancial(filter: TradeLedgerFilter): BigDecimal
 
     // Marks a manual trade as confirmed by an import. Null when no trade has that id.
     suspend fun confirmByB3(id: Int): Trade?

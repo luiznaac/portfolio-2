@@ -405,9 +405,9 @@ describe("the Alocação tree", () => {
     expect(within(panel).getByTestId("data-quality-negative-count").textContent).toBe("1");
     expect(within(panel).getByText("VALE3")).toBeDefined();
     expect(within(panel).getByText("BCFF11")).toBeDefined();
-    expect(within(panel).getByRole("link", { name: "Histórico" }).getAttribute("href")).toBe(
-      "/ativos/gaps",
-    );
+    expect(
+      within(panel).getByRole("link", { name: "Reconstruir histórico" }).getAttribute("href"),
+    ).toBe("/ativos/trades");
     expect(screen.getByTestId("allocation-partial")).toBeDefined();
   });
 

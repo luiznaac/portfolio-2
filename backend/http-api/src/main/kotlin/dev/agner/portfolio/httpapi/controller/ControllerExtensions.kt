@@ -38,11 +38,15 @@ internal fun ApplicationCall.requiredPeriod(name: String): YearMonth {
 }
 
 // A query date is the ISO `YYYY-MM-DD` the domain speaks; a malformed value is the caller's error.
-internal fun ApplicationCall.requiredDate(name: String): LocalDate {
-    val raw = parameters[name]
-    return raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+internal fun ApplicationCall.requiredDate(name: String): LocalDate = parseDate(name, parameters[name])
+
+// An absent query date is no filter; a present but malformed one is still the caller's error.
+internal fun ApplicationCall.optionalDate(name: String): LocalDate? =
+    request.queryParameters[name]?.let { parseDate(name, it) }
+
+private fun parseDate(name: String, raw: String?): LocalDate =
+    raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         ?: throw InvalidParameterException(name, raw)
-}
 
 // An optional enum query parameter: absent keeps the unfiltered read, a value outside the enum is
 // the caller's error rather than a silent ignore.

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  type FilterField,
+  type FilterBarField,
   type FilterValues,
   clearFilterValues,
   emptyFilterValues,
@@ -9,7 +9,7 @@ import {
 
 // Page-scoped filter state (#367): the page owns it for the life of its route element, so a keystroke
 // re-renders without touching the URL and leaving the page drops the narrowing with the component.
-export function usePageFilters<Row>(fields: readonly FilterField<Row>[]) {
+export function usePageFilters(fields: readonly FilterBarField[]) {
   const [values, setValues] = useState<FilterValues>(() => emptyFilterValues(fields));
 
   function setFilter(key: string, value: string) {
