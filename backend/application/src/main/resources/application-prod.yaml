@@ -1,5 +1,5 @@
 ktor:
-  port: 80
+  port: ${API_PORT:8080}
 
 gateways:
   sgs:
@@ -9,4 +9,4 @@ gateways:
   chameidor:
     host: 'http://chameidor'
 
-app-own-host: 'portfolio'
+app-own-host: 'portfolio:${API_PORT:8080}'

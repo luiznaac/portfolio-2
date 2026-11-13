@@ -115,7 +115,7 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 
 | Key | Source | Notes |
 |---|---|---|
-| `ktor.port` / `ktor.wait` | `KTOR_PORT` / fixed | `${KTOR_PORT:8110}` (portfolio-2's api role) / `true` |
+| `ktor.port` / `ktor.wait` | `KTOR_PORT` / fixed | `${KTOR_PORT:8110}` (portfolio-2's api role) / `true`; the prod profile uses `${API_PORT:8080}` |
 | `mysql.host` / `mysql.user` / `mysql.password` | `MYSQL_HOST` / `MYSQL_USER` / `MYSQL_PASSWORD` | required |
 | `mysql.port` | `MYSQL_PORT` | `${MYSQL_PORT:8112}` (portfolio-2's mysql role); `DatabaseConfig`, `Migrator` and `MysqlEnv` share the fallback |
 | `gateways.bacen.host` | fixed | `https://api.bcb.gov.br` |
@@ -128,6 +128,8 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 | `gateways.yahoo.host` | fixed (overridable) | `https://query1.finance.yahoo.com` — IBOV fallback (`^BVSP`) for the years brapi cannot serve |
 | `app-own-host` | fixed | `localhost:8110` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 
+`application-prod.yaml` is the image's profile (the Dockerfile pins `SPRING_PROFILES_ACTIVE=prod`): it overrides `ktor.port` with `${API_PORT:8080}` and `app-own-host` with `portfolio:${API_PORT:8080}`. `API_PORT` is the one container-side API-port knob — nginx's `/api` proxy and the image healthcheck read it too, so the app and the proxy can never disagree. `KTOR_PORT` is the host-dev override only; the image never sets it.
+
 ## Build, run, deploy
 
 ```bash
@@ -138,7 +140,7 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 
 Local dev: `docker compose -f backend/docker-compose.yml up -d mysql` from the repo root (or `npm run db`) — MySQL only, database `portfolio`, empty, published on `8112` — run `./gradlew :persistence:migrate` (or `npm run db:migrate`) to bring it to head, see "Database migrations" above — then run via the IntelliJ config in `backend/.run/` with `MYSQL_HOST=localhost`, `MYSQL_USER=root`, `MYSQL_PASSWORD=`. The app listens on `8110` (`KTOR_PORT`); see the repo README for the full four-row block. If you need scheduled-job registration to actually fire, also run chameidor locally on its API role (`8100`) and set `CHAMEIDOR_TOKEN` to the token registered for `portfolio` in chameidor (`dev-portfolio-fixture-token` against a local chameidor).
 
-Docker: the repo-root `Dockerfile` is a multi-stage build (frontend SPA → `gradle:8.14-jdk21` backend distribution → `eclipse-temurin:21-jre-jammy` runtime) that ships backend + built SPA in one image: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the SPA on `WEB_PORT`/8081, reverse-proxies `/api` → the app). The repo-root `docker-compose.yml` adds MySQL for full-stack runs; `backend/docker-compose.yml` is the MySQL-only file used by plain backend dev (the integration lane starts its own Testcontainers MySQL, not this compose file).
+Docker: the repo-root `Dockerfile` is a multi-stage build (frontend SPA → `gradle:8.14-jdk21` backend distribution → `eclipse-temurin:21-jre-jammy` runtime) that ships backend + built SPA in one image: `supervisord` runs the JVM app (`API_PORT`/8080) and `nginx` (`deploy/nginx.conf.template` — serves the SPA on `WEB_PORT`/8081, reverse-proxies `/api` → `API_PORT`). `API_PORT` is the single API-port authority inside the image: the prod profile's `ktor.port` and `app-own-host`, nginx's proxy target and the healthcheck all derive from it. The repo-root `docker-compose.yml` adds MySQL for full-stack runs; `backend/docker-compose.yml` is the MySQL-only file used by plain backend dev (the integration lane starts its own Testcontainers MySQL, not this compose file).
 
 ## Git & CI
 

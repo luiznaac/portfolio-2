@@ -38,8 +38,8 @@ Hand-authored module → key files → seam index, plus the app entry points —
 
 ### `backend/application` — composition root
 **Purpose**: the Spring Boot entry and the runtime configuration; wires the modules together.
-**Files**: `Boot.kt`, `src/main/resources/{application.yaml,application-prod.yaml,logback.xml}`, `build.gradle.kts`
-**Seam(s)**: `Boot.kt`'s `@ComponentScan("dev.agner.portfolio")` is the wiring seam — every `@Component`/`@Service` is picked up, so a new class needs no registration. `application.yaml` is the config seam (`ktor.port`/`mysql.port` default from `KTOR_PORT`/`MYSQL_PORT` on portfolio-2's committed block, env-driven `mysql.*` and `gateways.chameidor.token`; the full list is in `backend/AGENTS.md` §Configuration, including `gateways.sgs.host`/`gateways.brapi.*`/`gateways.yahoo.host` for the benchmark chain). `build.gradle.kts` adds the second start script `bin/migrate` (main class `MigratorKt`) beside `bin/application`.
+**Files**: `Boot.kt`, `src/main/resources/{application.yaml,application-prod.yaml,logback.xml}`, `src/test/kotlin/dev/agner/portfolio/application/ProdPortContractTest.kt`, `build.gradle.kts`
+**Seam(s)**: `Boot.kt`'s `@ComponentScan("dev.agner.portfolio")` is the wiring seam — every `@Component`/`@Service` is picked up, so a new class needs no registration. `application.yaml` is the host-dev config seam (`ktor.port`/`mysql.port` default from `KTOR_PORT`/`MYSQL_PORT` on portfolio-2's committed block, env-driven `mysql.*` and `gateways.chameidor.token`; the full list is in `backend/AGENTS.md` §Configuration, including `gateways.sgs.host`/`gateways.brapi.*`/`gateways.yahoo.host` for the benchmark chain); `application-prod.yaml` is the image's profile seam — `API_PORT` drives `ktor.port` and `app-own-host`, pinned by `ProdPortContractTest`. `build.gradle.kts` adds the second start script `bin/migrate` (main class `MigratorKt`) beside `bin/application`.
 
 ### `backend/integrationTest` — full-stack tests
 **Purpose**: end-to-end specs that boot the real app against a real MySQL and stubbed external gateways.
@@ -60,7 +60,7 @@ Hand-authored module → key files → seam index, plus the app entry points —
 ### Repo root — contracts, deploy, CI
 **Purpose**: the cross-cutting fixtures and the packaging/deploy story that bind backend + frontend together.
 **Files**: `contracts/error-response.json`, `contracts/chameidor/tasks-one-time-request.json`; `Dockerfile`, `docker-compose.yml`, `deploy/{entrypoint.sh,supervisord.conf,nginx.conf.template}`; `package.json` (script shims only), `scripts/backend-gradle.mjs`, `.github/workflows/ci.yml`, `.pre-commit-config.yaml`; `docs/{migrations.md,acceptance-runbook.md,adr/*}`, `docs/acceptance/fixtures/{b3-negociacao-2020,posicao-custodia-2020}.xlsx`, `docs/acceptance/fixtures/xp-relatorio-2026-10.pdf`
-**Seam(s)**: `contracts/*` are the versioned wire fixtures the tests pin against; the acceptance fixtures are pinned by `http-api`'s `B3AcceptanceFixtureTest`, `B3AcceptanceFixturesTest`, `B3CustodyAcceptanceFixtureTest` and `XpAcceptanceFixtureTest`. `scripts/backend-gradle.mjs` is the single crossing from the package scripts and the pre-commit hooks into Gradle — it resolves `gradlew.bat`/`./gradlew` for the host, so a new `be:*`/`db:*` script goes through it rather than re-deriving the wrapper invocation. The one image runs the JVM app (`API_PORT`/8080) and nginx (`WEB_PORT`/8081, reverse-proxying `/api`) under supervisord (host publish on portfolio-2's block: api 8110, web 8111, mysql 8112); `deploy/entrypoint.sh` runs `bin/migrate` then the app. `package.json` is a script-only shim (`npm run be:unit`, `npm run check`, `npm run db:migrate`, `npm run up`, …), not a real package.
+**Seam(s)**: `contracts/*` are the versioned wire fixtures the tests pin against; the acceptance fixtures are pinned by `http-api`'s `B3AcceptanceFixtureTest`, `B3AcceptanceFixturesTest`, `B3CustodyAcceptanceFixtureTest` and `XpAcceptanceFixtureTest`. `scripts/backend-gradle.mjs` is the single crossing from the package scripts and the pre-commit hooks into Gradle — it resolves `gradlew.bat`/`./gradlew` for the host, so a new `be:*`/`db:*` script goes through it rather than re-deriving the wrapper invocation. The one image runs the JVM app (`API_PORT`/8080) and nginx (`WEB_PORT`/8081, reverse-proxying `/api`) under supervisord (host publish on portfolio-2's block: api 8110, web 8111, mysql 8112); `API_PORT` is the single API-port authority (the prod profile's `ktor.port`/`app-own-host`, nginx's target and the healthcheck all derive from it); `deploy/entrypoint.sh` runs `bin/migrate` then the app. `package.json` is a script-only shim (`npm run be:unit`, `npm run check`, `npm run db:migrate`, `npm run up`, …), not a real package.
 
 ## Backend tests
 
@@ -73,7 +73,7 @@ Backend tests live in each module's `src/test/kotlin`, in the **mirrored package
 | `gateway` | `src/test/kotlin` |
 | `http-api` | `src/test/kotlin` (package `httpapi`, not `http-api`) |
 | `integrationTest` | `src/test/kotlin` — test-only module with no `src/main`, so its packages are not mirrored from production |
-| `application` | none |
+| `application` | `src/test/kotlin` |
 
 **Search the mirrored package for an existing test before creating one, and extend it rather than overwrite it** — an earlier session wrote a fresh `QuoteServiceTest` over the `fetchAllBy`/`refreshEod` cases already there; only a later `git status` caught it.
 

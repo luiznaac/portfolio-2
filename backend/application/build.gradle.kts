@@ -22,6 +22,9 @@ dependencies {
 
     implementation(libs.spring.boot)
     implementation(libs.snakeyaml)
+
+    testImplementation(libs.bundles.testDependencies)
+    testImplementation(libs.spring.boot.starter.test)
 }
 
 // A second start script, `bin/migrate`, alongside the app's own `bin/application` — same
