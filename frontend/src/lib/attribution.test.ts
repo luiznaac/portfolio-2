@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  Attribution,
   AttributionSlice,
   Edition,
   EditionStatus,
@@ -11,6 +12,7 @@ import {
   defaultTransferQuantity,
   isValidTransferQuantity,
   remainingAttributable,
+  strategyAttributionView,
   transferDestinations,
 } from "./attribution.ts";
 
@@ -215,3 +217,141 @@ function orderPlan({
     transfers: [],
   };
 }
+
+describe("strategyAttributionView", () => {
+  const report: Strategy = {
+    id: 1,
+    name: "Top Dividendos",
+    asset_class: "ACOES",
+    kind: "REPORT_DRIVEN",
+  };
+  const attribution = (
+    ticker: string,
+    custody: number,
+    slices: Attribution["slices"],
+  ): Attribution => {
+    const attributed = slices.reduce((sum, item) => sum + item.quantity, 0);
+    return {
+      ticker,
+      custody_quantity: custody,
+      attributed_quantity: attributed,
+      unattributed_quantity: custody - attributed,
+      slices,
+    };
+  };
+
+  it("marks a ticker whose whole custody sits in the strategy as reconciled", () => {
+    const view = strategyAttributionView(report.id, [
+      attribution("PETR4", 100, [
+        { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 100 },
+      ]),
+    ]);
+
+    expect(view.rows).toEqual([
+      {
+        ticker: "PETR4",
+        custody: 100,
+        own: 100,
+        outsideSlice: 0,
+        others: [],
+        state: "reconciled",
+        tone: "green",
+        statement: undefined,
+      },
+    ]);
+    expect(view.finding).toBe("Custódia e atribuição conferem em todos os tickers.");
+  });
+
+  it("keeps a split custody reconciled and names the other strategy", () => {
+    const view = strategyAttributionView(report.id, [
+      attribution("PETR4", 100, [
+        { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 60 },
+        { strategy_id: 4, strategy_name: "Legado Ações", quantity: 40 },
+      ]),
+    ]);
+
+    expect(view.rows[0]).toMatchObject({
+      own: 60,
+      outsideSlice: 40,
+      others: [{ strategyName: "Legado Ações", quantity: 40 }],
+      state: "reconciled",
+      tone: "green",
+      statement: undefined,
+    });
+  });
+
+  it("states unattributed custody as an attribution gap", () => {
+    const view = strategyAttributionView(report.id, [
+      attribution("PETR4", 100, [
+        { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 60 },
+      ]),
+    ]);
+
+    expect(view.rows[0]).toMatchObject({
+      own: 60,
+      outsideSlice: 40,
+      state: "gap",
+      tone: "amber",
+      statement: "40 cotas fora de toda estratégia",
+    });
+    expect(view.finding).toBe(
+      "1 de 1 ticker diverge da custódia · PETR4 (40 cotas fora de toda estratégia)",
+    );
+  });
+
+  it("states an attribution above custody as a divergence", () => {
+    const view = strategyAttributionView(report.id, [
+      attribution("PETR4", 100, [
+        { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 120 },
+      ]),
+    ]);
+
+    expect(view.rows[0]).toMatchObject({
+      custody: 100,
+      own: 120,
+      outsideSlice: -20,
+      state: "over",
+      tone: "amber",
+      statement: "atribuição 20 cotas acima da custódia",
+    });
+  });
+
+  it("counts every divergent ticker in the finding and sorts by ticker", () => {
+    const view = strategyAttributionView(report.id, [
+      attribution("VALE3", 50, [{ strategy_id: 1, strategy_name: "Top Dividendos", quantity: 70 }]),
+      attribution("PETR4", 100, [
+        { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 60 },
+      ]),
+    ]);
+
+    expect(view.rows.map((row) => row.ticker)).toEqual(["PETR4", "VALE3"]);
+    expect(view.finding).toBe(
+      "2 de 2 tickers divergem da custódia · PETR4 (40 cotas fora de toda estratégia); " +
+        "VALE3 (atribuição 20 cotas acima da custódia)",
+    );
+  });
+
+  it("shows a ticker the strategy targets but holds nothing of, reconciled through another strategy", () => {
+    const view = strategyAttributionView(report.id, [
+      attribution("WEGE3", 1000, [
+        { strategy_id: 4, strategy_name: "Legado Ações", quantity: 1000 },
+      ]),
+    ]);
+
+    expect(view.rows[0]).toMatchObject({
+      ticker: "WEGE3",
+      custody: 1000,
+      own: 0,
+      outsideSlice: 1000,
+      others: [{ strategyName: "Legado Ações", quantity: 1000 }],
+      state: "reconciled",
+    });
+  });
+
+  it("has nothing to reconcile when the strategy holds no ticker", () => {
+    const view = strategyAttributionView(report.id, []);
+
+    expect(view.rows).toEqual([]);
+    expect(view.finding).toBe("Nenhum ativo atribuído a esta estratégia.");
+  });
+});

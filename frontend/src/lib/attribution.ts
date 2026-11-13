@@ -1,4 +1,12 @@
-import type { AssetClass, AttributionSlice, Edition, OrderPlan, Strategy } from "../api/types.ts";
+import type {
+  AssetClass,
+  Attribution,
+  AttributionSlice,
+  Edition,
+  OrderPlan,
+  Strategy,
+} from "../api/types.ts";
+import { formatNumber } from "./format.ts";
 
 // The attribution ledger's arithmetic — pure helpers so the Ativos detail's bar and form do not
 // re-derive the same sums in JSX. The backend already returns the authoritative totals; these are
@@ -88,4 +96,105 @@ function activeEditionWeighs(editions: readonly Edition[] | undefined, ticker: s
     .filter((edition) => edition.status === "ACTIVE")
     .sort((left, right) => right.reference_month.localeCompare(left.reference_month))[0];
   return active?.entries.some((entry) => entry.ticker === ticker && entry.weight > 0) ?? false;
+}
+
+// The strategy detail's Atribuição tab: custody against the ledger attribution for the tickers the
+// strategy holds. A row reconciles when the ledger explains the whole custody — whether that custody
+// sits in this strategy, in another one, or split between them. A row diverges when the ledger leaves
+// custody unattributed (an attribution gap) or attributes more than custody holds; the divergence is
+// carried in words, never only in a tone.
+interface StrategyAttributionOther {
+  strategyName: string;
+  quantity: number;
+}
+
+interface StrategyAttributionBase {
+  ticker: string;
+  custody: number;
+  own: number;
+  // Custody outside this strategy's slice: another strategy's units plus the unattributed remainder.
+  outsideSlice: number;
+  others: StrategyAttributionOther[];
+}
+
+export type StrategyAttributionRow =
+  | (StrategyAttributionBase & { state: "reconciled"; tone: "green"; statement?: undefined })
+  | (StrategyAttributionBase & { state: "gap" | "over"; tone: "amber"; statement: string });
+
+export interface StrategyAttributionView {
+  rows: StrategyAttributionRow[];
+  finding: string;
+}
+
+// Quantities are decimal share counts, so a reconciliation compares them with a tolerance rather
+// than demanding bit-identical floats.
+const QUANTITY_EPSILON = 1e-9;
+
+function quantityLabel(quantity: number): string {
+  return `${formatNumber(quantity)} ${quantity === 1 ? "cota" : "cotas"}`;
+}
+
+function attributionRow(strategyId: number, attribution: Attribution): StrategyAttributionRow {
+  const own = attribution.slices.find((slice) => slice.strategy_id === strategyId)?.quantity ?? 0;
+  const others = attribution.slices
+    .filter((slice) => slice.strategy_id !== strategyId)
+    .map((slice) => ({ strategyName: slice.strategy_name, quantity: slice.quantity }))
+    .sort((left, right) => left.strategyName.localeCompare(right.strategyName));
+  const custody = attribution.custody_quantity;
+  const excess = attribution.attributed_quantity - custody;
+  const gap = custody - attribution.attributed_quantity;
+  const base = {
+    ticker: attribution.ticker,
+    custody,
+    own,
+    outsideSlice: custody - own,
+    others,
+  };
+
+  if (excess > QUANTITY_EPSILON) {
+    return {
+      ...base,
+      state: "over",
+      tone: "amber",
+      statement: `atribuição ${quantityLabel(excess)} acima da custódia`,
+    };
+  }
+  if (gap > QUANTITY_EPSILON) {
+    return {
+      ...base,
+      state: "gap",
+      tone: "amber",
+      statement: `${quantityLabel(gap)} fora de toda estratégia`,
+    };
+  }
+  return { ...base, state: "reconciled", tone: "green", statement: undefined };
+}
+
+// The strategy's own tickers — its chain targets plus the ledger slices it holds — arrive as their
+// resolved attribution reads, so a target it holds nothing of still shows its custody under another
+// strategy. A ticker with no read (no held position) has nothing to reconcile and is absent.
+export function strategyAttributionView(
+  strategyId: number,
+  attributions: readonly Attribution[],
+): StrategyAttributionView {
+  const rows = attributions
+    .map((attribution) => attributionRow(strategyId, attribution))
+    .sort((left, right) => left.ticker.localeCompare(right.ticker));
+  const divergentRows = rows.filter(
+    (row): row is Extract<StrategyAttributionRow, { statement: string }> =>
+      row.state !== "reconciled",
+  );
+
+  let finding: string;
+  if (rows.length === 0) {
+    finding = "Nenhum ativo atribuído a esta estratégia.";
+  } else if (divergentRows.length === 0) {
+    finding = "Custódia e atribuição conferem em todos os tickers.";
+  } else {
+    const verb = divergentRows.length === 1 ? "ticker diverge" : "tickers divergem";
+    const detail = divergentRows.map((row) => `${row.ticker} (${row.statement})`).join("; ");
+    finding = `${divergentRows.length} de ${rows.length} ${verb} da custódia · ${detail}`;
+  }
+
+  return { rows, finding };
 }
