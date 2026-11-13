@@ -2,8 +2,18 @@
 // the only place the SPA turns a lançamento into a create payload, so the mapping is unit-tested
 // here rather than inside the page.
 
-import type { FixedIncomeProductInput } from "../api/queries.ts";
-import type { Bond, CheckingAccount, FixedIncomeSubClass, IndexId } from "../api/types.ts";
+import type {
+  FixedIncomeProductInput,
+  FixedIncomeProductKind,
+  FixedIncomeProductRef,
+} from "../api/queries.ts";
+import type {
+  Bond,
+  BondPosition,
+  CheckingAccount,
+  FixedIncomeSubClass,
+  IndexId,
+} from "../api/types.ts";
 
 // How the form names a product: a fixed-rate bond, a floating-rate bond, or a checking account.
 export type FixedIncomeKind = "FIXED_BOND" | "FLOATING_BOND" | "ACCOUNT";
@@ -72,6 +82,54 @@ export function durationLabel(period: string): string {
   return MATURITY_DURATIONS.find((duration) => duration.value === period)?.label ?? period;
 }
 
+export function productKey(kind: FixedIncomeProductKind, id: number): string {
+  return `${kind}-${id}`;
+}
+
+export function fixedIncomeProductRefs(
+  bonds: Bond[],
+  accounts: CheckingAccount[],
+): FixedIncomeProductRef[] {
+  return [
+    ...bonds.map((bond) => ({
+      key: productKey("bond", bond.id),
+      kind: "bond" as const,
+      id: bond.id,
+    })),
+    ...accounts.map((account) => ({
+      key: productKey("account", account.id),
+      kind: "account" as const,
+      id: account.id,
+    })),
+  ];
+}
+
+// Joins each product to the position read that shares its key. The reads arrive in the order the
+// hook was called with; the map is keyed so a row can never read another product's value.
+export function positionsByProductKey(
+  products: readonly FixedIncomeProductRef[],
+  reads: readonly (readonly BondPosition[] | undefined)[],
+): Map<string, readonly BondPosition[]> {
+  return new Map(products.map((product, index) => [product.key, reads[index] ?? []]));
+}
+
+// A product's value is its latest consolidated position's principal plus yield — the accrual the
+// allocation read values it at. The date wins, not the array order (the API's ordering is not part
+// of the contract's promise).
+function latestPosition(positions: readonly BondPosition[]): BondPosition | undefined {
+  return positions.reduce<BondPosition | undefined>(
+    (latest, candidate) =>
+      latest === undefined || candidate.date > latest.date ? candidate : latest,
+    undefined,
+  );
+}
+
+// Undefined while the product has no consolidated position — unknown, never R$ 0,00.
+export function productValue(positions: readonly BondPosition[]): number | undefined {
+  const latest = latestPosition(positions);
+  return latest === undefined ? undefined : latest.principal + latest.yield;
+}
+
 export interface FixedIncomeRow {
   key: string;
   name: string;
@@ -81,23 +139,36 @@ export interface FixedIncomeRow {
   subClass: FixedIncomeSubClass;
   subClassLabel: string;
   maturity: string;
+  value?: number;
 }
 
 // The Products table shows both kinds in one list: bonds carry a maturity date, accounts a maturity
-// duration, and either reads as a plain string here.
-export function fixedIncomeRows(bonds: Bond[], accounts: CheckingAccount[]): FixedIncomeRow[] {
+// duration, and either reads as a plain string here. The value joins each product to its own accrual
+// read, keyed by the row key.
+export function fixedIncomeRows(
+  bonds: Bond[],
+  accounts: CheckingAccount[],
+  positionsByKey: ReadonlyMap<string, readonly BondPosition[]>,
+): FixedIncomeRow[] {
   const rows = [
-    ...bonds.map((bond) => productRow(bond, bond.maturity_date)),
-    ...accounts.map((account) => productRow(account, durationLabel(account.maturity_duration))),
+    ...bonds.map((bond) => productRow("bond", bond, bond.maturity_date, positionsByKey)),
+    ...accounts.map((account) =>
+      productRow("account", account, durationLabel(account.maturity_duration), positionsByKey),
+    ),
   ];
 
   return rows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
-// An id is unique only within its kind, so the row key carries the kind too.
-function productRow(product: Bond | CheckingAccount, maturity: string): FixedIncomeRow {
+function productRow(
+  kind: FixedIncomeProductKind,
+  product: Bond | CheckingAccount,
+  maturity: string,
+  positionsByKey: ReadonlyMap<string, readonly BondPosition[]>,
+): FixedIncomeRow {
+  const key = productKey(kind, product.id);
   return {
-    key: `${"maturity_date" in product ? "bond" : "account"}-${product.id}`,
+    key,
     name: product.name,
     kindLabel: productKindLabel(product),
     rate: product.rate,
@@ -105,6 +176,32 @@ function productRow(product: Bond | CheckingAccount, maturity: string): FixedInc
     subClass: product.sub_class,
     subClassLabel: subClassLabel(product.sub_class),
     maturity,
+    value: productValue(positionsByKey.get(key) ?? []),
+  };
+}
+
+export interface FixedIncomeTotal {
+  // Undefined when none of the rows is priced — distinct from a real zero.
+  value: number | undefined;
+  // True while at least one product has no consolidated position, so the total covers only part.
+  partial: boolean;
+}
+
+export function fixedIncomeTotal(rows: readonly FixedIncomeRow[]): FixedIncomeTotal {
+  let value = 0;
+  let priced = 0;
+  let unpriced = 0;
+  for (const row of rows) {
+    if (row.value === undefined) {
+      unpriced += 1;
+    } else {
+      value += row.value;
+      priced += 1;
+    }
+  }
+  return {
+    value: priced === 0 ? (rows.length === 0 ? 0 : undefined) : value,
+    partial: unpriced > 0,
   };
 }
 

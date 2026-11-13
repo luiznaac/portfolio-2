@@ -23,8 +23,10 @@ class BondController(
 
     override fun routes(): RouteDefinition = {
         route("/fixed-income/bonds") {
+            // The product list, not the allocation book: a checking account's deposit-created bonds
+            // are the account's value, so they stay out of the standalone bond rows.
             get {
-                call.respond(HttpStatusCode.OK, service.fetchAll())
+                call.respond(HttpStatusCode.OK, service.fetchStandalone())
             }
 
             post("/fixed") {

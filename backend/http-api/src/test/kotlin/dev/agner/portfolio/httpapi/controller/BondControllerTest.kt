@@ -26,9 +26,9 @@ class BondControllerTest : DescribeSpec({
 
     describe("listing bonds") {
 
-        it("serves /fixed-income/bonds and exposes the derived sub-class") {
+        it("serves the standalone products and exposes the derived sub-class") {
             val service = mockk<BondService>()
-            coEvery { service.fetchAll() } returns linkedSetOf(prefixado, ipcaPlus)
+            coEvery { service.fetchStandalone() } returns listOf(prefixado, ipcaPlus)
 
             testApplication {
                 application { installRoutes(bondController(service)) }
@@ -39,6 +39,7 @@ class BondControllerTest : DescribeSpec({
                 val body = ObjectMapper().readTree(response.bodyAsText())
                 body.get(0).get("sub_class").asText() shouldBe "FIXED_RATE"
                 body.get(1).get("sub_class").asText() shouldBe "INFLATION_LINKED"
+                coVerify { service.fetchStandalone() }
             }
         }
 
