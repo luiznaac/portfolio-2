@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { OrderList, Snapshot, TransferProposal } from "../api/types.ts";
-import { closeButtonLabel, closedMonthSummary, pendingTransfers } from "./fechamento.ts";
+import {
+  closeButtonLabel,
+  closedMonthSummary,
+  decidedTransfers,
+  pendingTransfers,
+} from "./fechamento.ts";
 
 const pending: TransferProposal = {
   id: 7,
@@ -30,6 +35,23 @@ describe("pendingTransfers", () => {
   it("treats a month with no persisted plan as having nothing pending", () => {
     expect(pendingTransfers(null)).toEqual([]);
     expect(pendingTransfers(undefined)).toEqual([]);
+  });
+});
+
+describe("decidedTransfers", () => {
+  it("keeps only the proposals that carry a decision", () => {
+    const approved = { ...pending, id: 8, status: "APPROVED" as const };
+    const rejected = { ...pending, id: 9, status: "REJECTED" as const };
+
+    expect(decidedTransfers(orderList([pending, approved, rejected]))).toEqual([
+      approved,
+      rejected,
+    ]);
+  });
+
+  it("treats a month with no persisted plan as having nothing decided", () => {
+    expect(decidedTransfers(null)).toEqual([]);
+    expect(decidedTransfers(undefined)).toEqual([]);
   });
 });
 

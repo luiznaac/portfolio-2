@@ -19,6 +19,9 @@ import {
   planCoversOrder,
   toTradeId,
   transferCopy,
+  transferEffect,
+  transferOutcome,
+  transferQuantityLabel,
   transferSourceIsBucket,
   transferStatusLabel,
 } from "./orders.ts";
@@ -206,6 +209,25 @@ describe("transfer copy", () => {
     expect(transferCopy(transfer({ amount: undefined }), strategies)).toBe("sem cotação");
     // While the catalog loads there is no honest source kind, so no caption is claimed.
     expect(transferCopy(transfer({ amount: 100 }), undefined)).toBeUndefined();
+  });
+});
+
+describe("transfer decision", () => {
+  it("states the atomic effect — approve moves the whole quantity, reject moves none", () => {
+    expect(transferEffect(60)).toBe("aprovar move 60 cotas · rejeitar não move nenhuma");
+    expect(transferEffect(1)).toBe("aprovar move 1 cota · rejeitar não move nenhuma");
+  });
+
+  it("reads a decided row's outcome from its status", () => {
+    expect(transferOutcome(transfer({ status: "APPROVED", quantity: 60 }))).toBe("moveu 60 cotas");
+    expect(transferOutcome(transfer({ status: "REJECTED", quantity: 60 }))).toBe(
+      "não moveu nenhuma cota",
+    );
+  });
+
+  it("names one unit in the singular", () => {
+    expect(transferQuantityLabel(1)).toBe("1 cota");
+    expect(transferQuantityLabel(60)).toBe("60 cotas");
   });
 });
 

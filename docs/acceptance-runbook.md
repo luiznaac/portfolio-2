@@ -999,6 +999,20 @@ Both clauses stay terminal and single-per-intent. The step 3 clause (`material-r
 
 A clause whose copy disagrees with the screen (a row asserted as "accepted"/`aceito`), a strip screenshot taken while `Carregando…` is still up, more than one vision clause on an intent, or an apply that does not land on `/ativos/trades` is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Importações · Fontes failed-beside-accepted (issue [#417](https://github.com/luiznaac/portfolio-2/issues/417))
+
+**Scenario**: the run drives the Fontes card's failed-file-beside-accepted state — the one state no staging path can produce, because ADR 0003 makes an unreadable file a 4xx that stages nothing. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the import tables and seeds one `B3_TRADES` source with an older `APPLIED` record (id 9501, `b3-negociacao.xlsx`) and a newer `FAILED` record (id 9502, `b3-negociacao-failed.xlsx`) under the committed fixtures' own SHA-256s, so the failed attempt is the latest and the applied one is the last success. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM import_file; DELETE FROM import_row; DELETE FROM import; \
+      INSERT INTO import (id, \`source\`, file_name, file_hash, status, created_at) VALUES \
+        (9501, 'B3_TRADES', 'b3-negociacao.xlsx', '89a0cdb524e8fe4258e2d570b94a01393df808f010913b8d3f55f73fae62d03e', 'APPLIED', '2026-10-14 10:00:00'), \
+        (9502, 'B3_TRADES', 'b3-negociacao-failed.xlsx', '7f3249811ced02ff21eeb4be457681f7a8e82499524fa34f4f6cc6f82d742451', 'FAILED', '2026-10-20 09:00:00');"
+```
+
+The read is then deterministic: `GET /imports/sources` → 200 with one `B3_TRADES` entry, `last_attempt` = `b3-negociacao-failed.xlsx` / `FAILED` / `2026-10-20T09:00`, `last_success` = `b3-negociacao.xlsx` / `APPLIED` / `2026-10-14T10:00`, `pending: 0` and `failure` = the failed attempt. On `/imports/sources` the `B3 · Negócios` card carries the `Falhou` chip, the failed file on **Última tentativa**, the accepted file on **Última aplicação**, `Nenhuma sessão em revisão`, and the failure block with `Falhou` beside `Aplicada` — never `Sem falhas na última tentativa.`. Each file name is its own link: the failed file opens `/imports/assistant/9502` on the read-only `Falhou` panel (`Esta tentativa falhou e não pode ser aplicada.`, no apply affordance), the accepted file opens `/imports/assistant/9501` on the `Aplicada` outcome. A card missing either file or the failure block, a healthy-state line, a link that lands on the other record, or a failed record that offers an apply is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — Carteira · Alocação (issue [#371](https://github.com/luiznaac/portfolio-2/issues/371))
 
 **Scenario**: the run drives the full allocation chain on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents. It resets the allocation tables and seeds an open 2027-05 month (id 9300, Capital R$ 100.000,00) with Ações 40 / Renda fixa 60, one report Strategy (Top Dividendos, id 9001) at 100% of Ações targeting ITUB4 60 / VALE3 40, one manual bucket (Legado Ações, id 9002), a 100% Pós-fixado RF sub-class target, and four R$ 10,00 closes. ITUB4 (100 units) is split 60/40 between the report Strategy and the bucket, VALE3 (40 units) is fully attributed, PETR4 (10 units) is the outside remainder, and ZZZZ9 (5 units) has a quote but no catalog row. Run it independently of the other seeds.
