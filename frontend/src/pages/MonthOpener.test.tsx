@@ -18,10 +18,13 @@ vi.mock("../api/queries.ts", () => {
       isError: false,
       data: { min: "2020-03", max: "2026-10", default: "2020-12" },
     }),
+    useClosedMonths: () => ({ data: [], isLoading: false, isError: false }),
+    useMonthSnapshot: () => ({ data: null, isLoading: false, isError: false }),
     useOpenMonth: mutation,
     useUpdateCurrentMonth: mutation,
     useReplaceTargets: mutation,
     useRefreshOrders: mutation,
+    useCloseMonth: mutation,
     useStrategies: () => ({ data: [], isLoading: false, isError: false }),
   };
 });

@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { Bond, CheckingAccount } from "../api/types.ts";
+import type { Bond, BondPosition, CheckingAccount } from "../api/types.ts";
 import {
   durationLabel,
   emptyFixedIncomeForm,
+  fixedIncomeProductRefs,
   fixedIncomeRows,
+  fixedIncomeTotal,
+  positionsByProductKey,
   productIndexLabel,
   productKindLabel,
+  productValue,
   subClassLabel,
   toProductInput,
   withKind,
@@ -65,7 +69,7 @@ describe("productKindLabel", () => {
 
 describe("fixedIncomeRows", () => {
   it("merges bonds and accounts into one name-sorted table", () => {
-    const rows = fixedIncomeRows([prefixado, ipcaPlus], [cdb]);
+    const rows = fixedIncomeRows([prefixado, ipcaPlus], [cdb], new Map());
 
     expect(rows.map((row) => row.name)).toEqual([
       "CDB 110% CDI",
@@ -76,7 +80,7 @@ describe("fixedIncomeRows", () => {
   });
 
   it("carries the derived labels and the backend sub-class", () => {
-    const [row] = fixedIncomeRows([], [cdb]);
+    const [row] = fixedIncomeRows([], [cdb], new Map());
 
     expect(row).toEqual({
       key: "account-3",
@@ -91,13 +95,13 @@ describe("fixedIncomeRows", () => {
   });
 
   it("keeps a bond's maturity date as the ISO date it arrives with", () => {
-    const [row] = fixedIncomeRows([prefixado], []);
+    const [row] = fixedIncomeRows([prefixado], [], new Map());
 
     expect(row.maturity).toBe("2031-01-01");
   });
 
   it("is empty when there are no products", () => {
-    expect(fixedIncomeRows([], [])).toEqual([]);
+    expect(fixedIncomeRows([], [], new Map())).toEqual([]);
   });
 });
 
@@ -226,5 +230,116 @@ describe("withKind", () => {
       rate: "12.5",
       kind: "ACCOUNT",
     });
+  });
+});
+
+function position(overrides: Partial<BondPosition>): BondPosition {
+  return { date: "2026-11-01", principal: 1000, yield: 20, taxes: 5, ...overrides };
+}
+
+describe("positionsByProductKey", () => {
+  it("keys each read to its product and reads a missing read as no position", () => {
+    const products = fixedIncomeProductRefs([prefixado], [cdb]);
+
+    const positions = positionsByProductKey(products, [undefined, [position({})]]);
+
+    expect(positions.get("bond-1")).toEqual([]);
+    expect(positions.get("account-3")).toHaveLength(1);
+  });
+});
+
+describe("fixedIncomeProductRefs", () => {
+  it("names every product's kind and id under the same key the row uses", () => {
+    expect(fixedIncomeProductRefs([prefixado, ipcaPlus], [cdb])).toEqual([
+      { key: "bond-1", kind: "bond", id: 1 },
+      { key: "bond-2", kind: "bond", id: 2 },
+      { key: "account-3", kind: "account", id: 3 },
+    ]);
+  });
+
+  it("is empty when there are no products", () => {
+    expect(fixedIncomeProductRefs([], [])).toEqual([]);
+  });
+});
+
+describe("productValue", () => {
+  it("values a product from its latest consolidated position's principal and yield", () => {
+    expect(
+      productValue([
+        position({ date: "2026-10-01", principal: 1000, yield: 10 }),
+        position({ date: "2026-11-01", principal: 1000, yield: 20 }),
+      ]),
+    ).toBe(1020);
+  });
+
+  it("is undefined while the product has no consolidated position", () => {
+    expect(productValue([])).toBeUndefined();
+  });
+
+  it("takes the latest position by date, not by the array's order", () => {
+    expect(
+      productValue([
+        position({ date: "2026-11-01", yield: 20 }),
+        position({ date: "2026-10-01", yield: 10 }),
+      ]),
+    ).toBe(1020);
+  });
+});
+
+describe("fixedIncomeRows values", () => {
+  it("carries each product's value from its consolidated position", () => {
+    const positions = new Map<string, BondPosition[]>([
+      ["bond-1", [position({ principal: 1000, yield: 20 })]],
+      ["account-3", [position({ principal: 500, yield: 5 })]],
+    ]);
+
+    const rows = fixedIncomeRows([prefixado], [cdb], positions);
+
+    expect(rows.map((row) => [row.key, row.value])).toEqual([
+      ["account-3", 505],
+      ["bond-1", 1020],
+    ]);
+  });
+
+  it("leaves a product without a consolidated position unpriced", () => {
+    const [row] = fixedIncomeRows([prefixado], [], new Map());
+
+    expect(row.value).toBeUndefined();
+  });
+});
+
+describe("fixedIncomeTotal", () => {
+  it("sums the priced rows", () => {
+    const positions = new Map<string, BondPosition[]>([
+      ["bond-1", [position({ principal: 1000, yield: 20 })]],
+      ["account-3", [position({ principal: 500, yield: 5 })]],
+    ]);
+
+    expect(fixedIncomeTotal(fixedIncomeRows([prefixado], [cdb], positions))).toEqual({
+      value: 1525,
+      partial: false,
+    });
+  });
+
+  it("flags a partial total while a product is unpriced", () => {
+    const positions = new Map<string, BondPosition[]>([
+      ["bond-1", [position({ principal: 1000, yield: 20 })]],
+    ]);
+
+    expect(fixedIncomeTotal(fixedIncomeRows([prefixado, ipcaPlus], [], positions))).toEqual({
+      value: 1020,
+      partial: true,
+    });
+  });
+
+  it("is undefined when no row is priced, distinct from a real zero", () => {
+    expect(fixedIncomeTotal(fixedIncomeRows([prefixado], [], new Map()))).toEqual({
+      value: undefined,
+      partial: true,
+    });
+  });
+
+  it("is a real zero for an empty list", () => {
+    expect(fixedIncomeTotal([])).toEqual({ value: 0, partial: false });
   });
 });

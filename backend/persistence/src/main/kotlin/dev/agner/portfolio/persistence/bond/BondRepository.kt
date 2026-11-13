@@ -12,6 +12,7 @@ import dev.agner.portfolio.usecase.commons.now
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.Clock
@@ -23,6 +24,10 @@ class BondRepository(
 
     override suspend fun fetchAll() = transaction {
         BondEntity.all().mapToSet { it.toModel() }
+    }
+
+    override suspend fun fetchStandalone() = transaction {
+        BondEntity.find { BondTable.checkingAccount.isNull() }.map { it.toModel() }
     }
 
     override suspend fun fetchById(bondId: Int) = transaction {

@@ -89,51 +89,61 @@ export function planSteps({
     {
       key: "capital",
       label: STEP_LABELS.capital,
-      done: capital,
+      done: closed || capital,
       blocked: false,
       meta: capital ? formatCurrency(month.capital) : "capital ainda não definido",
     },
     {
       key: "targets",
       label: STEP_LABELS.targets,
-      done: targeted,
+      done: closed || targeted,
       blocked: false,
-      meta: targeted ? targetsMeta(targets) : "nenhum alvo definido",
+      meta: closed
+        ? "congelado no snapshot"
+        : targeted
+          ? targetsMeta(targets)
+          : "nenhum alvo definido",
     },
     {
       key: "plan",
       label: STEP_LABELS.plan,
-      done: plan,
+      done: closed || plan,
       blocked: false,
-      meta: !plan
-        ? "plano ainda não calculado"
-        : planStale
-          ? "plano desatualizado — recalcule"
-          : `plano persistido · ${plural(orderCount, "ordem", "ordens")}`,
+      meta: closed
+        ? "congelado no snapshot"
+        : !plan
+          ? "plano ainda não calculado"
+          : planStale
+            ? "plano desatualizado — recalcule"
+            : `plano persistido · ${plural(orderCount, "ordem", "ordens")}`,
     },
     {
       key: "execution",
       label: STEP_LABELS.execution,
-      done: executionDone,
+      done: closed || executionDone,
       blocked: false,
-      meta: !plan
-        ? "o plano ainda não foi calculado"
-        : orderCount === 0
-          ? "sem ordens sugeridas"
-          : `${execution.executed.length}/${orderCount} executadas${execution.partial.length > 0 ? ` · ${execution.partial.length} parcial` : ""}`,
+      meta: closed
+        ? "congelado no snapshot"
+        : !plan
+          ? "o plano ainda não foi calculado"
+          : orderCount === 0
+            ? "sem ordens sugeridas"
+            : `${execution.executed.length}/${orderCount} executadas${execution.partial.length > 0 ? ` · ${execution.partial.length} parcial` : ""}`,
     },
     {
       key: "transfer",
       label: STEP_LABELS.transfer,
-      done: transferDone,
-      blocked: pending.length > 0,
-      meta: !plan
-        ? "o plano ainda não foi calculado"
-        : pending.length > 0
-          ? `${pending.length} pendente · trava o fechamento`
-          : (orders?.transfers.length ?? 0) === 0
-            ? "nenhuma transferência"
-            : "decidida",
+      done: closed || transferDone,
+      blocked: !closed && pending.length > 0,
+      meta: closed
+        ? "congelada no snapshot"
+        : !plan
+          ? "o plano ainda não foi calculado"
+          : pending.length > 0
+            ? `${pending.length} pendente · trava o fechamento`
+            : (orders?.transfers.length ?? 0) === 0
+              ? "nenhuma transferência"
+              : "decidida",
     },
     {
       key: "close",

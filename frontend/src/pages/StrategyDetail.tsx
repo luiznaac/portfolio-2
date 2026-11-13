@@ -13,6 +13,7 @@ import {
   useStrategyHoldings,
 } from "../api/queries.ts";
 import type { Attribution, Edition, Strategy } from "../api/types.ts";
+import { AttributionTransferModal } from "../components/AttributionTransferModal.tsx";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { EditionDiffPanel } from "../components/EditionDiffPanel.tsx";
@@ -58,10 +59,11 @@ import {
 } from "../lib/strategy.ts";
 import { type Tone, driftTone, toneClass } from "../lib/tones.ts";
 
-// Estratégias · detail (issues #374, #375, #376): the shell the row opens into — a KPI row and its
-// own tab strip over Carteira, Edições, Atribuição and Fatia. Edições owns the edition timeline, the
+// Estratégias · detail (issues #374, #375, #376, #377): the shell the row opens into — a KPI row and
+// its own tab strip over Carteira, Edições, Atribuição and Fatia for a report strategy; the Manual
+// variant keeps Carteira and Fatia and donates ledger slices. Edições owns the edition timeline, the
 // staged diff and the promote/discard decision; Atribuição owns the custody × attribution
-// reconciliation. The Manual variant's reduced tab set is the remaining slice.
+// reconciliation.
 export function StrategyDetail() {
   const { id, tab } = useParams();
   const strategyId = Number(id);
@@ -166,7 +168,7 @@ export function StrategyDetail() {
       ) : tab === "fatia" ? (
         <FatiaTab strategy={strategy} view={fatia} positions={positions} />
       ) : (
-        <CarteiraTab positions={positions} staged={staged} />
+        <CarteiraTab strategy={strategy} positions={positions} staged={staged} />
       )}
     </>
   );
@@ -195,12 +197,19 @@ function BackToStrategies() {
 }
 
 function CarteiraTab({
+  strategy,
   positions,
   staged,
 }: {
+  strategy: Strategy;
   positions: StrategyPositionRow[];
   staged?: Edition;
 }) {
+  // A manual bucket has no target: every target column reads "sem alvo" and the unit slices are the
+  // only thing a donation can move. The modal mounts on demand, so its reads start on open.
+  const manual = !isReportDriven(strategy);
+  const [donating, setDonating] = useState<string | null>(null);
+
   const columns: Column<StrategyPositionRow>[] = [
     {
       key: "ticker",
@@ -210,6 +219,16 @@ function CarteiraTab({
           <span className="font-mono font-semibold text-text">{row.ticker}</span>
           {row.stale === true && row.quoteDate !== undefined && (
             <Chip tone="amber">cotação {formatIsoDate(row.quoteDate)}</Chip>
+          )}
+          {manual && (
+            <button
+              type="button"
+              aria-label={`Transferir ${row.ticker}`}
+              onClick={() => setDonating(row.ticker)}
+              className="font-mono text-[10px] text-action hover:underline"
+            >
+              Transferir
+            </button>
           )}
         </span>
       ),
@@ -265,7 +284,13 @@ function CarteiraTab({
       align: "right",
       render: (row) =>
         row.target === undefined ? (
-          <Unknown />
+          manual ? (
+            <span data-testid={`strategy-ticker-${row.ticker}-target`} className="text-muted">
+              sem alvo
+            </span>
+          ) : (
+            <Unknown testId={`strategy-ticker-${row.ticker}-target`} />
+          )
         ) : (
           <Num
             value={row.target}
@@ -280,7 +305,7 @@ function CarteiraTab({
       align: "right",
       render: (row) =>
         row.ideal === undefined ? (
-          <Unknown />
+          <Unknown testId={`strategy-ticker-${row.ticker}-ideal`} />
         ) : (
           <Num
             value={row.ideal}
@@ -295,7 +320,7 @@ function CarteiraTab({
       align: "right",
       render: (row) =>
         row.drift === undefined ? (
-          <Unknown />
+          <Unknown testId={`strategy-ticker-${row.ticker}-drift`} />
         ) : (
           <span
             data-testid={`strategy-ticker-${row.ticker}-drift`}
@@ -323,6 +348,14 @@ function CarteiraTab({
           <Table columns={columns} rows={positions} rowKey={(row) => row.ticker} />
         )}
       </Panel>
+
+      {donating !== null && (
+        <AttributionTransferModal
+          ticker={donating}
+          source={{ id: strategy.id, assetClass: strategy.asset_class }}
+          onClose={() => setDonating(null)}
+        />
+      )}
     </div>
   );
 }
@@ -840,6 +873,10 @@ function Kv({
 
 // An unknown number — a slice the chain does not price, or a bucket with no target. Always an em
 // dash, never R$ 0,00.
-function Unknown() {
-  return <span className="text-muted">—</span>;
+function Unknown({ testId }: { testId?: string }) {
+  return (
+    <span data-testid={testId} className="text-muted">
+      —
+    </span>
+  );
 }
