@@ -10,7 +10,11 @@ import type {
 import {
   type StrategyPricing,
   activeEdition,
+  activeEditionBefore,
+  editionDeltaRows,
+  editionDeltaSummary,
   editionDiffSummary,
+  editionExitedRows,
   editionReviewRows,
   editionSummaryChip,
   editionTimeline,
@@ -691,6 +695,17 @@ describe("activeEdition", () => {
   });
 });
 
+describe("activeEditionBefore", () => {
+  it("picks the newest active edition before the report month", () => {
+    expect(activeEditionBefore(timeline, "2026-10")?.reference_month).toBe("2026-09");
+    expect(activeEditionBefore(timeline, "2026-09")?.reference_month).toBe("2026-08");
+  });
+
+  it("is absent when no active edition precedes the month", () => {
+    expect(activeEditionBefore(timeline, "2026-08")).toBeUndefined();
+  });
+});
+
 describe("editionReviewRows", () => {
   const previous: Edition = {
     id: 1,
@@ -752,5 +767,98 @@ describe("editionReviewRows", () => {
 
   it("marks every row new when there is no active edition to compare against", () => {
     expect(editionReviewRows(staged, undefined).every((row) => row.change === "new")).toBe(true);
+  });
+});
+
+describe("editionDeltaRows", () => {
+  const active: Edition = {
+    id: 1,
+    strategy_id: 1,
+    reference_month: "2026-09",
+    status: "ACTIVE",
+    entries: [
+      { ticker: "PETR4", weight: 25, rating: "BUY", target_price: 60, do_not_trade: false },
+      { ticker: "VALE3", weight: 25, rating: "NEUTRAL", target_price: 85, do_not_trade: false },
+      { ticker: "ITUB4", weight: 20, rating: "BUY", target_price: 30, do_not_trade: false },
+      { ticker: "EGIE3", weight: 20, rating: "BUY", target_price: 48, do_not_trade: false },
+      { ticker: "B3SA3", weight: 10, rating: "NEUTRAL", target_price: 12, do_not_trade: false },
+    ],
+  };
+  const staged: Edition = {
+    id: 2,
+    strategy_id: 1,
+    reference_month: "2026-10",
+    status: "STAGED",
+    entries: [
+      { ticker: "PETR4", weight: 25, rating: "BUY", target_price: 60, do_not_trade: false },
+      { ticker: "VALE3", weight: 22.5, rating: "NEUTRAL", target_price: 85, do_not_trade: true },
+      { ticker: "ITUB4", weight: 20, rating: "SELL", target_price: 30, do_not_trade: false },
+      { ticker: "EGIE3", weight: 20, rating: "BUY", target_price: 52, do_not_trade: false },
+      { ticker: "CXSE3", weight: 12.5, rating: "BUY", target_price: 20, do_not_trade: false },
+    ],
+  };
+
+  it("carries each staged entry's before and after values against the active edition", () => {
+    const rows = editionDeltaRows(staged, active);
+
+    expect(rows.map((row) => [row.ticker, row.change])).toEqual([
+      ["PETR4", "unchanged"],
+      ["VALE3", "changed"],
+      ["ITUB4", "changed"],
+      ["EGIE3", "changed"],
+      ["CXSE3", "new"],
+    ]);
+    expect(rows.find((row) => row.ticker === "VALE3")).toEqual({
+      ticker: "VALE3",
+      weight: 22.5,
+      weightBefore: 25,
+      rating: "NEUTRAL",
+      ratingBefore: "NEUTRAL",
+      targetPrice: 85,
+      targetPriceBefore: 85,
+      doNotTrade: true,
+      doNotTradeBefore: false,
+      change: "changed",
+      doNotTradeFlip: true,
+    });
+    expect(rows.find((row) => row.ticker === "CXSE3")).toMatchObject({
+      weightBefore: undefined,
+      targetPriceBefore: undefined,
+      doNotTradeBefore: false,
+      change: "new",
+      doNotTradeFlip: false,
+    });
+  });
+
+  it("counts weight, rating, target-price moves and não operar alerts separately", () => {
+    expect(editionDeltaSummary(editionDeltaRows(staged, active))).toEqual({
+      weightChanges: 1,
+      ratingChanges: 1,
+      targetPriceChanges: 1,
+      alerts: 1,
+    });
+  });
+
+  it("marks every row new and raises no alert when there is no active edition", () => {
+    const rows = editionDeltaRows(staged, undefined);
+
+    expect(rows.every((row) => row.change === "new")).toBe(true);
+    expect(rows.every((row) => row.doNotTradeFlip === false)).toBe(true);
+    expect(editionDeltaSummary(rows)).toEqual({
+      weightChanges: 0,
+      ratingChanges: 0,
+      targetPriceChanges: 0,
+      alerts: 0,
+    });
+  });
+
+  it("names each active ticker the staged set dropped as an exit", () => {
+    expect(editionExitedRows(staged, active)).toEqual([
+      { ticker: "B3SA3", weight: 10, rating: "NEUTRAL", targetPrice: 12, doNotTrade: false },
+    ]);
+  });
+
+  it("has no exits when there is no active edition", () => {
+    expect(editionExitedRows(staged, undefined)).toEqual([]);
   });
 });

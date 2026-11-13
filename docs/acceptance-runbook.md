@@ -1097,6 +1097,30 @@ Both clauses stay terminal and single-per-intent. The step 3 clause (`material-r
 
 A clause whose copy disagrees with the screen (a row asserted as "accepted"/`aceito`), a strip screenshot taken while `Carregando…` is still up, more than one vision clause on an intent, or an apply that does not land on `/ativos/trades` is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — import assistant XP edition-diff variant (issue [#384](https://github.com/luiznaac/portfolio-2/issues/384))
+
+**Scenario**: the run drives the XP report variant of the import assistant on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the strategy and edition tables and seeds one report Strategy (Top Dividendos, id 9001) with an active 2026-09 edition whose VALE3 slice is `não operar` — the flip the uploaded October report turns off. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001, 'Top Dividendos', 'ACOES', 'REPORT_DRIVEN', NOW());
+INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES
+  (9510, 9001, '2026-09', 'ACTIVE', NOW());
+INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES
+  (9510,'PETR4',25,'BUY',60,FALSE),
+  (9510,'VALE3',25,'NEUTRAL',85,TRUE),
+  (9510,'ITUB4',20,'BUY',30,FALSE),
+  (9510,'EGIE3',20,'BUY',48,FALSE),
+  (9510,'B3SA3',10,'NEUTRAL',12,FALSE);
+SQL
+```
+
+[`xp-relatorio-2026-10.pdf`](fixtures/xp-relatorio-2026-10.pdf) — the committed XP Top Dividendos report for October 2026, pinned by `XpAcceptanceFixtureTest` — is staged through the assistant's own file input via the browser capability's `upload` action. The backend's XP resolver reads the report PDF; the prototype's CSV wording is a re-export narrative, so this fixture is the PDF the parser actually claims. In order: `/strategies/9001/edicoes` reads the timeline `set/26 · ativa · 5 ativos` and the `Importar relatório` button; it opens `/imports/assistant?object=STRATEGY_EDITION&strategy=9001` on step 1 `Arquivo` with Estratégias · Edições, Top Dividendos and the XP parser pre-filled; choosing the PDF enables `Enviar e revisar`, which stages the edition and opens step 2 `Destino` with Aplicação `promover a edição a ativa`; `Continuar →` reaches step 3 `Diff da edição`. The panel reads the summary `1 peso alterado` / `1 preço-alvo alterado` / `1 rating alterado` / `1 alerta` / `1 saída` against the active set/26, the table carries PETR4 unchanged, VALE3 `25,0% → 22,5%` with `deixa de não operar`, ITUB4 `Compra → Venda`, EGIE3 `R$ 48,00 → R$ 52,00` and CXSE3 `nova`, and the exits list carries `− B3SA3 10,0%`; the alert banner reads `VALE3 deixa de não operar nesta edição…`, and the note states that the new weights enter the plan on its next recompute. `Continuar →` reaches step 4 `Promover`, whose "O que esta importação muda" card names Estratégias · Edições and Plano / Mês above the `Promover a ativa` and `Descartar` actions. `Descartar` shows `Edição não promovida` (the staged edition stays in review until replaced) and leaves `GET /strategies/9001/editions` with 2026-09 the only ACTIVE edition and 2026-10 STAGED; `Sair` returns to the Edições tab, whose `Importar relatório` resumes the staged session on the diff. `Continuar →` then `Promover a ativa` shows `Edição promovida` with the next-recompute note, and `GET /strategies/9001/editions` carries 2026-10 as the newest ACTIVE edition with 2026-09 as history; the timeline marks `out/26` ativa and `set/26` anterior.
+
+A diff that omits a weight, rating or target-price move, an alert rendered only as a colour, a discard that changes the editions, a promote that leaves the active edition unchanged, an active edition that changes before the promote action, or a missing next-recompute note is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — Importações · Fontes failed-beside-accepted (issue [#417](https://github.com/luiznaac/portfolio-2/issues/417))
 
 **Scenario**: the run drives the Fontes card's failed-file-beside-accepted state — the one state no staging path can produce, because ADR 0003 makes an unreadable file a 4xx that stages nothing. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the import tables and seeds one `B3_TRADES` source with an older `APPLIED` record (id 9501, `b3-negociacao.xlsx`) and a newer `FAILED` record (id 9502, `b3-negociacao-failed.xlsx`) under the committed fixtures' own SHA-256s, so the failed attempt is the latest and the applied one is the last success. Run it independently of the other seeds.

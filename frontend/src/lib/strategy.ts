@@ -364,6 +364,19 @@ export function activeEdition(editions: Edition[]): Edition | undefined {
   return newestEdition(editions, "ACTIVE");
 }
 
+// The edition a report of `referenceMonth` is staged against, matching the backend's
+// `fetchLatestActive(before = report.referenceMonth)`: the newest active edition before that month.
+// For a normal forward report this is the current active edition; for an older month it is the one
+// the promotion will actually diff against.
+export function activeEditionBefore(
+  editions: Edition[],
+  referenceMonth: string,
+): Edition | undefined {
+  return [...editions]
+    .filter((edition) => edition.status === "ACTIVE" && edition.reference_month < referenceMonth)
+    .sort((left, right) => right.reference_month.localeCompare(left.reference_month))[0];
+}
+
 // The tone an edition chip carries; the timeline and the comparison list both draw from it.
 export type EditionChipTone = "green" | "amber" | "neutral";
 
@@ -401,6 +414,10 @@ export function editionTimeline(editions: Edition[]): EditionTimelineRow[] {
 // a ticker the active edition does not carry is new, never a fabricated change.
 export type EditionEntryChange = "new" | "changed" | "unchanged";
 
+// The two decisions the Edições tab and the XP assistant share: promote the staged edition, or
+// leave the active one untouched.
+export type EditionDecision = "promoted" | "discarded";
+
 export interface EditionReviewRow {
   ticker: string;
   weight: number;
@@ -418,6 +435,41 @@ function entryChanged(before: EditionEntry, after: EditionEntry): boolean {
 }
 
 export function editionReviewRows(staged: Edition, active?: Edition): EditionReviewRow[] {
+  return editionDeltaRows(staged, active).map((row) => ({
+    ticker: row.ticker,
+    weight: row.weight,
+    rating: row.rating,
+    targetPrice: row.targetPrice,
+    change: row.change,
+  }));
+}
+
+// One row of the assistant's edition diff: the staged value beside the active edition's, so weight,
+// rating, target price and the "não operar" flag all read as a before → after move. `change` keeps
+// the review rule (weight/rating/target price); the policy flip is its own alert, never a silent
+// "alterada".
+export interface EditionDeltaRow {
+  ticker: string;
+  weight: number;
+  weightBefore?: number;
+  rating?: Rating;
+  ratingBefore?: Rating;
+  targetPrice?: number;
+  targetPriceBefore?: number;
+  doNotTrade: boolean;
+  doNotTradeBefore: boolean;
+  change: EditionEntryChange;
+  doNotTradeFlip: boolean;
+}
+
+export interface EditionDeltaSummary {
+  weightChanges: number;
+  ratingChanges: number;
+  targetPriceChanges: number;
+  alerts: number;
+}
+
+export function editionDeltaRows(staged: Edition, active?: Edition): EditionDeltaRow[] {
   const previous = new Map((active?.entries ?? []).map((entry) => [entry.ticker, entry]));
 
   return staged.entries.map((entry) => {
@@ -427,11 +479,52 @@ export function editionReviewRows(staged: Edition, active?: Edition): EditionRev
     return {
       ticker: entry.ticker,
       weight: entry.weight,
+      weightBefore: before?.weight,
       rating: entry.rating,
+      ratingBefore: before?.rating,
       targetPrice: entry.target_price,
+      targetPriceBefore: before?.target_price,
+      doNotTrade: entry.do_not_trade,
+      doNotTradeBefore: before?.do_not_trade ?? false,
       change,
+      doNotTradeFlip: before !== undefined && before.do_not_trade !== entry.do_not_trade,
     };
   });
+}
+
+// The diff's headline counts. A ticker the active edition does not carry is a new row, not a
+// change, so it contributes to none of the move counts.
+export function editionDeltaSummary(rows: EditionDeltaRow[]): EditionDeltaSummary {
+  const moved = rows.filter((row) => row.change !== "new");
+  return {
+    weightChanges: moved.filter((row) => row.weightBefore !== row.weight).length,
+    ratingChanges: moved.filter((row) => row.ratingBefore !== row.rating).length,
+    targetPriceChanges: moved.filter((row) => row.targetPriceBefore !== row.targetPrice).length,
+    alerts: rows.filter((row) => row.doNotTradeFlip).length,
+  };
+}
+
+// A ticker the report dropped is an exit: the active edition holds it and the staged set does not.
+// Promotion really removes it, so the diff names it instead of letting it vanish from the table.
+export interface EditionExitedRow {
+  ticker: string;
+  weight: number;
+  rating?: Rating;
+  targetPrice?: number;
+  doNotTrade: boolean;
+}
+
+export function editionExitedRows(staged: Edition, active?: Edition): EditionExitedRow[] {
+  const current = new Set(staged.entries.map((entry) => entry.ticker));
+  return (active?.entries ?? [])
+    .filter((entry) => !current.has(entry.ticker))
+    .map((entry) => ({
+      ticker: entry.ticker,
+      weight: entry.weight,
+      rating: entry.rating,
+      targetPrice: entry.target_price,
+      doNotTrade: entry.do_not_trade,
+    }));
 }
 
 export function isReportDriven(strategy: Strategy | null | undefined): boolean {

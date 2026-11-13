@@ -5,6 +5,7 @@ val docsDir = rootProject.projectDir.parentFile.resolve("docs")
 tasks.withType<Test> {
     inputs.file(docsDir.resolve("acceptance/fixtures/b3-negociacao-2020.xlsx"))
     inputs.file(docsDir.resolve("acceptance/fixtures/posicao-custodia-2020.xlsx"))
+    inputs.file(docsDir.resolve("acceptance/fixtures/xp-relatorio-2026-10.pdf"))
     systemProperty("docsDir", docsDir.absolutePath)
 }
 
