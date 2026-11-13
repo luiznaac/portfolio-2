@@ -1,5 +1,10 @@
 import { type FormEvent, useState } from "react";
-import { useBonds, useCheckingAccounts, useCreateFixedIncomeProduct } from "../api/queries.ts";
+import {
+  useBonds,
+  useCheckingAccounts,
+  useCreateFixedIncomeProduct,
+  useFixedIncomePositions,
+} from "../api/queries.ts";
 import type { IndexId } from "../api/types.ts";
 import { Badge } from "../components/Badge.tsx";
 import { Button } from "../components/Button.tsx";
@@ -10,13 +15,17 @@ import {
   type FixedIncomeFormState,
   type FixedIncomeKind,
   type FixedIncomeRow,
+  type FixedIncomeTotal,
   MATURITY_DURATIONS,
   emptyFixedIncomeForm,
+  fixedIncomeProductRefs,
   fixedIncomeRows,
+  fixedIncomeTotal,
+  positionsByProductKey,
   toProductInput,
   withKind,
 } from "../lib/fixedIncome.ts";
-import { formatNumber } from "../lib/format.ts";
+import { formatCurrency, formatNumber } from "../lib/format.ts";
 
 const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px] text-ink";
 
@@ -52,19 +61,60 @@ const COLUMNS: Column<FixedIncomeRow>[] = [
     render: (row) => `${formatNumber(row.rate)}%`,
   },
   { key: "maturity", header: "Vencimento", render: (row) => row.maturity },
+  {
+    key: "value",
+    header: "Valor",
+    align: "right",
+    render: (row) =>
+      row.value === undefined ? <span className="text-ink-dim">—</span> : formatCurrency(row.value),
+  },
 ];
 
-// Renda fixa: the product list (títulos and contas in one table) and the lançamentos form that
-// creates either kind. Sub-class is the backend's derivation, shown read-only.
+const FOOTER_CELL = "border-t border-line px-2.5 py-2";
+
+// The total covers the priced products; a product with no consolidated position keeps it partial
+// rather than letting it read as a real zero.
+function TotalRow({ total }: { total: FixedIncomeTotal }) {
+  return (
+    <tr data-testid="fixed-income-total" className="bg-panel-2 font-mono text-num">
+      <td
+        colSpan={COLUMNS.length - 1}
+        className={`${FOOTER_CELL} text-left text-[10px] tracking-[.08em] uppercase`}
+      >
+        Total{total.partial ? " · parcial" : ""}
+      </td>
+      <td data-testid="fixed-income-total-value" className={`${FOOTER_CELL} text-right`}>
+        {total.value === undefined ? "—" : formatCurrency(total.value)}
+      </td>
+    </tr>
+  );
+}
+
+// Ativos · Renda fixa (#380): the product list (títulos and contas in one table) with each product's
+// accrual value and a total, plus the lançamentos form that creates either kind. Sub-class is the
+// backend's derivation, shown read-only. RF stays its own managed list — it never enters through the
+// import assistant.
 export function FixedIncome() {
   const bonds = useBonds();
   const accounts = useCheckingAccounts();
   const create = useCreateFixedIncomeProduct();
   const [form, setForm] = useState<FixedIncomeFormState>(emptyFixedIncomeForm());
 
-  const rows = fixedIncomeRows(bonds.data ?? [], accounts.data ?? []);
+  const bondList = bonds.data ?? [];
+  const accountList = accounts.data ?? [];
+  const products = fixedIncomeProductRefs(bondList, accountList);
+  const positionReads = useFixedIncomePositions(products);
+  const positionsByKey = positionsByProductKey(
+    products,
+    positionReads.map((read) => read.data),
+  );
+  const rows = fixedIncomeRows(bondList, accountList, positionsByKey);
+  const total = fixedIncomeTotal(rows);
   const input = toProductInput(form);
-  const isLoading = bonds.isLoading || accounts.isLoading;
+  // The values are part of the table's answer, so the panel waits for the position reads too rather
+  // than flashing an unknown value and a partial total.
+  const isLoading =
+    bonds.isLoading || accounts.isLoading || positionReads.some((read) => read.isLoading);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -81,7 +131,12 @@ export function FixedIncome() {
           ) : rows.length === 0 ? (
             <p className="text-[13.5px] text-ink-dim">Nenhum produto cadastrado.</p>
           ) : (
-            <Table columns={COLUMNS} rows={rows} rowKey={(row) => row.key} />
+            <Table
+              columns={COLUMNS}
+              rows={rows}
+              rowKey={(row) => row.key}
+              footer={<TotalRow total={total} />}
+            />
           )}
         </Panel>
       </div>

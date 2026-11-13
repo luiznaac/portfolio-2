@@ -4,7 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  Month as MonthModel,
   OrderList,
+  Snapshot,
   Strategy,
   SuggestedOrder,
   Targets,
@@ -28,10 +30,14 @@ const mock = vi.hoisted(() => ({
   period: "2026-10",
   capital: 100_000,
   orders: null as OrderList | null,
+  currentClosed: false,
+  closedMonths: [] as MonthModel[],
+  snapshot: null as Snapshot | null,
   update: vi.fn(),
   replace: vi.fn(),
   refresh: vi.fn(),
   open: vi.fn(),
+  close: vi.fn(),
 }));
 
 vi.mock("../api/queries.ts", () => {
@@ -46,17 +52,19 @@ vi.mock("../api/queries.ts", () => {
     useCurrentMonth: () => ({
       isLoading: false,
       isError: false,
-      data: {
-        month: {
-          id: 1,
-          period: mock.period,
-          capital: mock.capital,
-          floor: 0,
-          status: "OPEN",
-          aportes: 0,
-        },
-        targets: mock.targets,
-      },
+      data: mock.currentClosed
+        ? null
+        : {
+            month: {
+              id: 1,
+              period: mock.period,
+              capital: mock.capital,
+              floor: 0,
+              status: "OPEN",
+              aportes: 0,
+            },
+            targets: mock.targets,
+          },
     }),
     useOrders: () => ({ data: mock.orders, isLoading: false, isError: false }),
     useMonthPeriodRange: () => ({
@@ -64,10 +72,17 @@ vi.mock("../api/queries.ts", () => {
       isError: false,
       data: { min: "2020-03", max: "2026-10", default: "2020-12" },
     }),
+    useClosedMonths: () => ({
+      data: mock.closedMonths,
+      isLoading: false,
+      isError: false,
+    }),
+    useMonthSnapshot: () => ({ data: mock.snapshot, isLoading: false, isError: false }),
     useOpenMonth: () => mutation(mock.open),
     useUpdateCurrentMonth: () => mutation(mock.update),
     useReplaceTargets: () => mutation(mock.replace),
     useRefreshOrders: () => mutation(mock.refresh),
+    useCloseMonth: () => mutation(mock.close),
     useStrategies: () => ({ data: mock.strategies, isLoading: false, isError: false }),
   };
 });
@@ -87,10 +102,14 @@ beforeEach(() => {
   mock.period = "2026-10";
   mock.capital = 100_000;
   mock.orders = null;
+  mock.currentClosed = false;
+  mock.closedMonths = [];
+  mock.snapshot = null;
   mock.update.mockReset();
   mock.replace.mockReset();
   mock.refresh.mockReset();
   mock.open.mockReset();
+  mock.close.mockReset();
 });
 
 afterEach(cleanup);
@@ -396,6 +415,164 @@ describe("Transfer step", () => {
     );
   });
 });
+
+describe("Close step", () => {
+  it("shows the ready gate and closes the month from Mês atual", async () => {
+    const user = userEvent.setup();
+    mock.orders = monthOrders({
+      orders: [order({ id: 1, status: "EXECUTED", executed_quantity: 10 })],
+    });
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId("plan-step-rail-close"));
+
+    expect(screen.getByTestId("plan-step-close")).toBeDefined();
+    expect(screen.getByText("Pronto para fechar")).toBeDefined();
+    const close = screen.getByTestId("step-close-month") as HTMLButtonElement;
+    expect(close.disabled).toBe(false);
+
+    await user.click(close);
+    expect(mock.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("states a pending transfer on step 6 and lets the refresh-first attempt run", async () => {
+    const user = userEvent.setup();
+    mock.orders = monthOrders({ transfers: [transfer()] });
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId("plan-step-rail-close"));
+
+    expect(screen.getByText("Fechamento bloqueado: transferência pendente")).toBeDefined();
+    expect(screen.getByText(/Se sobrar uma pendente, o fechamento é recusado/)).toBeDefined();
+    const close = screen.getByTestId("step-close-month") as HTMLButtonElement;
+    expect(close.disabled).toBe(false);
+    expect(screen.getByRole("link", { name: /Abrir Transferências/ }).getAttribute("href")).toBe(
+      "/plan/transfers",
+    );
+
+    await user.click(close);
+    expect(mock.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the closed state with the frozen snapshot when no month is open", () => {
+    mock.currentClosed = true;
+    mock.closedMonths = [closedMonth()];
+    mock.snapshot = snapshot();
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("month-closed")).toBeDefined();
+    expect(screen.getByText("6 de 6")).toBeDefined();
+    expect(screen.getByTestId("plan-step-rail-close")).toBeDefined();
+    expect(screen.getAllByText("set/2026").length).toBeGreaterThan(0);
+    expect(screen.getByText("30/09/2026 18:05")).toBeDefined();
+    expect(screen.getByText("PARCIAL")).toBeDefined();
+    expect(screen.getByRole("link", { name: /Abrir Fechamentos/ }).getAttribute("href")).toBe(
+      "/plan/close",
+    );
+    expect(screen.getByTestId("month-opener")).toBeDefined();
+  });
+
+  it("shows the snapshot the close produced", async () => {
+    const user = userEvent.setup();
+    mock.orders = monthOrders({
+      orders: [order({ id: 1, status: "EXECUTED", executed_quantity: 10 })],
+    });
+    const produced = snapshot();
+    mock.close.mockImplementationOnce((_payload, options) => {
+      mock.currentClosed = true;
+      mock.snapshot = produced;
+      options?.onSuccess?.(produced);
+    });
+
+    render(
+      <MemoryRouter>
+        <Month />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId("plan-step-rail-close"));
+    await user.click(screen.getByTestId("step-close-month"));
+
+    expect(screen.getByTestId("month-closed")).toBeDefined();
+    expect(screen.getByText("30/09/2026 18:05")).toBeDefined();
+  });
+});
+
+function closedMonth(): MonthModel {
+  return {
+    id: 9,
+    period: "2026-09",
+    capital: 240_000,
+    floor: 20_000,
+    status: "CLOSED",
+    aportes: 2_000,
+  };
+}
+
+function snapshot(): Snapshot {
+  return {
+    id: 3,
+    month_id: 9,
+    created_at: "2026-09-30T18:05:00",
+    state: {
+      period: "2026-09",
+      capital: 240_000,
+      floor: 20_000,
+      aportes: 2_000,
+      caixa: 45_000,
+      holdings: [],
+      attributions: [],
+      classes: [],
+      income: { gross: 100, retained: 15, net: 85 },
+      orders: {
+        orders: [
+          {
+            id: 1,
+            ticker: "ITUB4",
+            side: "BUY",
+            quantity: 10,
+            executed_quantity: 10,
+            status: "IMPORTED",
+          },
+          {
+            id: 2,
+            ticker: "B3SA3",
+            side: "SELL",
+            quantity: 10,
+            executed_quantity: 5,
+            status: "EXECUTED",
+          },
+        ],
+        transfers: [],
+        unplanned_trades: [],
+      },
+      tax: {
+        carry: [],
+        meter: {
+          gross_sales: 0,
+          exemption_limit: 20_000,
+          exceeded: false,
+          realized_gain: 0,
+          taxable_gain: 0,
+          rate: 15,
+          tax: 0,
+        },
+      },
+    },
+  };
+}
 
 function order(overrides: Partial<SuggestedOrder> = {}): SuggestedOrder {
   return {

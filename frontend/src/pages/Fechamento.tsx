@@ -2,42 +2,60 @@ import { Link } from "react-router-dom";
 import {
   useCloseMonth,
   useClosedMonths,
+  useCorporateActions,
   useCurrentMonth,
+  useGaps,
+  useIncome,
+  useMonthPeriodRange,
   useMonthSnapshot,
   useOrders,
+  usePortfolioStatus,
 } from "../api/queries.ts";
-import type { Month, Snapshot } from "../api/types.ts";
+import type { Month, OrdersSnapshot, Snapshot, TransferProposal } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
+import { CLOSE_NON_BLOCKING_NOTE, CloseGateReason } from "../components/CloseGateReason.tsx";
 import { ClosedMonthSelect } from "../components/ClosedMonthSelect.tsx";
-import { Kpi } from "../components/Kpi.tsx";
+import { ClosedMonthStats } from "../components/ClosedMonthStats.tsx";
+import { FrozenOrders } from "../components/FrozenOrders.tsx";
+import { MonthOpener } from "../components/MonthOpener.tsx";
 import { Panel } from "../components/Panel.tsx";
 import { type Column, Table } from "../components/Table.tsx";
 import { useClosedMonthSelection } from "../hooks/useClosedMonthSelection.ts";
 import { monthKey, todayIso } from "../lib/dates.ts";
 import {
+  type CloseGateView,
+  type CloseNonBlockingItem,
   type ClosedMonthSummary,
-  closeButtonLabel,
+  closeGateView,
+  closeNonBlockingItems,
   closedMonthSummary,
   pendingTransfers,
 } from "../lib/fechamento.ts";
-import { formatCurrency, formatNumber } from "../lib/format.ts";
+import { formatCurrency } from "../lib/format.ts";
 import { isBackdatedPeriod, monthPeriodLabel } from "../lib/month.ts";
-import { ROUTES } from "../lib/routes.ts";
+import { ROUTES, portfolioHistoryDetail } from "../lib/routes.ts";
 
-// Fechamento (issue #176): the month's last ritual. The close is gated by the transfer inbox — a
-// pending Attribution Transfer blocks it — and the frozen snapshot of every closed month is the
-// read-only history the summary and its selector open on.
+// Plano / Mês · Fechamentos (issue #391): the close screen. The gate refreshes the plan before it
+// decides, so only an undecided Attribution Transfer can refuse the close; every data-quality state
+// the snapshot freezes is listed beside it as "não trava". The resulting immutable snapshot and the
+// recent closes stay on the same screen.
 export function Fechamento() {
   const current = useCurrentMonth();
   const orders = useOrders();
   const closed = useClosedMonths();
   const close = useCloseMonth();
+  const gaps = useGaps();
+  const corporateActions = useCorporateActions();
+  const incomes = useIncome();
+  const status = usePortfolioStatus();
+  const periodRange = useMonthPeriodRange();
+
   const months = closed.data ?? [];
   const { monthId, select: selectMonth } = useClosedMonthSelection(months);
   const snapshot = useMonthSnapshot(monthId);
-  const pending = pendingTransfers(orders.data);
 
+  const pending = pendingTransfers(orders.data);
   // The gate is only trustworthy once the inbox has loaded: disabling while it is in flight keeps a
   // click from racing the pending-transfer check.
   const gateReady = !orders.isLoading && !orders.isError;
@@ -46,8 +64,22 @@ export function Fechamento() {
     current.data !== null &&
     current.data !== undefined &&
     isBackdatedPeriod(current.data.month.period, monthKey(todayIso()));
-  const canClose =
-    hasOpenMonth && !backdated && gateReady && pending.length === 0 && !close.isPending;
+  const gate = closeGateView({
+    hasOpenMonth,
+    backdated,
+    gateReady,
+    pendingCount: pending.length,
+  });
+  const canClose = gate.canClose && !close.isPending;
+
+  const nonBlocking = closeNonBlockingItems({
+    period: current.data?.month.period ?? "",
+    orders: orders.data,
+    gaps: gaps.data ?? [],
+    corporateActions: corporateActions.data ?? [],
+    staleQuotes: status.data?.data.stale_quotes ?? [],
+    incomes: incomes.data ?? [],
+  });
 
   function handleClose() {
     close.mutate(undefined, {
@@ -56,7 +88,7 @@ export function Fechamento() {
   }
 
   return (
-    <section>
+    <section data-testid="close-page">
       <div className="mb-4 grid items-start gap-3 lg:grid-cols-2">
         <Panel title="Antes de fechar">
           {current.isLoading || orders.isLoading ? (
@@ -66,19 +98,18 @@ export function Fechamento() {
               {(current.error ?? orders.error)?.message ?? "Não foi possível ler o mês."}
             </p>
           ) : current.data === null || current.data === undefined ? (
-            <p className="text-[13.5px] text-ink-dim">
-              Nenhum mês aberto.{" "}
-              <Link to={ROUTES.plan} className="text-principal underline">
-                Abra um mês
-              </Link>{" "}
-              para fechá-lo.
-            </p>
+            periodRange.isError ? (
+              <p className="text-[13.5px] text-tax">{periodRange.error.message}</p>
+            ) : periodRange.data ? (
+              <MonthOpener range={periodRange.data} onOpened={() => {}} />
+            ) : (
+              <p className="text-[13.5px] text-ink-dim">Carregando…</p>
+            )
           ) : (
             <CloseGate
               month={current.data.month}
-              backdated={backdated}
-              pendingCount={pending.length}
-              gateReady={gateReady}
+              gate={gate}
+              pending={pending}
               canClose={canClose}
               isClosing={close.isPending}
               error={close.error?.message ?? null}
@@ -87,6 +118,14 @@ export function Fechamento() {
           )}
         </Panel>
 
+        {hasOpenMonth && (
+          <Panel title="Não trava o fechamento" action={<Chip tone="neutral">não bloqueia</Chip>}>
+            <NonBlockingList items={nonBlocking} />
+          </Panel>
+        )}
+      </div>
+
+      <div className="grid items-start gap-3 lg:grid-cols-2">
         <SummaryPanel
           months={months}
           monthId={monthId}
@@ -95,42 +134,24 @@ export function Fechamento() {
           error={snapshot.isError ? snapshot.error.message : null}
           onSelect={selectMonth}
         />
+        <RecentCloses months={months.slice(0, 3)} monthId={monthId} onSelect={selectMonth} />
       </div>
-
-      <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
-        Meses fechados
-      </h2>
-      {months.length === 0 ? (
-        <Panel>
-          <p className="text-[13px] text-ink-dim">
-            Nenhum mês fechado ainda. Feche o mês aberto para começar a história.
-          </p>
-        </Panel>
-      ) : (
-        <Table
-          columns={closedMonthColumns(monthId, selectMonth)}
-          rows={months}
-          rowKey={(month) => month.id}
-        />
-      )}
     </section>
   );
 }
 
 function CloseGate({
   month,
-  backdated,
-  pendingCount,
-  gateReady,
+  gate,
+  pending,
   canClose,
   isClosing,
   error,
   onClose,
 }: {
   month: Month;
-  backdated: boolean;
-  pendingCount: number;
-  gateReady: boolean;
+  gate: CloseGateView;
+  pending: TransferProposal[];
   canClose: boolean;
   isClosing: boolean;
   error: string | null;
@@ -143,24 +164,24 @@ function CloseGate({
           {monthPeriodLabel(month.period)}
         </span>
         <Chip tone="blue">Aberto</Chip>
-        {backdated && <Chip tone="amber">histórico — sem fechamento</Chip>}
+        {gate.state === "backdated" && <Chip tone="amber">histórico — sem fechamento</Chip>}
       </div>
 
-      <dl className="mb-4 space-y-1.5 text-[12.5px]">
+      <dl className="mb-3 space-y-1.5 text-[12.5px]">
         <Row label="Capital" value={formatCurrency(month.capital)} />
         <Row label="Piso" value={formatCurrency(month.floor)} />
         <Row label="Aportes" value={formatCurrency(month.aportes)} />
         <div className="flex items-center justify-between gap-3">
           <dt className="text-ink-dim">Transferências</dt>
           <dd className="flex items-center gap-2">
-            {!gateReady ? (
+            {gate.state === "checking" ? (
               <Chip>verificando…</Chip>
-            ) : pendingCount === 0 ? (
+            ) : pending.length === 0 ? (
               <Chip tone="green">Nenhuma pendente</Chip>
             ) : (
               <>
                 <Chip tone="rose">
-                  {pendingCount} {pendingCount === 1 ? "pendente" : "pendentes"}
+                  {pending.length} {pending.length === 1 ? "pendente" : "pendentes"}
                 </Chip>
                 <Link to={ROUTES.planTransfers} className="text-[11.5px] text-principal underline">
                   resolver
@@ -171,6 +192,8 @@ function CloseGate({
         </div>
       </dl>
 
+      <CloseGateReason gate={gate} />
+
       <Button
         variant="primary"
         className="w-full justify-center"
@@ -180,18 +203,41 @@ function CloseGate({
       >
         {isClosing
           ? "Fechando…"
-          : backdated
+          : gate.state === "backdated"
             ? "Só o mês atual pode ser fechado"
-            : closeButtonLabel(pendingCount)}
+            : "Fechar mês"}
       </Button>
 
-      <p className="mt-2 text-[11.5px] text-ink-faint">
-        {backdated
-          ? "Um mês histórico é apenas de planejamento: o fechamento congela o mês atual, nunca o passado importado."
-          : "Fechar recalcula o plano de ordens e congela posições, proventos, impostos e o plano no retrato do mês."}
-      </p>
+      <p className="mt-2 text-[11.5px] text-ink-faint">{CLOSE_NON_BLOCKING_NOTE}</p>
 
       {error && <p className="mt-2 text-[12.5px] text-tax">{error}</p>}
+    </div>
+  );
+}
+
+function NonBlockingList({ items }: { items: CloseNonBlockingItem[] }) {
+  return (
+    <div>
+      <p className="mb-2 text-[12px] leading-[1.5] text-ink-dim">
+        O snapshot segue com estes estados como estão; nenhum deles recusa o fechamento.
+      </p>
+      <ul className="divide-y divide-line-soft">
+        {items.map((item) => (
+          <li
+            key={item.key}
+            data-testid={`non-blocking-${item.key}`}
+            className="flex flex-wrap items-center gap-2 py-2 text-[12px]"
+          >
+            <span className="font-cond font-semibold text-ink">{item.label}</span>
+            <span className="font-mono text-ink-dim">{item.detail}</span>
+            <span className="flex-1" />
+            <Chip tone="neutral">{item.badge}</Chip>
+            <Link to={item.to} className="text-[11.5px] text-principal underline">
+              ver →
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -214,7 +260,7 @@ function SummaryPanel({
   const summary = snapshot ? closedMonthSummary(snapshot) : null;
 
   return (
-    <Panel title="Mês fechado">
+    <Panel title="Resultado do fechamento">
       <div className="mb-3">
         <ClosedMonthSelect months={months} monthId={monthId} onSelect={onSelect} />
       </div>
@@ -223,18 +269,24 @@ function SummaryPanel({
         <p className="text-[13.5px] text-ink-dim">Carregando…</p>
       ) : error ? (
         <p className="text-[13.5px] text-tax">{error}</p>
-      ) : summary ? (
-        <ClosedSummary summary={summary} />
+      ) : summary && snapshot ? (
+        <ClosedSummary summary={summary} orders={snapshot.state.orders} />
       ) : (
         <p className="text-[13.5px] text-ink-dim">
-          Nenhum mês fechado ainda. O resumo aparece aqui quando o primeiro mês for fechado.
+          Nenhum mês fechado ainda. O resultado aparece aqui quando o primeiro mês for fechado.
         </p>
       )}
     </Panel>
   );
 }
 
-function ClosedSummary({ summary }: { summary: ClosedMonthSummary }) {
+function ClosedSummary({
+  summary,
+  orders,
+}: {
+  summary: ClosedMonthSummary;
+  orders: OrdersSnapshot;
+}) {
   return (
     <div data-testid="closed-summary">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -242,17 +294,56 @@ function ClosedSummary({ summary }: { summary: ClosedMonthSummary }) {
           {monthPeriodLabel(summary.period)}
         </span>
         <Chip tone="green">Fechado</Chip>
-        <span className="ml-auto font-mono text-[11px] text-ink-faint">{summary.closedAt}</span>
+        <span className="font-mono text-[11px] text-ink-faint">{summary.closedAt}</span>
+        <Link
+          to={portfolioHistoryDetail(summary.period)}
+          className="ml-auto text-[11.5px] text-principal underline"
+        >
+          Abrir mês congelado →
+        </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Kpi label="Capital" value={formatCurrency(summary.capital)} />
-        <Kpi label="Piso" value={formatCurrency(summary.floor)} />
-        <Kpi label="Caixa" value={formatCurrency(summary.caixa)} />
-        <Kpi label="Proventos líquidos" value={formatCurrency(summary.incomeNet)} />
-        <Kpi label="Ordens executadas" value={formatNumber(summary.executedOrders)} />
+      <ClosedMonthStats summary={summary} />
+
+      <div className="mt-3">
+        <FrozenOrders orders={orders} testId="frozen-orders" title="Plano congelado" />
       </div>
     </div>
+  );
+}
+
+function RecentCloses({
+  months,
+  monthId,
+  onSelect,
+}: {
+  months: Month[];
+  monthId: number | null;
+  onSelect: (monthId: number) => void;
+}) {
+  return (
+    <Panel
+      title="Fechamentos guardados"
+      action={
+        <Link to={ROUTES.portfolioHistory} className="text-[11.5px] text-principal underline">
+          Ver todos →
+        </Link>
+      }
+    >
+      <div data-testid="recent-closes">
+        {months.length === 0 ? (
+          <p className="text-[13px] text-ink-dim">
+            Nenhum mês fechado ainda. Feche o mês aberto para começar a história.
+          </p>
+        ) : (
+          <Table
+            columns={closedMonthColumns(monthId, onSelect)}
+            rows={months}
+            rowKey={(month) => month.id}
+          />
+        )}
+      </div>
+    </Panel>
   );
 }
 

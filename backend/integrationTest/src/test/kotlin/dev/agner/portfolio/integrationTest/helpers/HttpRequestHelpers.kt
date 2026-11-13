@@ -29,6 +29,11 @@ suspend fun createFloatingBond(value: String, index: String, maturityDate: Strin
         )
     }["id"]!!
 
+suspend fun getBonds() =
+    getRequest<List<Map<String, Any>>> {
+        path = "/fixed-income/bonds"
+    }
+
 suspend fun createFixedBond(value: String, maturityDate: String = "2025-10-20") =
     postRequest<Map<String, String>> {
         path = "/fixed-income/bonds/fixed"

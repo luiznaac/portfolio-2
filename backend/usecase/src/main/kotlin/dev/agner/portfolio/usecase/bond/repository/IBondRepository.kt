@@ -9,6 +9,10 @@ interface IBondRepository {
 
     suspend fun fetchAll(): Set<Bond>
 
+    // The bond products a user manages: every bond not created by a checking-account deposit. An
+    // account's internal bonds are that account's value, not products of their own.
+    suspend fun fetchStandalone(): List<Bond>
+
     suspend fun fetchById(bondId: Int): Bond?
 
     suspend fun save(creation: BondCreation): Bond
