@@ -46,8 +46,10 @@ src/
                 `GET /imports` parameters); imports.ts names the sources/states and defines the
                 parked session and the record age; position.ts builds the Posições rows and their
                 filtered total;
-                analysisWindow.ts is the Análise rail's preset/range/window math;
-                portfolioHistory.ts derives the closed-month list and the frozen detail's rows, reading
+                analysisWindow.ts is the Análise rail's preset/range/window math; taxes.ts is
+                Impostos' monthly apuração derivation — the window-filtered apuração list, the
+                grain note and the DARF/carry/harvest helpers; portfolioHistory.ts derives the
+                closed-month list and the frozen detail's rows, reading
                 only the snapshot's own values)
 ```
 

@@ -55,6 +55,8 @@ export interface AnalysisWindow {
   range?: WindowRange;
   bounds?: WindowBounds;
   setPreset: (preset: WindowPreset) => void;
+  // The month anchor selected directly (Impostos' apuração list); clamped at render like any anchor.
+  setAnchor: (anchor: string) => void;
   // One month per arrow, clamped to the months the read holds.
   shift: (delta: number) => void;
 }
@@ -85,6 +87,7 @@ export function useAnalysisWindow(
     range: anchor === undefined ? undefined : windowRange(context.preset, anchor),
     bounds,
     setPreset: context.setPreset,
+    setAnchor: context.setAnchor,
     shift: (delta) => {
       if (anchor === undefined || bounds === undefined) return;
       context.setAnchor(shiftAnchor(anchor, delta, bounds));

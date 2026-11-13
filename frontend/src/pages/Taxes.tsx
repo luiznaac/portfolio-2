@@ -15,22 +15,26 @@ import type {
   HarvestPair,
   HarvestProposal,
   HarvestReport,
-  MonthPeriodRange,
   StockTaxReport,
 } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Field, Input } from "../components/Field.tsx";
+import { Kpi } from "../components/Kpi.tsx";
 import { Panel } from "../components/Panel.tsx";
-import { PeriodSelect } from "../components/PeriodSelect.tsx";
+import { PeriodRail } from "../components/PeriodRail.tsx";
 import { type Column, Table } from "../components/Table.tsx";
+import { useAnalysisWindow } from "../hooks/useAnalysisWindow.tsx";
+import { windowMonthKeys, windowRangeLabel } from "../lib/analysisWindow.ts";
 import { monthKey, todayIso } from "../lib/dates.ts";
 import { formatCurrency, formatIsoDate, formatNumber } from "../lib/format.ts";
 import { monthPeriodLabel } from "../lib/month.ts";
 import {
   type HarvestPairFormState,
   type RealizedRow,
+  type TaxApuracaoRow,
   carryAmount,
+  carryClosing,
   darfDeadlineLabel,
   darfIsOverdue,
   harvestPairForm,
@@ -39,157 +43,243 @@ import {
   meterProgress,
   realizedKindLabel,
   realizedRows,
+  taxApuracoes,
+  taxGrainNote,
   taxPeriodChip,
   toHarvestPairCreation,
   unclassifiedStatusLabel,
 } from "../lib/taxes.ts";
 
-// Impostos (issue #173): the month's tax ledger — the R$20k stock-sale meter, the realized result
-// per kind, the three carry buckets and the DARF 6015 deadline — plus the harvest pass: loss pairs
-// sold D and rebought D+1, sized to the remaining headroom, with a per-ticker opt-out.
+// Análise · Impostos: the monthly read over the shared rail. The month anchor selects the apuração
+// (GET /tax/{period}) and renders the R$20k stock-sale meter, the realized result per kind, the
+// three carry buckets and the DARF 6015 deadline for that month. The window never fakes the monthly
+// read into a window read — it only filters which apurações the side panel lists. The harvest pass
+// is carried as it exists in production, for the open month only.
 export function Taxes() {
   const range = useMonthPeriodRange();
   const current = useCurrentMonth();
   const closed = useClosedMonths();
-  const [selected, setSelected] = useState<string | null>(null);
   const currentPeriod = monthKey(todayIso());
-  const period = selected ?? current.data?.month.period ?? range.data?.default ?? "";
   const openPeriod = current.data?.month.period ?? null;
   const closedPeriods = (closed.data ?? []).map((month) => month.period);
-  const chip = taxPeriodChip(period, currentPeriod, openPeriod, closedPeriods);
-  const isOpenMonth = openPeriod !== null && period === openPeriod;
-  const tax = useStockTax(period);
+  const periods = range.data ? windowMonthKeys({ start: range.data.min, end: range.data.max }) : [];
+  const rail = useAnalysisWindow(periods, closed.data?.[0]?.period);
+  const anchor = rail.anchor;
+  const isOpenMonth = openPeriod !== null && anchor === openPeriod;
+  const tax = useStockTax(anchor ?? "");
   const harvest = useHarvest(isOpenMonth);
+
+  if (range.isLoading) {
+    return (
+      <section>
+        <p className="text-[13.5px] text-muted">Carregando…</p>
+      </section>
+    );
+  }
+
+  if (range.isError) {
+    return (
+      <section>
+        <p className="text-[13.5px] text-return-down">{range.error.message}</p>
+      </section>
+    );
+  }
+
+  if (anchor === undefined || rail.range === undefined) {
+    return (
+      <section>
+        <Panel title="Sem apurações">
+          <p className="text-[13px] text-muted">
+            Nenhum mês na janela de planejamento. Importe um extrato ou abra um mês para começar.
+          </p>
+        </Panel>
+      </section>
+    );
+  }
+
+  if (tax.isLoading) {
+    return (
+      <section>
+        <p className="text-[13.5px] text-muted">Carregando…</p>
+      </section>
+    );
+  }
+
+  if (tax.isError) {
+    return (
+      <section>
+        <p className="text-[13.5px] text-return-down">{tax.error.message}</p>
+      </section>
+    );
+  }
+
+  if (!tax.data) return null;
+
+  const report = tax.data;
+  const apuracoes = taxApuracoes(periods, rail.range, currentPeriod, openPeriod, closedPeriods);
+  const chip = taxPeriodChip(anchor, currentPeriod, openPeriod, closedPeriods);
 
   return (
     <section>
-      {range.isLoading ? (
-        <p className="text-[13.5px] text-ink-dim">Carregando…</p>
-      ) : range.isError ? (
-        <p className="text-[13.5px] text-tax">{range.error.message}</p>
-      ) : range.data ? (
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <PeriodPicker range={range.data} period={period} onChange={setSelected} />
-          {chip && <Chip tone={chip.tone}>{chip.label}</Chip>}
+      <PeriodRail
+        preset={rail.preset}
+        anchor={anchor}
+        range={rail.range}
+        bounds={rail.bounds}
+        onPreset={rail.setPreset}
+        onShift={rail.shift}
+        grainNote={taxGrainNote(anchor)}
+      />
+
+      <TaxStrip report={report} />
+
+      <div className="mb-4 grid items-start gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="space-y-4">
+          <MeterPanel tax={report} />
+          <Panel
+            title={`Apuração de ${monthPeriodLabel(report.period)}`}
+            action={chip && <Chip tone={chip.tone}>{chip.label}</Chip>}
+          >
+            <div data-testid="tax-realized">
+              {hasSales(report) ? (
+                <Table
+                  columns={REALIZED_COLUMNS}
+                  rows={realizedRows(report.realized)}
+                  rowKey={(row) => row.kind}
+                />
+              ) : (
+                <p className="text-[13px] text-muted">Sem vendas neste mês.</p>
+              )}
+            </div>
+          </Panel>
+          <CarryPanel carry={report.carry} />
+          <p data-testid="tax-grain-caption" className="text-[11.5px] text-faint">
+            Impostos é leitura mensal: a apuração existe por mês, então o mês-âncora escolhe o
+            detalhe e a janela do rail só decide quais meses aparecem na lista ao lado.
+          </p>
         </div>
-      ) : null}
 
-      {tax.isLoading ? (
-        <p className="text-[13.5px] text-ink-dim">Carregando…</p>
-      ) : tax.isError ? (
-        <p className="text-[13.5px] text-tax">{tax.error.message}</p>
-      ) : tax.data ? (
-        <TaxLedger
-          tax={tax.data}
-          isOpenMonth={isOpenMonth}
-          today={todayIso()}
-          harvest={harvest.data ?? null}
-          harvestError={harvest.isError ? harvest.error.message : null}
-        />
-      ) : null}
-    </section>
-  );
-}
-
-// The same server window the month opener reads, so a period outside it is never offered.
-function PeriodPicker({
-  range,
-  period,
-  onChange,
-}: {
-  range: MonthPeriodRange;
-  period: string;
-  onChange: (period: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-[11.5px] text-ink-dim">
-      <span>Período</span>
-      <PeriodSelect range={range} period={period} onChange={onChange} />
-    </div>
-  );
-}
-
-function TaxLedger({
-  tax,
-  isOpenMonth,
-  today,
-  harvest,
-  harvestError,
-}: {
-  tax: StockTaxReport;
-  isOpenMonth: boolean;
-  today: string;
-  harvest: HarvestReport | null;
-  harvestError: string | null;
-}) {
-  return (
-    <div data-testid="tax-ledger">
-      <div className="mb-4">
-        <MeterPanel tax={tax} />
-      </div>
-
-      {(tax.pending_gaps.length > 0 || tax.unclassified.length > 0) && (
-        <div className="mb-4 grid items-start gap-3 lg:grid-cols-2">
-          {tax.pending_gaps.length > 0 && (
-            <Panel title="Resultado pendente">
-              <p className="text-[13px] text-ink-dim">
-                Venda sem preço declarado: o resultado deste mês fica pendente até a lacuna ser
-                precificada. Ela nunca entra no imposto.
-              </p>
-              <ul className="mt-2 space-y-1 font-mono text-[12px] text-ink">
-                {tax.pending_gaps.map((gap) => (
-                  <li key={gap.id}>
-                    {gap.ticker} · {formatIsoDate(gap.date)} · {formatNumber(gap.quantity)} un
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-          {tax.unclassified.length > 0 && (
-            <Panel title="Sem classe">
-              <p className="text-[13px] text-ink-dim">
-                Tickers sem classe: as vendas ficam fora do imposto até a classificação.
-              </p>
-              <ul className="mt-2 space-y-1 font-mono text-[12px] text-ink">
-                {tax.unclassified.map((ticker) => (
-                  <li key={ticker.ticker}>
-                    {ticker.ticker} · {unclassifiedStatusLabel(ticker.status)}
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-        </div>
-      )}
-
-      <div className="mb-4 grid items-start gap-3 lg:grid-cols-[1.6fr_1fr]">
-        <RealizedPanel tax={tax} />
-        <DarfPanel tax={tax} today={today} />
-      </div>
-
-      <div className="mb-4">
-        <CarryPanel carry={tax.carry} />
+        <aside className="space-y-4">
+          <Panel
+            title="Apurações na janela"
+            action={
+              <span className="font-mono text-num text-faint">{windowRangeLabel(rail.range)}</span>
+            }
+          >
+            <div data-testid="tax-apuracoes-list">
+              <Table
+                columns={apuracaoColumns(anchor)}
+                rows={apuracoes}
+                rowKey={(row) => row.period}
+                rowId={(row) => `tax-apuracao-${row.period}`}
+                rowClassName={(row) => (row.period === anchor ? "bg-action-bg" : undefined)}
+                onRowClick={(row) => rail.setAnchor(row.period)}
+              />
+            </div>
+          </Panel>
+          <Panel title="O que explica o DARF">
+            <DarfExplanation tax={report} />
+          </Panel>
+          <PendenciasPanel tax={report} />
+        </aside>
       </div>
 
       {!isOpenMonth ? (
         <Panel title="Harvest">
-          <p className="text-[13px] text-ink-dim">
+          <p className="text-[13px] text-muted">
             O planejador de harvest só existe para o mês aberto; este é um mês histórico.
           </p>
+          {openPeriod !== null && (
+            <Button className="mt-2" onClick={() => rail.setAnchor(openPeriod)}>
+              Ir para o mês aberto · {monthPeriodLabel(openPeriod)}
+            </Button>
+          )}
         </Panel>
-      ) : harvestError ? (
+      ) : harvest.isError ? (
         <Panel title="Harvest">
-          <p className="text-[13px] text-tax">{harvestError}</p>
+          <p className="text-[13px] text-return-down">{harvest.error.message}</p>
         </Panel>
-      ) : harvest ? (
-        <HarvestPanel harvest={harvest} />
+      ) : harvest.data ? (
+        <HarvestPanel harvest={harvest.data} />
       ) : (
         <Panel title="Harvest">
-          <p className="text-[13px] text-ink-dim">Calculando as sugestões de harvest…</p>
+          <p className="text-[13px] text-muted">Calculando as sugestões de harvest…</p>
         </Panel>
       )}
+    </section>
+  );
+}
+
+function TaxStrip({ report }: { report: StockTaxReport }) {
+  const { meter } = report;
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <Kpi
+        testId="tax-gross-sales-kpi"
+        label="Vendas de ações"
+        value={formatCurrency(meter.gross_sales)}
+        hint={meterLabel(meter)}
+        tone={meter.exceeded ? "attention" : "default"}
+      />
+      <Kpi
+        testId="tax-realized-gain-kpi"
+        label="Ganho realizado"
+        value={formatCurrency(meter.realized_gain)}
+        hint="swing trade"
+      />
+      <Kpi
+        testId="tax-taxable-gain-kpi"
+        label="Ganho tributável"
+        value={formatCurrency(meter.taxable_gain)}
+        hint="após prejuízo acumulado"
+      />
+      <Kpi
+        testId="tax-darf-kpi"
+        label="DARF"
+        value={formatCurrency(meter.tax)}
+        hint={`vence ${darfDeadlineLabel(report)}`}
+        tone="attention"
+      />
+      <Kpi
+        testId="tax-carry-swing"
+        label="Prejuízo a compensar"
+        value={carryAmount(carryClosing(report, "SWING"))}
+        hint="swing · saldo final"
+      />
+      <Kpi
+        testId="tax-carry-fii"
+        label="FII"
+        value={carryAmount(carryClosing(report, "FII"))}
+        hint="prejuízo acumulado"
+      />
     </div>
   );
+}
+
+function apuracaoColumns(anchor: string): Column<TaxApuracaoRow>[] {
+  return [
+    {
+      key: "period",
+      header: "Mês",
+      render: (row) => (
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-[12px] text-text">{row.label}</span>
+          {row.period === anchor && (
+            <span className="font-mono text-[9px] tracking-[.06em] text-action uppercase">
+              âncora
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "state",
+      header: "Estado",
+      render: (row) =>
+        row.chip ? <Chip tone={row.chip.tone}>{row.chip.label}</Chip> : <span>—</span>,
+    },
+  ];
 }
 
 function MeterPanel({ tax }: { tax: StockTaxReport }) {
@@ -197,73 +287,138 @@ function MeterPanel({ tax }: { tax: StockTaxReport }) {
 
   return (
     <Panel title={`Vendas de ações × teto mensal · ${monthPeriodLabel(tax.period)}`}>
-      <div className="flex flex-wrap items-baseline gap-3">
-        <span className="font-mono text-[22px] text-ink">{formatCurrency(meter.gross_sales)}</span>
-        <span className="text-[12.5px] text-ink-dim">
-          de {formatCurrency(meter.exemption_limit)} vendidos no mês
-        </span>
-        <Chip tone={meter.exceeded ? "rose" : "green"}>{meterLabel(meter)}</Chip>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-3">
-        <div
-          className={`h-full ${meter.exceeded ? "bg-tax" : "bg-yield"}`}
-          style={{ width: `${meterProgress(meter)}%` }}
-        />
-      </div>
-      <div className="mt-2 flex flex-wrap justify-between gap-2 text-[12px] text-ink-dim">
-        <span>
-          Ganho tributável{" "}
-          <b className="font-mono text-ink">{formatCurrency(meter.taxable_gain)}</b>
-        </span>
-        <span>
-          IR estimado <b className="font-mono text-tax">{formatCurrency(meter.tax)}</b>
-        </span>
+      <div data-testid="tax-meter">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <span className="font-mono text-[22px] text-text">
+            {formatCurrency(meter.gross_sales)}
+          </span>
+          <span className="text-[12.5px] text-muted">
+            de {formatCurrency(meter.exemption_limit)} vendidos no mês
+          </span>
+          <Chip tone={meter.exceeded ? "rose" : "green"}>{meterLabel(meter)}</Chip>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-panel-3">
+          <div
+            className={`h-full ${meter.exceeded ? "bg-return-down" : "bg-return-up"}`}
+            style={{ width: `${meterProgress(meter)}%` }}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap justify-between gap-2 text-[12px] text-muted">
+          <span>
+            Ganho tributável{" "}
+            <b className="font-mono text-text">{formatCurrency(meter.taxable_gain)}</b>
+          </span>
+          <span>
+            IR estimado <b className="font-mono text-attention">{formatCurrency(meter.tax)}</b>
+          </span>
+        </div>
       </div>
     </Panel>
   );
 }
 
-function RealizedPanel({ tax }: { tax: StockTaxReport }) {
-  const rows = realizedRows(tax.realized);
+function DarfExplanation({ tax }: { tax: StockTaxReport }) {
+  const { meter } = tax;
+  const fii = carryClosing(tax, "FII");
 
   return (
-    <div>
-      <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
-        Livro mensal · {monthPeriodLabel(tax.period)}
-      </h2>
-      {hasSales(tax) ? (
-        <Table columns={REALIZED_COLUMNS} rows={rows} rowKey={(row) => row.kind} />
-      ) : (
-        <Panel>
-          <p className="text-[13px] text-ink-dim">Sem vendas neste mês.</p>
-        </Panel>
+    <div className="space-y-2 text-[12.5px] text-muted">
+      <p>
+        {meter.exceeded ? (
+          <>
+            Vendas de ações de{" "}
+            <b className="font-mono text-text">{formatCurrency(meter.gross_sales)}</b> cruzaram a
+            isenção de {formatCurrency(meter.exemption_limit)}. Todo o ganho do mês vira tributável
+            depois de aplicar os prejuízos acumulados.
+          </>
+        ) : (
+          <>
+            As vendas de ações de{" "}
+            <b className="font-mono text-text">{formatCurrency(meter.gross_sales)}</b> ficaram
+            dentro da isenção de {formatCurrency(meter.exemption_limit)}; o mês não gera DARF.
+          </>
+        )}
+      </p>
+      <p>
+        <b className="font-mono text-text">{formatCurrency(meter.tax)}</b> = {meter.rate}% sobre{" "}
+        {formatCurrency(meter.taxable_gain)}, vencimento em {darfDeadlineLabel(tax)}.
+      </p>
+      <p>
+        As vendas de FII ficam fora do medidor de ações; o saldo de prejuízo de FII fecha em{" "}
+        {carryAmount(fii)}.
+      </p>
+      {darfIsOverdue(tax, todayIso()) && (
+        <p className="text-return-down">O prazo desta DARF já passou.</p>
       )}
     </div>
   );
 }
 
-function DarfPanel({ tax, today }: { tax: StockTaxReport; today: string }) {
+function PendenciasPanel({ tax }: { tax: StockTaxReport }) {
+  const empty =
+    tax.pending_gaps.length === 0 && tax.unclassified.length === 0 && tax.day_trades.length === 0;
+
   return (
-    <Panel title="DARF 6015">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="font-mono text-[22px] text-tax">{formatCurrency(tax.meter.tax)}</div>
-        {darfIsOverdue(tax, today) && <Chip tone="rose">vencida</Chip>}
-      </div>
-      <dl className="mt-2 space-y-1 text-[12.5px]">
-        <div className="flex justify-between gap-3">
-          <dt className="text-ink-dim">Competência</dt>
-          <dd className="font-mono">{monthPeriodLabel(tax.period)}</dd>
+    <Panel title="Pendências">
+      {empty ? (
+        <p className="text-[13px] text-muted">Sem pendências para esta apuração.</p>
+      ) : (
+        <div data-testid="tax-pendencias" className="space-y-3">
+          {tax.pending_gaps.length > 0 && (
+            <PendenciaSection
+              title="Resultado pendente"
+              hint="Venda sem preço declarado: o resultado fica pendente até a lacuna ser precificada e nunca entra no imposto."
+              items={tax.pending_gaps.map((gap) => ({
+                key: String(gap.id),
+                text: `${gap.ticker} · ${formatIsoDate(gap.date)} · ${formatNumber(gap.quantity)} un`,
+              }))}
+            />
+          )}
+          {tax.unclassified.length > 0 && (
+            <PendenciaSection
+              title="Sem classe"
+              hint="Tickers sem classe: as vendas ficam fora do imposto até a classificação."
+              items={tax.unclassified.map((ticker) => ({
+                key: ticker.ticker,
+                text: `${ticker.ticker} · ${unclassifiedStatusLabel(ticker.status)}`,
+              }))}
+            />
+          )}
+          {tax.day_trades.length > 0 && (
+            <PendenciaSection
+              title="Day trade"
+              hint="Compra e venda no mesmo dia: aviso apenas; o app não calcula imposto de day trade."
+              items={tax.day_trades.map((warning) => ({
+                key: `${warning.ticker}-${warning.date}-${warning.institution_id}`,
+                text: `${warning.ticker} · ${formatIsoDate(warning.date)} · ${formatNumber(warning.quantity)} un`,
+              }))}
+            />
+          )}
         </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-ink-dim">Vencimento</dt>
-          <dd className="font-mono">{darfDeadlineLabel(tax)}</dd>
-        </div>
-      </dl>
-      <p className="mt-3 text-[11.5px] text-ink-faint">
-        O app não emite a DARF. O vencimento é o último dia útil do mês seguinte; confira feriados
-        no calendário da Receita antes de pagar.
-      </p>
+      )}
     </Panel>
+  );
+}
+
+function PendenciaSection({
+  title,
+  hint,
+  items,
+}: {
+  title: string;
+  hint: string;
+  items: { key: string; text: string }[];
+}) {
+  return (
+    <div>
+      <h3 className="mb-1 font-mono text-label tracking-[.1em] text-faint uppercase">{title}</h3>
+      <p className="text-[11.5px] text-faint">{hint}</p>
+      <ul className="mt-1 space-y-1 font-mono text-[11.5px] text-text">
+        {items.map((item) => (
+          <li key={item.key}>{item.text}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -271,17 +426,16 @@ function CarryPanel({ carry }: { carry: CarryBucket[] }) {
   const unavailable = carry.some((bucket) => !bucket.available);
 
   return (
-    <div>
-      <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
-        Baldes de prejuízo
-      </h2>
-      <Table columns={CARRY_COLUMNS} rows={carry} rowKey={(row) => row.kind} />
+    <Panel title="Compensação">
+      <div data-testid="tax-carry">
+        <Table columns={CARRY_COLUMNS} rows={carry} rowKey={(row) => row.kind} />
+      </div>
       {unavailable && (
-        <p className="mt-2 text-[11.5px] text-ink-faint">
+        <p className="pt-2 text-[11.5px] text-faint">
           Sem base antes da adoção — os baldes sem histórico anterior aparecem como "—".
         </p>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -289,26 +443,27 @@ function HarvestPanel({ harvest }: { harvest: HarvestReport }) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
+        <h2 className="mb-2 font-mono text-label font-semibold tracking-[.13em] text-muted uppercase">
           Harvest · step-up
         </h2>
         <Panel>
-          <div className="mb-3 flex flex-wrap gap-4 text-[12px] text-ink-dim">
+          <div className="mb-3 flex flex-wrap gap-4 text-[12px] text-muted">
             <span>
-              Folga do teto <b className="font-mono text-ink">{formatCurrency(harvest.headroom)}</b>
+              Folga do teto{" "}
+              <b className="font-mono text-text">{formatCurrency(harvest.headroom)}</b>
             </span>
             <span>
               Perda mínima{" "}
-              <b className="font-mono text-ink">{formatCurrency(harvest.minimum_loss)}</b>
+              <b className="font-mono text-text">{formatCurrency(harvest.minimum_loss)}</b>
             </span>
           </div>
-          <p className="mb-3 text-[11.5px] text-ink-faint">
+          <p className="mb-3 text-[11.5px] text-faint">
             Recompra no próximo dia útil (D+1). O app não conhece feriados da B3 — confira o
             calendário antes de executar.
           </p>
 
           {harvest.suggestions.length === 0 ? (
-            <p className="text-[13px] text-ink-dim">
+            <p className="text-[13px] text-muted">
               Nenhuma sugestão: sem posições de ações com prejuízo, folga no teto ou acima da perda
               mínima.
             </p>
@@ -322,7 +477,7 @@ function HarvestPanel({ harvest }: { harvest: HarvestReport }) {
 
           {harvest.ignored.length > 0 && (
             <div className="mt-3 border-t border-line-soft pt-2">
-              <h3 className="mb-1 font-mono text-[10px] tracking-[.1em] text-ink-faint uppercase">
+              <h3 className="mb-1 font-mono text-label tracking-[.1em] text-faint uppercase">
                 Ignorados ({harvest.ignored.length})
               </h3>
               <div className="divide-y divide-line-soft">
@@ -335,7 +490,7 @@ function HarvestPanel({ harvest }: { harvest: HarvestReport }) {
 
           {harvest.pairs.length > 0 && (
             <div className="mt-3 border-t border-line-soft pt-2">
-              <h3 className="mb-1 font-mono text-[10px] tracking-[.1em] text-ink-faint uppercase">
+              <h3 className="mb-1 font-mono text-label tracking-[.1em] text-faint uppercase">
                 Pares aceitos ({harvest.pairs.length})
               </h3>
               <Table columns={PAIR_COLUMNS} rows={harvest.pairs} rowKey={(pair) => pair.id} />
@@ -370,16 +525,16 @@ function HarvestRow({ proposal }: { proposal: HarvestProposal }) {
   return (
     <div className="py-2.5" data-testid={`harvest-${proposal.ticker}`}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[12.5px] font-semibold text-ink">{proposal.ticker}</span>
+        <span className="font-mono text-[12.5px] font-semibold text-text">{proposal.ticker}</span>
         {proposal.strategy && <Chip>{proposal.strategy}</Chip>}
         {proposal.neutro && <Chip tone="blue">NEUTRO</Chip>}
-        <span className="text-[12px] text-ink-dim">
+        <span className="text-[12px] text-muted">
           {formatNumber(proposal.quantity)} un · PM {formatCurrency(proposal.average_price)} →{" "}
           {formatCurrency(proposal.price)}
         </span>
-        <span className="ml-auto font-mono text-tax">−{formatCurrency(proposal.loss)}</span>
+        <span className="ml-auto font-mono text-return-down">−{formatCurrency(proposal.loss)}</span>
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11.5px] text-ink-faint">
+      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11.5px] text-faint">
         <span>
           Venda {formatIsoDate(proposal.sell.date)} · {formatCurrency(proposal.sell.amount)}
         </span>
@@ -458,11 +613,11 @@ function HarvestRow({ proposal }: { proposal: HarvestProposal }) {
             </Field>
           </div>
           {form.rebuyDate <= form.sellDate && (
-            <p className="text-[11.5px] text-tax">
+            <p className="text-[11.5px] text-return-down">
               A recompra precisa ser em um dia posterior à venda — nunca no mesmo dia.
             </p>
           )}
-          {accept.error && <p className="text-[12px] text-tax">{accept.error.message}</p>}
+          {accept.error && <p className="text-[12px] text-return-down">{accept.error.message}</p>}
           <Button type="submit" variant="primary" disabled={!creation || accept.isPending}>
             {accept.isPending ? "Aceitando…" : "Aceitar par"}
           </Button>
@@ -477,12 +632,10 @@ function IgnoredRow({ ignored }: { ignored: HarvestIgnored }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 py-2">
-      <span className="font-mono text-[12.5px] font-semibold text-ink">{ignored.ticker}</span>
+      <span className="font-mono text-[12.5px] font-semibold text-text">{ignored.ticker}</span>
       {ignored.strategy && <Chip>{ignored.strategy}</Chip>}
       {ignored.neutro && <Chip tone="blue">NEUTRO</Chip>}
-      <span className="text-[12px] text-ink-dim">
-        Perda potencial {formatCurrency(ignored.loss)}
-      </span>
+      <span className="text-[12px] text-muted">Perda potencial {formatCurrency(ignored.loss)}</span>
       <Button
         variant="ghost"
         className="ml-auto"
@@ -499,16 +652,16 @@ function IgnoredRow({ ignored }: { ignored: HarvestIgnored }) {
 function FiiPanel({ report }: { report: FiiHarvestReport[] }) {
   return (
     <div>
-      <h2 className="mb-2 font-cond text-[13px] font-bold tracking-[.04em] text-ink-dim uppercase">
+      <h2 className="mb-2 font-mono text-label font-semibold tracking-[.13em] text-muted uppercase">
         FIIs · somente relatório
       </h2>
       <Panel>
-        <p className="mb-3 text-[12px] text-ink-dim">
+        <p className="mb-3 text-[12px] text-muted">
           Fundos imobiliários não entram na isenção de R$ 20 mil: o ganho é tributado a 20% e o
           prejuízo só compensa ganho de FII. O app não propõe par para FIIs.
         </p>
         {report.length === 0 ? (
-          <p className="text-[13px] text-ink-dim">Nenhum FII na carteira.</p>
+          <p className="text-[13px] text-muted">Nenhum FII na carteira.</p>
         ) : (
           <Table columns={FII_COLUMNS} rows={report} rowKey={(row) => row.ticker} />
         )}
@@ -533,20 +686,20 @@ const REALIZED_COLUMNS: Column<RealizedRow>[] = [
     key: "gains",
     header: "Ganhos",
     align: "right",
-    render: (row) => <span className="text-yield">{formatCurrency(row.gains)}</span>,
+    render: (row) => <span className="text-return-up">{formatCurrency(row.gains)}</span>,
   },
   {
     key: "losses",
     header: "Prejuízos",
     align: "right",
-    render: (row) => <span className="text-principal">{formatCurrency(row.losses)}</span>,
+    render: (row) => <span className="text-return-down">{formatCurrency(row.losses)}</span>,
   },
   {
     key: "result",
     header: "Resultado",
     align: "right",
     render: (row) => (
-      <span className={row.result < 0 ? "text-principal" : "text-ink"}>
+      <span className={row.result < 0 ? "text-return-down" : "text-text"}>
         {formatCurrency(row.result)}
       </span>
     ),
@@ -569,7 +722,7 @@ const CARRY_COLUMNS: Column<CarryBucket>[] = [
     key: "banked",
     header: "Prejuízo do mês",
     align: "right",
-    render: (row) => <span className="text-principal">{carryAmount(row.loss_banked)}</span>,
+    render: (row) => <span className="text-return-down">{carryAmount(row.loss_banked)}</span>,
   },
   {
     key: "applied",
@@ -581,7 +734,9 @@ const CARRY_COLUMNS: Column<CarryBucket>[] = [
     key: "closing",
     header: "Saldo final",
     align: "right",
-    render: (row) => <span className="font-mono text-ink">{carryAmount(row.closing_balance)}</span>,
+    render: (row) => (
+      <span className="font-mono text-text">{carryAmount(row.closing_balance)}</span>
+    ),
   },
 ];
 
@@ -616,7 +771,7 @@ const PAIR_COLUMNS: Column<HarvestPair>[] = [
     key: "loss",
     header: "Perda",
     align: "right",
-    render: (row) => <span className="text-tax">{formatCurrency(row.loss)}</span>,
+    render: (row) => <span className="text-return-down">{formatCurrency(row.loss)}</span>,
   },
 ];
 
@@ -644,7 +799,7 @@ const FII_COLUMNS: Column<FiiHarvestReport>[] = [
     header: "Resultado",
     align: "right",
     render: (row) => (
-      <span className={row.unrealized_result < 0 ? "text-principal" : "text-yield"}>
+      <span className={row.unrealized_result < 0 ? "text-return-down" : "text-return-up"}>
         {formatCurrency(row.unrealized_result)}
       </span>
     ),
@@ -653,6 +808,6 @@ const FII_COLUMNS: Column<FiiHarvestReport>[] = [
     key: "tax",
     header: "IR estimado (20%)",
     align: "right",
-    render: (row) => <span className="text-tax">{formatCurrency(row.estimated_tax)}</span>,
+    render: (row) => <span className="text-attention">{formatCurrency(row.estimated_tax)}</span>,
   },
 ];
