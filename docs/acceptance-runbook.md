@@ -1107,3 +1107,19 @@ SQL
 ```
 
 The ledger holds 55 executions: the first page reads `50 de 55` with a next cursor, and the total row covers all 55 (R$ 5.826,00 — the four named rows total R$ 4.500,00 and the generated quantities sum to R$ 1.326,00). `ticker=VALE3` narrows to one row (R$ 2.000,00); `side=SELL` and the window `2026-10-02..2026-10-03` each narrow to the two named rows (R$ 2.600,00). Clearing a filter returns to the first page (`50 de 55`), never the pages loaded before the filter. Ativos · Negócios also hosts **Reconstruir histórico**: skipping adoption unlocks the replay; the backfill renders its report; the custody cross-check accepts `posicao-custodia-2020.xlsx` and renders the drift table.
+
+## Acceptance scenario — Importações · Ações corporativas (issue #387)
+
+**Scenario**: the run drives the corporate-action review queue and its applied history on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the HTTP/Browser intents. It seeds three parked events: a desdobramento of PETR4 with no factor (id 9001, computable once the owner supplies the factor), a subscrição of VALE3 (id 9002, a manual kind the engine never applies on its own) and a desdobramento of ITUB4 (id 9003, the HTTP resolve intent's target). Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+DELETE FROM corporate_action WHERE id IN (9001, 9002, 9003);
+INSERT INTO corporate_action (id, ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES
+  (9001, 'PETR4', 'SPLIT',       '2026-10-20', NULL, NULL, NULL, NULL, 'B3_MOVEMENTS', '12345', 'Desdobramento', 1, NULL, 'NEEDS_REVIEW', NOW()),
+  (9002, 'VALE3', 'RIGHTS_ISSUE','2026-10-18', NULL, NULL, NULL, NULL, 'B3_MOVEMENTS', '54321', 'Subscrição',    1, NULL, 'NEEDS_REVIEW', NOW()),
+  (9003, 'ITUB4', 'SPLIT',       '2026-10-15', NULL, NULL, NULL, NULL, 'B3_MOVEMENTS', '99999', 'Desdobramento', 1, NULL, 'NEEDS_REVIEW', NOW());
+SQL
+```
+
+`POST /corporate-actions/9003/resolve` with `{"ratio":3}` answers 200 with `status: "APPLIED"`. After that resolve, the page reads 9001 and 9002 in the queue — 9001 with the factor field and the "A exportação não trouxe o fator." reason, 9002 with the "Sem efeito automático: o motor não aplica Subscrição sozinho." reason and the "Marcar como tratada" action — beside a history holding 9003. Resolving 9001 with factor 2 and acknowledging 9002 move both rows into the history without a reload, leaving the queue empty.

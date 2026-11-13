@@ -13,6 +13,7 @@ import type {
   CheckingAccountCreation,
   ClassificationQueueItem,
   CorporateAction,
+  CorporateActionResolution,
   CurrentMonth,
   Edition,
   EditionActivation,
@@ -468,6 +469,18 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return upload("/corporate-actions/import", form);
+  },
+
+  // The review decision: the supplied data fills what the export lacked, or the empty body
+  // acknowledges a manual kind. The response is the event now in the applied history.
+  resolveCorporateAction(
+    id: number,
+    resolution: CorporateActionResolution,
+  ): Promise<CorporateAction> {
+    return request(`/corporate-actions/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify(resolution),
+    });
   },
 
   // Reconstruir histórico: the backend operations Ativos · Negócios owns. The backfill body is
