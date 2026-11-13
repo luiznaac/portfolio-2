@@ -11,6 +11,7 @@ import {
   defaultTransferQuantity,
   isValidTransferQuantity,
   remainingAttributable,
+  reportStrategiesOfClass,
   transferDestinations,
 } from "./attribution.ts";
 
@@ -39,6 +40,18 @@ describe("remainingAttributable", () => {
 
   it("floors at zero when the position shrank below the attributed total", () => {
     expect(remainingAttributable(50, [slice(1, 60)])).toBe(0);
+  });
+});
+
+describe("reportStrategiesOfClass", () => {
+  it("keeps only report-driven Strategies of the named class", () => {
+    const strategies: Strategy[] = [
+      strategy(1, "Top Dividendos", "ACOES", "REPORT_DRIVEN"),
+      strategy(2, "Legado Ações", "ACOES", "MANUAL"),
+      strategy(3, "Top FIIs", "FIIS", "REPORT_DRIVEN"),
+    ];
+
+    expect(reportStrategiesOfClass(strategies, "ACOES")).toEqual([strategies[0]]);
   });
 });
 

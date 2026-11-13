@@ -4,15 +4,28 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Allocation, Edition, Month, MonthPerformance, Strategy } from "../api/types.ts";
+import type {
+  Allocation,
+  Attribution,
+  AttributionTransferCreation,
+  Edition,
+  Month,
+  MonthPerformance,
+  OrderPlan,
+  Strategy,
+} from "../api/types.ts";
 import { StrategyDetail } from "./StrategyDetail.tsx";
 
 const mock = vi.hoisted(() => ({
   strategies: [] as Strategy[],
   allocation: null as Allocation | null,
   editions: [] as Edition[],
+  editionsByStrategy: {} as Record<number, Edition[]>,
   months: [] as Month[],
   performance: null as MonthPerformance | null,
+  attribution: null as Attribution | null,
+  orderPlan: null as OrderPlan | null,
+  transfers: [] as AttributionTransferCreation[],
   promotions: [] as { referenceMonth: string; tickers: string[] }[],
 }));
 
@@ -20,9 +33,16 @@ vi.mock("../api/client.ts", () => ({
   api: {
     getStrategies: () => Promise.resolve(mock.strategies),
     getCurrentAllocation: () => Promise.resolve(mock.allocation),
-    getEditions: () => Promise.resolve(mock.editions),
+    getEditions: (strategyId: number) =>
+      Promise.resolve(mock.editionsByStrategy[strategyId] ?? mock.editions),
     getClosedMonths: () => Promise.resolve(mock.months),
     getMonthPerformance: () => Promise.resolve(mock.performance),
+    getAttribution: () => Promise.resolve(mock.attribution),
+    getOrderPlan: () => Promise.resolve(mock.orderPlan),
+    transferAttribution: (_ticker: string, creation: AttributionTransferCreation) => {
+      mock.transfers.push(creation);
+      return Promise.resolve(mock.attribution);
+    },
     activateEdition: (
       _strategyId: number,
       activation: { reference_month: string; entries: { ticker: string }[] },
@@ -224,8 +244,12 @@ afterEach(() => {
   mock.strategies = [];
   mock.allocation = null;
   mock.editions = [];
+  mock.editionsByStrategy = {};
   mock.months = [];
   mock.performance = null;
+  mock.attribution = null;
+  mock.orderPlan = null;
+  mock.transfers = [];
   mock.promotions = [];
 });
 
@@ -417,5 +441,185 @@ describe("the strategy detail's Edições tab", () => {
     expect(
       screen.getByText("A cadeia do mês não carrega ativos para esta estratégia."),
     ).toBeDefined();
+  });
+});
+
+const manualStrategy: Strategy = {
+  id: 9,
+  name: "Legado",
+  asset_class: "ACOES",
+  kind: "MANUAL",
+};
+
+const manualAllocation: Allocation = {
+  period: "2026-10",
+  capital: 100000,
+  floor: 0,
+  ideal: 100000,
+  actual: 4000,
+  deficit: 96000,
+  drift: -96,
+  unattributed: 0,
+  unclassified: { actual: 0, tickers: [] },
+  classes: [
+    {
+      asset_class: "ACOES",
+      target: 100,
+      ideal: 100000,
+      actual: 4000,
+      deficit: 96000,
+      drift: -96,
+      unattributed: 0,
+      strategies: [],
+      manual: {
+        strategy: "Legado",
+        strategy_id: 9,
+        actual: 4000,
+        tickers: [{ ticker: "ITUB4", quantity: 40, price: 100, actual: 4000 }],
+      },
+      outside: { actual: 0, tickers: [] },
+      sub_classes: [],
+    },
+  ],
+};
+
+// The read after a 15-unit donation: the bucket's slice falls from 40 to 25 units while custody
+// (100) is untouched — only the attribution ledger moved.
+const movedManualAllocation: Allocation = {
+  ...manualAllocation,
+  actual: 2500,
+  deficit: 97500,
+  drift: -97.5,
+  classes: [
+    {
+      asset_class: "ACOES",
+      target: 100,
+      ideal: 100000,
+      actual: 2500,
+      deficit: 97500,
+      drift: -97.5,
+      unattributed: 0,
+      strategies: [],
+      manual: {
+        strategy: "Legado",
+        strategy_id: 9,
+        actual: 2500,
+        tickers: [{ ticker: "ITUB4", quantity: 25, price: 100, actual: 2500 }],
+      },
+      outside: { actual: 0, tickers: [] },
+      sub_classes: [],
+    },
+  ],
+};
+
+const manualAttribution: Attribution = {
+  ticker: "ITUB4",
+  custody_quantity: 100,
+  attributed_quantity: 100,
+  unattributed_quantity: 0,
+  slices: [
+    { strategy_id: 9, strategy_name: "Legado", quantity: 40 },
+    { strategy_id: 1, strategy_name: "Top Dividendos", quantity: 60 },
+  ],
+};
+
+const transferPlan: OrderPlan = {
+  period: "2026-10",
+  phase: "FUNDING",
+  capital: 100000,
+  floor: 0,
+  investable_capital: 100000,
+  classes: [
+    {
+      asset_class: "ACOES",
+      target: 100,
+      ideal: 100000,
+      strategies: [
+        {
+          strategy: "Top Dividendos",
+          target: 100,
+          ideal: 100000,
+          tickers: [
+            {
+              ticker: "ITUB4",
+              strategy: "Top Dividendos",
+              target: 100,
+              ideal: 100000,
+              target_quantity: 25,
+              neutro: false,
+              attributed_quantity: 10,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  candidates: [],
+  outside_strategy: [],
+  unclassified: [],
+  attribution: [],
+  transfers: [],
+};
+
+describe("the manual strategy variant", () => {
+  function renderManual() {
+    mock.strategies = [manualStrategy, strategy];
+    mock.allocation = manualAllocation;
+  }
+
+  it("opens with exactly Carteira and Fatia, every target column without a target", async () => {
+    renderManual();
+
+    renderDetail("/strategies/9");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Legado" })).toBeDefined();
+    const tabs = within(screen.getByTestId("page-tabs")).getAllByRole("link");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Carteira", "Fatia no portfólio"]);
+    expect(screen.queryByRole("link", { name: "Edições" })).toBeNull();
+
+    expect(screen.getByTestId("strategy-kpi-alvo").textContent).toBe("sem alvo");
+    expect(screen.getByTestId("strategy-kpi-ideal").textContent).toBe("—");
+    expect(screen.getByTestId("strategy-kpi-drift").textContent).toBe("—");
+
+    expect(screen.getByTestId("strategy-ticker-ITUB4-target").textContent).toBe("sem alvo");
+    expect(screen.getByTestId("strategy-ticker-ITUB4-ideal").textContent).toBe("—");
+    expect(screen.getByTestId("strategy-ticker-ITUB4-drift").textContent).toBe("—");
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("link", { name: "Fatia no portfólio" }));
+
+    expect((await screen.findByTestId("strategy-target")).textContent).toBe("sem alvo");
+    expect(screen.getByTestId("strategy-drift").textContent).toBe("—");
+  });
+
+  it("donates the ticker's slice to a report strategy without touching custody", async () => {
+    renderManual();
+    mock.attribution = manualAttribution;
+    mock.orderPlan = transferPlan;
+    mock.editionsByStrategy = { 1: [activeEdition] };
+
+    renderDetail("/strategies/9");
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Transferir ITUB4" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Transferir do legado" });
+    expect(within(dialog).getByText(/A custódia não muda/)).toBeDefined();
+    const destination = within(dialog).getByLabelText("Estratégia de destino") as HTMLSelectElement;
+    expect(Array.from(destination.options).map((option) => option.textContent)).toEqual([
+      "Top Dividendos · falta 15 cotas",
+    ]);
+    expect((within(dialog).getByLabelText("Quantidade") as HTMLInputElement).value).toBe("15");
+
+    mock.allocation = movedManualAllocation;
+    await user.click(within(dialog).getByRole("button", { name: "Transferir 15 cotas" }));
+
+    expect(mock.transfers).toEqual([{ from_strategy_id: 9, to_strategy_id: 1, quantity: 15 }]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // The refetch reflects the moved slice: the bucket now holds 25 units, not 40.
+    await waitFor(() =>
+      expect(screen.getByTestId("strategy-ticker-ITUB4-quantity").textContent).toBe("25"),
+    );
+    expect(screen.getByTestId("strategy-ticker-ITUB4-value").textContent).toBe("R$ 2.500,00");
   });
 });
