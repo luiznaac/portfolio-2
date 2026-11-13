@@ -5,11 +5,12 @@ import { type RouteObject, RouterProvider, createMemoryRouter } from "react-rout
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { routes } from "./App.tsx";
 import { monthPeriodLabel } from "./lib/month.ts";
-import { ROUTES, resolveCrumb } from "./lib/routes.ts";
+import { ROUTES, STRATEGY_DETAIL_TABS, resolveCrumb } from "./lib/routes.ts";
 
 // The route-table smoke harness: render every registered route against loading queries, so a route
-// with a broken element or a missing page head fails here. Each page slice extends the table it
-// walks; the harness derives the routes from App.tsx rather than keeping a parallel list.
+// with a broken element or a missing page head fails here. The harness derives the paths from
+// App.tsx rather than keeping a parallel list, expanding each route param to its samples (and each
+// optional segment to its absent form) so the detail pages and their tabs are walked too.
 const mocked = vi.hoisted(() => ({
   loading: {
     data: undefined,
@@ -22,24 +23,42 @@ const mocked = vi.hoisted(() => ({
     mutateAsync: () => Promise.resolve(),
     reset: () => undefined,
   },
-  arrayHooks: new Set(["useTickerQuotesList", "useStrategyEditions", "useFixedIncomePositions"]),
+  // The catalog resolves, so the strategy detail's head is the entity name — the head the real
+  // stack renders. Every other read stays in its loading state.
+  strategy: { id: 1, name: "Dividendos", asset_class: "ACOES", kind: "REPORT_DRIVEN" },
+  arrayHooks: new Set([
+    "useTickerQuotesList",
+    "useStrategyEditions",
+    "useFixedIncomePositions",
+    "useAttributions",
+  ]),
 }));
 
 vi.mock(import("./api/queries.ts"), async (importOriginal) => {
   const actual = await importOriginal();
   const mockedModule: Record<string, unknown> = {};
   for (const key of Object.keys(actual)) {
-    mockedModule[key] = mocked.arrayHooks.has(key) ? () => [] : () => mocked.loading;
+    if (key === "useStrategies") {
+      mockedModule[key] = () => ({
+        ...mocked.loading,
+        data: [mocked.strategy],
+        isLoading: false,
+      });
+    } else {
+      mockedModule[key] = mocked.arrayHooks.has(key) ? () => [] : () => mocked.loading;
+    }
   }
   return mockedModule as typeof actual;
 });
 
-const SAMPLE_PARAM: Record<string, string> = {
-  ticker: "PETR4",
-  id: "1",
-  tab: "carteira",
-  period: "2026-10",
-  importId: "7",
+const SAMPLE_PARAM: Record<string, string[]> = {
+  ticker: ["PETR4"],
+  id: ["1"],
+  // Carteira is the detail's segment-less landing route, so the optional segment's absent form
+  // covers it; the other three are the tabs the detail links to.
+  tab: STRATEGY_DETAIL_TABS.filter((tab) => tab !== "carteira"),
+  period: ["2026-02"],
+  importId: ["7"],
 };
 
 // The full-screen flow owns the viewport instead of the shell's page head; the smoke walk asserts
@@ -60,8 +79,8 @@ function expectedHead(path: string): string | undefined {
   if (path.startsWith(`${ROUTES.portfolioHistory}/`)) {
     return `Histórico · ${monthPeriodLabel(path.slice(ROUTES.portfolioHistory.length + 1))}`;
   }
-  const detail = path.startsWith(`${ROUTES.strategies}/`) && path !== ROUTES.strategiesImport;
-  return detail ? "Estratégia" : (OFF_OBJECT_HEAD[path] ?? resolveCrumb(path)?.object);
+  const detail = path.startsWith(`${ROUTES.strategies}/`);
+  return detail ? mocked.strategy.name : (OFF_OBJECT_HEAD[path] ?? resolveCrumb(path)?.object);
 }
 
 function joinPath(parent: string, child: string): string {
@@ -70,27 +89,35 @@ function joinPath(parent: string, child: string): string {
   return `${base}/${child}`;
 }
 
-function sample(path: string): string {
-  const sampled = path
-    .split("/")
-    .map((segment) => {
-      if (!segment.startsWith(":")) return segment;
-      // An optional segment (`:ticker?`) samples its present form so the detail route is walked too.
-      const name = segment.slice(1).replace(/\?$/, "");
-      const value = SAMPLE_PARAM[name];
-      if (value === undefined) throw new Error(`no smoke sample for route param ${name}`);
-      return value;
-    })
-    .join("/");
-  return sampled.length > 1 ? sampled.replace(/\/$/, "") : sampled;
+// Expands a route template into the paths the walk visits: a required param takes each of its
+// samples, an optional param (`:tab?`) also visits the segment-absent form.
+function expand(path: string): string[] {
+  let paths = [""];
+  for (const segment of path.split("/")) {
+    if (!segment.startsWith(":")) {
+      paths = paths.map((prefix) => joinPath(prefix, segment));
+      continue;
+    }
+    const optional = segment.endsWith("?");
+    const name = segment.slice(1).replace(/\?$/, "");
+    const values = SAMPLE_PARAM[name];
+    if (values === undefined) throw new Error(`no smoke sample for route param ${name}`);
+    paths = paths.flatMap((prefix) => [
+      ...(optional ? [prefix] : []),
+      ...values.map((value) => joinPath(prefix, value)),
+    ]);
+  }
+  return paths;
 }
 
 function collect(routeObjects: RouteObject[], parent = ""): string[] {
   const paths: string[] = [];
   for (const route of routeObjects) {
-    const path = route.index === true ? parent : sample(joinPath(parent, route.path ?? ""));
-    paths.push(path === "" ? "/" : path);
-    if (route.children !== undefined) paths.push(...collect(route.children, path));
+    const expanded = route.index === true ? [parent] : expand(joinPath(parent, route.path ?? ""));
+    for (const path of expanded) {
+      paths.push(path === "" ? "/" : path);
+      if (route.children !== undefined) paths.push(...collect(route.children, path));
+    }
   }
   return [...new Set(paths)].sort();
 }

@@ -18,7 +18,6 @@ export const ROUTES = {
   allocation: "/portfolio/allocation",
   portfolioHistory: "/portfolio/history",
   strategies: "/strategies",
-  strategiesImport: "/strategies/import",
   assets: "/ativos",
   positions: "/ativos/positions",
   trades: "/ativos/trades",
@@ -56,8 +55,12 @@ export function strategyDetail(strategyId: number): string {
   return `${ROUTES.strategies}/${strategyId}`;
 }
 
-// The detail's own tabs are routes under the id; Carteira is the detail's landing tab.
-export type StrategyDetailTab = "carteira" | "edicoes" | "atribuicao" | "fatia";
+// The detail's own tabs are routes under the id; Carteira is the detail's landing tab and so has no
+// path segment of its own. The list is the single source the route builder and the smoke harness
+// share.
+export const STRATEGY_DETAIL_TABS = ["carteira", "edicoes", "atribuicao", "fatia"] as const;
+
+export type StrategyDetailTab = (typeof STRATEGY_DETAIL_TABS)[number];
 
 export function strategyDetailTab(strategyId: number, tab: StrategyDetailTab): string {
   return tab === "carteira" ? strategyDetail(strategyId) : `${strategyDetail(strategyId)}/${tab}`;
@@ -276,11 +279,6 @@ export const NAV_GROUPS: { label: NavGroup; objects: AppObject[] }[] = [
   { label: "Resultados", objects: OBJECTS.filter((object) => object.group === "Resultados") },
 ];
 
-// A nested route that is not an entity (a child screen of a tab) and so keeps a stable crumb label.
-const STATIC_CHILDREN: Record<string, string> = {
-  [ROUTES.strategiesImport]: "Importar relatórios",
-};
-
 export interface Crumb {
   group: NavGroup;
   object: string;
@@ -312,17 +310,14 @@ export function activeSub(object: AppObject, pathname: string): SubView {
   return resolved;
 }
 
-// Resolves the topbar crumb. At depth the third slot is the entity name (a ticker, a frozen month)
-// or a nested screen's label — never the parent sub-view.
+// Resolves the topbar crumb. At depth the third slot is the entity name (a ticker, a frozen month),
+// never the parent sub-view.
 export function resolveCrumb(pathname: string): Crumb | null {
   const object = activeObject(pathname);
   if (object === null) return null;
   const sub = activeSub(object, pathname);
   const path = normalize(pathname);
   const rest = path.slice(sub.path.length).replace(/^\//, "");
-  const view =
-    rest.length === 0
-      ? sub.label
-      : (STATIC_CHILDREN[`${sub.path}/${rest}`] ?? decodeURIComponent(rest.split("/")[0] ?? ""));
+  const view = rest.length === 0 ? sub.label : decodeURIComponent(rest.split("/")[0] ?? "");
   return { group: object.group, object: object.label, view };
 }

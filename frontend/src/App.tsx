@@ -29,10 +29,9 @@ import { Trades } from "./pages/Trades.tsx";
 import { Transfers } from "./pages/Transfers.tsx";
 
 // The six-object route table (issue #369). Every object's sub-views are page tabs under an
-// ObjectPage frame, and every registered sub-view now has its own slice. Production screens are
-// remounted under their new homes until their slice replaces them. Detail routes (strategy detail,
-// frozen month, the import assistant) land with their own slices and extend the smoke harness beside
-// their page. The landing is Carteira · Visão geral; health stays off-nav.
+// ObjectPage frame, and every registered sub-view has its own slice. Detail routes (strategy detail,
+// frozen month, the import assistant) sit beside the object frame because they own their page head
+// or the viewport. The landing is Carteira · Visão geral; health stays off-nav.
 export const routes: RouteObject[] = [
   {
     path: "/",
@@ -56,10 +55,7 @@ export const routes: RouteObject[] = [
       {
         path: "strategies",
         element: <ObjectPage objectKey="strategies" />,
-        children: [
-          { index: true, element: <Strategies /> },
-          { path: "import", element: <Strategies /> },
-        ],
+        children: [{ index: true, element: <Strategies /> }],
       },
       // The row target is a depth page with its own head and its own tab strip, so it sits beside
       // the object frame instead of inside its tabbed children (#374).
