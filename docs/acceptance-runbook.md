@@ -949,6 +949,40 @@ SQL
 
 The reads are then deterministic: `GET /strategies` opens the list; `GET /strategies/9001/editions` carries the 2027-06 `STAGED` edition; `GET /months` lists 2027-05 first; `GET /months/9402/performance` carries Top Dividendos' decomposition (`value_start` 9.000, `value_end` 10.000, `return_percentage` 11,1111). On `/strategies` clicking **Top Dividendos** opens `/strategies/9001`: the page head reads `Top Dividendos`, the KPI row reads Fatia R$ 10.000,00 (62,5% da carteira), Alvo 60,0% da classe Ações, Ideal R$ 36.000,00 (faltam R$ 26.000,00), Drift -26,0 p.p. and Retorno mai/27 +11,11%; the tab strip reads `Carteira` and `Fatia no portfólio`. Carteira lists VALE3 with 1.000 units, R$ 10,00, R$ 10.000,00, 100,0% target, R$ 36.000,00 Ideal and -26,0 p.p. drift, and the `Edição em revisão · jun/27` strip sits above the table. Switching to Fatia reads Fatia na carteira 62,5%, Fatia na classe 90,9%, Alvo na classe 60,0%, Drift -26,0 p.p. and the return decomposition Início R$ 9.000,00 / Fim R$ 10.000,00 / Aportes R$ 0,00 / Proventos R$ 0,00 / Retorno +11,11%, with no edition strip. `/strategies/999999` renders `Estratégia não encontrada` instead of crashing. A missing KPI, a Carteira row without its target weight or units, a missing stage strip, a Fatia without the class and portfolio shares or the decomposition, a repeated edition strip on Fatia, a detail that crashes on an unknown id, or a value that disagrees with the seed is an automatic red; the evidence names the first failing intent.
 
+## Acceptance scenario — Manual Strategy detail variant (issue #377)
+
+**Scenario**: the run drives the Manual Strategy detail's reduced tab set, its no-target columns and the donation of a ledger slice to a report Strategy on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the plan, close and allocation tables and seeds an open 2027-06 month at Capital R$ 1.250,00 whose Ações 100 chain gives Top Dividendos 60% and its ITUB4 ticker 100%. ITUB4 custody is 100 units at R$ 10,00: 60 attributed to Top Dividendos (which has an active 2027-05 edition weighing ITUB4) and 40 to the Legado Ações bucket. The plan's ITUB4 target is therefore 75 units against 60 attributed, so the donation defaults to the 15-unit shortfall, capped by the bucket's 40-unit slice. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM snapshot; DELETE FROM target; DELETE FROM transfer_proposal; DELETE FROM suggested_order;
+DELETE FROM month; DELETE FROM ticker_catalog; DELETE FROM quote; DELETE FROM cash_movement;
+DELETE FROM gap; DELETE FROM trade; DELETE FROM position; DELETE FROM institution;
+DELETE FROM attribution; DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM strategy;
+INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES
+  (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()),
+  (9003,'Legado Ações','ACOES','MANUAL',NOW());
+INSERT INTO `month` (id, period, capital, `floor`, aportes, status, created_at) VALUES
+  (9300,'2027-06',1250,0,0,'OPEN',NOW());
+INSERT INTO target (month_id, `level`, asset_class, strategy, sub_class, ticker, percentage, created_at) VALUES
+  (9300,'CLASS','ACOES',NULL,NULL,NULL,100,NOW()),
+  (9300,'STRATEGY','ACOES','Top Dividendos',NULL,NULL,60,NOW()),
+  (9300,'TICKER','ACOES','Top Dividendos',NULL,'ITUB4',100,NOW());
+INSERT INTO edition (id, strategy_id, reference_month, status, created_at) VALUES
+  (9501,9001,'2027-05','ACTIVE',NOW());
+INSERT INTO edition_entry (edition_id, ticker, weight, rating, target_price, do_not_trade) VALUES
+  (9501,'ITUB4',100,NULL,NULL,FALSE);
+REPLACE INTO position (ticker, quantity, average_price) VALUES ('ITUB4',100,8);
+INSERT INTO attribution (ticker, strategy_id, quantity) VALUES ('ITUB4',9001,60), ('ITUB4',9003,40);
+REPLACE INTO quote (ticker, date, close, source, created_at) VALUES ('ITUB4','2027-06-30',10,'COTAHIST',NOW());
+REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('ITUB4','ITAUUNIBANCO','02',NULL,'STOCK','ACOES','2027-01-01','2027-06-30',NOW());
+SQL
+```
+
+On `/strategies/9003` the page head reads `Legado Ações` with the subtitle `bucket manual · Ações`; the tab strip carries exactly `Carteira` and `Fatia no portfólio`, and the KPI row reads Fatia R$ 400,00 (40,0% da carteira), Alvo `sem alvo` (bucket manual), Ideal `—`, Drift `—` and Retorno `—`. Carteira lists ITUB4 with 40 units, R$ 10,00, R$ 400,00 and `sem alvo` in Alvo, `—` in Ideal and `—` in Drift, plus the `Transferir` action. Fatia reads Fatia na carteira 40,0%, Fatia na classe 40,0%, Alvo na classe `sem alvo`, Drift `—` and no edition strip. The `Transferir` action opens `Transferir do legado` with the destination `Top Dividendos · falta 15 cotas`, the quantity pre-filled `15` and the caption `A custódia não muda: só a atribuição.`; confirming moves the 15 units, closes the dialog and the Carteira row reads 25 units and R$ 250,00. `GET /positions/ITUB4/attribution` afterwards reads custody 100, Top Dividendos 75 and Legado Ações 25; `/portfolio/allocation` reads the Top Dividendos rung R$ 750,00, the Legado Ações bucket R$ 250,00 and the Conciliação caption `R$ 0,00 de custódia fora de qualquer estratégia.` A missing or extra tab, a target column carrying a number or a bar, a donation that changes custody or leaves the row/slice unchanged, or a reconciliation that drops the unattributed caption is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — Estratégias detail · Atribuição (issue [#376](https://github.com/luiznaac/portfolio-2/issues/376))
 
 **Scenario**: the run drives the strategy detail's Atribuição tab — titled "Custódia × atribuição" with its reconciliation caption — on the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the Browser intents; it resets the plan and allocation tables and seeds one report strategy (Top Dividendos, id 9001) and one manual bucket (Legado Ações, id 9002), an open 2027-06 month whose Ações chain targets VALE3, ITUB4, CSNA3 and WEGE3 inside Top Dividendos, and four positions and quotes at R$ 10. The ledger is seeded to exercise every state: VALE3 is fully attributed to Top Dividendos (reconciled), ITUB4 is wholly in the Legado bucket (a chain ticker with nothing in Top Dividendos), CSNA3 has 100 of its 150 units attributed (an attribution gap), and WEGE3 carries 1.200 units attributed against 1.000 in custody (an over-attribution the write path refuses but a custody overwrite can leave behind). Run it independently of the other seeds.

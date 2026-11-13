@@ -21,7 +21,9 @@ src/
                 or its deep link; RebuildHistory — the Ativos · Negócios reconstruction steps
                 (adoption, backfill, custody check); EditionDiffPanel — the edition diff chips
                 shared by the report import drawer and the strategy detail's Edições tab;
-                PeriodRail — the Análise period rail; icons.tsx; *Chip.tsx
+                AttributionTransferModal — the manual Attribution Transfer dialog shared by
+                Alocação and the Manual Strategy detail; PeriodRail — the Análise period rail;
+                icons.tsx; *Chip.tsx
   hooks/        shared stateful UI logic (useClosedMonthSelection.ts; useAnalysisWindow.tsx — the
                 Análise rail's shared window, kept across the three tabs and reset on area re-entry;
                 usePageFilters.ts — a page's filter values, kept for the route element's lifetime and

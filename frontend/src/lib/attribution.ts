@@ -38,6 +38,17 @@ export interface TransferDestination {
   shortfall?: number;
 }
 
+// The report-driven Strategies of one class — the destination rule's first half, shared by the
+// destination list and the editions read that feeds it.
+export function reportStrategiesOfClass(
+  strategies: readonly Strategy[],
+  assetClass: AssetClass,
+): Strategy[] {
+  return strategies.filter(
+    (strategy) => strategy.kind === "REPORT_DRIVEN" && strategy.asset_class === assetClass,
+  );
+}
+
 // The destination rule from the ticket: report-driven, same class, and the latest active Edition
 // gives the ticker a weight above zero. A Strategy with no active Edition contributes nothing.
 export function transferDestinations(
@@ -47,8 +58,7 @@ export function transferDestinations(
   ticker: string,
   plan: OrderPlan | null | undefined,
 ): TransferDestination[] {
-  return strategies
-    .filter((strategy) => strategy.kind === "REPORT_DRIVEN" && strategy.asset_class === assetClass)
+  return reportStrategiesOfClass(strategies, assetClass)
     .filter((strategy) => activeEditionWeighs(editionsByStrategyId.get(strategy.id), ticker))
     .map((strategy) => ({
       strategyId: strategy.id,
