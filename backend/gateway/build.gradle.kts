@@ -11,6 +11,10 @@ dependencies {
     implementation(libs.ktor.jackson)
     implementation("io.ktor:ktor-client-logging:3.3.1")
 
+    implementation(libs.opentelemetry.api)
+    implementation(libs.opentelemetry.ktor)
+
     testImplementation(libs.bundles.testDependencies)
     testImplementation(libs.ktor.client.mock)
+    testImplementation(libs.opentelemetry.sdk.testing)
 }
