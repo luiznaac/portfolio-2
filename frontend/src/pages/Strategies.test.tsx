@@ -31,13 +31,13 @@ vi.mock("../api/client.ts", () => ({
   },
 }));
 
-function renderStrategies(path = "/strategies") {
+function renderStrategies() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={["/strategies"]}>
         <Strategies />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -132,25 +132,6 @@ describe("Estratégias · Todas", () => {
     const link = await screen.findByRole("link", { name: "Top Dividendos" });
     expect(link.getAttribute("href")).toBe("/strategies/1");
     expect(mock.editionsCalls).toBe(0);
-  });
-});
-
-describe("the report import", () => {
-  it("offers no report destination and keeps import disabled when only a bucket exists", async () => {
-    mock.strategies = [{ id: 9, name: "Legado", asset_class: "ACOES", kind: "MANUAL" }];
-
-    const { container } = renderStrategies("/strategies/import");
-    const user = userEvent.setup();
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
-    await user.upload(
-      input,
-      new File(["report"], "Carteira Top Dividendos.pdf", { type: "application/pdf" }),
-    );
-
-    expect(await screen.findByText("Nenhuma estratégia com relatório")).toBeDefined();
-    expect(
-      (screen.getByRole("button", { name: "Importar pendentes" }) as HTMLButtonElement).disabled,
-    ).toBe(true);
   });
 });
 

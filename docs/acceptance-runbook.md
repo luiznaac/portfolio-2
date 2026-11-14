@@ -1307,3 +1307,25 @@ SQL
 ```
 
 `POST /corporate-actions/9003/resolve` with `{"ratio":3}` answers 200 with `status: "APPLIED"`. After that resolve, the page reads 9001 and 9002 in the queue — 9001 with the factor field and the "A exportação não trouxe o fator." reason, 9002 with the "Sem efeito automático: o motor não aplica Subscrição sozinho." reason and the "Marcar como tratada" action — beside a history holding 9003. Resolving 9001 with factor 2 and acknowledging 9002 move both rows into the history without a reload, leaving the queue empty.
+
+## Acceptance scenario — route-by-route IA walk (issue [#395](https://github.com/luiznaac/portfolio-2/issues/395))
+
+**Scenario**: the contract-phase walk of the six-object IA, the browser equivalent of the prototype's 35-route walk. Boot from `docker compose down -v`, then apply the **Performance + Fechamento seed** (above) and the benchmark backfill; no other seed runs. The walk opens `http://localhost:8081/` and visits every route in the new IA, asserting the rendered page head (the single `h1` inside `[data-testid="page-head"]`) or, for the full-screen assistant, the `import-assistant` marker. Run it independently of the scenario seeds.
+
+| Route | Expected head |
+|---|---|
+| `/` and `/portfolio` | Carteira |
+| `/portfolio/allocation` | Carteira |
+| `/portfolio/history` | Carteira |
+| `/portfolio/history/2026-02` | Histórico · fev/2026 |
+| `/strategies` | Estratégias |
+| `/strategies/<id>` and its `carteira` / `edicoes` / `atribuicao` / `fatia` tabs | the strategy's name (the seeded id 1 is Dividendos) |
+| `/ativos`, `/ativos/positions`, `/ativos/positions/PETR4` | Ativos |
+| `/ativos/trades`, `/ativos/fixed`, `/ativos/quotes`, `/ativos/gaps` | Ativos |
+| `/imports`, `/imports/sources`, `/imports/corporate`, `/imports/history` | Importações |
+| `/plan`, `/plan/orders`, `/plan/transfers`, `/plan/close` | Plano / Mês |
+| `/analysis`, `/analysis/income`, `/analysis/tax` | Análise |
+| `/imports/assistant` and `/imports/assistant/<id>` | the `import-assistant` marker (the walk samples id 7; a real resume is exercised by the assistant scenarios above) |
+| `/health` | Health |
+
+A route that fails to render, a missing page head, or a head that disagrees with this table is an automatic red; the evidence names the first failing route. The unit-level equivalent is `frontend/src/App.test.tsx`, which derives the same path set from `App.tsx` with loading mocks.

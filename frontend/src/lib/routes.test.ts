@@ -109,14 +109,6 @@ describe("resolveCrumb", () => {
     expect(resolveCrumb("/portfolio/history/2026-10")?.view).toBe("2026-10");
   });
 
-  it("names a nested route that is not an entity", () => {
-    expect(resolveCrumb("/strategies/import")).toEqual({
-      group: "Posição",
-      object: "Estratégias",
-      view: "Importar relatórios",
-    });
-  });
-
   it("resolves the root path to the landing", () => {
     expect(resolveCrumb("/")?.object).toBe("Carteira");
   });
@@ -148,12 +140,6 @@ describe("activeSub", () => {
     const assets = OBJECTS.find((object) => object.key === "assets");
     if (assets === undefined) throw new Error("assets object missing");
     expect(activeSub(assets, "/ativos/positions/PETR4")?.label).toBe("Posições");
-  });
-
-  it("keeps the list tab active on the nested import route", () => {
-    const strategies = OBJECTS.find((object) => object.key === "strategies");
-    if (strategies === undefined) throw new Error("strategies object missing");
-    expect(activeSub(strategies, "/strategies/import")?.label).toBe("Todas");
   });
 });
 

@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.logstash.logback.encoder)
 
     testImplementation(libs.bundles.testDependencies)
+    testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.opentelemetry.sdk.testing)
 }
 

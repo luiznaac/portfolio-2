@@ -3,9 +3,8 @@ import { ratingLabel } from "../lib/strategy.ts";
 import { Chip } from "./Chip.tsx";
 import { Panel } from "./Panel.tsx";
 
-// The edition diff as console chips — entered, exited and the weight/rating moves. Shared by the
-// report import's review drawer and the strategy detail's Edições tab, so the two review surfaces
-// read the same delta.
+// The edition diff as console chips — entered, exited and the weight/rating moves — shown on the
+// strategy detail's Edições tab.
 export function EditionDiffPanel({ diff }: { diff: EditionDiff }) {
   const hasMoves = diff.entered.length + diff.exited.length + diff.changed.length > 0;
 

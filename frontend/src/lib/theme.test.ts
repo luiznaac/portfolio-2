@@ -63,8 +63,8 @@ describe("theme tokens", () => {
     "--color-surplus": "--color-attention",
   };
 
-  // The legacy vocabulary the un-migrated screens already consume. Each is an alias of its console
-  // name, so a slice can move over without a second palette drifting away from this one.
+  // The compatibility vocabulary the primitive layer consumes. Each is an alias of its console
+  // name, so a call site keeps one meaning without a second palette drifting away from this one.
   const LEGACY: Record<string, string> = {
     "--color-ground": "--color-bg",
     "--color-surface": "--color-panel",
