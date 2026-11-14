@@ -22,7 +22,7 @@ dependencies {
     implementation(libs.ktor.content.negotiation)
     implementation(libs.ktor.jackson)
     implementation(libs.apache.poi)
-    implementation("org.apache.pdfbox:pdfbox:3.0.6")
+    implementation("org.apache.pdfbox:pdfbox:3.0.8")
 
     implementation(libs.opentelemetry.api)
     implementation(libs.opentelemetry.ktor)
