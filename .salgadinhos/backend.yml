@@ -5,4 +5,13 @@ lane: backend
 applied:
   revision: 4
   scaffold_sha: 95b7b3ed91078831644afbda05c68b0258c0577b
-allow: []
+allow:
+  # docs/observability.md §2/§3: the scaffold file maps every non-DomainException failure to
+  # 500; this lane resolves a framework-rejected request through Ktor's own status mapping so an
+  # expected 4xx stays a WARN and never becomes an ERROR record. Remove when the scaffold carries
+  # the fix (environments#101).
+  - entry: http-api/src/main/kotlin/dev/agner/template/httpapi/configuration/RequestTelemetry.kt
+    reason: >-
+      Lane carries the framework-4xx boundary fix (defaultExceptionStatusCode in statusOf and
+      errorTypeOf); the scaffold maps every non-DomainException failure to 500
+      (environments#101).

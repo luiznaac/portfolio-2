@@ -24,7 +24,11 @@ dependencies {
     implementation(libs.apache.poi)
     implementation("org.apache.pdfbox:pdfbox:3.0.6")
 
+    implementation(libs.opentelemetry.api)
+    implementation(libs.opentelemetry.ktor)
+
     testImplementation(libs.bundles.testDependencies)
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.opentelemetry.sdk.testing)
     testImplementation(testFixtures(project(":usecase")))
 }

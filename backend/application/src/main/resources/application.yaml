@@ -27,3 +27,8 @@ gateways:
     host: 'https://bvmf.bmfbovespa.com.br'
 
 app-own-host: 'localhost:8110'
+
+telemetry:
+  service-name: ${OTEL_SERVICE_NAME:portfolio}
+  endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:}
+  console: ${TELEMETRY_CONSOLE:false}

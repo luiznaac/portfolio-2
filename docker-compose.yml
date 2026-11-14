@@ -46,6 +46,11 @@ services:
       - MYSQL_HOST=mysql
       - MYSQL_USER=root
       - MYSQL_PASSWORD=
+      - OTEL_SERVICE_NAME=portfolio
+      # Empty keeps the dev default (http://localhost:4318); the Collector is infra-owned and
+      # never shipped in this image or compose file.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - TELEMETRY_CONSOLE=${TELEMETRY_CONSOLE:-false}
     ports:
       - "${KTOR_PORT:-8110}:8080"   # API      (Ktor)
       - "${WEB_HOST_PORT:-8111}:8081"   # web / UI  (nginx: SPA + /api proxy)

@@ -70,6 +70,10 @@ Renaming an enum whose values are persisted as strings (an Exposed `enumerationB
 
 - [`CODING_STANDARDS.md`](CODING_STANDARDS.md) — "the language-idiom rules the tooling does not enforce"
 
+## Observability
+
+- [`docs/observability.md`](docs/observability.md) — the logging & metrics contract (OTLP, no traces), the request-correlation and redaction rules, the metric catalog, this lane's wiring map and the verification ladder. A diff that emits or configures telemetry is reviewed against it.
+
 ## Testing
 
 Kotest `StringSpec`, MockK, `kotest-extensions-spring`. Reuse `testFixtures` builders rather than hand-rolling fixture objects per test. Existing unit test coverage worth using as a style reference: `BondCalculatorTest`, `BondConsolidationServiceTest`, `BondContributionConsolidatorTest`, `YieldRateServiceTest`, `CheckingAccountConsolidatorTest`, `IndexValueServiceTest`, `TaxServiceTest`, `IOFIncidenceCalculatorTest`, `RendaIncidenceCalculatorTest`.
@@ -127,6 +131,11 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 | `gateways.brapi.token` | `BRAPI_TOKEN` | optional — a paid token lifts brapi's three-month clamp; absence is the free tier, not a boot failure |
 | `gateways.yahoo.host` | fixed (overridable) | `https://query1.finance.yahoo.com` — IBOV fallback (`^BVSP`) for the years brapi cannot serve |
 | `app-own-host` | fixed | `localhost:8110` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
+| `telemetry.service-name` | `OTEL_SERVICE_NAME` | defaults to `portfolio`; the `service.name` resource attribute and the custom meter scope |
+| `telemetry.endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` | dev defaults to `http://localhost:4318`; **required under the prod profile — a missing value fails the boot** |
+| `telemetry.console` | `TELEMETRY_CONSOLE` | dev-only offline switch (`true` swaps both exporters for console exporters); rejected in prod |
+
+The other telemetry env vars (`OTEL_*`, `SERVICE_VERSION`, `LOG_LEVEL`) are the standard contract, read directly from the environment by `TelemetrySettings` rather than remapped through app config keys — see [docs/observability.md](docs/observability.md) §2 "Configuration".
 
 ## Build, run, deploy
 
@@ -145,6 +154,8 @@ Docker: the repo-root `Dockerfile` is a multi-stage build (frontend SPA → `gra
 - Remote: `git@github.com:luiznaac/portfolio-2.git`.
 - **Dependabot is active** — expect `dependabot/gradle/...` branches with auto-merged PRs; don't manually bump a dependency Dependabot already has a PR open for.
 - Commits: short, imperative (`"consolidate in transaction"`, `"Fixed rate calculation"`). Feature branches are named after the domain concept (`bond-full-redemption`, `checking-account`, `yield-service`).
+
+Telemetry deploy gate: the prod profile requires `OTEL_EXPORTER_OTLP_ENDPOINT`, so an image carrying this wiring must not deploy until the host Collector and per-service env exist ([environments#96](https://github.com/luiznaac/environments/issues/96)). The deploy then sets `SPRING_PROFILES_ACTIVE=prod`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME` and `SERVICE_VERSION`; `deploy/supervisord.conf` gives the API program `stopwaitsecs=20` for the shutdown flush.
 
 ## Related repositories
 
