@@ -4,6 +4,6 @@ source: react
 lane: frontend
 name: portfolio
 applied:
-  revision: 4
-  scaffold_sha: 95b7b3ed91078831644afbda05c68b0258c0577b
+  revision: 5
+  scaffold_sha: 0bb394790a02f5696acc58cf842ff2b9cdd484fb
 allow: []
