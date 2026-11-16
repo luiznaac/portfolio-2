@@ -11,14 +11,14 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.YearMonth
 
-// The XP report the assistant's acceptance scenario uploads is committed under docs/acceptance, so
+// The XP report the assistant's acceptance scenario uploads is committed under test resources, so
 // it is pinned against the same resolver the running app uses. A PDF that stops being claimed, or
 // whose staged entries drift from the enumerated diff, fails here instead of as a red browser run.
 class XpAcceptanceFixtureTest : DescribeSpec({
 
     describe("the committed XP report acceptance fixture") {
 
-        val fixture = acceptanceDocsFixture("xp-relatorio-2026-10.pdf")
+        val fixture = loadAcceptanceFixture("xp-relatorio-2026-10.pdf")
         val resolver = StrategyReportParserResolver(
             listOf(
                 XpEquityCarteiraParser(),
@@ -27,7 +27,7 @@ class XpAcceptanceFixtureTest : DescribeSpec({
                 XpGenericReportParser(),
             ),
         )
-        val report = resolver.resolve(fixture.name, fixture.readBytes())
+        val report = resolver.resolve(fixture.name, fixture.bytes)
 
         it("is claimed by the equity layout parser and names its reference month") {
             report.parser shouldBe "XpEquityCarteira"

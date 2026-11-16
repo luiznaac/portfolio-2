@@ -1,8 +1,8 @@
 # AGENTS.md — portfolio-2 backend (Gradle root project name: `portfolio`)
 
-Development guidelines for anyone (human, agent, or tool) working in `backend/`. This is the most mature and actively developed project in the `luiznaac` personal family — treat its conventions as the reference implementation of the shared Ktor+Spring+Exposed architecture; when [chameidor](../../chameidor/AGENTS.md) and this repo disagree on a convention, this one is more likely to be the up-to-date version.
+Development guidelines for anyone (human, agent, or tool) working in `backend/`. This is the most mature and actively developed project in the `luiznaac` personal family — treat its conventions as the reference implementation of the shared Ktor+Spring+Exposed architecture; when [chameidor](https://github.com/luiznaac/chameidor/blob/master/AGENTS.md) and this repo disagree on a convention, this one is more likely to be the up-to-date version.
 
-> This repo is a monorepo: `backend/` (this Gradle project) + `frontend/` (a React SPA that consumes the HTTP API — see [../frontend/README.md](../frontend/README.md)). The repo root holds the combined `Dockerfile`/`docker-compose.yml`, the `deploy/` templates and a script-only `package.json` task runner. **Cross-cutting rule:** `frontend/src/api/types.ts` is a hand-maintained mirror of the DTOs the controllers in `http-api/.../controller/` serialize (Jackson `SNAKE_CASE`, see `usecase/.../configuration/JsonMapper.kt`). Change a request/response shape on one side and update the other in the same commit. The domain-exception error body is pinned by the shared fixture `contracts/error-response.json` instead, asserted by `DomainExceptionContractTest`.
+> This repo is a monorepo: `backend/` (this Gradle project) + `frontend/` (a React SPA that consumes the HTTP API — see [../frontend/AGENTS.md](../frontend/AGENTS.md)). The repo root holds the combined `Dockerfile`/`docker-compose.yml`, the `deploy/` templates and a script-only `package.json` task runner. **Cross-cutting rule:** `frontend/src/api/types.ts` is a hand-maintained mirror of the DTOs the controllers in `http-api/.../controller/` serialize (Jackson `SNAKE_CASE`, see `usecase/.../configuration/JsonMapper.kt`). Change a request/response shape on one side and update the other in the same commit. The domain-exception error body is pinned by the shared fixture `contracts/error-response.json` instead, asserted by `DomainExceptionContractTest`.
 
 ## Code map
 
@@ -17,11 +17,11 @@ portfolio-2 tracks and consolidates a personal investment portfolio, focused on 
 - **Brazilian index rates** (CDI/SELIC) fetched from the Central Bank of Brazil (BACEN) API via `BacenGateway`, used to price floating-rate bonds.
 - **Tax calculation** — Brazilian IOF (financial transaction tax, front-loaded and decaying with holding time) and Renda (income tax, bracket depends on holding time), via `IOFIncidenceCalculator`/`RendaIncidenceCalculator`.
 - **Reporting** — generates XLSX/PDF statements and uploads them.
-- **Scheduling** — registers its own periodic consolidation/reporting jobs with **[chameidor](../../chameidor/AGENTS.md)** (a separate service in this same family) via `ChameidorGateway`, instead of running its own scheduler.
+- **Scheduling** — registers its own periodic consolidation/reporting jobs with **[chameidor](https://github.com/luiznaac/chameidor/blob/master/AGENTS.md)** (a separate service in this same family) via `ChameidorGateway`, instead of running its own scheduler.
 
 ## Architecture
 
-Same layered multi-module shape and wiring model as chameidor — read [chameidor/AGENTS.md](../../chameidor/AGENTS.md)'s "Runtime wiring model" first if you haven't; it is not repeated in full here. Summary:
+Same layered multi-module shape and wiring model as chameidor — read [chameidor/AGENTS.md](https://github.com/luiznaac/chameidor/blob/master/AGENTS.md)'s "Runtime wiring model" first if you haven't; it is not repeated in full here. Summary:
 
 ```
 application  →  http-api  →  usecase  ←  persistence
@@ -161,4 +161,4 @@ Telemetry deploy gate: the prod profile requires `OTEL_EXPORTER_OTLP_ENDPOINT`, 
 
 ## Related repositories
 
-Uses [chameidor](../../chameidor/AGENTS.md) as its scheduling backend and was generated from the same [environments/kotlin](../../environments/AGENTS.md) template. If you introduce a new cross-cutting convention here that should also apply to chameidor or the template, call it out explicitly rather than letting the three silently drift apart.
+Uses [chameidor](https://github.com/luiznaac/chameidor/blob/master/AGENTS.md) as its scheduling backend and was generated from the same [environments/kotlin](https://github.com/luiznaac/environments/blob/master/AGENTS.md) template. If you introduce a new cross-cutting convention here that should also apply to chameidor or the template, call it out explicitly rather than letting the three silently drift apart.
