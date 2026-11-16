@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.catalogEntry
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -68,6 +69,26 @@ class ClassificationQueueServiceTest : StringSpec({
                 reason = UnclassifiedReason.UNHANDLED_BDI_CODE,
             ),
         )
+    }
+
+    "presents a held unclassified paper under its canonical ticker" {
+        val aliased = ClassificationQueueService(
+            positions,
+            catalog,
+            tickerAliases(rename("OLD3", "NEW3")),
+        )
+        coEvery { positions.fetchAll() } returns listOf(position("NEW3", "5"))
+        coEvery { catalog.fetchAll() } returns listOf(
+            catalogEntry(
+                ticker = "OLD3",
+                shortName = "OLD",
+                bdiType = "99",
+                assetKind = AssetKind.UNKNOWN,
+                assetClass = null,
+            ),
+        )
+
+        aliased.fetchQueue().single().ticker shouldBe "NEW3"
     }
 
     "counts an override-only ticker as classified and skips a ticker the book does not hold" {
