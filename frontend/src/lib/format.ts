@@ -1,7 +1,7 @@
 // Pure formatting helpers — no React imports here (see AGENTS.md). This is what gets unit-tested
 // in src/lib/**, since these repos don't have component-render tests yet.
 
-import type { TradeSide, TradeSource } from "../api/types.ts";
+import type { TargetCurrency, TradeSide, TradeSource } from "../api/types.ts";
 
 export function formatHealthStatus(isHealthy: boolean): string {
   return isHealthy ? "healthy" : "unhealthy";
@@ -18,12 +18,18 @@ export function plural(count: number, singular: string, many: string): string {
   return `${count} ${count === 1 ? singular : many}`;
 }
 
-const CURRENCY = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const CURRENCIES = new Map<TargetCurrency, Intl.NumberFormat>();
 
 // Intl renders the pt-BR currency with a non-breaking space after the symbol; normalise it to a
-// regular space so the string is what it looks like.
-export function formatCurrency(value: number): string {
-  return CURRENCY.format(value).replace(/\u00a0/g, " ");
+// regular space so the string is what it looks like. An absent currency reads as reais, the XP
+// reports' default.
+export function formatCurrency(value: number, currency: TargetCurrency = "BRL"): string {
+  let formatter = CURRENCIES.get(currency);
+  if (formatter === undefined) {
+    formatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency });
+    CURRENCIES.set(currency, formatter);
+  }
+  return formatter.format(value).replace(/\u00a0/g, " ");
 }
 
 export function formatTradeSide(side: TradeSide): string {

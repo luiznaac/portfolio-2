@@ -194,7 +194,7 @@ _UI:_ "Edição"
 _Avoid_: Report (the PDF artifact), import (the act)
 
 **Edition Entry**:
-A line inside an Edition: ticker, weight, rating and target price.
+A line inside an Edition: ticker, weight, rating and target price, plus the currency that price is quoted in (reais by default, dollars when the report quotes a foreign listing).
 _UI:_ —
 _Avoid_: Row, position, target (a Target is a chain percentage)
 

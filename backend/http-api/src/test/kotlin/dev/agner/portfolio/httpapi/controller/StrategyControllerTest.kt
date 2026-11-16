@@ -22,6 +22,7 @@ import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyHolding
 import dev.agner.portfolio.usecase.strategy.model.StrategyHoldings
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
+import dev.agner.portfolio.usecase.strategy.model.TargetCurrency
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.forms.MultiPartFormDataContent
@@ -274,7 +275,7 @@ class StrategyControllerTest : DescribeSpec({
                         {
                           "reference_month": "2026-09",
                           "entries": [
-                            {"ticker":"PETR4","weight":12.5,"rating":"BUY","target_price":63.00,"do_not_trade":false}
+                            {"ticker":"PETR4","weight":12.5,"rating":"BUY","target_price":63.00,"target_currency":"BRL","do_not_trade":false}
                           ]
                         }
                         """.trimIndent(),
@@ -315,6 +316,7 @@ private val entry = EditionEntry(
     weight = BigDecimal("12.5"),
     rating = Rating.BUY,
     targetPrice = BigDecimal("63.00"),
+    targetCurrency = TargetCurrency.BRL,
 )
 
 private val edition = EditionDetail(
