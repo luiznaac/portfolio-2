@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.strategy.InvalidStrategyReportException
 import dev.agner.portfolio.usecase.strategy.UnsupportedStrategyReportException
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.Rating
+import dev.agner.portfolio.usecase.strategy.model.TargetCurrency
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -28,6 +29,7 @@ class XpStrategyReportParserTest : StringSpec({
                 weight = BigDecimal("12.5"),
                 rating = Rating.BUY,
                 targetPrice = BigDecimal("63.00"),
+                targetCurrency = TargetCurrency.BRL,
             )
         report.entries.first { it.ticker == "B3SA3" } shouldBe
             EditionEntry(
@@ -35,6 +37,7 @@ class XpStrategyReportParserTest : StringSpec({
                 weight = BigDecimal("10.0"),
                 rating = Rating.NEUTRAL,
                 targetPrice = BigDecimal("16.00"),
+                targetCurrency = TargetCurrency.BRL,
             )
         weightSum(report) shouldBe BigDecimal("100.0")
     }
@@ -93,6 +96,28 @@ class XpStrategyReportParserTest : StringSpec({
             .parser shouldBe "XpGeneric"
     }
 
+    "the equity parser reads a row whose target price is quoted in dollars" {
+        val page = """
+            Carteira Top Ações 1 de novembro de 2026
+            Companhia Ticker Peso Rating Preço-Alvo
+            Petrobras PETR4 92,5% Compra R$ 63,00
+            JBS JBSS32 7,5% Compra US$ 20,30
+        """.trimIndent()
+
+        val report = equity.parse("top-acoes.pdf", listOf(page))
+
+        report.entries.map { it.ticker } shouldBe listOf("PETR4", "JBSS32")
+        report.entries.first { it.ticker == "JBSS32" } shouldBe
+            EditionEntry(
+                ticker = "JBSS32",
+                weight = BigDecimal("7.5"),
+                rating = Rating.BUY,
+                targetPrice = BigDecimal("20.30"),
+                targetCurrency = TargetCurrency.USD,
+            )
+        weightSum(report) shouldBe BigDecimal("100.0")
+    }
+
     "a report whose weights do not sum to 100 fails loudly" {
         val page = """
             Carteira Top Dividendos 1 de setembro de 2026
@@ -132,6 +157,15 @@ class XpStrategyReportParserTest : StringSpec({
             "DEFY3" to BigDecimal("35.5"),
             "GHIW11" to BigDecimal("39.5"),
         )
+    }
+
+    "the generic fallback keeps a dollar-quoted target price's currency" {
+        val page = "Carteira Nova de setembro de 2026\nABCX11 100% Compra US$ 20,30"
+
+        val entry = generic.parse("unknown.pdf", listOf(page)).entries.single()
+
+        entry.targetPrice shouldBe BigDecimal("20.30")
+        entry.targetCurrency shouldBe TargetCurrency.USD
     }
 
     "the resolver dispatches each real layout to its parser" {

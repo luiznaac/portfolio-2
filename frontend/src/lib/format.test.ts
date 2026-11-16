@@ -59,6 +59,10 @@ describe("formatCurrency", () => {
   it("renders zero", () => {
     expect(formatCurrency(0)).toBe("R$ 0,00");
   });
+
+  it("renders a dollar amount with its own symbol", () => {
+    expect(formatCurrency(20.3, "USD")).toBe("US$ 20,30");
+  });
 });
 
 describe("formatIsoDate", () => {

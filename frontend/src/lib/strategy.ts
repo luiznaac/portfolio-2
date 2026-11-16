@@ -15,6 +15,7 @@ import type {
   StrategyAllocation,
   StrategyKind,
   StrategyPerformance,
+  TargetCurrency,
 } from "../api/types.ts";
 import { distanceText, formatPoints, formatTarget } from "./allocation.ts";
 import { formatCurrency, formatPercent, formatSignedPercent } from "./format.ts";
@@ -423,14 +424,22 @@ export interface EditionReviewRow {
   weight: number;
   rating?: Rating;
   targetPrice?: number;
+  targetCurrency?: TargetCurrency;
   change: EditionEntryChange;
+}
+
+// An entry with no currency reads as reais, the reports' default: a legacy row and a freshly
+// imported "BRL" row are the same price, not a move.
+function effectiveCurrency(currency: TargetCurrency | undefined): TargetCurrency {
+  return currency ?? "BRL";
 }
 
 function entryChanged(before: EditionEntry, after: EditionEntry): boolean {
   return (
     before.weight !== after.weight ||
     before.rating !== after.rating ||
-    before.target_price !== after.target_price
+    before.target_price !== after.target_price ||
+    effectiveCurrency(before.target_currency) !== effectiveCurrency(after.target_currency)
   );
 }
 
@@ -440,6 +449,7 @@ export function editionReviewRows(staged: Edition, active?: Edition): EditionRev
     weight: row.weight,
     rating: row.rating,
     targetPrice: row.targetPrice,
+    targetCurrency: row.targetCurrency,
     change: row.change,
   }));
 }
@@ -456,6 +466,8 @@ export interface EditionDeltaRow {
   ratingBefore?: Rating;
   targetPrice?: number;
   targetPriceBefore?: number;
+  targetCurrency?: TargetCurrency;
+  targetCurrencyBefore?: TargetCurrency;
   doNotTrade: boolean;
   doNotTradeBefore: boolean;
   change: EditionEntryChange;
@@ -484,6 +496,8 @@ export function editionDeltaRows(staged: Edition, active?: Edition): EditionDelt
       ratingBefore: before?.rating,
       targetPrice: entry.target_price,
       targetPriceBefore: before?.target_price,
+      targetCurrency: entry.target_currency,
+      targetCurrencyBefore: before?.target_currency,
       doNotTrade: entry.do_not_trade,
       doNotTradeBefore: before?.do_not_trade ?? false,
       change,
@@ -499,7 +513,11 @@ export function editionDeltaSummary(rows: EditionDeltaRow[]): EditionDeltaSummar
   return {
     weightChanges: moved.filter((row) => row.weightBefore !== row.weight).length,
     ratingChanges: moved.filter((row) => row.ratingBefore !== row.rating).length,
-    targetPriceChanges: moved.filter((row) => row.targetPriceBefore !== row.targetPrice).length,
+    targetPriceChanges: moved.filter(
+      (row) =>
+        row.targetPriceBefore !== row.targetPrice ||
+        effectiveCurrency(row.targetCurrencyBefore) !== effectiveCurrency(row.targetCurrency),
+    ).length,
     alerts: rows.filter((row) => row.doNotTradeFlip).length,
   };
 }

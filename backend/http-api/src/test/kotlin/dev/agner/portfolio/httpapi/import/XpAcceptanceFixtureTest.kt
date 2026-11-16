@@ -41,14 +41,15 @@ class XpAcceptanceFixtureTest : DescribeSpec({
                     entry.weight.plain(),
                     entry.rating,
                     entry.targetPrice?.plain(),
+                    entry.targetCurrency?.name,
                     entry.doNotTrade,
                 )
             } shouldBe listOf(
-                listOf("PETR4", "25", Rating.BUY, "60", false),
-                listOf("VALE3", "22.5", Rating.NEUTRAL, "85", false),
-                listOf("ITUB4", "20", Rating.SELL, "30", false),
-                listOf("EGIE3", "20", Rating.BUY, "52", false),
-                listOf("CXSE3", "12.5", Rating.BUY, "20", false),
+                listOf("PETR4", "25", Rating.BUY, "60", "BRL", false),
+                listOf("VALE3", "22.5", Rating.NEUTRAL, "85", "BRL", false),
+                listOf("ITUB4", "20", Rating.SELL, "30", "BRL", false),
+                listOf("EGIE3", "20", Rating.BUY, "52", "BRL", false),
+                listOf("CXSE3", "12.5", Rating.BUY, "20", "BRL", false),
             )
         }
     }
