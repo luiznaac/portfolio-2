@@ -109,6 +109,7 @@ function trade(): Trade {
   return {
     id: 1,
     ticker: "PETR4",
+    original_ticker: "PETR4",
     date: "2026-10-02",
     venue: "VISTA",
     side: "BUY",

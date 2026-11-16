@@ -1,7 +1,6 @@
 package dev.agner.portfolio.usecase.listedasset
 
 import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
-import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.DomainException
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
@@ -18,6 +17,7 @@ import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
@@ -33,6 +33,7 @@ class AttributionService(
     private val positions: IPositionRepository,
     private val strategies: IStrategyRepository,
     private val catalog: ICatalogRepository,
+    private val aliases: TickerAliasResolver,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -41,13 +42,24 @@ class AttributionService(
     // other reads that join it.
     suspend fun fetchSlicesByTicker(): AttributionSlicesByTicker {
         val names = strategies.fetchAll().associate { it.id to it.name }
-        return attributions.fetchAll()
+        val rows = attributions.fetchAll()
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        return rows
             .mapNotNull { row ->
                 names[row.strategyId]?.let { name ->
-                    row.ticker to AttributionSlice(row.strategyId, name, row.quantity)
+                    canonicalByTicker.getValue(row.ticker) to AttributionSlice(row.strategyId, name, row.quantity)
                 }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            // Two stored rows can collapse onto one canonical slice (a rename before the slices
+            // were remapped); the ledger presents one slice per (ticker, strategy), summing them.
+            .mapValues { (_, slices) ->
+                slices
+                    .groupBy { it.strategyId }
+                    .map { (strategyId, group) ->
+                        AttributionSlice(strategyId, group.first().strategyName, group.sumOf { it.quantity })
+                    }
+            }
     }
 
     // The whole ledger keyed by (strategy name, ticker), the way the order engine's funding pass
@@ -55,7 +67,7 @@ class AttributionService(
     suspend fun fetchLedger(): Map<StrategyTicker, BigDecimal> = fetchSlicesByTicker().toLedger()
 
     suspend fun fetchSummary(ticker: String): AttributionSummary? {
-        val normalized = ticker.normalizedTicker()
+        val normalized = aliases.canonical(ticker)
         val position = positions.fetchBy(normalized) ?: return null
         return summarize(normalized, position, attributions.fetchBy(normalized))
     }
@@ -66,7 +78,7 @@ class AttributionService(
         if (creation.quantity <= BigDecimal.ZERO) {
             throw InvalidAttributionException("quantity must be positive, received ${creation.quantity}")
         }
-        return upsertSlice(normalized = ticker.normalizedTicker(), creation = creation)
+        return upsertSlice(normalized = aliases.canonical(ticker), creation = creation)
     }
 
     // The one Attribution Transfer operation: the source slice gives up units, the destination slice
@@ -80,11 +92,11 @@ class AttributionService(
         if (creation.fromStrategyId == creation.toStrategyId) {
             throw InvalidTransferException("source and destination must be different strategies")
         }
-        return moveSlice(normalized = ticker.normalizedTicker(), creation = creation)
+        return moveSlice(normalized = aliases.canonical(ticker), creation = creation)
     }
 
     suspend fun removeSlice(ticker: String, strategyId: Int): AttributionSummary? {
-        val normalized = ticker.normalizedTicker()
+        val normalized = aliases.canonical(ticker)
         return transaction.execute {
             val position = positions.fetchBy(normalized)
             if (position == null) {

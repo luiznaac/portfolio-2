@@ -13,10 +13,13 @@ import dev.agner.portfolio.usecase.portfolio.AllocationService
 import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.TargetChainCalculator
 import dev.agner.portfolio.usecase.portfolio.model.Allocation
+import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.portfolio.targetedTickers
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.coroutines.awaitAll
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -37,12 +40,13 @@ class OrderPlanService(
     private val strategies: StrategyService,
     private val attributions: AttributionService,
     private val catalog: CatalogService,
+    private val aliases: TickerAliasResolver,
 ) {
 
     // Null when no month is open — the edge maps that to the 404 the current-month reads promise.
     suspend fun computePlan(phase: OrderPlanPhase): OrderPlan? {
         val current = months.fetchCurrent() ?: return null
-        val targets = current.targets.normalized()
+        val targets = canonicalized(current.targets.normalized())
         val positionByTicker = positions.fetchAll().associate { it.ticker to it.quantity }
         val ledger = attributions.fetchLedger()
         val manualNames = strategies.fetchManualNames()
@@ -109,6 +113,23 @@ class OrderPlanService(
         } else {
             funded
         }
+    }
+
+    // A Target chain names tickers, and a chain saved before a rename still names the old code. The
+    // plan keys every rung on the paper's canonical code, so two leaves for one paper merge into one
+    // weight rather than splitting the same position across two candidates.
+    private suspend fun canonicalized(targets: Targets): Targets {
+        val canonicalByTicker = aliases.canonicalAll(targets.tickers.map { it.ticker })
+        val merged = targets.tickers
+            .groupBy { it.strategy to canonicalByTicker.getValue(it.ticker) }
+            .map { entry ->
+                TickerTarget(
+                    strategy = entry.key.first,
+                    ticker = entry.key.second,
+                    percentage = entry.value.sumOf { it.percentage },
+                )
+            }
+        return targets.copy(tickers = merged)
     }
 
     // The whole book's Actual is exactly the holdings the Capital is not sitting in cash; the

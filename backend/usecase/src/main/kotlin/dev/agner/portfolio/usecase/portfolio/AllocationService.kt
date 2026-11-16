@@ -18,6 +18,7 @@ import dev.agner.portfolio.usecase.strategy.model.AttributionLedger
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.coroutines.awaitAll
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
@@ -37,6 +38,7 @@ class AllocationService(
     private val bondPositions: BondPositionService,
     private val strategies: IStrategyRepository,
     private val attributions: IAttributionRepository,
+    private val aliases: TickerAliasResolver,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
@@ -58,13 +60,18 @@ class AllocationService(
         val strategyIdsByName = strategyList.associate { it.name to it.id }
         // The ledger is keyed by strategy name because that is how the Target chain names its
         // strategies; the id resolves the name and the kind in one read.
-        val ledger: AttributionLedger = attributions.fetchAll()
+        val attributionRows = attributions.fetchAll()
+        val canonicalByTicker = aliases.canonicalAll(attributionRows.map { it.ticker })
+        val ledger: AttributionLedger = attributionRows
             .mapNotNull { row ->
                 strategyById[row.strategyId]?.let { strategy ->
-                    StrategyTicker(strategy.name, row.ticker) to row.quantity
+                    StrategyTicker(strategy.name, canonicalByTicker.getValue(row.ticker)) to row.quantity
                 }
             }
-            .toMap()
+            // Two stored rows can collapse onto one canonical slice (a rename before the slices were
+            // remapped); the ledger sums them instead of dropping one.
+            .groupBy { it.first }
+            .mapValues { (_, rows) -> rows.sumOf { it.second } }
         val manual = strategyList
             .filter { it.kind == StrategyKind.MANUAL }
             .map { ManualStrategyHolding(it.name, it.assetClass) }

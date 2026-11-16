@@ -24,9 +24,11 @@ import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -60,6 +62,7 @@ class AllocationServiceTest : StringSpec({
         bondPositions,
         strategies,
         attributions,
+        tickerAliases(),
     )
 
     beforeTest { clearAllMocks() }
@@ -81,6 +84,35 @@ class AllocationServiceTest : StringSpec({
         allocation.actual.plain() shouldBe "1000"
         val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
         acoes.actual.plain() shouldBe "1000"
+        acoes.manual!!.actual.plain() shouldBe "400"
+        acoes.outside.actual.plain() shouldBe "600"
+    }
+
+    "maps an attribution row stored under a retired code onto the canonical position" {
+        val aliased = AllocationService(
+            months,
+            positions,
+            catalog,
+            quotes,
+            bonds,
+            bondPositions,
+            strategies,
+            attributions,
+            tickerAliases(rename("OLD3", "NEW3")),
+        )
+        coEvery { months.fetchCurrent() } returns null
+        coEvery { positions.fetchAll() } returns listOf(Position("NEW3", BigDecimal("100"), BigDecimal("10")))
+        coEvery { catalog.fetchBy("NEW3") } returns catalogEntry
+        coEvery { quotes.latestQuote("NEW3") } returns quote("2026-10-13", "10")
+        coEvery { bonds.fetchAll() } returns emptySet()
+        coEvery { strategies.fetchAll() } returns listOf(manualStrategy)
+        coEvery { attributions.fetchAll() } returns listOf(
+            Attribution("OLD3", manualStrategy.id, BigDecimal("40")),
+        )
+
+        val allocation = aliased.fetchCurrent()
+
+        val acoes = allocation.classes.single { it.assetClass == AssetClass.ACOES }
         acoes.manual!!.actual.plain() shouldBe "400"
         acoes.outside.actual.plain() shouldBe "600"
     }
@@ -197,6 +229,7 @@ class AllocationServiceTest : StringSpec({
             bondPositions,
             strategies,
             attributions,
+            tickerAliases(),
             fixedClock,
         )
         coEvery { months.fetchCurrent() } returns currentMonth

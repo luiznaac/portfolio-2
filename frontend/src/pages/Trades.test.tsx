@@ -89,9 +89,11 @@ vi.mock("../api/client.ts", () => ({
 }));
 
 function trade(overrides: Partial<Trade>): Trade {
+  const ticker = overrides.ticker ?? "PETR4";
   return {
     id: 1,
-    ticker: "PETR4",
+    ticker,
+    original_ticker: ticker,
     date: "2026-10-01",
     venue: "VISTA",
     side: "BUY",
@@ -169,6 +171,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Ativos · Negócios ledger", () => {
+  it("shows the canonical ticker with the imported code as provenance", async () => {
+    mock.trades = [trade({ id: 1, ticker: "NEW3", original_ticker: "OLD3" })];
+    renderTrades();
+
+    expect(await screen.findByText("NEW3")).toBeTruthy();
+    expect(screen.getByTestId("trade-provenance").textContent).toContain("OLD3");
+  });
+
   it("renders the ledger columns and narrows the request, count and total through the filter bar", async () => {
     mock.trades = [
       trade({ id: 1, ticker: "PETR4", date: "2026-10-01", side: "BUY" }),

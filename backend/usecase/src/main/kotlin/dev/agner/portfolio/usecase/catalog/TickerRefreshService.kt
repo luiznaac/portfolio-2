@@ -16,6 +16,7 @@ import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.quotes.MonthlyCloses
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.time.Clock
@@ -31,6 +32,7 @@ class TickerRefreshService(
     private val source: ICotahistSource,
     private val positions: IPositionRepository,
     private val trades: ITradeRepository,
+    private val aliases: TickerAliasResolver,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
@@ -39,7 +41,12 @@ class TickerRefreshService(
             .filter { it.quantity.signum() > 0 }
             .mapToSet { it.ticker }
         val ledger = trades.fetchAll()
-        val ledgerTickers = ledger.mapToSet { it.ticker }
+        // The annual files are stored for every code the ledger has traded the paper under, so a
+        // rename does not lose the old code's monthly closes.
+        val ledgerTickers = ledger.map { it.ticker }
+            .distinct()
+            .flatMap { aliases.aliasesOf(it) }
+            .toSet()
 
         val daily = fetchDaily()
         val catalogCount = if (daily.rows.isEmpty()) 0 else catalogService.refresh(daily.rows)
@@ -54,7 +61,7 @@ class TickerRefreshService(
         val failed = listOfNotNull(daily.failure) + yearLoads.mapNotNull { it.failure } + tickerFailures
 
         val catalogByTicker = catalogService.fetchAll().associateBy { it.ticker }
-        val latestTickers = daily.rows.mapToSet { it.ticker }
+        val latestTickers = aliases.canonicalAll(daily.rows.map { it.ticker }).values.toSet()
         val unclassified = heldTickers.sorted().mapNotNull { ticker ->
             classifyGap(ticker, catalogByTicker[ticker], latestTickers)
         }

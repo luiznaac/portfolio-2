@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeCreation
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
+import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
@@ -30,7 +31,7 @@ class TradeController(
             get("/ledger") {
                 val cursor = call.request.queryParameters["cursor"]
                 val filter = TradeLedgerFilter(
-                    ticker = call.request.queryParameters["ticker"],
+                    ticker = call.request.queryParameters["ticker"]?.let(TradeTickerFilter::Search),
                     from = call.optionalDate("from"),
                     to = call.optionalDate("to"),
                     side = call.optionalSide(),

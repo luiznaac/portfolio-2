@@ -32,14 +32,18 @@ import dev.agner.portfolio.usecase.portfolio.model.StrategyTarget
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.TickerTarget
 import dev.agner.portfolio.usecase.portfolio.repository.ITargetRepository
+import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.sell
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
+import dev.agner.portfolio.usecase.tickerAliases
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -300,6 +304,28 @@ class PerformanceServiceTest : StringSpec({
         series.ledgerEmpty shouldBe false
     }
 
+    "computed performance stitches a rename into one paper" {
+        val series = service(
+            snapshots = emptyList(),
+            targets = targets(),
+            quotes = listOf(
+                Quote("OLD3", LocalDate.parse("2026-01-30"), BigDecimal("10"), QuoteSource.COTAHIST),
+                Quote("NEW3", LocalDate.parse("2026-02-27"), BigDecimal("12"), QuoteSource.COTAHIST),
+            ),
+            trades = listOf(
+                buy(id = 1, ticker = "OLD3", date = "2026-01-10", quantity = "100", unitPrice = "10"),
+                sell(id = 2, ticker = "NEW3", date = "2026-02-10", quantity = "100", unitPrice = "12"),
+            ),
+            aliases = tickerAliases(rename("OLD3", "NEW3")),
+        ).fetchSeries()
+
+        series.months.map { it.period } shouldBe
+            listOf("2026-01", "2026-02").map { YearMonth.parse(it) }
+        // January's value prices the old code's close; February's sale leaves nothing held.
+        series.months.first().decomposition.valueEnd.compareTo(BigDecimal("1000")) shouldBe 0
+        series.months.last().decomposition.valueEnd.compareTo(BigDecimal.ZERO) shouldBe 0
+    }
+
     "marks a computed month partial when a held ticker has no close" {
         val series = service(
             snapshots = emptyList(),
@@ -355,6 +381,7 @@ private fun service(
     strategies: List<Strategy> = strategyCatalog,
     trades: List<Trade> = emptyList(),
     incomes: List<Income> = emptyList(),
+    aliases: TickerAliasResolver = tickerAliases(),
     clock: Clock = Clock.fixed(Instant.parse("2026-03-01T12:00:00Z"), ZoneOffset.UTC),
 ): PerformanceService {
     val snapshotRepository = mockk<ISnapshotRepository>(relaxed = true)
@@ -386,7 +413,7 @@ private fun service(
     return PerformanceService(
         snapshots = snapshotRepository,
         catalog = catalog,
-        quotes = quoteRepository,
+        quotes = QuoteService(quoteRepository, aliases),
         targets = targetRepository,
         strategies = strategyRepository,
         benchmarks = gateway,
@@ -394,6 +421,7 @@ private fun service(
         incomes = incomeRepository,
         corporateActions = corporateActionRepository,
         gaps = gapRepository,
+        aliases = aliases,
         clock = clock,
     )
 }

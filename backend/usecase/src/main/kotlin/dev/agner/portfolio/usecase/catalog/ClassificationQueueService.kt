@@ -4,9 +4,11 @@ import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.model.ClassificationQueueItem
 import dev.agner.portfolio.usecase.catalog.model.UNCATALOGED_BDI_TYPE
 import dev.agner.portfolio.usecase.catalog.model.UnclassifiedReason
+import dev.agner.portfolio.usecase.catalog.model.canonicalEntryByTicker
 import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import org.springframework.stereotype.Service
 
 // The held-unclassified residue the bulk classification modal reads: every held ticker with no
@@ -18,10 +20,13 @@ import org.springframework.stereotype.Service
 class ClassificationQueueService(
     private val positions: IPositionRepository,
     private val catalog: ICatalogRepository,
+    private val aliases: TickerAliasResolver,
 ) {
 
     suspend fun fetchQueue(): List<ClassificationQueueItem> {
-        val entries = catalog.fetchAll().associateBy { it.ticker }
+        val rawEntries = catalog.fetchAll()
+        val entryCanonical = aliases.canonicalAll(rawEntries.map { it.ticker })
+        val entries = rawEntries.canonicalEntryByTicker(entryCanonical)
         return positions.fetchAll()
             .filter { it.quantity.signum() > 0 }
             .filter { entries[it.ticker]?.effectiveAssetClass == null }

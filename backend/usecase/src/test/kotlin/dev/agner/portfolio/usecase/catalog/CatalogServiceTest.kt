@@ -7,6 +7,8 @@ import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.catalogEntry
 import dev.agner.portfolio.usecase.cotahistRow
+import dev.agner.portfolio.usecase.rename
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -19,7 +21,7 @@ import kotlinx.datetime.LocalDate
 
 class CatalogServiceTest : StringSpec({
     val repository = mockk<ICatalogRepository>(relaxed = true)
-    val service = CatalogService(repository, CLOCK)
+    val service = CatalogService(repository, tickerAliases(), CLOCK)
 
     beforeTest { clearAllMocks() }
 
@@ -62,6 +64,13 @@ class CatalogServiceTest : StringSpec({
 
         captured.captured.single().assetKind shouldBe AssetKind.UNKNOWN
         captured.captured.single().assetClass shouldBe null
+    }
+
+    "fetchBy resolves a retired code to its canonical catalog row" {
+        val aliased = CatalogService(repository, tickerAliases(rename("OLD3", "NEW3")), CLOCK)
+        coEvery { repository.fetchBy("NEW3") } returns catalogEntry(ticker = "NEW3")
+
+        aliased.fetchBy("OLD3") shouldBe catalogEntry(ticker = "NEW3")
     }
 
     "fetchUnclassified reports the tickers with no class, including a missing row" {

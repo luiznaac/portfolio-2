@@ -15,6 +15,7 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerPage
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
+import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
@@ -76,7 +77,7 @@ class TradeLedgerTest : StringSpec({
         )
         val service = getBean<TradeService>()
 
-        service.fetchLedger(TradeLedgerFilter(ticker = "petr"))
+        service.fetchLedger(TradeLedgerFilter(ticker = TradeTickerFilter.Search("petr")))
             .shouldHold(listOf("PETR4", "PETR4"))
         service.fetchLedger(
             TradeLedgerFilter(from = LocalDate.parse("2026-10-02"), to = LocalDate.parse("2026-10-03")),

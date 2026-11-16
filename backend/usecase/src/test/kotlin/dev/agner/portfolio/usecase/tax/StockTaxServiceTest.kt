@@ -21,11 +21,13 @@ import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthPeriodRange
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.sell
 import dev.agner.portfolio.usecase.tax.model.CarryBucketOpening
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
 import dev.agner.portfolio.usecase.tax.model.TaxPendingGap
 import dev.agner.portfolio.usecase.tax.repository.ICarryBucketRepository
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -46,6 +48,7 @@ class StockTaxServiceTest : StringSpec({
             catalog = catalog(),
             carryBuckets = carryBuckets(),
             gaps = gaps(),
+            aliases = tickerAliases(),
         )
 
         service.fetchCurrent().shouldBeNull()
@@ -62,6 +65,7 @@ class StockTaxServiceTest : StringSpec({
             catalog = catalog("PETR4" to AssetKind.STOCK),
             carryBuckets = carryBuckets(),
             gaps = gaps(),
+            aliases = tickerAliases(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -70,6 +74,28 @@ class StockTaxServiceTest : StringSpec({
         report.meter.grossSales.plain() shouldBe "20010"
         report.meter.exceeded shouldBe true
         report.meter.tax.plain() shouldBe "600.3"
+        report.averagePrices.shouldBeEmpty()
+    }
+
+    "a buy under the old code and a sell under the new code are one tax book" {
+        val service = StockTaxService(
+            months = months(),
+            trades = trades(
+                buy(id = 1, ticker = "OLD3", quantity = "2001", unitPrice = "8"),
+                sell(id = 2, ticker = "NEW3", quantity = "2001", unitPrice = "10"),
+            ),
+            corporateActions = actions(),
+            catalog = catalog("NEW3" to AssetKind.STOCK),
+            carryBuckets = carryBuckets(),
+            gaps = gaps(),
+            aliases = tickerAliases(rename("OLD3", "NEW3")),
+        )
+
+        val report = requireNotNull(service.fetchCurrent())
+
+        report.meter.grossSales.plain() shouldBe "20010"
+        report.meter.realizedGain.plain() shouldBe "4002"
+        // The sale closes the whole position, so no fiscal average remains.
         report.averagePrices.shouldBeEmpty()
     }
 
@@ -86,6 +112,7 @@ class StockTaxServiceTest : StringSpec({
             catalog = catalog("HGLG11" to AssetKind.FII),
             carryBuckets = carryBuckets(),
             gaps = gaps(),
+            aliases = tickerAliases(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -107,6 +134,7 @@ class StockTaxServiceTest : StringSpec({
             catalog = catalog("PETR4" to AssetKind.STOCK),
             carryBuckets = carryBuckets(),
             gaps = gaps(),
+            aliases = tickerAliases(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -126,6 +154,7 @@ class StockTaxServiceTest : StringSpec({
             catalog = catalog("PETR4" to AssetKind.STOCK),
             carryBuckets = carryBuckets(RealizedKind.SWING to "500"),
             gaps = gaps(),
+            aliases = tickerAliases(),
         )
 
         val report = requireNotNull(service.fetchCurrent())
@@ -152,6 +181,7 @@ class StockTaxServiceTest : StringSpec({
             catalog = catalog(),
             carryBuckets = carryBuckets(),
             gaps = gaps(),
+            aliases = tickerAliases(),
         )
 
         val error = shouldThrow<TaxPeriodOutsideWindowException> {
@@ -201,6 +231,7 @@ class StockTaxServiceTest : StringSpec({
                     status = GapStatus.OPEN,
                 ),
             ),
+            aliases = tickerAliases(),
         )
 
         service.fetch(YearMonth.parse("2020-12")).pendingGaps shouldBe listOf(

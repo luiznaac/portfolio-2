@@ -32,3 +32,12 @@ val CatalogEntry.effectiveAssetClass: AssetClass? get() = assetClassOverride ?: 
 // One read's ticker → effective-class map, so the override rule is applied in one place.
 fun Iterable<CatalogEntry>.effectiveClassByTicker(): Map<String, AssetClass?> =
     associate { it.ticker to it.effectiveAssetClass }
+
+// One entry per canonical paper: the row carrying the canonical code wins, otherwise the latest
+// sighting stands in for it. A rename leaves two rows in the catalog; every read that collapses them
+// goes through here so they cannot disagree about which one represents the paper.
+fun Iterable<CatalogEntry>.canonicalEntryByTicker(
+    canonicalByTicker: Map<String, String>,
+): Map<String, CatalogEntry> =
+    groupBy { canonicalByTicker.getValue(it.ticker) }
+        .mapValues { (canonical, rows) -> rows.firstOrNull { it.ticker == canonical } ?: rows.maxBy { it.lastSeen } }

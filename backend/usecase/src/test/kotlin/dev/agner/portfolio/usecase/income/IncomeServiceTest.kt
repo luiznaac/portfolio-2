@@ -8,6 +8,8 @@ import dev.agner.portfolio.usecase.income.model.IncomeType
 import dev.agner.portfolio.usecase.income.model.Provenance
 import dev.agner.portfolio.usecase.income.model.TaxNature
 import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
+import dev.agner.portfolio.usecase.rename
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -25,7 +27,7 @@ private val CLOCK = Clock.fixed(Instant.parse("2026-11-05T00:00:00Z"), ZoneOffse
 
 class IncomeServiceTest : StringSpec({
     val repository = mockk<IIncomeRepository>()
-    val service = IncomeService(repository, CLOCK)
+    val service = IncomeService(repository, tickerAliases(), CLOCK)
 
     beforeTest { clearAllMocks() }
 
@@ -43,6 +45,15 @@ class IncomeServiceTest : StringSpec({
             IncomeStatus.RECEIVED,
             IncomeStatus.RECONCILED,
         )
+    }
+
+    "fetchAll presents a renamed paper under its canonical ticker" {
+        val aliased = IncomeService(repository, tickerAliases(rename("OLD3", "NEW3")), CLOCK)
+        coEvery { repository.fetchAll() } returns listOf(
+            income(id = 1, date = "2026-11-20", status = IncomeStatus.RECEIVED, ticker = "OLD3"),
+        )
+
+        aliased.fetchAll().single().ticker shouldBe "NEW3"
     }
 
     "fetchAll applies an inclusive window boundary on the payable date" {

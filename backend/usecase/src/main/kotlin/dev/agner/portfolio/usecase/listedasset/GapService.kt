@@ -1,6 +1,5 @@
 package dev.agner.portfolio.usecase.listedasset
 
-import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
@@ -11,6 +10,7 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.model.side
 import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
@@ -23,38 +23,61 @@ class GapService(
     private val trades: ITradeRepository,
     private val corporateActions: ICorporateActionRepository,
     private val positions: PositionService,
+    private val aliases: TickerAliasResolver,
     private val transaction: ITransactionTemplate,
 ) {
 
-    suspend fun fetchAll(): List<Gap> = gaps.fetchAll()
+    // The read presents the paper's canonical ticker; the stored row keeps the code the custody
+    // export carried.
+    suspend fun fetchAll(): List<Gap> {
+        val rows = gaps.fetchAll()
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        return rows.map { it.withCanonicalTicker(canonicalByTicker.getValue(it.ticker)) }
+    }
 
     suspend fun reconcile(ticker: String): Boolean = transaction.execute {
-        val normalized = ticker.normalizedTicker()
-        val open = gaps.fetchOpenBy(normalized)
+        val canonical = aliases.canonical(ticker)
+        val aliasSet = aliases.aliasesOf(canonical)
+        val open = aliasSet.flatMap { gaps.fetchOpenBy(it) }
         if (open.isEmpty()) return@execute false
 
-        val retired = retire(open, trades.fetchAllBy(normalized), corporateActions.fetchByTicker(normalized))
-        if (retired.isNotEmpty()) positions.reproject(normalized)
+        val retired = retire(
+            open,
+            aliasSet.flatMap { trades.fetchAllBy(it) },
+            aliasSet.flatMap { corporateActions.fetchByTicker(it) },
+        )
+        if (retired.isNotEmpty()) positions.reproject(canonical)
         retired.isNotEmpty()
     }
 
     // The backfill's whole-book pass; returns how many GAP records it retired.
     suspend fun reconcileAll(): Int = transaction.execute {
-        gaps.fetchAll()
-            .filter { it.status == GapStatus.OPEN }
-            .groupBy { it.ticker }
+        val openGaps = gaps.fetchAll().filter { it.status == GapStatus.OPEN }
+        val canonicalByTicker = aliases.canonicalAll(openGaps.map { it.ticker })
+        openGaps
+            .groupBy { canonicalByTicker.getValue(it.ticker) }
             .entries
-            .sumOf { (ticker, open) ->
-                val retired = retire(open, trades.fetchAllBy(ticker), corporateActions.fetchByTicker(ticker))
-                if (retired.isNotEmpty()) positions.reproject(ticker)
+            .sumOf { (canonical, open) ->
+                val aliasSet = aliases.aliasesOf(canonical)
+                val retired = retire(
+                    open,
+                    aliasSet.flatMap { trades.fetchAllBy(it) },
+                    aliasSet.flatMap { corporateActions.fetchByTicker(it) },
+                )
+                if (retired.isNotEmpty()) positions.reproject(canonical)
                 retired.size
             }
     }
 
     // Prices a missing record: a sale's proceeds, or the market placeholder a missing buy entered the
-    // replay at. Either way the position replay follows.
+    // replay at. Either way the position replay follows, under the paper's canonical code.
     suspend fun price(id: Int, unitPrice: BigDecimal): Gap? = transaction.execute {
         gaps.price(id, unitPrice)?.also { positions.reproject(it.ticker) }
+    }
+
+    private fun Gap.withCanonicalTicker(canonical: String): Gap = when (this) {
+        is Gap.Buy -> copy(ticker = canonical)
+        is Gap.Sell -> copy(ticker = canonical)
     }
 
     // A record explains the delta only if it is newer than the GAP's watermark: the ledger the gap was

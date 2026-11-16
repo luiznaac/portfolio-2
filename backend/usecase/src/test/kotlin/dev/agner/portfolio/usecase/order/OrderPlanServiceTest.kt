@@ -22,9 +22,11 @@ import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.model.UnclassifiedAllocation
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategyTarget
+import dev.agner.portfolio.usecase.tickerAliases
 import dev.agner.portfolio.usecase.tickerTarget
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -48,7 +50,16 @@ class OrderPlanServiceTest : StringSpec({
     val strategies = mockk<StrategyService>(relaxed = true)
     val attributions = mockk<AttributionService>(relaxed = true)
     val catalog = mockk<CatalogService>(relaxed = true)
-    val service = OrderPlanService(months, positions, quotes, allocations, strategies, attributions, catalog)
+    val service = OrderPlanService(
+        months,
+        positions,
+        quotes,
+        allocations,
+        strategies,
+        attributions,
+        catalog,
+        tickerAliases(),
+    )
 
     beforeTest {
         clearAllMocks()
@@ -63,6 +74,30 @@ class OrderPlanServiceTest : StringSpec({
         coVerify(exactly = 0) { positions.fetchAll() }
         coVerify(exactly = 0) { quotes.latestClose(any()) }
         coVerify(exactly = 0) { allocations.fetchCurrent() }
+    }
+
+    "a target chain that names a retired code plans the paper's canonical ticker" {
+        val aliased = OrderPlanService(
+            months,
+            positions,
+            quotes,
+            allocations,
+            strategies,
+            attributions,
+            catalog,
+            tickerAliases(rename("OLD3", "NEW3")),
+        )
+        coEvery { months.fetchCurrent() } returns currentMonth.copy(
+            targets = currentMonth.targets.copy(
+                tickers = listOf(tickerTarget("Top", "OLD3", "100")),
+            ),
+        )
+        coEvery { positions.fetchAll() } returns emptyList()
+        coEvery { quotes.latestClose("NEW3") } returns BigDecimal("10")
+
+        val plan = aliased.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.candidates.map { it.ticker } shouldBe listOf("NEW3")
     }
 
     "values a position at its current quote and targets a ticker with no position from its quote" {
