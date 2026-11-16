@@ -32,6 +32,7 @@ describe("import labels", () => {
     expect(importSourceLabel("B3_POSITION")).toBe("B3 · Custódia");
     expect(importSourceLabel("B3_MOVEMENTS")).toBe("B3 · Movimentações");
     expect(importSourceLabel("XP_REPORT")).toBe("XP · Relatório");
+    expect(importSourceLabel("RICO_NOTES")).toBe("Rico · Nota de corretagem");
     expect(importStatusLabel("STAGED")).toBe("Aguardando revisão");
     expect(importStatusLabel("REVIEWED")).toBe("Revisada");
     expect(importStatusLabel("APPLIED")).toBe("Aplicada");
@@ -44,11 +45,18 @@ describe("import labels", () => {
       "Snapshot de posição em custódia",
       "Negócios, proventos e eventos",
       "Relatório mensal por estratégia",
+      "Notas de corretagem por PDF",
     ]);
   });
 
   it("declares the sources and states in reading order", () => {
-    expect(IMPORT_SOURCES).toEqual(["B3_TRADES", "B3_POSITION", "B3_MOVEMENTS", "XP_REPORT"]);
+    expect(IMPORT_SOURCES).toEqual([
+      "B3_TRADES",
+      "B3_POSITION",
+      "B3_MOVEMENTS",
+      "XP_REPORT",
+      "RICO_NOTES",
+    ]);
     expect(IMPORT_STATUSES).toEqual(["STAGED", "REVIEWED", "APPLIED", "FAILED"]);
   });
 });

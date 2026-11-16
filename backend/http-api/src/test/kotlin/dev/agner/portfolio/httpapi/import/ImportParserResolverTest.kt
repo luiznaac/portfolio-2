@@ -72,6 +72,26 @@ class ImportParserResolverTest : StringSpec({
         }
     }
 
+    "resolve stages the Rico nota PDF through the Rico parser" {
+        val resolver = ImportParserResolver(listOf(B3NegotiationParser(), RicoNotaParser()))
+        val bytes = acceptanceDocsFixture("rico-nota-2019.pdf").readBytes()
+
+        val rows = resolver.resolve("nota-de-corretagem.pdf", bytes, ImportDestinationObject.TRADES)
+
+        rows.size shouldBe 8
+        rows.first().rawDescription shouldBe "FII BCFF11 CI"
+        rows.first().noteNumber shouldBe "123456"
+    }
+
+    "resolve rejects a PDF that no trades layout claims instead of staging an empty import" {
+        val resolver = ImportParserResolver(listOf(B3NegotiationParser(), RicoNotaParser()))
+        val bytes = acceptanceDocsFixture("xp-relatorio-2026-10.pdf").readBytes()
+
+        shouldThrow<UnsupportedImportFileException> {
+            resolver.resolve("relatorio.pdf", bytes, ImportDestinationObject.TRADES)
+        }
+    }
+
     "resolve stages a real Área do Investidor negotiation export instead of rejecting it" {
         val resolver = ImportParserResolver(listOf(B3NegotiationParser()))
         val bytes = b3Workbook(

@@ -44,7 +44,7 @@ export function custodyDivergences(
 ): CustodyDivergence[] {
   const custodyByTicker = new Map<string, number>();
   for (const row of rows) {
-    if (row.error !== undefined) continue;
+    if (row.error !== undefined || row.ticker === undefined) continue;
     custodyByTicker.set(row.ticker, (custodyByTicker.get(row.ticker) ?? 0) + row.quantity);
   }
   const ledgerByTicker = new Map(positions.map((position) => [position.ticker, position.quantity]));

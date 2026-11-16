@@ -1,5 +1,6 @@
 package dev.agner.portfolio.httpapi.import.strategy
 
+import dev.agner.portfolio.httpapi.import.parsePtBrDecimal
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import org.springframework.stereotype.Component

@@ -1,20 +1,16 @@
 package dev.agner.portfolio.httpapi.import.strategy
 
+import dev.agner.portfolio.httpapi.import.pdfPagesOrNull
 import dev.agner.portfolio.usecase.strategy.InvalidStrategyReportException
 import dev.agner.portfolio.usecase.strategy.UnsupportedStrategyReportException
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.Rating
 import dev.agner.portfolio.usecase.strategy.model.editionWeightProblem
 import kotlinx.datetime.YearMonth
-import org.apache.pdfbox.Loader
-import org.apache.pdfbox.text.PDFTextStripper
-import java.io.IOException
-import java.math.BigDecimal
 
-// Shared text handling for the XP report parsers. The reports are text PDFs; PDFBox's stripper
-// (the same dependency PdfConverter uses) yields one page at a time, and every parser anchors on a
-// header line inside that text rather than on a page number, since the summary and detail pages
-// repeat the same table at different offsets.
+// Shared text handling for the XP report parsers. The reports are text PDFs, and every parser
+// anchors on a header line inside the text rather than on a page number, since the summary and
+// detail pages repeat the same table at different offsets.
 
 // The two row fragments every XP layout shares — a ticker token and a pt-BR weight with its percent
 // sign. Each layout composes them into its own row regex (the FII layout prints them reversed), so
@@ -23,23 +19,7 @@ internal const val TICKER_GROUP = "([A-Z][A-Z0-9]{3}\\d{1,2})"
 internal const val WEIGHT_GROUP = "(\\d+(?:,\\d+)?)%"
 
 internal fun pdfPages(fileName: String, content: ByteArray): List<String> =
-    try {
-        Loader.loadPDF(content).use { document ->
-            val stripper = PDFTextStripper().apply { sortByPosition = true }
-            (1..document.numberOfPages).map { page ->
-                stripper.startPage = page
-                stripper.endPage = page
-                stripper.getText(document)
-            }
-        }
-    } catch (exception: IOException) {
-        throw UnsupportedStrategyReportException(fileName)
-    }
-
-// A PT-BR number as the reports print it: a comma decimal separator, dots as thousands separators
-// and an optional trailing percent sign. "12,5%" -> 12.5, "1.234,56" -> 1234.56.
-internal fun parsePtBrDecimal(raw: String): BigDecimal =
-    BigDecimal(raw.trim().removeSuffix("%").replace(".", "").replace(",", "."))
+    pdfPagesOrNull(content) ?: throw UnsupportedStrategyReportException(fileName)
 
 internal fun parseRating(raw: String): Rating = when (raw.trim().uppercase()) {
     "COMPRA", "BUY" -> Rating.BUY

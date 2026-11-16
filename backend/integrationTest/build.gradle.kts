@@ -1,5 +1,14 @@
 import java.util.concurrent.TimeUnit
 
+// The Rico and XP acceptance PDFs are read from the repo docs tree, so a fixture change reruns the
+// integration specs that pin them.
+val docsDir = rootProject.projectDir.parentFile.resolve("docs")
+
+tasks.withType<Test> {
+    inputs.file(docsDir.resolve("acceptance/fixtures/rico-nota-2019.pdf"))
+    inputs.file(docsDir.resolve("acceptance/fixtures/xp-relatorio-2026-10.pdf"))
+}
+
 dependencies {
     testImplementation(project(":application"))
     // Reaches KtorConfig etc. transitively via :application already, but MigrationSchemaTest

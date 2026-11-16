@@ -1,5 +1,7 @@
 package dev.agner.portfolio.usecase.import
 
+import dev.agner.portfolio.usecase.broker.BrokerAssetAliasService
+import dev.agner.portfolio.usecase.broker.model.BrokerDescriptionResolution
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
@@ -42,6 +44,7 @@ class ImportServiceTest : StringSpec({
     val institutionService = mockk<InstitutionService>(relaxed = true)
     val catalogService = mockk<CatalogService>(relaxed = true)
     val custodySnapshot = mockk<CustodySnapshotService>(relaxed = true)
+    val brokerAssetAliasService = mockk<BrokerAssetAliasService>(relaxed = true)
     val transaction = CountingTransaction()
     val service = ImportService(
         repository,
@@ -49,6 +52,7 @@ class ImportServiceTest : StringSpec({
         institutionService,
         catalogService,
         custodySnapshot,
+        brokerAssetAliasService,
         transaction,
     )
 
@@ -114,6 +118,101 @@ class ImportServiceTest : StringSpec({
         ) shouldBe StagingResult(stagedImport, created = true)
 
         captured.captured.destination shouldBe ImportDestination(ImportDestinationObject.POSITIONS)
+    }
+
+    "stage should resolve a broker description to its ticker through the alias" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+        coEvery { institutionService.fetchByName("RICO INVESTIMENTOS") } returns null
+        coEvery { brokerAssetAliasService.resolve(null, "FII BCFF11") } returns
+            BrokerDescriptionResolution.Resolved("BCFF11")
+        val captured = slot<ImportCreation>()
+        coEvery { repository.save(capture(captured)) } returns stagedImport
+
+        service.stage(
+            ImportSource.RICO_NOTES,
+            "nota.pdf",
+            HASH,
+            listOf(ricoPayload("FII BCFF11 CI")),
+            destination,
+        )
+
+        captured.captured.rows.single().let { row ->
+            row.ticker shouldBe "BCFF11"
+            row.rawDescription shouldBe "FII BCFF11 CI"
+            row.error shouldBe null
+        }
+    }
+
+    "stage should pass the resolved institution id to the alias lookup" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+        coEvery { institutionService.fetchByName("RICO INVESTIMENTOS") } returns
+            Institution(7, "RICO INVESTIMENTOS")
+        coEvery { brokerAssetAliasService.resolve(7, "FII BCFF11") } returns
+            BrokerDescriptionResolution.Resolved("BCFF11")
+        coEvery { repository.save(any()) } returns stagedImport
+
+        service.stage(
+            ImportSource.RICO_NOTES,
+            "nota.pdf",
+            HASH,
+            listOf(ricoPayload("FII BCFF11 CI")),
+            destination,
+        )
+
+        coVerify(exactly = 1) { brokerAssetAliasService.resolve(7, "FII BCFF11") }
+    }
+
+    "stage should stage an unresolved description as a row-level error without discarding the valid rows" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+        coEvery { institutionService.fetchByName(any()) } returns null
+        coEvery { brokerAssetAliasService.resolve(null, "FII BCFF11") } returns
+            BrokerDescriptionResolution.Resolved("BCFF11")
+        coEvery { brokerAssetAliasService.resolve(null, "ATIVO INEXISTENTE XPTO") } returns
+            BrokerDescriptionResolution.Unresolved
+        val captured = slot<ImportCreation>()
+        coEvery { repository.save(capture(captured)) } returns stagedImport
+
+        service.stage(
+            ImportSource.RICO_NOTES,
+            "nota.pdf",
+            HASH,
+            listOf(ricoPayload("FII BCFF11 CI"), ricoPayload("ATIVO INEXISTENTE XPTO")),
+            destination,
+        )
+
+        captured.captured.rows.map { it.ticker to it.error } shouldBe listOf(
+            "BCFF11" to null,
+            null to "Description 'ATIVO INEXISTENTE XPTO' did not resolve to a ticker",
+        )
+    }
+
+    "stage should stage an ambiguous description as a row-level error naming the candidates" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+        coEvery { institutionService.fetchByName(any()) } returns null
+        coEvery { brokerAssetAliasService.resolve(null, "ATIVO DUVIDOSO") } returns
+            BrokerDescriptionResolution.Ambiguous(setOf("BBBB3", "AAAA3"))
+        val captured = slot<ImportCreation>()
+        coEvery { repository.save(capture(captured)) } returns stagedImport
+
+        service.stage(
+            ImportSource.RICO_NOTES,
+            "nota.pdf",
+            HASH,
+            listOf(ricoPayload("ATIVO DUVIDOSO")),
+            destination,
+        )
+
+        captured.captured.rows.single().error shouldBe
+            "Description 'ATIVO DUVIDOSO' is ambiguous: AAAA3, BBBB3"
+    }
+
+    "stage should not consult the alias for a layout that already prints a ticker" {
+        coEvery { repository.fetchByHash(HASH) } returns null
+        coEvery { repository.save(any()) } returns stagedImport
+
+        service.stage(ImportSource.B3_TRADES, "neg.xlsx", HASH, listOf(payload), destination)
+
+        coVerify(exactly = 0) { brokerAssetAliasService.resolve(any(), any()) }
     }
 
     "review should move a staged import to reviewed" {
@@ -468,6 +567,18 @@ private val row = ImportRow(
 )
 
 private val errorRow = row.copy(id = 11, error = "unrecognized side 'X'")
+
+private fun ricoPayload(rawDescription: String) = ImportRowPayload(
+    date = LocalDate.parse("2019-05-03"),
+    side = TradeSide.BUY,
+    venue = "VISTA",
+    ticker = null,
+    quantity = BigDecimal("100"),
+    unitPrice = BigDecimal("100"),
+    institutionName = "RICO INVESTIMENTOS",
+    rawDescription = rawDescription,
+    noteNumber = "123456",
+)
 
 private val institution = Institution(id = 3, name = "XP INVESTIMENTOS")
 

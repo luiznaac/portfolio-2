@@ -87,7 +87,12 @@ export interface TickerRefreshResult {
 
 export type TradeSide = "BUY" | "SELL";
 
-export type ImportSource = "B3_TRADES" | "B3_POSITION" | "B3_MOVEMENTS" | "XP_REPORT";
+export type ImportSource =
+  | "B3_TRADES"
+  | "B3_POSITION"
+  | "B3_MOVEMENTS"
+  | "XP_REPORT"
+  | "RICO_NOTES";
 export type ImportStatus = "STAGED" | "REVIEWED" | "APPLIED" | "FAILED";
 
 // The object an import lands on. The kind is typed so the parked session, the resume strip and the
@@ -158,13 +163,17 @@ export interface ImportRow {
   date?: string;
   side: TradeSide;
   venue: string;
-  ticker: string;
+  ticker?: string;
   quantity: number;
   unit_price: number;
   institution_name: string;
   error?: string;
   situation: ImportRowSituation;
   outcome?: ImportRowOutcome;
+  // A broker note's raw asset description and the note it came from; absent for a layout that
+  // prints a ticker.
+  raw_description?: string;
+  note_number?: string;
 }
 
 export type TradeSource = "MANUAL" | "B3_IMPORT" | "OPENING";

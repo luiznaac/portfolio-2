@@ -228,7 +228,7 @@ describe("the import assistant", () => {
     renderAssistant("/imports/assistant?object=TRADES");
 
     expect(screen.getAllByText("Ativos · Negócios").length).toBeGreaterThan(0);
-    expect(screen.getByText(/B3 — negociação/)).toBeDefined();
+    expect(screen.getAllByText(/B3 — negociação/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Linhas" })).toBeNull();
 
     await user.upload(screen.getByLabelText("Arquivo"), new File(["x"], "neg.xlsx"));
@@ -243,6 +243,43 @@ describe("the import assistant", () => {
     expect(state.applyCalls).toBe(0);
     expect(screen.getByTestId("location").textContent).toBe("/imports/assistant/7");
     expect(screen.getByRole("heading", { name: "Destino" })).toBeDefined();
+  });
+
+  it("offers the Rico nota layout and stages the record under its source", async () => {
+    state.staged = { import: importRecord("STAGED"), created: true };
+    state.record = importRecord("STAGED");
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant?object=TRADES");
+
+    await user.selectOptions(screen.getByLabelText("Formato"), "RICO_NOTES");
+    expect(screen.getAllByText(/Rico — nota de corretagem/).length).toBeGreaterThan(0);
+
+    await user.upload(screen.getByLabelText("Arquivo"), new File(["%PDF"], "nota.pdf"));
+    await user.click(screen.getByRole("button", { name: "Enviar e revisar" }));
+
+    expect(state.stageInput).toEqual({
+      source: "RICO_NOTES",
+      file: expect.any(File),
+      destination: "TRADES",
+    });
+  });
+
+  it("shows the broker description beside the ticker the alias resolved", () => {
+    state.record = { ...importRecord("STAGED"), source: "RICO_NOTES" };
+    state.rows = [
+      {
+        ...row(1, "new"),
+        ticker: "BCFF11",
+        raw_description: "FII BCFF11 CI",
+        note_number: "123456",
+      },
+    ];
+    renderAssistant("/imports/assistant/7");
+
+    expect(screen.getByText("Descrição")).toBeDefined();
+    expect(screen.getByText("FII BCFF11 CI")).toBeDefined();
+    expect(screen.getByText("BCFF11")).toBeDefined();
+    expect(screen.getByText("123456")).toBeDefined();
   });
 
   it("resumes a parked session at the material and applies onto the destination", async () => {

@@ -28,6 +28,11 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
 
 ## Setup prose
 
+- **Clean database**: run `docker compose down -v` before the first boot. A named volume left by an
+  earlier acceptance run carries prior imports, and re-uploading a file whose hash is already known
+  resumes the old record instead of staging a fresh one. The app migrates and seeds an empty MySQL
+  on boot.
+
 - **Token injection**: the repo-root `docker-compose.yml` `app` service does not reference `CHAMEIDOR_TOKEN`, and `docker compose` does not forward host env vars into containers (verified empirically). Before starting, create a gitignored `docker-compose.override.yml` at the repo root:
 
   ```yaml

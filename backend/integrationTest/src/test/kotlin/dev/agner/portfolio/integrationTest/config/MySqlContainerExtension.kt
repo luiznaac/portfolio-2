@@ -47,6 +47,8 @@ object MySqlContainerExtension : Extension, BeforeProjectListener, AfterProjectL
     override suspend fun afterTest(testCase: TestCase, result: TestResult) {
         // `index` stays: V1 seeds CDI/IPCA/SELIC and index_value/bond/checking_account carry a FK
         // to it, so truncating it would make later `insert ignore` writes silently drop.
+        // `broker_asset_alias` stays for the same reason as a data seed: V26 seeds the known broker
+        // descriptions and the import tests resolve against them without re-seeding.
         val database = TestMySql.databaseName
         withContext(Dispatchers.IO) {
             launch {
@@ -55,7 +57,7 @@ object MySqlContainerExtension : Extension, BeforeProjectListener, AfterProjectL
                     "-c",
                     """
                         mysql -uroot -Nse 'show tables' $database | while read table; do
-                           if [ "${'$'}table" != 'flyway_schema_history' ] && [ "${'$'}table" != 'index' ]; then
+                           if [ "${'$'}table" != 'flyway_schema_history' ] && [ "${'$'}table" != 'index' ] && [ "${'$'}table" != 'broker_asset_alias' ]; then
                                mysql -e "set FOREIGN_KEY_CHECKS=0; truncate table \`${'$'}table\`" $database;
                            fi
                         done
