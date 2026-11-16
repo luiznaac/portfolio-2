@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Month, MonthPeriodRange, Targets } from "../api/types.ts";
 import {
   MONTH_OPTIONS,
@@ -326,6 +326,48 @@ describe("targets form rows", () => {
     expect(removeTickerRow(form, 0).tickers).toEqual([
       { id: "i", strategy: "Top Dividendos", ticker: "ITUB4", percentage: "" },
     ]);
+  });
+});
+
+describe("row identity outside a secure context", () => {
+  // A plain-HTTP origin (e.g. http://192.168.0.20:6901) is not a secure context, so the browser
+  // exposes crypto.getRandomValues but not crypto.randomUUID. Stub exactly that shape.
+  afterEach(() => vi.unstubAllGlobals());
+
+  function insecureCrypto() {
+    vi.stubGlobal("crypto", {
+      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+    });
+  }
+
+  it("appends a strategy row when crypto.randomUUID is unavailable", () => {
+    insecureCrypto();
+
+    const [row] = addStrategyRow(emptyTargetsForm()).strategies;
+
+    expect(row.id).toBeTruthy();
+  });
+
+  it("appends a ticker row when crypto.randomUUID is unavailable", () => {
+    insecureCrypto();
+
+    const [row] = addTickerRow(emptyTargetsForm(), "Top Dividendos").tickers;
+
+    expect(row.id).toBeTruthy();
+  });
+
+  it("seeds the form from stored targets when crypto.randomUUID is unavailable", () => {
+    insecureCrypto();
+
+    const form = targetsFormFrom({
+      classes: [],
+      sub_classes: [],
+      strategies: [{ asset_class: "ACOES", strategy: "Top Dividendos", percentage: 100 }],
+      tickers: [{ strategy: "Top Dividendos", ticker: "VALE3", percentage: 20 }],
+    });
+
+    expect(form.strategies[0]?.id).toBeTruthy();
+    expect(form.tickers[0]?.id).toBeTruthy();
   });
 });
 
