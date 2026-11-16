@@ -17,6 +17,8 @@ import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.quotes.MonthlyCloses
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.rename
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -38,7 +40,7 @@ class TickerRefreshServiceTest : StringSpec({
     val source = mockk<ICotahistSource>(relaxed = true)
     val positions = mockk<IPositionRepository>(relaxed = true)
     val trades = mockk<ITradeRepository>(relaxed = true)
-    val service = TickerRefreshService(catalogService, quoteService, source, positions, trades, CLOCK)
+    val service = TickerRefreshService(catalogService, quoteService, source, positions, trades, tickerAliases(), CLOCK)
 
     beforeTest {
         clearAllMocks()
@@ -82,6 +84,26 @@ class TickerRefreshServiceTest : StringSpec({
         verify(exactly = 1) { source.fetchYear(2020) }
         verify(exactly = 1) { source.fetchYear(2025) }
         verify(exactly = 1) { source.fetchYear(2026) }
+    }
+
+    "stores monthly closes for every code the ledger's paper has traded under" {
+        val aliased = TickerRefreshService(
+            catalogService,
+            quoteService,
+            source,
+            positions,
+            trades,
+            tickerAliases(rename("OLD3", "NEW3")),
+            CLOCK,
+        )
+        coEvery { source.fetchTradingDay() } returns emptyList()
+        coEvery { trades.fetchAll() } returns listOf(buy(ticker = "OLD3", date = "2020-01-02"))
+        coEvery { positions.fetchAll() } returns emptyList()
+        coEvery { catalogService.fetchAll() } returns emptyList()
+
+        aliased.refresh()
+
+        coVerify { quoteService.storeMonthlyCloses(any(), setOf("OLD3", "NEW3")) }
     }
 
     "a held ticker priced only by the daily file is not reported as unquoted" {

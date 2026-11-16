@@ -5,11 +5,13 @@ import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.model.CotahistRow
 import dev.agner.portfolio.usecase.catalog.model.UNCATALOGED_BDI_TYPE
+import dev.agner.portfolio.usecase.catalog.model.canonicalEntryByTicker
 import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.commons.today
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.time.Clock
@@ -17,18 +19,30 @@ import java.time.Clock
 @Service
 class CatalogService(
     private val repository: ICatalogRepository,
+    private val aliases: TickerAliasResolver,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
-    suspend fun fetchAll() = repository.fetchAll()
+    // One row per paper: a renamed paper's old and new rows collapse onto the canonical code, so a
+    // class lookup by either code lands on the same entry.
+    suspend fun fetchAll(): List<CatalogEntry> {
+        val entries = repository.fetchAll()
+        val canonicalByTicker = aliases.canonicalAll(entries.map { it.ticker })
+        return entries.canonicalEntryByTicker(canonicalByTicker).values.sortedBy { it.ticker }
+    }
 
-    suspend fun fetchBy(ticker: String) = repository.fetchBy(ticker.normalizedTicker())
+    suspend fun fetchBy(ticker: String) = repository.fetchBy(aliases.canonical(ticker))
 
     // Which of the given tickers the catalog has not classified yet. A missing row counts as
     // unclassified: without a class a ticker belongs to no class rung and waits for classification.
+    // The returned codes are canonical, the way every other read keys its book.
     suspend fun fetchUnclassified(tickers: Set<String>): Set<String> {
-        val classByTicker = repository.fetchAll().effectiveClassByTicker()
-        return tickers.filter { classByTicker[it] == null }.toSet()
+        val canonicalByTicker = aliases.canonicalAll(tickers)
+        val classByTicker = fetchAll().effectiveClassByTicker()
+        return tickers
+            .map { canonicalByTicker.getValue(it) }
+            .filter { classByTicker[it] == null }
+            .toSet()
     }
 
     // Upsert the catalog from the latest published COTAHIST file's rows. Unknown BDI codes still
@@ -48,8 +62,10 @@ class CatalogService(
     }
 
     // Auto-enter a ticker into the catalog (minimal entry) so imports never block on unknown tickers.
+    // A retired code resolves to its successor first, so the placeholder never creates a second row
+    // for a paper the catalog already knows under the canonical code.
     suspend fun upsertTicker(ticker: String) {
-        val normalized = ticker.normalizedTicker()
+        val normalized = aliases.canonical(ticker)
         val existing = repository.fetchBy(normalized)
         if (existing == null) {
             repository.upsertAll(
@@ -76,14 +92,14 @@ class CatalogService(
     suspend fun classify(ticker: String, assetClass: AssetClass): CatalogEntry? {
         if (assetClass == AssetClass.RENDA_FIXA) throw InvalidCatalogClassException(assetClass)
 
-        val normalized = ticker.normalizedTicker()
-        upsertTicker(normalized)
-        return repository.setAssetClassOverride(normalized, assetClass)
+        val canonical = aliases.canonical(ticker)
+        upsertTicker(canonical)
+        return repository.setAssetClassOverride(canonical, assetClass)
     }
 
     // Hand the ticker back to the BDI-derived class; the row itself stays in the catalog.
     suspend fun revertClassification(ticker: String): CatalogEntry? =
-        repository.setAssetClassOverride(ticker.normalizedTicker(), null)
+        repository.setAssetClassOverride(aliases.canonical(ticker), null)
 
     // The bulk counterpart of classify: the held-unclassified queue's chosen rows in one write. The
     // batch shares one validation and one transaction, so a rejected class or a storage failure
@@ -94,7 +110,10 @@ class CatalogService(
         classifications.values.firstOrNull { it == AssetClass.RENDA_FIXA }
             ?.let { throw InvalidCatalogClassException(it) }
 
-        val normalized = classifications.mapKeys { it.key.normalizedTicker() }
+        val canonical = aliases.canonicalAll(classifications.keys)
+        val normalized = classifications.entries.associate { (ticker, assetClass) ->
+            canonical.getValue(ticker) to assetClass
+        }
         // Auto-enter any ticker the catalog has never seen, exactly as the single classify does;
         // upsertTicker no-ops on an existing row, so the batch needs no separate existence check.
         for (ticker in normalized.keys) upsertTicker(ticker)

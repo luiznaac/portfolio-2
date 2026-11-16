@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.listedasset.InvalidTransferException
 import dev.agner.portfolio.usecase.listedasset.model.AttributionTransferCreation
 import dev.agner.portfolio.usecase.listedasset.model.Trade
 import dev.agner.portfolio.usecase.listedasset.model.isImported
+import dev.agner.portfolio.usecase.listedasset.model.withCanonicalTicker
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.order.model.InvalidOrderMatchException
 import dev.agner.portfolio.usecase.order.model.OrderList
@@ -25,6 +26,7 @@ import dev.agner.portfolio.usecase.portfolio.MonthService
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 import org.springframework.stereotype.Service
@@ -44,6 +46,7 @@ class OrderLifecycleService(
     private val transfers: ITransferProposalRepository,
     private val attributionService: AttributionService,
     private val strategies: IStrategyRepository,
+    private val aliases: TickerAliasResolver,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -212,8 +215,13 @@ class OrderLifecycleService(
         )
     }
 
-    private suspend fun monthTrades(period: YearMonth): List<Trade> =
-        trades.fetchAll().filter { it.date.inPeriod(period) }
+    // The plan's orders are keyed on the canonical ticker, so a trade stored under a retired code
+    // still matches its suggestion and is not reported as unplanned.
+    private suspend fun monthTrades(period: YearMonth): List<Trade> {
+        val rows = trades.fetchAll().filter { it.date.inPeriod(period) }
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        return rows.map { it.withCanonicalTicker(canonicalByTicker.getValue(it.ticker)) }
+    }
 
     private fun LocalDate.inPeriod(period: YearMonth): Boolean =
         year == period.year && month == period.month

@@ -172,6 +172,9 @@ export type TradeSource = "MANUAL" | "B3_IMPORT" | "OPENING";
 export interface Trade {
   id: number;
   ticker: string;
+  // The code the row was imported under, kept as provenance after a rename. Equal to `ticker` when
+  // the paper has never been renamed.
+  original_ticker: string;
   date: string;
   venue: string;
   side: TradeSide;

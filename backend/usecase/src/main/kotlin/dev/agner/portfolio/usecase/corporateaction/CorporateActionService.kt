@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.corporateaction
 
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
@@ -12,6 +13,9 @@ import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRe
 import dev.agner.portfolio.usecase.income.model.TaxNature
 import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
+import dev.agner.portfolio.usecase.tickeralias.model.TickerAlias
+import dev.agner.portfolio.usecase.tickeralias.repository.ITickerAliasRepository
 import org.springframework.stereotype.Service
 
 // The corporate-action engine. An imported event is either applied to the holder's position (the
@@ -26,10 +30,25 @@ class CorporateActionService(
     private val attributions: IAttributionRepository,
     private val catalog: CatalogService,
     private val positionService: PositionService,
+    private val tickerAliases: ITickerAliasRepository,
+    private val aliases: TickerAliasResolver,
     private val transaction: ITransactionTemplate,
 ) {
 
-    suspend fun fetchAll() = repository.fetchAll()
+    // The log read presents each event under the paper's canonical ticker, so a rename does not
+    // hide the old code's history. The stored row keeps the code the export carried.
+    suspend fun fetchAll(): List<CorporateAction> {
+        val rows = repository.fetchAll()
+        val canonicalByTicker = aliases.canonicalAll(
+            rows.flatMap { listOfNotNull(it.ticker, it.targetTicker) }.distinct(),
+        )
+        return rows.map { action ->
+            action.copy(
+                ticker = canonicalByTicker.getValue(action.ticker),
+                targetTicker = action.targetTicker?.let { canonicalByTicker.getValue(it) },
+            )
+        }
+    }
 
     // Applies a batch in the deterministic replay order — ex date, then the event's own ordinal.
     // The log's natural key is the dedup: a re-export of a period already applied is a no-op.
@@ -102,7 +121,12 @@ class CorporateActionService(
     // or the quantity scaling, the cash entitlement, and the reprojection the position read needs.
     private suspend fun settle(action: CorporateAction): CorporateAction {
         when {
-            action.kind == CorporateActionKind.TICKER_CHANGE -> remapTicker(action)
+            action.kind == CorporateActionKind.TICKER_CHANGE -> {
+                remapTicker(action)
+                // The projection moves to the new code in the same event, so the read never shows
+                // two rows for one paper.
+                positionService.reproject(action.ticker)
+            }
             action.kind.isQuantityEvent -> scaleAttributions(action)
         }
         // Cash is read off the position before the replay: a grupamento's fraction belongs to the
@@ -131,8 +155,22 @@ class CorporateActionService(
         )
     }
 
+    // The catalog remap and the alias edge are one atomic event: the resolver can never see the new
+    // code in the catalog without the chain that points the old code at it.
     private suspend fun remapTicker(action: CorporateAction) {
-        action.targetTicker?.let { catalog.remapTicker(action.ticker, it) }
+        action.targetTicker?.let { target ->
+            catalog.remapTicker(action.ticker, target)
+            tickerAliases.save(
+                TickerAlias(
+                    oldTicker = action.ticker.normalizedTicker(),
+                    canonicalTicker = target.normalizedTicker(),
+                    effectiveDate = action.exDate,
+                    source = action.source,
+                    ratio = action.ratio,
+                    corporateActionId = action.id,
+                ),
+            )
+        }
     }
 
     private suspend fun scaleAttributions(action: CorporateAction) {

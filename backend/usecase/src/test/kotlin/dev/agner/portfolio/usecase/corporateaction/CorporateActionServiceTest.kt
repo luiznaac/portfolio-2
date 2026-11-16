@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
+import dev.agner.portfolio.usecase.corporateAction
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionResolution
@@ -17,6 +18,9 @@ import dev.agner.portfolio.usecase.listedasset.PositionService
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
+import dev.agner.portfolio.usecase.rename
+import dev.agner.portfolio.usecase.tickerAliases
+import dev.agner.portfolio.usecase.tickerAliasesRepository
 import dev.agner.portfolio.usecase.toModel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -36,7 +40,16 @@ class CorporateActionServiceTest : StringSpec({
     val catalog = mockk<CatalogService>(relaxed = true)
     val positionService = mockk<PositionService>(relaxed = true)
     val transaction = InlineTransaction()
-    val service = CorporateActionService(repository, attributions, catalog, positionService, transaction)
+    val aliasRepository = tickerAliasesRepository()
+    val service = CorporateActionService(
+        repository,
+        attributions,
+        catalog,
+        positionService,
+        aliasRepository,
+        tickerAliases(),
+        transaction,
+    )
 
     beforeTest {
         clearAllMocks()
@@ -110,7 +123,7 @@ class CorporateActionServiceTest : StringSpec({
         coVerify(exactly = 0) { positionService.reproject(any()) }
     }
 
-    "a ticker change remaps the catalog instead of touching the position" {
+    "a ticker change remaps the catalog, writes the alias and moves the position" {
         coEvery { repository.save(any(), CorporateActionStatus.APPLIED) } returns
             action(
                 creation = CorporateActionCreation(
@@ -134,7 +147,34 @@ class CorporateActionServiceTest : StringSpec({
         )
 
         coVerify { catalog.remapTicker("PETR4", "VALE3") }
-        coVerify(exactly = 0) { positionService.reproject(any()) }
+        aliasRepository.fetchAll().single().oldTicker shouldBe "PETR4"
+        aliasRepository.fetchAll().single().canonicalTicker shouldBe "VALE3"
+        aliasRepository.fetchAll().single().corporateActionId shouldBe 7
+        coVerify(exactly = 1) { positionService.reproject("PETR4") }
+    }
+
+    "fetchAll presents the canonical ticker and target of a rename chain" {
+        coEvery { repository.fetchAll() } returns listOf(
+            corporateAction(
+                CorporateActionKind.TICKER_CHANGE,
+                ticker = "OLD3",
+                targetTicker = "MID3",
+            ),
+        )
+        val aliased = CorporateActionService(
+            repository,
+            attributions,
+            catalog,
+            positionService,
+            aliasRepository,
+            tickerAliases(rename("OLD3", "MID3"), rename("MID3", "NEW3")),
+            transaction,
+        )
+
+        val action = aliased.fetchAll().single()
+
+        action.ticker shouldBe "NEW3"
+        action.targetTicker shouldBe "NEW3"
     }
 
     "a ticker change for a ticker absent from the catalog is queued instead of applied" {

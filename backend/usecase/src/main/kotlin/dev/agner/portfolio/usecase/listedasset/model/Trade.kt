@@ -31,6 +31,9 @@ sealed class Trade(
     // How much of an OPENING seed the backfill has already absorbed. Only seeds use it; a regular
     // trade stays at zero. Keeping it lets absorb rerun without subtracting the same history twice.
     open val absorbedQuantity: BigDecimal,
+    // The code the row was imported under, kept beside the canonical `ticker` the read presents.
+    // A stored trade is never rewritten by a rename; provenance stays with the original row.
+    open val originalTicker: String,
 ) {
     // The direction as an explicit property, so it survives serialization (the API's GET /trades
     // would otherwise return a trade with no way to tell a buy from a sell).
@@ -49,6 +52,7 @@ sealed class Trade(
         override val confirmedByB3: Boolean,
         override val ordinal: Int,
         override val absorbedQuantity: BigDecimal = BigDecimal.ZERO,
+        override val originalTicker: String = ticker,
     ) : Trade(
         id,
         ticker,
@@ -62,6 +66,7 @@ sealed class Trade(
         confirmedByB3,
         ordinal,
         absorbedQuantity,
+        originalTicker,
     ) {
         override val side: TradeSide = TradeSide.BUY
 
@@ -83,6 +88,7 @@ sealed class Trade(
         override val confirmedByB3: Boolean,
         override val ordinal: Int,
         override val absorbedQuantity: BigDecimal = BigDecimal.ZERO,
+        override val originalTicker: String = ticker,
     ) : Trade(
         id,
         ticker,
@@ -96,6 +102,7 @@ sealed class Trade(
         confirmedByB3,
         ordinal,
         absorbedQuantity,
+        originalTicker,
     ) {
         override val side: TradeSide = TradeSide.SELL
         init { requirePositiveQuantity(quantity) }
@@ -105,6 +112,14 @@ sealed class Trade(
 // Whether the trade's execution is on the ledger through a B3 import — directly, or because the
 // import later confirmed the manual record. The one definition the order lifecycle reads.
 val Trade.isImported: Boolean get() = source == TradeSource.B3_IMPORT || confirmedByB3
+
+// The read shape: `ticker` becomes the canonical code every listed-asset read groups by, while
+// `originalTicker` keeps the code the row was imported under as provenance. The stored row is never
+// rewritten — this only shapes the value the read returns.
+fun Trade.withCanonicalTicker(canonical: String): Trade = when (this) {
+    is Trade.Buy -> copy(ticker = canonical)
+    is Trade.Sell -> copy(ticker = canonical)
+}
 
 private fun requirePositiveQuantity(quantity: BigDecimal) {
     require(quantity.signum() > 0) { "Trade quantity must be positive but was $quantity" }

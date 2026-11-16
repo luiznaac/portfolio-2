@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.batchUpsert
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.stereotype.Component
@@ -34,5 +35,9 @@ class PositionRepository : IPositionRepository {
                 this[PositionTable.averagePrice] = p.averagePrice
             }
         }
+    }
+
+    override suspend fun delete(ticker: String): Boolean = transaction {
+        PositionTable.deleteWhere { PositionTable.ticker eq ticker } > 0
     }
 }

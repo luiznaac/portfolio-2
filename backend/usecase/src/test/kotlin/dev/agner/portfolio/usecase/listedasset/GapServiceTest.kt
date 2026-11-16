@@ -12,7 +12,9 @@ import dev.agner.portfolio.usecase.listedasset.model.GapStatus
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.sell
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -32,7 +34,8 @@ class GapServiceTest : StringSpec({
         coEvery { trades.fetchAllBy("PETR4") } returns listOf(sell(id = 5, date = "2026-03-15", quantity = "40"))
         coEvery { gaps.markReplaced(gap.id) } returns gap.copy(status = GapStatus.REPLACED)
 
-        GapService(gaps, trades, mockk(relaxed = true), positions, transaction()).reconcile("PETR4") shouldBe true
+        GapService(gaps, trades, mockk(relaxed = true), positions, tickerAliases(), transaction())
+            .reconcile("PETR4") shouldBe true
 
         coVerify { gaps.markReplaced(gap.id) }
         coVerify { positions.reproject("PETR4") }
@@ -45,7 +48,7 @@ class GapServiceTest : StringSpec({
         coEvery { gaps.fetchOpenBy("PETR4") } returns listOf(gap)
         coEvery { trades.fetchAllBy("PETR4") } returns listOf(sell(id = 3, quantity = "40"))
 
-        GapService(gaps, trades, mockk(relaxed = true), mockk(relaxed = true), transaction())
+        GapService(gaps, trades, mockk(relaxed = true), mockk(relaxed = true), tickerAliases(), transaction())
             .reconcile("PETR4") shouldBe false
         coVerify(exactly = 0) { gaps.markReplaced(any()) }
     }
@@ -58,7 +61,7 @@ class GapServiceTest : StringSpec({
         coEvery { actions.fetchByTicker("PETR4") } returns listOf(split(id = 3))
         coEvery { gaps.markReplaced(gap.id) } returns gap.copy(status = GapStatus.REPLACED)
 
-        GapService(gaps, mockk(relaxed = true), actions, mockk(relaxed = true), transaction())
+        GapService(gaps, mockk(relaxed = true), actions, mockk(relaxed = true), tickerAliases(), transaction())
             .reconcile("PETR4") shouldBe true
         coVerify { gaps.markReplaced(gap.id) }
     }
@@ -72,7 +75,7 @@ class GapServiceTest : StringSpec({
             buy(id = 5, source = TradeSource.OPENING, quantity = "40"),
         )
 
-        GapService(gaps, trades, mockk(relaxed = true), mockk(relaxed = true), transaction())
+        GapService(gaps, trades, mockk(relaxed = true), mockk(relaxed = true), tickerAliases(), transaction())
             .reconcile("PETR4") shouldBe false
         coVerify(exactly = 0) { gaps.markReplaced(any()) }
     }
@@ -83,10 +86,32 @@ class GapServiceTest : StringSpec({
         coEvery { gaps.price(gap.id, BigDecimal("18")) } returns gap.copy(unitPrice = BigDecimal("18"))
         val positions = mockk<PositionService>(relaxed = true)
 
-        val priced = GapService(gaps, mockk(relaxed = true), mockk(relaxed = true), positions, transaction())
+        val priced = GapService(
+            gaps,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            positions,
+            tickerAliases(),
+            transaction(),
+        )
             .price(gap.id, BigDecimal("18")) as Gap.Sell
         priced.realizedPending shouldBe false
         coVerify { positions.reproject("PETR4") }
+    }
+
+    "fetchAll presents the paper's canonical ticker" {
+        val gaps = mockk<IGapRepository>(relaxed = true)
+        coEvery { gaps.fetchAll() } returns listOf(sellGap().copy(ticker = "OLD3"))
+        val service = GapService(
+            gaps,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+            tickerAliases(rename("OLD3", "NEW3")),
+            transaction(),
+        )
+
+        service.fetchAll().single().ticker shouldBe "NEW3"
     }
 
     "the whole-book pass retires each ticker's matching record" {
@@ -96,7 +121,8 @@ class GapServiceTest : StringSpec({
         coEvery { trades.fetchAllBy("PETR4") } returns listOf(sell(id = 5, quantity = "40"))
         val positions = mockk<PositionService>(relaxed = true)
 
-        GapService(gaps, trades, mockk(relaxed = true), positions, transaction()).reconcileAll() shouldBe 1
+        GapService(gaps, trades, mockk(relaxed = true), positions, tickerAliases(), transaction())
+            .reconcileAll() shouldBe 1
         coVerify { gaps.markReplaced(1) }
     }
 })

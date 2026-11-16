@@ -1,6 +1,5 @@
 package dev.agner.portfolio.usecase.income
 
-import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.commons.mapToSet
 import dev.agner.portfolio.usecase.commons.today
 import dev.agner.portfolio.usecase.income.model.Income
@@ -9,6 +8,7 @@ import dev.agner.portfolio.usecase.income.model.IncomeQuery
 import dev.agner.portfolio.usecase.income.model.IncomeStatus
 import dev.agner.portfolio.usecase.income.model.IncomeType
 import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 import java.time.Clock
@@ -16,6 +16,7 @@ import java.time.Clock
 @Service
 class IncomeService(
     private val repository: IIncomeRepository,
+    private val aliases: TickerAliasResolver,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
 
@@ -27,12 +28,12 @@ class IncomeService(
     // filtered after it is derived, never from the stored column.
     suspend fun fetchAll(query: IncomeQuery = IncomeQuery()): List<Income> {
         val filter = query.prepared()
-        return derive(repository.fetchAll()).filter { filter.matches(it) }
+        return canonicalizedIncomes(derive(repository.fetchAll())).filter { filter.matches(it) }
     }
 
     // "Upcoming" is everything not yet paid: announced and payable movements. A received (or
     // reconciled) one has already landed, so it is not a forecast.
-    suspend fun fetchUpcoming(): List<Income> = derive(repository.fetchAll())
+    suspend fun fetchUpcoming(): List<Income> = canonicalizedIncomes(derive(repository.fetchAll()))
         .filter { it.status == IncomeStatus.ANNOUNCED || it.status == IncomeStatus.PAYABLE }
 
     // Imports parsed movements, skipping the ones the ledger already holds — income is deduped by
@@ -41,12 +42,23 @@ class IncomeService(
     // paper; the batch's own duplicates collapse before the ledger is touched.
     suspend fun importEvents(creations: List<IncomeCreation>): List<Income> {
         if (creations.isEmpty()) return emptyList()
-        val existing = repository.fetchAll().mapToSet { it.naturalKey() }
-        val fresh = creations
-            .map { it.normalized() }
+        val existing = canonicalizedIncomes(repository.fetchAll()).mapToSet { it.naturalKey() }
+        val fresh = canonicalizedCreations(creations)
             .distinctBy { it.naturalKey() }
             .filter { it.naturalKey() !in existing }
         return derive(repository.saveAll(fresh))
+    }
+
+    // Reads and new writes both key on the paper's canonical ticker; a stored row under a retired
+    // code still surfaces under the current one.
+    private suspend fun canonicalizedIncomes(rows: List<Income>): List<Income> {
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        return rows.map { it.copy(ticker = canonicalByTicker.getValue(it.ticker)) }
+    }
+
+    private suspend fun canonicalizedCreations(creations: List<IncomeCreation>): List<IncomeCreation> {
+        val canonicalByTicker = aliases.canonicalAll(creations.map { it.ticker })
+        return creations.map { it.copy(ticker = canonicalByTicker.getValue(it.ticker)) }
     }
 
     private fun derive(incomes: List<Income>): List<Income> {
@@ -62,8 +74,8 @@ class IncomeService(
     // so it is imported as usual.
     suspend fun reconcile(creations: List<IncomeCreation>): List<Income> {
         if (creations.isEmpty()) return emptyList()
-        val ledger = repository.fetchAll()
-        val fresh = creations.map { it.normalized() }
+        val ledger = canonicalizedIncomes(repository.fetchAll())
+        val fresh = canonicalizedCreations(creations)
             .distinctBy { IncomeNaturalKey(it.ticker, it.date, it.type) }
         val pairs = fresh.mapNotNull { creation ->
             ledger.firstOrNull { it.matches(creation) }?.let { creation to it }
@@ -94,8 +106,6 @@ private fun Income.matches(creation: IncomeCreation): Boolean =
         type == creation.type &&
         date.year == creation.date.year &&
         date.month == creation.date.month
-
-private fun IncomeCreation.normalized() = copy(ticker = ticker.normalizedTicker())
 
 private fun Income.naturalKey() = IncomeNaturalKey(ticker, date, type)
 

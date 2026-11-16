@@ -207,6 +207,11 @@ _Avoid_: Security, stock, papel
 The normalized B3 trading code that identifies a listed asset: uppercase, with the fractional-market `F` suffix stripped (`B3SA3F` resolves to `B3SA3`).
 _Avoid_: Código de Negociação (the raw import column), symbol
 
+**Canonical Ticker**:
+The latest code in a listed asset's rename chain — the identity every listed-asset read groups by. A Ticker Alias maps an old code to the code that replaced it on an effective date; the resolver follows the chain to the latest canonical ticker and rejects a cycle. A stored Trade keeps the imported code as provenance.
+_UI:_ "Ticker" (the canonical code; the original code is shown beside it as provenance)
+_Avoid_: Current ticker, new ticker (they presume a single rename)
+
 **Asset Class**:
 The allocation bucket a holding rolls up to: `ACOES`, `FIIS`, `RENDA_FIXA`.
 _UI:_ "Classe"

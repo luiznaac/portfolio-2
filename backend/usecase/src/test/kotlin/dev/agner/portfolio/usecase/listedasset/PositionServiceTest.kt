@@ -9,6 +9,9 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
+import dev.agner.portfolio.usecase.rename
+import dev.agner.portfolio.usecase.sell
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -23,7 +26,8 @@ class PositionServiceTest : StringSpec({
     val positions = mockk<IPositionRepository>(relaxed = true)
     val trades = mockk<ITradeRepository>(relaxed = true)
     val corporateActions = mockk<ICorporateActionRepository>(relaxed = true)
-    val service = PositionService(positions, trades, corporateActions, mockk<IGapRepository>(relaxed = true))
+    val service =
+        PositionService(positions, trades, corporateActions, mockk<IGapRepository>(relaxed = true), tickerAliases())
 
     beforeTest { clearAllMocks() }
 
@@ -85,6 +89,29 @@ class PositionServiceTest : StringSpec({
 
         detail?.position shouldBe storedPosition
         detail?.trades?.size shouldBe 1
+    }
+
+    "a buy under the old code and a sell under the new code replay into one canonical position" {
+        val aliased = PositionService(
+            positions,
+            trades,
+            corporateActions,
+            mockk<IGapRepository>(relaxed = true),
+            tickerAliases(rename("OLD3", "NEW3")),
+        )
+        coEvery { trades.fetchAllBy("OLD3") } returns
+            listOf(buy(id = 1, ticker = "OLD3", quantity = "100", unitPrice = "10"))
+        coEvery { trades.fetchAllBy("NEW3") } returns
+            listOf(sell(id = 2, ticker = "NEW3", date = "2026-10-14", quantity = "40", unitPrice = "12"))
+        coEvery { corporateActions.fetchByTicker(any()) } returns emptyList()
+        coEvery { positions.save(any()) } returns Unit
+
+        val position = aliased.reproject("NEW3")
+
+        position.ticker shouldBe "NEW3"
+        position.quantity.compareTo(BigDecimal("60")) shouldBe 0
+        position.averagePrice.compareTo(BigDecimal("10")) shouldBe 0
+        coVerify { positions.delete("OLD3") }
     }
 
     "fetchDetail returns null when the ticker has no position" {

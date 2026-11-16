@@ -29,11 +29,13 @@ import dev.agner.portfolio.usecase.portfolio.model.CurrentMonth
 import dev.agner.portfolio.usecase.portfolio.model.Month
 import dev.agner.portfolio.usecase.portfolio.model.MonthStatus
 import dev.agner.portfolio.usecase.portfolio.model.Targets
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.strategyTarget
+import dev.agner.portfolio.usecase.tickerAliases
 import dev.agner.portfolio.usecase.tickerTarget
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -66,6 +68,7 @@ class OrderLifecycleServiceTest : StringSpec({
         transfers = transfers,
         attributionService = attributionService,
         strategies = strategies,
+        aliases = tickerAliases(),
         transaction = immediateTransactions,
     )
 
@@ -81,6 +84,28 @@ class OrderLifecycleServiceTest : StringSpec({
         )
         coEvery { suggestions.replaceAll(any(), any()) } returns emptyList()
         coEvery { attributionService.transfer(any(), any()) } returns transferSummary
+    }
+
+    "matches a trade stored under a retired code to its canonical order" {
+        val aliased = OrderLifecycleService(
+            months = months,
+            plans = plans,
+            trades = trades,
+            suggestions = suggestions,
+            transfers = transfers,
+            attributionService = attributionService,
+            strategies = strategies,
+            aliases = tickerAliases(rename("OLD3", "NEW3")),
+            transaction = immediateTransactions,
+        )
+        coEvery { months.fetchCurrent() } returns currentMonth
+        coEvery { trades.fetchAll() } returns listOf(trade(1, "OLD3", TradeSide.BUY, "70"))
+        coEvery { suggestions.fetchBy(1) } returns listOf(
+            persisted(1, buyCreation().copy(ticker = "NEW3")),
+        )
+        coEvery { transfers.fetchBy(1) } returns emptyList()
+
+        aliased.fetch()!!.unplannedTrades shouldBe emptyList()
     }
 
     "returns null when no month is open and writes nothing" {

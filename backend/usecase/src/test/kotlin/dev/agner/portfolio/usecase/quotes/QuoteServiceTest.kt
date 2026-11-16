@@ -5,6 +5,8 @@ import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.model.isStale
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
+import dev.agner.portfolio.usecase.rename
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -18,7 +20,7 @@ import java.math.BigDecimal
 
 class QuoteServiceTest : StringSpec({
     val repository = mockk<IQuoteRepository>(relaxed = true)
-    val service = QuoteService(repository)
+    val service = QuoteService(repository, tickerAliases())
 
     beforeTest { clearAllMocks() }
 
@@ -119,6 +121,24 @@ class QuoteServiceTest : StringSpec({
         )
 
         service.latestQuote("vale3") shouldBe quote("2026-10-12", "12")
+    }
+
+    "quote stitching merges the old and new series and picks the last close on or before the date" {
+        val stitched = QuoteService(repository, tickerAliases(rename("OLD3", "NEW3")))
+        coEvery { repository.fetchAllBy("OLD3") } returns listOf(
+            quote("2026-10-01", "10").copy(ticker = "OLD3"),
+            quote("2026-10-05", "11").copy(ticker = "OLD3"),
+        )
+        coEvery { repository.fetchAllBy("NEW3") } returns listOf(
+            quote("2026-10-09", "12").copy(ticker = "NEW3"),
+        )
+
+        // Before the rename's first new close, the old series still prices the paper.
+        stitched.latestCloseOn("NEW3", LocalDate.parse("2026-10-06")) shouldBe BigDecimal("11")
+        // After it, the merged read advances to the new code's close.
+        stitched.latestCloseOn("OLD3", LocalDate.parse("2026-10-12")) shouldBe BigDecimal("12")
+        // The current quote is the merged series' newest close.
+        stitched.latestClose("NEW3") shouldBe BigDecimal("12")
     }
 
     "a close is stale only once it is more than five calendar days old" {

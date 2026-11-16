@@ -9,7 +9,10 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerPage
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
+import dev.agner.portfolio.usecase.listedasset.model.withCanonicalTicker
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import org.springframework.stereotype.Service
 
 @Service
@@ -17,18 +20,24 @@ class TradeService(
     private val repository: ITradeRepository,
     private val positionService: PositionService,
     private val gaps: GapService,
+    private val aliases: TickerAliasResolver,
     private val transaction: ITransactionTemplate,
 ) {
 
     // A manual entry is refused when a broker import already holds the same natural tuple: the
-    // imported row is the source of truth and the manual copy would double the position. The insert
-    // and the projection it feeds run in one transaction, so a failure cannot leave the ledger and
-    // its position disagreeing.
+    // imported row is the source of truth and the manual copy would double the position. The new
+    // write canonicalizes its ticker at this boundary, so a manual trade filed under a retired code
+    // lands on the paper's current identity. The insert and the projection it feeds run in one
+    // transaction, so a failure cannot leave the ledger and its position disagreeing.
     suspend fun createManual(creation: TradeCreation): Trade {
-        val normalized = normalized(creation)
+        val canonical = aliases.canonical(creation.ticker)
+        val normalized = creation.copy(ticker = canonical)
         return transaction.execute {
             val key = normalized.naturalKey()
-            val existing = repository.fetchByKey(key)
+            // The stored import may carry an old code, so the duplicate check looks across the
+            // paper's whole alias set rather than only the canonical spelling.
+            val existing = aliases.aliasesOf(canonical)
+                .flatMap { repository.fetchByKey(key.withTicker(it)) }
             if (existing.any { it.source == TradeSource.B3_IMPORT }) throw DuplicateTradeException(key)
             val trade = repository.save(normalized, TradeSource.MANUAL, existing.size + 1)
             positionService.reproject(trade.ticker)
@@ -43,6 +52,9 @@ class TradeService(
     // no-op. A skipped occurrence that is an unconfirmed manual trade is marked confirmed by B3:
     // the manual record wins and keeps its edits. Occurrences past what the ledger holds are new
     // and are written at that occurrence's ordinal, then the ticker's position is reprojected.
+    //
+    // An import keeps the code the file carried — that is provenance — while the projection it
+    // feeds resolves the canonical ticker.
     suspend fun reconcile(key: TradeKey, creations: List<TradeCreation>) {
         val existing = repository.fetchByKey(key)
         for (occupant in existing.take(creations.size)) {
@@ -65,30 +77,57 @@ class TradeService(
     // apply reconciles against, without writing.
     suspend fun countByKey(key: TradeKey): Int = repository.fetchByKey(key).size
 
-    suspend fun fetchAll() = repository.fetchAll()
+    // Every read presents the paper's canonical ticker, with the imported code kept as provenance.
+    suspend fun fetchAll(): List<Trade> {
+        val rows = repository.fetchAll()
+        return canonicalized(rows)
+    }
 
-    suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())
+    suspend fun fetchAllBy(ticker: String): List<Trade> {
+        val aliasSet = aliases.aliasesOf(ticker)
+        val rows = aliasSet.flatMap { repository.fetchAllBy(it) }
+        return canonicalized(rows)
+    }
 
     // The ledger's paged read. The repository returns one extra row, which is the "is there another
     // page" signal; the last row of the page it returns becomes the next cursor. The two aggregates
-    // cover the whole filter, so the page can state "n de m" and a total while it loads more.
+    // cover the whole filter, so the page can state "n de m" and a total while it loads more. A
+    // typed ticker that names a renamed paper widens to its alias set, so the new code finds the
+    // rows stored under the old one.
     suspend fun fetchLedger(filter: TradeLedgerFilter): TradeLedgerPage {
-        val normalized = filter.copy(
-            ticker = filter.ticker
-                ?.normalizedTicker()
-                ?.takeIf { it.isNotEmpty() },
-        )
-        val fetched = repository.fetchLedger(normalized)
-        val page = fetched.take(normalized.limit)
+        val prepared = preparedFilter(filter)
+        val fetched = repository.fetchLedger(prepared)
+        val page = fetched.take(prepared.limit)
         val nextCursor = page.lastOrNull()
             ?.let { TradeLedgerCursor(it.date, it.id).encode() }
-            ?.takeIf { fetched.size > normalized.limit }
+            ?.takeIf { fetched.size > prepared.limit }
         return TradeLedgerPage(
-            rows = page,
+            rows = canonicalized(page),
             nextCursor = nextCursor,
-            total = repository.countLedger(normalized),
-            financialTotal = repository.sumLedgerFinancial(normalized),
+            total = repository.countLedger(prepared),
+            financialTotal = repository.sumLedgerFinancial(prepared),
         )
+    }
+
+    private suspend fun preparedFilter(filter: TradeLedgerFilter): TradeLedgerFilter {
+        val typed = (filter.ticker as? TradeTickerFilter.Search)
+            ?.text
+            ?.normalizedTicker()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return filter.copy(ticker = null)
+        val aliasSet = aliases.aliasesOf(typed)
+        return filter.copy(
+            ticker = if (aliasSet.size > 1) {
+                TradeTickerFilter.Aliases(aliasSet.sorted())
+            } else {
+                TradeTickerFilter.Search(typed)
+            },
+        )
+    }
+
+    private suspend fun canonicalized(rows: List<Trade>): List<Trade> {
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        return rows.map { it.withCanonicalTicker(canonicalByTicker.getValue(it.ticker)) }
     }
 
     // The ticker is the ledger's canonical key, so it is normalized at this boundary (ALUP11F and

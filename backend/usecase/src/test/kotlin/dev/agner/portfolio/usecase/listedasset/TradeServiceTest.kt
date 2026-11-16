@@ -8,8 +8,11 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.sell
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -26,7 +29,7 @@ class TradeServiceTest : StringSpec({
     val positionService = mockk<PositionService>(relaxed = true)
     val transaction = CountingTransaction()
     val gaps = mockk<GapService>(relaxed = true)
-    val service = TradeService(repository, positionService, gaps, transaction)
+    val service = TradeService(repository, positionService, gaps, tickerAliases(), transaction)
 
     beforeTest {
         clearAllMocks()
@@ -42,6 +45,40 @@ class TradeServiceTest : StringSpec({
 
         captured.captured.ticker shouldBe "PETR4"
         coVerify(exactly = 1) { repository.save(any(), TradeSource.MANUAL, 1) }
+    }
+
+    "createManual canonicalizes a retired code at the write boundary" {
+        val aliased = TradeService(
+            repository,
+            positionService,
+            gaps,
+            tickerAliases(rename("OLD3", "NEW3")),
+            transaction,
+        )
+        coEvery { repository.fetchByKey(any()) } returns emptyList()
+        val captured = slot<TradeCreation>()
+        coEvery { repository.save(capture(captured), any(), any()) } returns savedManual.copy(ticker = "NEW3")
+
+        aliased.createManual(creation(ticker = "OLD3"))
+
+        captured.captured.ticker shouldBe "NEW3"
+        coVerify { positionService.reproject("NEW3") }
+    }
+
+    "fetchAll presents the canonical ticker and keeps the imported code as provenance" {
+        val aliased = TradeService(
+            repository,
+            positionService,
+            gaps,
+            tickerAliases(rename("OLD3", "NEW3")),
+            transaction,
+        )
+        coEvery { repository.fetchAll() } returns listOf(buy(id = 1, ticker = "OLD3"))
+
+        val rows = aliased.fetchAll()
+
+        rows.single().ticker shouldBe "NEW3"
+        rows.single().originalTicker shouldBe "OLD3"
     }
 
     "createManual assigns the next ordinal when manual trades already share the tuple" {
@@ -146,9 +183,9 @@ class TradeServiceTest : StringSpec({
         coEvery { repository.countLedger(any()) } returns 7
         coEvery { repository.sumLedgerFinancial(any()) } returns BigDecimal("1234.56")
 
-        val page = service.fetchLedger(TradeLedgerFilter(ticker = "petr4f", limit = 2))
+        val page = service.fetchLedger(TradeLedgerFilter(ticker = TradeTickerFilter.Search("petr4f"), limit = 2))
 
-        captured.captured.ticker shouldBe "PETR4"
+        captured.captured.ticker shouldBe TradeTickerFilter.Search("PETR4")
         page.rows.map { it.id } shouldBe listOf(3, 2)
         page.nextCursor shouldBe "2026-10-02:2"
         page.total shouldBe 7
@@ -175,7 +212,7 @@ class TradeServiceTest : StringSpec({
         coEvery { repository.countLedger(any()) } returns 0
         coEvery { repository.sumLedgerFinancial(any()) } returns BigDecimal.ZERO
 
-        service.fetchLedger(TradeLedgerFilter(ticker = "   "))
+        service.fetchLedger(TradeLedgerFilter(ticker = TradeTickerFilter.Search("   ")))
 
         captured.captured.ticker shouldBe null
     }

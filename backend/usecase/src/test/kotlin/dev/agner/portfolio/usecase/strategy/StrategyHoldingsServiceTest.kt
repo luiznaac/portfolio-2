@@ -5,9 +5,11 @@ import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -21,7 +23,7 @@ class StrategyHoldingsServiceTest : StringSpec({
     val strategies = mockk<IStrategyRepository>(relaxed = true)
     val attributions = mockk<IAttributionRepository>(relaxed = true)
     val quotes = mockk<QuoteService>(relaxed = true)
-    val service = StrategyHoldingsService(strategies, attributions, quotes)
+    val service = StrategyHoldingsService(strategies, attributions, quotes, tickerAliases())
 
     beforeTest { clearAllMocks() }
 
@@ -48,6 +50,23 @@ class StrategyHoldingsServiceTest : StringSpec({
         holdings.holdings.map { it.ticker } shouldBe listOf("ITUB4", "VALE3")
         holdings.holdings.map { it.value.plain() } shouldBe listOf("100", "100")
         holdings.holdings.map { it.share.plain() } shouldBe listOf("50", "50")
+    }
+
+    "maps a slice stored under a retired code onto the canonical ticker" {
+        val aliased = StrategyHoldingsService(
+            strategies,
+            attributions,
+            quotes,
+            tickerAliases(rename("OLD3", "NEW3")),
+        )
+        coEvery { strategies.fetchById(9) } returns manualStrategy
+        coEvery { attributions.fetchAll() } returns listOf(Attribution("OLD3", 9, BigDecimal("10")))
+        coEvery { quotes.latestClose("NEW3") } returns BigDecimal("10")
+
+        val holdings = aliased.fetch(9)!!
+
+        holdings.holdings.single().ticker shouldBe "NEW3"
+        holdings.totalValue.plain() shouldBe "100"
     }
 
     "values a slice with no stored quote at zero and shares a zero bucket as zero" {

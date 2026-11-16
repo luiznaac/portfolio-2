@@ -100,6 +100,17 @@ fun LocalDateRange.removeWeekends() = mapNotNull { it.takeIf { !it.isWeekend() }
 
 fun BigDecimal.defaultScale() = setScale(2, RoundingMode.HALF_EVEN)
 
+// The quantity-weighted average price of one paper's several rows (a rename's two stored rows, or a
+// snapshot's frozen codes collapsing onto the current one). A non-positive total quantity has no
+// meaningful average, so it collapses to zero. The caller names the scale: a stored position keeps
+// the table's decimal(18,6), while a performance holding keeps its own precision.
+fun weightedAveragePrice(rows: List<Pair<BigDecimal, BigDecimal>>, scale: Int): BigDecimal {
+    val quantity = rows.fold(BigDecimal.ZERO) { total, row -> total + row.first }
+    if (quantity.signum() <= 0) return BigDecimal.ZERO
+    val cost = rows.fold(BigDecimal.ZERO) { total, row -> total + row.first.multiply(row.second) }
+    return cost.divide(quantity, scale, RoundingMode.HALF_UP)
+}
+
 // A quantity valued at a price, treating a missing quote as zero. Only informational surfaces (the
 // legacy attribution preview) may use this; valuation never does — an unpriced holding stays
 // unknown, so it can never read as R$ 0,00.
