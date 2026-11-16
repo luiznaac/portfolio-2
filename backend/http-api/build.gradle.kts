@@ -1,14 +1,3 @@
-// The committed acceptance artifacts are read from the repo's docs/ tree rather than copied into
-// test resources, so the parser tests pin the exact files the acceptance runbook uploads.
-val docsDir = rootProject.projectDir.parentFile.resolve("docs")
-
-tasks.withType<Test> {
-    inputs.file(docsDir.resolve("acceptance/fixtures/b3-negociacao-2020.xlsx"))
-    inputs.file(docsDir.resolve("acceptance/fixtures/posicao-custodia-2020.xlsx"))
-    inputs.file(docsDir.resolve("acceptance/fixtures/xp-relatorio-2026-10.pdf"))
-    systemProperty("docsDir", docsDir.absolutePath)
-}
-
 dependencies {
     implementation(project(":usecase"))
 

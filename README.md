@@ -1,81 +1,62 @@
 # portfolio-2
 
-A personal **investment portfolio tracker**, focused on Brazilian fixed-income investing. It keeps track of bonds and checking accounts, calculates how much they're worth today (including accrued yield and applicable taxes), and can generate reports.
+A personal investment tracker for Brazilian fixed-income and B3 listed assets: it values what you hold today, plans the month against targets, and reports the tax due.
 
-## What it actually does for you
+![Carteira · Visão geral — capital, allocation by class, monthly results and the attention queue for a seeded portfolio](docs/assets/portfolio-overview.png)
 
-- **Tracks bonds** (renda fixa) — both fixed-rate and floating-rate (indexed to CDI/SELIC) — and the orders (purchases/contributions) that make them up.
-- **Tracks checking account balances and movements.**
-- **Calculates current value/yield** for everything above, pulling official index rates (CDI, SELIC) from the Brazilian Central Bank's public API.
-- **Calculates Brazilian taxes** that would apply if you redeemed today — IOF (a tax that decreases the longer you hold an investment, within the first 30 days) and income tax (rate depends on how long you've held the position).
-- **Generates reports** — XLSX and PDF exports of your consolidated position.
-- **Schedules its own recurring jobs** (like periodic consolidation) by registering them with a companion service, [chameidor](../chameidor/README.md), instead of running its own cron loop.
-- **Web UI** — a React SPA (`frontend/`) for browsing the portfolio, positions and index rates.
+## Quickstart
 
-In short: point it at your bonds and accounts, and it tells you what they're worth today, after tax, without you doing the math by hand.
-
-## Repository layout
-
-This is a monorepo:
-
-- **`backend/`** — the Ktor + Spring + Exposed service (Gradle multi-module). See [backend/AGENTS.md](backend/AGENTS.md).
-- **`frontend/`** — the React + Vite + Tailwind SPA that consumes the HTTP API. See [frontend/README.md](frontend/README.md).
-- repo root — combined `Dockerfile` / `docker-compose.yml`, `deploy/` templates, and a script-only `package.json` task runner (`npm run db | be:run | fe:dev | check | up`).
-
-## Using it
-
-### Run it locally
-
-Requires Docker, JDK 21 and Node 20+.
+Requires Docker 25+.
 
 ```bash
-npm run db          # starts a local MySQL instance on :8112 (database: portfolio)
-npm run be:run      # runs the backend on :8110 (needs MYSQL_HOST=localhost etc.)
-npm run fe:dev      # runs the SPA on :8113, proxying /api -> :8110
+docker compose up --build
 ```
 
-portfolio-2 holds a committed 10-port block in the family allocation (`.salgadinhos/ports.json`); a fresh clone with no `.env` boots on it:
+Ports: API `8110`, web `8111` (the SPA is at `/portfolio/`), MySQL `8112`.
 
-| Role | Host port | What it is |
-|---|---|---|
-| api | `8110` | the Ktor backend — `http://localhost:8110` |
-| web | `8111` | the combined image's nginx (SPA + `/api` proxy) |
-| mysql | `8112` | the dev database (the container side stays `3306`) |
-| frontend-dev | `8113` | the Vite dev server, strict on its port |
-
-If you want scheduled jobs to actually run, also start [chameidor](../chameidor/README.md) on its **API** role (`8100`) — portfolio-2 talks to it at `http://localhost:8100` by default. (Its web role only proxies `/api/`, so `/tasks/one-time` on the web port would hit the SPA fallback.)
-
-Full stack in one container: `npm run up` (or `docker compose up --build`) → SPA on `http://localhost:8111`, API on `http://localhost:8110`.
-
-### What you can do through the API
-
-- `BondController` / `BondOrderController` — register bonds and their orders.
-- `CheckingAccountController` — register checking accounts and movements.
-- `IndexController` / `IndexValueController` — manage the reference indexes (CDI, SELIC) and their historical values.
-- `ConsolidationController` — get your consolidated position across everything you've registered.
-- `UploadController` — generate/upload XLSX or PDF reports.
-- `HealthController` — service health check.
-
-### Build & test
+## Checks
 
 ```bash
-cd backend && ./gradlew clean build       # backend
-npm --prefix frontend run build           # frontend
-npm run check                             # both, from the repo root
+npm run be:unit          # backend unit lane, no Docker
+npm run be:integration   # backend integration lane, needs Docker
+npm run be:check         # backend detekt plus the full test suite, needs Docker
+npm run fe:typecheck     # SPA typecheck
+npm run fe:lint          # SPA lint
+npm run fe:test          # SPA tests
+npm run fe:build         # SPA production build
+npm run check            # canonical all-checks command
 ```
 
-## Where things live
+## How it fits
 
-- `backend/usecase` — the actual investment/tax logic (bonds, checking accounts, indexes, tax calculation), organized one folder per business concept.
-- `backend/persistence` — how everything is stored in MySQL.
-- `backend/gateway` — talks to the Central Bank of Brazil's rates API and to chameidor for scheduling.
-- `backend/http-api` — the HTTP endpoints listed above, plus PDF/XLSX report generation.
-- `backend/application` — the entry point and configuration.
-- `frontend/src` — the SPA: `api/` (typed HTTP client mirroring the controllers), `pages/`, `components/`, `lib/`, `i18n/`.
-- `deploy/` — nginx + supervisord templates for the combined Docker image.
+portfolio-2 registers its recurring consolidation and reporting jobs with [chameidor](https://github.com/luiznaac/chameidor), a sibling scheduler, over the `IScheduleGateway` seam instead of running its own cron loop. The backend serves the HTTP API and the SPA consumes it; `contracts/` holds the wire fixtures both sides test against. Module, seam and entry-point navigation lives in [docs/code-map.md](docs/code-map.md).
 
-See [AGENTS.md](AGENTS.md) for the monorepo overview and [backend/AGENTS.md](backend/AGENTS.md) for backend architecture and conventions.
+## Limits
 
-## Related project
+- The app requires `CHAMEIDOR_TOKEN` at boot; the dev fixture is `dev-portfolio-fixture-token` (see `.env.example`) and the combined image reads it from the gitignored `docker-compose.override.yml` the [acceptance runbook](docs/runbooks/acceptance.md) sets up.
+- The screenshot is the product's real dark A · Console UI; the family standard's light-theme preference is not adopted because the product ships no light theme.
+- The GitHub social preview is a crop of the screenshot above, uploaded by hand in the repository settings — GitHub exposes no API for it.
+- The combined image serves the SPA under `/portfolio/`; a bare `/` returns the shell without its assets.
+- Scheduled jobs fire only while chameidor runs on its API role; the Quickstart does not start it.
+- The integration lane needs Docker; the unit lane runs without it.
+- The backend + SPA dev loop is in the [local development runbook](docs/runbooks/local-development.md).
 
-Uses [chameidor](../chameidor/README.md) as its task scheduler — run both locally if you need scheduled consolidation/reporting jobs to actually fire.
+## Docs
+
+- [AGENTS.md — portfolio-2 monorepo](AGENTS.md) — open it when you need the monorepo conventions, the surface declaration and the run story.
+- [AGENTS.md — portfolio-2 backend](backend/AGENTS.md) — open it when you touch the backend's architecture, testing or configuration.
+- [Coding standards — Kotlin lane](backend/CODING_STANDARDS.md) — open it when you need the Kotlin idiom rules the tooling does not enforce.
+- [AGENTS.md — portfolio-2 frontend](frontend/AGENTS.md) — open it when you touch the SPA's layout, commands or testing.
+- [Coding standards — React lane](frontend/CODING_STANDARDS.md) — open it when you need the React idiom rules the tooling does not enforce.
+- [Carteira Ideal](CONTEXT.md) — open it when you need the domain vocabulary the code and the UI share.
+- [Code map](docs/code-map.md) — open it when you need to go from a seam to the file a change belongs to.
+- [Architecture decision records](docs/adr/) — open it when you need the reasoning behind an irreversible choice.
+- [Observability — logging & metrics](backend/docs/observability.md) — open it when a change emits or configures telemetry.
+- [Migration baseline history](docs/migrations.md) — open it when you touch the V1 baseline or diagnose a schema mismatch.
+- [Local development runbook — portfolio-2](docs/runbooks/local-development.md) — open it when you need the backend + SPA dev loop, its env settings and the chameidor hookup.
+- [Acceptance runbook — portfolio-2](docs/runbooks/acceptance.md) — open it when you need the full-stack run, the seeds and the Browser scenarios.
+
+## Related projects
+
+- [chameidor](https://github.com/luiznaac/chameidor) — the scheduler portfolio-2 registers its recurring jobs with.
+- [environments](https://github.com/luiznaac/environments) — the scaffold this repository was generated from.

@@ -11,6 +11,12 @@ Two projects, one repo:
 
 - [`docs/code-map.md`](docs/code-map.md)
 
+## Documentation
+
+- [Family documentation standard](https://github.com/luiznaac/salgadinhos/blob/master/docs/salgadinhos/documentation-standard.md)
+- [`refresh-docs` skill](https://github.com/luiznaac/salgadinhos/blob/master/skills/refresh-docs/SKILL.md)
+- Run `refresh-docs audit` when a change hits the standard's change-kind matrix.
+
 ## Shared contracts
 
 Repo-root `contracts/` holds JSON fixtures that are the cross-cutting source of truth for the backend tests. `contracts/error-response.json` is the canonical domain-exception body: the backend's `DomainExceptionContractTest` asserts the API serialises exactly it, so a shape change edits the fixture once.
@@ -37,4 +43,4 @@ Surfaces: **HTTP + Browser**.
 
 Run story: combined Docker image — `docker compose up --build` at the repo root (`mysql` + `app`), run in the acceptance session; `CHAMEIDOR_TOKEN` injected as the dev fixture via a gitignored `docker-compose.override.yml`; chameidor is not booted.
 
-Runbook: [`docs/acceptance-runbook.md`](docs/acceptance-runbook.md).
+Runbook: [`docs/runbooks/acceptance.md`](docs/runbooks/acceptance.md).

@@ -12,9 +12,9 @@ class B3CustodyAcceptanceFixtureTest : DescribeSpec({
 
     describe("the committed custody acceptance fixture") {
 
-        val fixture = acceptanceDocsFixture("posicao-custodia-2020.xlsx")
+        val fixture = loadAcceptanceFixture("posicao-custodia-2020.xlsx")
         val parser = B3PositionParser()
-        val bytes = fixture.readBytes()
+        val bytes = fixture.bytes
         val rows = parser.parse(fixture.name, bytes)
 
         it("is claimed by the B3 position parser") {
