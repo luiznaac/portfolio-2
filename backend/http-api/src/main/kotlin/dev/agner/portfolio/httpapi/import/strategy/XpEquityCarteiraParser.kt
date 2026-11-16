@@ -6,7 +6,7 @@ import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import org.springframework.stereotype.Component
 
 // The Top Ações / Top Dividendos / Top Small Caps layout: a nine-column table whose rows print
-// `Companhia TICKER peso% Rating R$ preço-alvo`. Only the summary page's table is read — the
+// `Companhia TICKER peso% Rating R$/US$ preço-alvo`. Only the summary page's table is read — the
 // performance page repeats the tickers with last month's dot-decimal weights and no rating, and
 // must never feed targets (issue #93's stale-table trap).
 @Component
@@ -23,11 +23,14 @@ class XpEquityCarteiraParser : XpTableReportParser() {
         ticker = match.groupValues[1].normalizedTicker(),
         weight = parsePtBrDecimal(match.groupValues[2]),
         rating = parseRating(match.groupValues[3]),
-        targetPrice = parsePtBrDecimal(match.groupValues[4]),
+        targetPrice = parsePtBrDecimal(match.groupValues[5]),
+        targetCurrency = parseTargetCurrency(match.groupValues[4]),
     )
 
+    // A dollar-quoted target is a valid row, not a missing one: the symbol is captured so the price
+    // keeps its currency instead of the row vanishing from the table.
     override val row = Regex(
-        "$TICKER_GROUP\\s+$WEIGHT_GROUP\\s+(Compra|Neutro|Venda)\\s+R\\$\\s*([\\d.,]+)",
+        "$TICKER_GROUP\\s+$WEIGHT_GROUP\\s+(Compra|Neutro|Venda)\\s+(R\\$|US\\$)\\s*([\\d.,]+)",
         RegexOption.IGNORE_CASE,
     )
 }

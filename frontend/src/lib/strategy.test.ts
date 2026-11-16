@@ -625,6 +625,7 @@ describe("editionReviewRows", () => {
       weight: 12.5,
       rating: "NEUTRAL",
       targetPrice: 85,
+      targetCurrency: "BRL",
       change: "changed",
     });
   });
@@ -689,6 +690,8 @@ describe("editionDeltaRows", () => {
       ratingBefore: "NEUTRAL",
       targetPrice: 85,
       targetPriceBefore: 85,
+      targetCurrency: "BRL",
+      targetCurrencyBefore: "BRL",
       doNotTrade: true,
       doNotTradeBefore: false,
       change: "changed",
@@ -710,6 +713,50 @@ describe("editionDeltaRows", () => {
       targetPriceChanges: 1,
       alerts: 1,
     });
+  });
+
+  it("treats a target price quoted in another currency as a change", () => {
+    const dollar: Edition = {
+      ...staged,
+      entries: [
+        {
+          ticker: "PETR4",
+          weight: 25,
+          rating: "BUY",
+          target_price: 60,
+          target_currency: "USD",
+          do_not_trade: false,
+        },
+      ],
+    };
+
+    const [row] = editionDeltaRows(dollar, active);
+
+    expect(row.change).toBe("changed");
+    expect(row.targetCurrency).toBe("USD");
+    expect(row.targetCurrencyBefore).toBe("BRL");
+    expect(editionDeltaSummary([row]).targetPriceChanges).toBe(1);
+  });
+
+  it("reads a legacy entry with no currency and an explicit BRL entry as the same price", () => {
+    const explicit: Edition = {
+      ...staged,
+      entries: [
+        {
+          ticker: "PETR4",
+          weight: 25,
+          rating: "BUY",
+          target_price: 60,
+          target_currency: "BRL",
+          do_not_trade: false,
+        },
+      ],
+    };
+
+    const [row] = editionDeltaRows(explicit, active);
+
+    expect(row.change).toBe("unchanged");
+    expect(editionDeltaSummary([row]).targetPriceChanges).toBe(0);
   });
 
   it("marks every row new and raises no alert when there is no active edition", () => {

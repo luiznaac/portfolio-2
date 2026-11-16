@@ -877,6 +877,9 @@ export interface OrderPlan {
 // A strategy report's analyst recommendation — the English key the backend serialises.
 export type Rating = "BUY" | "NEUTRAL" | "SELL";
 
+// The currency an Edition Entry's target price is quoted in. Null reads as BRL, the reports' default.
+export type TargetCurrency = "BRL" | "USD";
+
 export type EditionStatus = "STAGED" | "ACTIVE";
 
 // A Strategy is either report-driven (fed by an Edition, planned through Targets) or manual — the
@@ -927,6 +930,7 @@ export interface EditionEntry {
   weight: number;
   rating?: Rating;
   target_price?: number;
+  target_currency?: TargetCurrency;
   do_not_trade: boolean;
 }
 

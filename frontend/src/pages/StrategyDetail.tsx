@@ -537,7 +537,7 @@ function StagedEditionReview({
         row.targetPrice === undefined ? (
           <Unknown />
         ) : (
-          <span className="font-mono">{formatCurrency(row.targetPrice)}</span>
+          <span className="font-mono">{formatCurrency(row.targetPrice, row.targetCurrency)}</span>
         ),
     },
     {

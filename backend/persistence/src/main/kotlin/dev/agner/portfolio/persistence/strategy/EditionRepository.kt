@@ -126,6 +126,7 @@ class EditionRepository(
                 weight = entry.weight
                 rating = entry.rating
                 targetPrice = entry.targetPrice
+                targetCurrency = entry.targetCurrency
                 doNotTrade = entry.doNotTrade
             }
         }

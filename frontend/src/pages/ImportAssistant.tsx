@@ -19,6 +19,7 @@ import type {
   ImportRow,
   ImportSource,
   Strategy,
+  TargetCurrency,
 } from "../api/types.ts";
 import { Badge } from "../components/Badge.tsx";
 import { Button } from "../components/Button.tsx";
@@ -717,11 +718,7 @@ function StepEditionDiff({
       key: "target",
       header: "Preço-alvo",
       align: "right",
-      render: (row) => (
-        <span className="font-mono">
-          {deltaText(row.targetPriceBefore, row.targetPrice, priceLabel)}
-        </span>
-      ),
+      render: (row) => <span className="font-mono">{priceDeltaText(row)}</span>,
     },
     {
       key: "rating",
@@ -930,8 +927,18 @@ function EditionChangeCell({ change }: { change: EditionEntryChange }) {
   return <span className="text-ink-dim">—</span>;
 }
 
-function priceLabel(value: number | undefined): string {
-  return value === undefined ? "—" : formatCurrency(value);
+function priceLabel(value: number | undefined, currency: TargetCurrency | undefined): string {
+  return value === undefined ? "—" : formatCurrency(value, currency);
+}
+
+// A target-price cell reads the staged price beside the active one, each in its own currency — a
+// price that moved and a currency that moved are both changes.
+function priceDeltaText(row: EditionDeltaRow): string {
+  const after = priceLabel(row.targetPrice, row.targetCurrency);
+  const unchanged =
+    row.targetPriceBefore === row.targetPrice && row.targetCurrencyBefore === row.targetCurrency;
+  if (row.targetPriceBefore === undefined || unchanged) return after;
+  return `${priceLabel(row.targetPriceBefore, row.targetCurrencyBefore)} → ${after}`;
 }
 
 function deltaText<T>(

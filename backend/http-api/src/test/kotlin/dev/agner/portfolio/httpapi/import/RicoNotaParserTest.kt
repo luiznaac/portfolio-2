@@ -14,8 +14,8 @@ class RicoNotaParserTest : DescribeSpec({
 
     describe("the committed synthetic Rico nota") {
 
-        val fixture = acceptanceDocsFixture("rico-nota-2019.pdf")
-        val bytes = fixture.readBytes()
+        val fixture = loadAcceptanceFixture("rico-nota-2019.pdf")
+        val bytes = fixture.bytes
         val parser = RicoNotaParser()
         val rows = parser.parse(fixture.name, bytes)
 
@@ -163,4 +163,4 @@ private val FIXTURE_ROWS = listOf(
 // A real text PDF from the repo's docs tree that is not a Rico note: the claim is by content, so a
 // PDF-shaped file with another broker's header must not be claimed.
 private fun notARicoNote(): ByteArray =
-    acceptanceDocsFixture("xp-relatorio-2026-10.pdf").readBytes()
+    loadAcceptanceFixture("xp-relatorio-2026-10.pdf").bytes

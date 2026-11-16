@@ -5,6 +5,7 @@ import dev.agner.portfolio.usecase.strategy.InvalidStrategyReportException
 import dev.agner.portfolio.usecase.strategy.UnsupportedStrategyReportException
 import dev.agner.portfolio.usecase.strategy.model.EditionEntry
 import dev.agner.portfolio.usecase.strategy.model.Rating
+import dev.agner.portfolio.usecase.strategy.model.TargetCurrency
 import dev.agner.portfolio.usecase.strategy.model.editionWeightProblem
 import kotlinx.datetime.YearMonth
 
@@ -20,6 +21,11 @@ internal const val WEIGHT_GROUP = "(\\d+(?:,\\d+)?)%"
 
 internal fun pdfPages(fileName: String, content: ByteArray): List<String> =
     pdfPagesOrNull(content) ?: throw UnsupportedStrategyReportException(fileName)
+
+// The currency symbol a report prints before a target price. "R$" is a Brazilian listing, "US$" one
+// quoted abroad; anything else the layouts print is reais.
+internal fun parseTargetCurrency(raw: String): TargetCurrency =
+    if (raw.trim().uppercase().startsWith("US")) TargetCurrency.USD else TargetCurrency.BRL
 
 internal fun parseRating(raw: String): Rating = when (raw.trim().uppercase()) {
     "COMPRA", "BUY" -> Rating.BUY
