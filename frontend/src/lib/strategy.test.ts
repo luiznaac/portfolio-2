@@ -625,6 +625,7 @@ describe("editionReviewRows", () => {
       weight: 12.5,
       rating: "NEUTRAL",
       targetPrice: 85,
+      targetCurrency: "BRL",
       change: "changed",
     });
   });
@@ -689,6 +690,8 @@ describe("editionDeltaRows", () => {
       ratingBefore: "NEUTRAL",
       targetPrice: 85,
       targetPriceBefore: 85,
+      targetCurrency: "BRL",
+      targetCurrencyBefore: "BRL",
       doNotTrade: true,
       doNotTradeBefore: false,
       change: "changed",
@@ -731,7 +734,7 @@ describe("editionDeltaRows", () => {
 
     expect(row.change).toBe("changed");
     expect(row.targetCurrency).toBe("USD");
-    expect(row.targetCurrencyBefore).toBeUndefined();
+    expect(row.targetCurrencyBefore).toBe("BRL");
     expect(editionDeltaSummary([row]).targetPriceChanges).toBe(1);
   });
 

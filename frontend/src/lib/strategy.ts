@@ -457,7 +457,8 @@ export function editionReviewRows(staged: Edition, active?: Edition): EditionRev
 // One row of the assistant's edition diff: the staged value beside the active edition's, so weight,
 // rating, target price and the "não operar" flag all read as a before → after move. `change` keeps
 // the review rule (weight/rating/target price); the policy flip is its own alert, never a silent
-// "alterada".
+// "alterada". Both currencies are normalised to their effective value, so the cell and the counts
+// agree on a legacy row that carries no currency.
 export interface EditionDeltaRow {
   ticker: string;
   weight: number;
@@ -496,8 +497,9 @@ export function editionDeltaRows(staged: Edition, active?: Edition): EditionDelt
       ratingBefore: before?.rating,
       targetPrice: entry.target_price,
       targetPriceBefore: before?.target_price,
-      targetCurrency: entry.target_currency,
-      targetCurrencyBefore: before?.target_currency,
+      targetCurrency: effectiveCurrency(entry.target_currency),
+      targetCurrencyBefore:
+        before === undefined ? undefined : effectiveCurrency(before.target_currency),
       doNotTrade: entry.do_not_trade,
       doNotTradeBefore: before?.do_not_trade ?? false,
       change,
