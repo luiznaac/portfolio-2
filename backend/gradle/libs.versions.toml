@@ -50,7 +50,7 @@ logstash-logback-encoder = { module="net.logstash.logback:logstash-logback-encod
 
 logback-classic = "ch.qos.logback:logback-classic:1.5.20"
 
-spring-boot = { module = "org.springframework.boot:spring-boot", version = "3.5.7" }
+spring-boot = { module = "org.springframework.boot:spring-boot", version = "4.1.2" }
 spring-context = { module="org.springframework:spring-context", version.ref="springframework" }
 
 snakeyaml = "org.yaml:snakeyaml:2.5"
