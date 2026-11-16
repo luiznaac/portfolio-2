@@ -21,6 +21,10 @@ class TradeKey(
     val unitPrice: BigDecimal,
     val institutionId: Int,
 ) {
+    // The same natural tuple under another code: the alias-aware duplicate check walks the paper's
+    // whole history without re-deriving the rest of the key.
+    fun withTicker(ticker: String) = TradeKey(date, side, venue, ticker, quantity, unitPrice, institutionId)
+
     override fun equals(other: Any?): Boolean =
         other is TradeKey &&
             date == other.date &&

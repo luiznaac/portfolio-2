@@ -16,6 +16,7 @@ import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -32,7 +33,7 @@ class AttributionServiceTest : StringSpec({
     val strategies = mockk<IStrategyRepository>(relaxed = true)
     val catalog = mockk<ICatalogRepository>(relaxed = true)
     val transaction = AttributionTransaction()
-    val service = AttributionService(attributions, positions, strategies, catalog, transaction)
+    val service = AttributionService(attributions, positions, strategies, catalog, tickerAliases(), transaction)
 
     beforeTest {
         clearAllMocks()

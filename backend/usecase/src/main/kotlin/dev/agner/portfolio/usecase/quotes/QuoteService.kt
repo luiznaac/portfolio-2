@@ -1,10 +1,10 @@
 package dev.agner.portfolio.usecase.quotes
 
 import dev.agner.portfolio.usecase.catalog.model.CotahistRow
-import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.quotes.model.Quote
 import dev.agner.portfolio.usecase.quotes.model.QuoteSource
 import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.toList
@@ -22,17 +22,31 @@ data class MonthlyCloses(
 @Service
 class QuoteService(
     private val repository: IQuoteRepository,
+    private val aliases: TickerAliasResolver,
 ) {
 
-    suspend fun fetchAllBy(ticker: String) = repository.fetchAllBy(ticker.normalizedTicker())
+    // The paper's merged close series: every code it has traded under, oldest first. A rename does
+    // not split the history, so a caller reading the old code and one reading the new see the same
+    // series.
+    suspend fun fetchAllBy(ticker: String): List<Quote> =
+        aliases.aliasesOf(ticker)
+            .flatMap { repository.fetchAllBy(it) }
+            .sortedBy { it.date }
 
     // The "current quote" every valuation reads: the latest stored close with the date it belongs
     // to, null when the ticker has none yet. The rule lives here so the allocation tree and the
     // order plan cannot drift; the date lets a caller mark an old-but-real close as stale.
-    suspend fun latestQuote(ticker: String): Quote? =
-        repository.fetchAllBy(ticker.normalizedTicker()).maxByOrNull { it.date }
+    suspend fun latestQuote(ticker: String): Quote? = fetchAllBy(ticker).maxByOrNull { it.date }
 
     suspend fun latestClose(ticker: String): BigDecimal? = latestQuote(ticker)?.close
+
+    // The close a historical read needs: the last one on or before the requested date, merged across
+    // the alias set. Without the merge a rename would make the new code look unpriced until its
+    // first post-rename close, dropping performance to a stale or absent value.
+    suspend fun latestQuoteOn(ticker: String, asOf: LocalDate): Quote? =
+        fetchAllBy(ticker).filter { it.date <= asOf }.maxByOrNull { it.date }
+
+    suspend fun latestCloseOn(ticker: String, asOf: LocalDate): BigDecimal? = latestQuoteOn(ticker, asOf)?.close
 
     // Store the COTAHIST EOD closes for the latest published day — the authoritative close once the
     // market has finished.

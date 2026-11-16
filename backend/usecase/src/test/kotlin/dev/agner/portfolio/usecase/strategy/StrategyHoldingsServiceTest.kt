@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -21,7 +22,7 @@ class StrategyHoldingsServiceTest : StringSpec({
     val strategies = mockk<IStrategyRepository>(relaxed = true)
     val attributions = mockk<IAttributionRepository>(relaxed = true)
     val quotes = mockk<QuoteService>(relaxed = true)
-    val service = StrategyHoldingsService(strategies, attributions, quotes)
+    val service = StrategyHoldingsService(strategies, attributions, quotes, tickerAliases())
 
     beforeTest { clearAllMocks() }
 

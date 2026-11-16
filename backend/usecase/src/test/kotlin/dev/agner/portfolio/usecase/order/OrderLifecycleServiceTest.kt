@@ -34,6 +34,7 @@ import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.strategyTarget
+import dev.agner.portfolio.usecase.tickerAliases
 import dev.agner.portfolio.usecase.tickerTarget
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -66,6 +67,7 @@ class OrderLifecycleServiceTest : StringSpec({
         transfers = transfers,
         attributionService = attributionService,
         strategies = strategies,
+        aliases = tickerAliases(),
         transaction = immediateTransactions,
     )
 

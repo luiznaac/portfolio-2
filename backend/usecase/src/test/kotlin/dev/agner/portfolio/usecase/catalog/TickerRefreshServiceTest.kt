@@ -17,6 +17,7 @@ import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.quotes.MonthlyCloses
 import dev.agner.portfolio.usecase.quotes.QuoteService
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -38,7 +39,7 @@ class TickerRefreshServiceTest : StringSpec({
     val source = mockk<ICotahistSource>(relaxed = true)
     val positions = mockk<IPositionRepository>(relaxed = true)
     val trades = mockk<ITradeRepository>(relaxed = true)
-    val service = TickerRefreshService(catalogService, quoteService, source, positions, trades, CLOCK)
+    val service = TickerRefreshService(catalogService, quoteService, source, positions, trades, tickerAliases(), CLOCK)
 
     beforeTest {
         clearAllMocks()

@@ -10,6 +10,7 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerPage
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.request.get
@@ -63,7 +64,7 @@ class TradeControllerTest : DescribeSpec({
 
                 response.status shouldBe HttpStatusCode.OK
                 captured.captured shouldBe TradeLedgerFilter(
-                    ticker = "petr4",
+                    ticker = TradeTickerFilter.Search("petr4"),
                     from = LocalDate.parse("2026-10-01"),
                     to = LocalDate.parse("2026-10-31"),
                     side = TradeSide.BUY,

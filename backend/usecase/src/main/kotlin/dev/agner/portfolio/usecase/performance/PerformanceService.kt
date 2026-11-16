@@ -1,11 +1,13 @@
 package dev.agner.portfolio.usecase.performance
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
-import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
+import dev.agner.portfolio.usecase.catalog.model.canonicalEntryByTicker
+import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.commons.today
+import dev.agner.portfolio.usecase.commons.weightedAveragePrice
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.income.repository.IIncomeRepository
@@ -19,6 +21,7 @@ import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.monthlyclose.model.CloseState
 import dev.agner.portfolio.usecase.monthlyclose.model.HoldingSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.model.Snapshot
+import dev.agner.portfolio.usecase.monthlyclose.model.TickerIncomeSnapshot
 import dev.agner.portfolio.usecase.monthlyclose.repository.ISnapshotRepository
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkBlend
 import dev.agner.portfolio.usecase.performance.benchmark.BenchmarkBlendCalculator
@@ -40,11 +43,11 @@ import dev.agner.portfolio.usecase.performance.model.StrategyPerformance
 import dev.agner.portfolio.usecase.performance.model.TickerPerformance
 import dev.agner.portfolio.usecase.portfolio.model.Targets
 import dev.agner.portfolio.usecase.portfolio.repository.ITargetRepository
-import dev.agner.portfolio.usecase.quotes.model.Quote
-import dev.agner.portfolio.usecase.quotes.repository.IQuoteRepository
+import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.Strategy
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -66,7 +69,7 @@ private typealias BenchmarkObservations = Map<BenchmarkIndex, List<BenchmarkObse
 class PerformanceService(
     private val snapshots: ISnapshotRepository,
     private val catalog: ICatalogRepository,
-    private val quotes: IQuoteRepository,
+    private val quotes: QuoteService,
     private val targets: ITargetRepository,
     private val strategies: IStrategyRepository,
     private val benchmarks: IBenchmarkGateway,
@@ -74,6 +77,7 @@ class PerformanceService(
     private val incomes: IIncomeRepository,
     private val corporateActions: ICorporateActionRepository,
     private val gaps: IGapRepository,
+    private val aliases: TickerAliasResolver,
     private val clock: Clock,
 ) {
 
@@ -90,7 +94,7 @@ class PerformanceService(
         val period = current.state.period
         val previousEnd = previous?.state?.period?.endDate()
         val monthEnd = period.endDate()
-        val incomeByTicker = current.state.incomeByTicker.associate { it.ticker to it.net }
+        val incomeByTicker = canonicalIncomeByTicker(current.state.incomeByTicker)
         val chain = targets.fetchByMonth(monthId)
         val observations = benchmarkObservations(period, period)
         val returns = returnsFor(observations, period)
@@ -205,17 +209,19 @@ class PerformanceService(
         val incomeRows = incomes.fetchAll()
         val actions = corporateActions.fetchApplied()
         val openGaps = gaps.fetchAll().filter { it.status == GapStatus.OPEN }
-        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
-        val quoteSeries = (ledger.map { it.ticker } + actions.map { it.ticker } + openGaps.map { it.ticker })
-            .toSet()
-            .associateWith { quotes.fetchAllBy(it) }
+        val canonicalByTicker = aliases.canonicalAll(
+            (ledger.map { it.ticker } + actions.map { it.ticker } + openGaps.map { it.ticker }).distinct(),
+        )
+        val assetClasses = effectiveClasses()
 
         val raw: List<PeriodPerformance> = periods
             .runningFold(emptyList<PeriodPerformance>()) { points, period ->
                 val asOf = period.endDate()
-                val positions = positionsAt(ledger, actions, openGaps, asOf)
+                val positions = positionsAt(ledger, actions, openGaps, asOf, canonicalByTicker)
+                // The quote read stitches the paper's old and new series, so the month-end close
+                // never falls back to a stale value at the rename.
                 val closes = positions.mapNotNull { position ->
-                    lastClose(quoteSeries[position.ticker].orEmpty(), asOf)?.let { position.ticker to it }
+                    quotes.latestCloseOn(position.ticker, asOf)?.let { position.ticker to it }
                 }.toMap()
                 val monthValue = ComputedPerformanceCalculator.valueAt(positions, closes, assetClasses)
                 val netAportes = ComputedPerformanceCalculator.netAportes(ledger, incomeRows, period)
@@ -255,10 +261,11 @@ class PerformanceService(
         actions: List<CorporateAction>,
         openGaps: List<Gap>,
         asOf: LocalDate,
+        canonicalByTicker: Map<String, String>,
     ): List<Position> {
-        val tradesByTicker = ledger.filter { it.date <= asOf }.groupBy { it.ticker }
-        val actionsByTicker = actions.filter { it.exDate <= asOf }.groupBy { it.ticker }
-        val gapsByTicker = openGaps.filter { it.date <= asOf }.groupBy { it.ticker }
+        val tradesByTicker = ledger.filter { it.date <= asOf }.groupBy { canonicalByTicker.getValue(it.ticker) }
+        val actionsByTicker = actions.filter { it.exDate <= asOf }.groupBy { canonicalByTicker.getValue(it.ticker) }
+        val gapsByTicker = openGaps.filter { it.date <= asOf }.groupBy { canonicalByTicker.getValue(it.ticker) }
         val tickers = tradesByTicker.keys + actionsByTicker.keys + gapsByTicker.keys
 
         return tickers.map { ticker ->
@@ -270,9 +277,6 @@ class PerformanceService(
             )
         }
     }
-
-    private fun lastClose(quotes: List<Quote>, asOf: LocalDate): BigDecimal? =
-        quotes.filter { it.date <= asOf }.maxByOrNull { it.date }?.close
 
     private fun lastCompletedMonth(): YearMonth {
         val today = LocalDate.today(clock)
@@ -313,7 +317,7 @@ class PerformanceService(
         val previousByClass = context.previous?.classes?.associateBy { it.assetClass }.orEmpty()
         val targetByClass = context.chain.classes.associate { it.assetClass to it.percentage }
         val totalTarget = targetByClass.values.fold(BigDecimal.ZERO, BigDecimal::add)
-        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
+        val assetClasses = effectiveClasses()
         val incomeByClass = context.incomeByTicker.entries
             .groupBy({ (ticker, _) -> assetClasses[ticker] }, { (_, net) -> net })
             .mapValues { (_, amounts) -> amounts.fold(BigDecimal.ZERO, BigDecimal::add).defaultScale() }
@@ -450,9 +454,9 @@ class PerformanceService(
     }
 
     private suspend fun tickerPerformances(context: TickerPerformanceContext): List<TickerPerformance> {
-        val previousByTicker = context.previous?.holdings?.associateBy { it.ticker }.orEmpty()
-        val currentByTicker = context.current.holdings.associateBy { it.ticker }
-        val assetClasses = catalog.fetchAll().effectiveClassByTicker()
+        val previousByTicker = canonicalHoldings(context.previous?.holdings.orEmpty())
+        val currentByTicker = canonicalHoldings(context.current.holdings)
+        val assetClasses = effectiveClasses()
 
         val endValues = currentByTicker.mapValues { (_, holding) -> valueAt(holding, context.currentEnd) }
         val endByClass = endValues.entries
@@ -501,8 +505,42 @@ class PerformanceService(
         }
 
     private suspend fun valueAt(holding: HoldingSnapshot, date: LocalDate): BigDecimal {
-        val close = lastClose(quotes.fetchAllBy(holding.ticker), date) ?: holding.averagePrice
+        val close = quotes.latestQuoteOn(holding.ticker, date)?.close ?: holding.averagePrice
         return (holding.quantity * close).defaultScale()
+    }
+
+    // The class map keyed the way every read keys its book: a renamed paper's old and new catalog
+    // rows collapse onto the canonical code.
+    private suspend fun effectiveClasses(): Map<String, AssetClass?> {
+        val entries = catalog.fetchAll()
+        val canonicalByTicker = aliases.canonicalAll(entries.map { it.ticker })
+        return entries.canonicalEntryByTicker(canonicalByTicker)
+            .mapValues { (_, entry) -> entry.effectiveAssetClass }
+    }
+
+    // A snapshot freezes the codes it closed with; a later rename still presents them under the
+    // paper's current identity, merging two frozen rows for the same paper into one holding.
+    private suspend fun canonicalHoldings(holdings: List<HoldingSnapshot>): Map<String, HoldingSnapshot> {
+        if (holdings.isEmpty()) return emptyMap()
+        val canonicalByTicker = aliases.canonicalAll(holdings.map { it.ticker })
+        return holdings
+            .groupBy { canonicalByTicker.getValue(it.ticker) }
+            .mapValues { (canonical, rows) -> mergeHoldings(canonical, rows) }
+    }
+
+    private fun mergeHoldings(canonical: String, rows: List<HoldingSnapshot>): HoldingSnapshot {
+        if (rows.size == 1) return rows.single().copy(ticker = canonical)
+        val quantity = rows.sumOf { it.quantity }
+        val average = weightedAveragePrice(rows.map { it.quantity to it.averagePrice }, PERFORMANCE_SCALE)
+        return HoldingSnapshot(ticker = canonical, quantity = quantity, averagePrice = average)
+    }
+
+    private suspend fun canonicalIncomeByTicker(rows: List<TickerIncomeSnapshot>): Map<String, BigDecimal> {
+        if (rows.isEmpty()) return emptyMap()
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        return rows
+            .groupBy { canonicalByTicker.getValue(it.ticker) }
+            .mapValues { (_, group) -> group.fold(BigDecimal.ZERO) { total, row -> total + row.net }.defaultScale() }
     }
 
     // A small lookback before the first month gives the IBOV level an anchor: its return is measured

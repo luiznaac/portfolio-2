@@ -5,6 +5,7 @@ import { adoptionDefaultDate, isValidAdoptionRow, latestClose } from "./history.
 function trade(overrides: Partial<Trade> & Pick<Trade, "id" | "date">): Trade {
   return {
     ticker: "PETR4",
+    original_ticker: "PETR4",
     venue: "VISTA",
     side: "BUY",
     quantity: 10,

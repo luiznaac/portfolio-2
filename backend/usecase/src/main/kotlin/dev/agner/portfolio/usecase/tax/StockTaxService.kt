@@ -12,6 +12,7 @@ import dev.agner.portfolio.usecase.tax.model.StockTaxReport
 import dev.agner.portfolio.usecase.tax.model.TaxPendingGap
 import dev.agner.portfolio.usecase.tax.model.TickerLedger
 import dev.agner.portfolio.usecase.tax.repository.ICarryBucketRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.datetime.YearMonth
 import kotlinx.datetime.yearMonth
 import org.springframework.stereotype.Service
@@ -29,6 +30,7 @@ class StockTaxService(
     private val catalog: CatalogService,
     private val carryBuckets: ICarryBucketRepository,
     private val gaps: IGapRepository,
+    private val aliases: TickerAliasResolver,
 ) {
 
     // The period-parameterised read. Inside the month window it never refuses: a pending missing-sale
@@ -47,16 +49,23 @@ class StockTaxService(
     }
 
     private suspend fun report(period: YearMonth): StockTaxReport {
+        val ledger = trades.fetchAll()
+        val appliedActions = corporateActions.fetchApplied()
+        val canonicalByTicker = aliases.canonicalAll(
+            (ledger.map { it.ticker } + appliedActions.map { it.ticker }).distinct(),
+        )
         val kinds = catalog.fetchAll().associateBy { it.ticker }
-        val actions = corporateActions.fetchApplied().groupBy { it.ticker }
-        val ledgers = trades.fetchAll()
-            .groupBy { it.ticker }
-            .map { (ticker, ledger) ->
+        val actions = appliedActions.groupBy { canonicalByTicker.getValue(it.ticker) }
+        // A buy under the old code and a sell under the new one are one paper, so the whole history
+        // replays as one ledger under the canonical ticker.
+        val ledgers = ledger
+            .groupBy { canonicalByTicker.getValue(it.ticker) }
+            .map { (ticker, rows) ->
                 TickerLedger(
                     ticker = ticker,
                     // An uncatalogued ticker is UNKNOWN, not a stock: the meter must not guess.
                     assetKind = kinds[ticker]?.assetKind ?: AssetKind.UNKNOWN,
-                    trades = ledger,
+                    trades = rows,
                     corporateActions = actions[ticker].orEmpty(),
                 )
             }
@@ -69,10 +78,22 @@ class StockTaxService(
     }
 
     // A missing sale's proceeds are unknown until the owner prices it; the month's result is pending
-    // rather than guessed, and the GAP never feeds the tax.
-    private suspend fun pendingGapsOf(period: YearMonth): List<TaxPendingGap> = gaps.fetchAll()
-        .filterIsInstance<Gap.Sell>()
-        .filter { it.realizedPending && it.date.yearMonth == period }
-        .map { TaxPendingGap(id = it.id, ticker = it.ticker, date = it.date, quantity = it.quantity) }
-        .sortedWith(compareBy({ it.date }, { it.ticker }))
+    // rather than guessed, and the GAP never feeds the tax. The gap's ticker is the paper's canonical
+    // code, the way the report keys it.
+    private suspend fun pendingGapsOf(period: YearMonth): List<TaxPendingGap> {
+        val pending = gaps.fetchAll()
+            .filterIsInstance<Gap.Sell>()
+            .filter { it.realizedPending && it.date.yearMonth == period }
+        val canonicalByTicker = aliases.canonicalAll(pending.map { it.ticker })
+        return pending
+            .map {
+                TaxPendingGap(
+                    id = it.id,
+                    ticker = canonicalByTicker.getValue(it.ticker),
+                    date = it.date,
+                    quantity = it.quantity,
+                )
+            }
+            .sortedWith(compareBy({ it.date }, { it.ticker }))
+    }
 }

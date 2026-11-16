@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.catalogEntry
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
+import dev.agner.portfolio.usecase.tickerAliases
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -21,7 +22,7 @@ import java.math.BigDecimal
 class ClassificationQueueServiceTest : StringSpec({
     val positions = mockk<IPositionRepository>()
     val catalog = mockk<ICatalogRepository>()
-    val service = ClassificationQueueService(positions, catalog)
+    val service = ClassificationQueueService(positions, catalog, tickerAliases())
 
     beforeTest {
         clearAllMocks()

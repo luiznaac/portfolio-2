@@ -28,12 +28,23 @@ const COLUMNS: Column<Trade>[] = [
     key: "ticker",
     header: "Ticker",
     render: (trade) => (
-      <Link
-        to={positionDetail(trade.ticker)}
-        className="font-mono font-medium text-principal hover:underline"
-      >
-        {trade.ticker}
-      </Link>
+      <span className="flex flex-col">
+        <Link
+          to={positionDetail(trade.ticker)}
+          className="font-mono font-medium text-principal hover:underline"
+        >
+          {trade.ticker}
+        </Link>
+        {trade.original_ticker !== trade.ticker && (
+          <span
+            data-testid="trade-provenance"
+            className="font-mono text-[10px] text-ink-dim"
+            title="Código original do negócio importado"
+          >
+            orig. {trade.original_ticker}
+          </span>
+        )}
+      </span>
     ),
   },
   {

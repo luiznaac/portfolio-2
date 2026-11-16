@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.quotes.QuoteService
 import dev.agner.portfolio.usecase.strategy.model.StrategyHolding
 import dev.agner.portfolio.usecase.strategy.model.StrategyHoldings
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import kotlinx.coroutines.awaitAll
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
@@ -21,6 +22,7 @@ class StrategyHoldingsService(
     private val strategies: IStrategyRepository,
     private val attributions: IAttributionRepository,
     private val quotes: QuoteService,
+    private val aliases: TickerAliasResolver,
 ) {
 
     private val hundred = BigDecimal("100")
@@ -28,13 +30,15 @@ class StrategyHoldingsService(
     // Null means the Strategy does not exist — the controller maps that to 404.
     suspend fun fetch(strategyId: Int): StrategyHoldings? {
         val strategy = strategies.fetchById(strategyId) ?: return null
-        val valued = attributions.fetchAll()
-            .filter { it.strategyId == strategy.id }
+        val rows = attributions.fetchAll().filter { it.strategyId == strategy.id }
+        val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
+        val valued = rows
             .mapAsync { slice ->
+                val ticker = canonicalByTicker.getValue(slice.ticker)
                 StrategyHolding(
-                    ticker = slice.ticker,
+                    ticker = ticker,
                     quantity = slice.quantity,
-                    value = slice.quantity.valueAt(price = quotes.latestClose(slice.ticker)),
+                    value = slice.quantity.valueAt(price = quotes.latestClose(ticker)),
                     share = BigDecimal.ZERO,
                 )
             }

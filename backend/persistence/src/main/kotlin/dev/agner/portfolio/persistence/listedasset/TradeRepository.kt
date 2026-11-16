@@ -10,6 +10,7 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
+import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import kotlinx.datetime.LocalDateTime
 import org.jetbrains.exposed.v1.core.Op
@@ -19,6 +20,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.functions.math.AbsFunction
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.like
@@ -152,12 +154,17 @@ class TradeRepository(
 // encoding. A filter with no values is the always-true id predicate, which keeps the builder total.
 private fun TradeLedgerFilter.condition(): Op<Boolean> =
     listOfNotNull(
-        ticker?.let { TradeTable.ticker.lowerCase() like "%${it.lowercase()}%" },
+        ticker?.let { it.condition() },
         from?.let { TradeTable.date greaterEq it },
         to?.let { TradeTable.date lessEq it },
         side?.let { it.condition() },
         after?.let { it.condition() },
     ).reduceOrNull { left, right -> left and right } ?: (TradeTable.id greater 0)
+
+private fun TradeTickerFilter.condition(): Op<Boolean> = when (this) {
+    is TradeTickerFilter.Search -> TradeTable.ticker.lowerCase() like "%${text.lowercase()}%"
+    is TradeTickerFilter.Aliases -> TradeTable.ticker inList tickers
+}
 
 private fun TradeSide.condition(): Op<Boolean> =
     if (this == TradeSide.BUY) {

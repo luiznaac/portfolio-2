@@ -4,11 +4,20 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
-// The ledger read's filter: a ticker substring, an inclusive execution-date window and a side. `after`
+// How the ledger narrows by ticker: the owner's typed search term (a substring) or the exact alias
+// set a rename resolves the paper to. One field, two variants — a filter can never carry both and
+// hide a precedence in the repository.
+sealed interface TradeTickerFilter {
+    data class Search(val text: String) : TradeTickerFilter
+
+    data class Aliases(val tickers: List<String>) : TradeTickerFilter
+}
+
+// The ledger read's filter: a ticker match, an inclusive execution-date window and a side. `after`
 // is the cursor of the last row already read, so paging never repeats or skips a row when executions
 // share a date; `limit` bounds one page.
 data class TradeLedgerFilter(
-    val ticker: String? = null,
+    val ticker: TradeTickerFilter? = null,
     val from: LocalDate? = null,
     val to: LocalDate? = null,
     val side: TradeSide? = null,
