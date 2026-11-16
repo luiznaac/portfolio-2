@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import java.math.BigDecimal
 
 // A line inside an Edition (CONTEXT.md -> Edition Entry): ticker, weight, rating and target price.
+// `targetCurrency` is the currency that price is quoted in; null when the entry carries no target.
 // `doNotTrade` is the "não operar" flag — per-Edition only (D7) and never set by a parser, only by a
 // reviewer's override.
 data class EditionEntry(
@@ -11,6 +12,7 @@ data class EditionEntry(
     val weight: BigDecimal,
     val rating: Rating? = null,
     val targetPrice: BigDecimal? = null,
+    val targetCurrency: TargetCurrency? = null,
     val doNotTrade: Boolean = false,
 )
 

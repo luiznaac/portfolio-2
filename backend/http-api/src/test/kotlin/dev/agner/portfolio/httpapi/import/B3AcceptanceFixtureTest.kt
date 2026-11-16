@@ -6,7 +6,7 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import java.math.BigDecimal
 
-// The curated acceptance artifact committed at docs/acceptance/fixtures/ is the file the runbook's
+// The curated acceptance artifact committed under test resources/acceptance/ is the file the runbook's
 // end-to-end scenario uploads, so it is pinned against the same parser the running app uses. A
 // fixture that stops being recognised, or whose rows drift from the enumerated scenario, fails here
 // rather than surfacing as a red browser run on the combined image.
@@ -14,9 +14,9 @@ class B3AcceptanceFixtureTest : DescribeSpec({
 
     describe("the committed 2020 acceptance fixture") {
 
-        val fixture = acceptanceDocsFixture("b3-negociacao-2020.xlsx")
+        val fixture = loadAcceptanceFixture("b3-negociacao-2020.xlsx")
         val parser = B3NegotiationParser()
-        val bytes = fixture.readBytes()
+        val bytes = fixture.bytes
         val rows = parser.parse(fixture.name, bytes)
 
         it("is claimed by the B3 negotiation parser") {

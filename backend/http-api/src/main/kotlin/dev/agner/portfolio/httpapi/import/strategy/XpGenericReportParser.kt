@@ -34,13 +34,14 @@ class XpGenericReportParser : IStrategyReportParser {
         ticker = groupValues[1].normalizedTicker(),
         weight = parsePtBrDecimal(groupValues[2]),
         rating = groupValues[3].takeIf { it.isNotBlank() }?.let(::parseRating),
-        targetPrice = groupValues[4].takeIf { it.isNotBlank() }?.let(::parsePtBrDecimal),
+        targetPrice = groupValues[5].takeIf { it.isNotBlank() }?.let(::parsePtBrDecimal),
+        targetCurrency = groupValues[4].takeIf { it.isNotBlank() }?.let(::parseTargetCurrency),
     )
 
     private companion object {
         val ROW = Regex(
             "$TICKER_GROUP\\s+$WEIGHT_GROUP" +
-                "(?:\\s+(Compra|Neutro|Venda))?(?:\\s+R\\$\\s*([\\d.,]+))?",
+                "(?:\\s+(Compra|Neutro|Venda))?(?:\\s+(R\\$|US\\$)\\s*([\\d.,]+))?",
             RegexOption.IGNORE_CASE,
         )
     }

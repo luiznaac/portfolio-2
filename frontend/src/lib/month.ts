@@ -259,9 +259,15 @@ function percentageString(value: number | undefined): string {
 }
 
 // A stable identity for a variable row, so the page can key its inputs by identity rather than by an
-// editable value — a value-derived key remounts the input on every keystroke and drops focus.
+// editable value — a value-derived key remounts the input on every keystroke and drops focus. A
+// monotonic counter rather than crypto.randomUUID: that method is absent outside a secure context
+// (the app served over plain HTTP on a LAN address), and a row key only needs to be unique within
+// the page's lifetime.
+let rowIdSequence = 0;
+
 function newRowId(): string {
-  return crypto.randomUUID();
+  rowIdSequence += 1;
+  return `row-${rowIdSequence}`;
 }
 
 // Maps the form to the payload the replace-all PUT takes: a row is kept only when it carries a

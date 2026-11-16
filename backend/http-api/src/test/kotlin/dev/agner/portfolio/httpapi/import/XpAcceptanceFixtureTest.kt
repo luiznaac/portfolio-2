@@ -11,14 +11,14 @@ import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.datetime.YearMonth
 
-// The XP report the assistant's acceptance scenario uploads is committed under docs/acceptance, so
+// The XP report the assistant's acceptance scenario uploads is committed under test resources, so
 // it is pinned against the same resolver the running app uses. A PDF that stops being claimed, or
 // whose staged entries drift from the enumerated diff, fails here instead of as a red browser run.
 class XpAcceptanceFixtureTest : DescribeSpec({
 
     describe("the committed XP report acceptance fixture") {
 
-        val fixture = acceptanceDocsFixture("xp-relatorio-2026-10.pdf")
+        val fixture = loadAcceptanceFixture("xp-relatorio-2026-10.pdf")
         val resolver = StrategyReportParserResolver(
             listOf(
                 XpEquityCarteiraParser(),
@@ -27,7 +27,7 @@ class XpAcceptanceFixtureTest : DescribeSpec({
                 XpGenericReportParser(),
             ),
         )
-        val report = resolver.resolve(fixture.name, fixture.readBytes())
+        val report = resolver.resolve(fixture.name, fixture.bytes)
 
         it("is claimed by the equity layout parser and names its reference month") {
             report.parser shouldBe "XpEquityCarteira"
@@ -41,14 +41,15 @@ class XpAcceptanceFixtureTest : DescribeSpec({
                     entry.weight.plain(),
                     entry.rating,
                     entry.targetPrice?.plain(),
+                    entry.targetCurrency?.name,
                     entry.doNotTrade,
                 )
             } shouldBe listOf(
-                listOf("PETR4", "25", Rating.BUY, "60", false),
-                listOf("VALE3", "22.5", Rating.NEUTRAL, "85", false),
-                listOf("ITUB4", "20", Rating.SELL, "30", false),
-                listOf("EGIE3", "20", Rating.BUY, "52", false),
-                listOf("CXSE3", "12.5", Rating.BUY, "20", false),
+                listOf("PETR4", "25", Rating.BUY, "60", "BRL", false),
+                listOf("VALE3", "22.5", Rating.NEUTRAL, "85", "BRL", false),
+                listOf("ITUB4", "20", Rating.SELL, "30", "BRL", false),
+                listOf("EGIE3", "20", Rating.BUY, "52", "BRL", false),
+                listOf("CXSE3", "12.5", Rating.BUY, "20", "BRL", false),
             )
         }
     }
