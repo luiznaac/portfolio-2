@@ -33,6 +33,8 @@ Bootstrap-only runbook for the `self-served-acceptance` runner. The runner owns 
   resumes the old record instead of staging a fresh one. The app migrates and seeds an empty MySQL
   on boot.
 
+- **Fixtures**: the binary upload fixtures live in `backend/http-api/src/test/resources/acceptance/` — `b3-negociacao-2020.xlsx`, `posicao-custodia-2020.xlsx`, `xp-relatorio-2026-10.pdf` and `rico-nota-2019.pdf` — because the parser tests pin the same bytes from the test classpath; a manifest's `upload` action names that repo-relative path. `docs/acceptance/fixtures/` holds SQL seeds only (a ticket-scoped runbook applies them from its ready probe). Never add a second copy of a binary under `docs/`.
+
 - **Token injection**: the repo-root `docker-compose.yml` `app` service does not reference `CHAMEIDOR_TOKEN`, and `docker compose` does not forward host env vars into containers (verified empirically). Before starting, create a gitignored `docker-compose.override.yml` at the repo root:
 
   ```yaml
