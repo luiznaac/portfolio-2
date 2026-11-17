@@ -1,0 +1,80 @@
+{
+  "results": [
+    {
+      "requestedSymbol": "PETR4",
+      "symbol": "PETR4",
+      "changed": false,
+      "data": {
+        "cashDividends": [
+          {
+            "assetIssued": "BRPETRACNPR6",
+            "paymentDate": "2026-08-20T03:00:00.000Z",
+            "paymentDateIsDeadline": false,
+            "verified": true,
+            "rate": 0.20250435,
+            "rawRate": 0.20250435,
+            "relatedTo": "",
+            "approvedOn": "2026-05-11T03:00:00.000Z",
+            "isinCode": "BRPETRACNPR6",
+            "label": "JCP",
+            "lastDatePrior": "2026-06-01T03:00:00.000Z",
+            "exDate": "2026-06-02T03:00:00.000Z",
+            "remarks": ""
+          },
+          {
+            "assetIssued": "BRPETRACNPR6",
+            "paymentDate": "2026-08-20T03:00:00.000Z",
+            "paymentDateIsDeadline": false,
+            "verified": true,
+            "rate": 0.47156696,
+            "relatedTo": "",
+            "approvedOn": "2026-05-11T03:00:00.000Z",
+            "isinCode": "BRPETRACNPR6",
+            "label": "DIVIDENDO",
+            "lastDatePrior": "2026-06-01T03:00:00.000Z",
+            "exDate": "2026-06-02T03:00:00.000Z",
+            "remarks": ""
+          }
+        ],
+        "stockDividends": [
+          {
+            "assetIssued": "BRPETRACNPR6",
+            "factor": 2,
+            "completeFactor": "2 para 1",
+            "approvedOn": "2008-04-25T03:00:00.000Z",
+            "isinCode": "BRPETRACNPR6",
+            "label": "DESDOBRAMENTO",
+            "lastDatePrior": "2008-04-25T03:00:00.000Z",
+            "exDate": null,
+            "remarks": ""
+          },
+          {
+            "assetIssued": "BRPETRACNPR6",
+            "factor": 0.01,
+            "completeFactor": "1 para 100",
+            "approvedOn": "2000-05-23T03:00:00.000Z",
+            "isinCode": "BRPETRACNPR6",
+            "label": "GRUPAMENTO",
+            "lastDatePrior": "2000-06-21T03:00:00.000Z",
+            "exDate": "2000-06-22T03:00:00.000Z",
+            "remarks": ""
+          },
+          {
+            "assetIssued": "BRPETRACNPR6",
+            "factor": 1.3333334,
+            "completeFactor": "1,33333332 para 1",
+            "approvedOn": "1994-03-25T03:00:00.000Z",
+            "isinCode": "BRPETRACNPR6",
+            "label": "BONIFICACAO",
+            "lastDatePrior": "1994-03-25T03:00:00.000Z",
+            "exDate": "1994-03-26T03:00:00.000Z",
+            "remarks": ""
+          }
+        ],
+        "subscriptions": []
+      }
+    }
+  ],
+  "requestedAt": "2026-11-17T01:37:09.078Z",
+  "took": 12
+}

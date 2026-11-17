@@ -18,6 +18,7 @@ import type {
   BenchmarkStatusReport,
   Bond,
   BondPosition,
+  BrapiSyncReport,
   CheckingAccount,
   CheckingAccountCreation,
   CorporateAction,
@@ -790,6 +791,31 @@ export function useCorporateActions() {
   return useQuery({
     queryKey: ["corporate-actions"],
     queryFn: api.getCorporateActions,
+  });
+}
+
+// The last brapi sync's audit: the report the page shows on load, before the owner runs another.
+export function useCorporateActionSync() {
+  return useQuery({
+    queryKey: ["corporate-actions", "sync"],
+    queryFn: api.getCorporateActionSync,
+    retry: false,
+  });
+}
+
+// The explicit one-off brapi sync: it can apply events, import income and park rows, so every read
+// it touches is stale in one step.
+export function useSyncCorporateActions() {
+  const queryClient = useQueryClient();
+  return useMutation<BrapiSyncReport, Error, void>({
+    mutationFn: () => api.syncCorporateActions(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["corporate-actions"] });
+      queryClient.invalidateQueries({ queryKey: ["income"] });
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["month"] });
+      invalidatePortfolioStatus(queryClient);
+    },
   });
 }
 

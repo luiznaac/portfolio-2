@@ -9,6 +9,7 @@ import type {
   BenchmarkStatusReport,
   Bond,
   BondPosition,
+  BrapiSyncReport,
   CatalogEntry,
   CheckingAccount,
   CheckingAccountCreation,
@@ -474,6 +475,16 @@ export const api = {
 
   getCorporateActions(): Promise<CorporateAction[]> {
     return request("/corporate-actions");
+  },
+
+  // The explicit, one-off brapi sync. It spends the paid quota and returns the run's report.
+  syncCorporateActions(): Promise<BrapiSyncReport> {
+    return request("/corporate-actions/sync", { method: "POST" });
+  },
+
+  // The last run's audit, so the report survives a reload; absent when the sync never ran.
+  getCorporateActionSync(): Promise<BrapiSyncReport | undefined> {
+    return request("/corporate-actions/sync");
   },
 
   importMovements(file: File): Promise<MovementsImportResult> {

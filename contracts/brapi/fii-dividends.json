@@ -1,0 +1,34 @@
+{
+  "dividends": [
+    {
+      "symbol": "MXRF11",
+      "approvedOn": null,
+      "label": "RENDIMENTO",
+      "lastDatePrior": "2026-10-30T03:00:00.000Z",
+      "exDate": null,
+      "paymentDate": "2026-11-16T03:00:00.000Z",
+      "rate": 0.095,
+      "rawRate": 0.095,
+      "relatedTo": "Outubro-2026",
+      "isinCode": "BRMXRFCTF008",
+      "remarks": "",
+      "verified": true
+    },
+    {
+      "symbol": "MXRF11",
+      "approvedOn": "2026-09-20T03:00:00.000Z",
+      "label": "AMORTIZAÇÃO",
+      "lastDatePrior": "2026-09-29T03:00:00.000Z",
+      "exDate": "2026-09-30T03:00:00.000Z",
+      "paymentDate": "2026-10-15T03:00:00.000Z",
+      "rate": 0.5,
+      "rawRate": 0.5,
+      "relatedTo": "Setembro-2026",
+      "isinCode": "BRMXRFCTF008",
+      "remarks": "",
+      "verified": true
+    }
+  ],
+  "requestedAt": "2026-11-17T01:37:09.078Z",
+  "took": 8
+}

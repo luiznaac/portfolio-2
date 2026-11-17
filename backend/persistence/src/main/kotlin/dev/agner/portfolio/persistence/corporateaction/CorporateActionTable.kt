@@ -21,7 +21,10 @@ import kotlin.time.ExperimentalTime
 object CorporateActionTable : IntIdTable("corporate_action") {
     val ticker = varchar("ticker", 12)
     val kind = enumerationByName<CorporateActionKind>("kind", 30)
-    val exDate = date("ex_date")
+
+    // Null only on a parked row: a source event with no ex-date waits in review instead of the
+    // engine guessing a day to apply it across a trade. An applied row always has one.
+    val exDate = date("ex_date").nullable()
     val approvalDate = date("approval_date").nullable()
     val ratio = decimal("ratio", 18, 8).nullable()
     val declaredValuePerShare = decimal("declared_value_per_share", 18, 8).nullable()

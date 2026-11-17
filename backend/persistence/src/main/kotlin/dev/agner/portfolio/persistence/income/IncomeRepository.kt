@@ -39,6 +39,7 @@ class IncomeRepository(
                 taxNature = creation.taxNature
                 provenance = creation.provenance
                 status = IncomeStatus.ANNOUNCED
+                estimated = creation.estimated
                 createdAt = LocalDateTime.now(clock)
             }.toModel()
         }

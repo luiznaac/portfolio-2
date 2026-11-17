@@ -10,6 +10,7 @@ import dev.agner.portfolio.persistence.catalog.CatalogTable
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.persistence.configuration.DATABASE_NAME
 import dev.agner.portfolio.persistence.configuration.mysqlJdbcUrl
+import dev.agner.portfolio.persistence.corporateaction.CorporateActionSyncTable
 import dev.agner.portfolio.persistence.corporateaction.CorporateActionTable
 import dev.agner.portfolio.persistence.import.ImportFileTable
 import dev.agner.portfolio.persistence.import.ImportRowTable
@@ -68,6 +69,7 @@ val allTables: Array<Table> = arrayOf(
     ImportFileTable,
     CashMovementTable,
     CorporateActionTable,
+    CorporateActionSyncTable,
     MonthTable,
     SnapshotTable,
     TargetTable,

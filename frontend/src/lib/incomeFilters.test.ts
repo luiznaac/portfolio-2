@@ -13,6 +13,7 @@ function row(overrides: Partial<IncomeRow>): IncomeRow {
     gross: 10,
     retained: 0,
     net: 10,
+    estimated: false,
     ...overrides,
   };
 }

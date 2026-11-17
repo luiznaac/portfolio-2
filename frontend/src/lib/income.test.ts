@@ -20,6 +20,7 @@ const dividend: Income = {
   net_amount: 65.06,
   tax_nature: "INCOME",
   provenance: "B3",
+  estimated: false,
   status: "ANNOUNCED",
 };
 
@@ -33,6 +34,7 @@ const jcp: Income = {
   net_amount: 136.55,
   tax_nature: "INCOME",
   provenance: "B3",
+  estimated: false,
   status: "PAYABLE",
 };
 
@@ -46,6 +48,7 @@ const rendimento: Income = {
   net_amount: 30,
   tax_nature: "INCOME",
   provenance: "B3",
+  estimated: false,
   status: "RECEIVED",
 };
 
@@ -80,6 +83,7 @@ describe("incomeRows", () => {
       gross: 78.39,
       retained: 13.33,
       net: 65.06,
+      estimated: false,
     });
   });
 
@@ -120,6 +124,7 @@ function movement(overrides: Partial<Income>): Income {
     net_amount: 10,
     tax_nature: "INCOME",
     provenance: "B3",
+    estimated: false,
     status: "RECEIVED",
     ...overrides,
   };
@@ -185,5 +190,16 @@ describe("incomeLedgerRows", () => {
       true,
       false,
     ]);
+  });
+});
+
+describe("incomeRows", () => {
+  it("carries the estimated marker through to the row", () => {
+    const rows = incomeRows([
+      { ...dividend, estimated: true },
+      { ...jcp, estimated: false },
+    ]);
+
+    expect(rows.map((row) => row.estimated)).toEqual([true, false]);
   });
 });

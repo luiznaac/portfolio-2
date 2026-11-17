@@ -11,6 +11,7 @@ import dev.agner.portfolio.usecase.listedasset.repository.IGapRepository
 import dev.agner.portfolio.usecase.listedasset.repository.IPositionRepository
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
+import kotlinx.datetime.LocalDate
 import org.springframework.stereotype.Service
 
 // The projected custody read. Every lookup resolves the canonical ticker first, so a buy under a
@@ -66,6 +67,20 @@ class PositionService(
             aliasSet.flatMap { trades.fetchAllBy(it) },
             aliasSet.flatMap { corporateActions.fetchByTicker(it) },
             action,
+            aliasSet.flatMap { gaps.fetchOpenBy(it) },
+        )
+    }
+
+    // The custody at the end of a date — the quantity an income entitlement is paid on. It replays
+    // the paper's whole alias set, so a payment under the old code sees the book the rename moved.
+    suspend fun positionOn(ticker: String, date: LocalDate): Position {
+        val canonical = aliases.canonical(ticker)
+        val aliasSet = aliases.aliasesOf(canonical)
+        return PositionCalculator.positionOn(
+            canonical,
+            aliasSet.flatMap { trades.fetchAllBy(it) },
+            aliasSet.flatMap { corporateActions.fetchByTicker(it) },
+            date,
             aliasSet.flatMap { gaps.fetchOpenBy(it) },
         )
     }

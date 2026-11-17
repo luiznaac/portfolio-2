@@ -10,11 +10,14 @@ import java.math.BigDecimal
 // the issuer states the event and re-deriving a "new per old" fraction would make the stored number
 // disagree with the source. `ordinal` is the event's occurrence within its (ticker, kind, exDate)
 // tuple, so two same-day events of one kind stay distinct and replay in a deterministic order.
+//
+// `exDate` is nullable only for a parked row: a brapi event that carries no ex-date waits for a
+// decision rather than guessing a date across a trade, and an applied row always has one.
 data class CorporateAction(
     val id: Int,
     val ticker: String,
     val kind: CorporateActionKind,
-    val exDate: LocalDate,
+    val exDate: LocalDate?,
     val approvalDate: LocalDate?,
     val ratio: BigDecimal?,
     val declaredValuePerShare: BigDecimal?,
@@ -39,7 +42,7 @@ data class CorporateAction(
 data class CorporateActionKey(
     val ticker: String,
     val kind: CorporateActionKind,
-    val exDate: LocalDate,
+    val exDate: LocalDate?,
     val ordinal: Int,
 )
 
@@ -48,7 +51,7 @@ data class CorporateActionKey(
 data class CorporateActionCreation(
     val ticker: String,
     val kind: CorporateActionKind,
-    val exDate: LocalDate,
+    val exDate: LocalDate?,
     val approvalDate: LocalDate? = null,
     val ratio: BigDecimal? = null,
     val declaredValuePerShare: BigDecimal? = null,
@@ -68,10 +71,12 @@ data class CorporateActionCreation(
 
     // A quantity event without its ratio cannot be applied; parking it is the honest outcome.
     // A review kind is parked regardless of the columns the row did carry. A cash-only event with
-    // no declared per-share value has no amount to pay, and a ticker change with no target code has
-    // nothing to remap — both wait for a human rather than guessing.
+    // no declared per-share value has no amount to pay, a ticker change with no target code has
+    // nothing to remap, and an event with no ex-date has no day to land on — all wait for a human
+    // rather than guessing.
     fun needsReview(): Boolean =
-        kind.requiresReview ||
+        exDate == null ||
+            kind.requiresReview ||
             (kind.isQuantityEvent && !ratio.isPositive()) ||
             (kind == CorporateActionKind.BONUS_SHARES && !declaredValuePerShare.isPositive()) ||
             (kind.isCashOnly && !declaredValuePerShare.isPositive()) ||

@@ -264,7 +264,9 @@ class PerformanceService(
         canonicalByTicker: Map<String, String>,
     ): List<Position> {
         val tradesByTicker = ledger.filter { it.date <= asOf }.groupBy { canonicalByTicker.getValue(it.ticker) }
-        val actionsByTicker = actions.filter { it.exDate <= asOf }.groupBy { canonicalByTicker.getValue(it.ticker) }
+        val actionsByTicker = actions
+            .filter { it.exDate?.let { date -> date <= asOf } == true }
+            .groupBy { canonicalByTicker.getValue(it.ticker) }
         val gapsByTicker = openGaps.filter { it.date <= asOf }.groupBy { canonicalByTicker.getValue(it.ticker) }
         val tickers = tradesByTicker.keys + actionsByTicker.keys + gapsByTicker.keys
 
