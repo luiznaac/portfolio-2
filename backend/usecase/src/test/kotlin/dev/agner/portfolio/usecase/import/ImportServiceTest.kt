@@ -1,7 +1,9 @@
 package dev.agner.portfolio.usecase.import
 
 import dev.agner.portfolio.usecase.broker.BrokerAssetAliasService
+import dev.agner.portfolio.usecase.broker.model.BrokerAssetAlias
 import dev.agner.portfolio.usecase.broker.model.BrokerDescriptionResolution
+import dev.agner.portfolio.usecase.broker.repository.IBrokerAssetAliasRepository
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
@@ -506,6 +508,169 @@ class ImportServiceTest : StringSpec({
         service.fetchRows(1) shouldBe null
     }
 
+    "confirm should write the institution's alias and update the row's ticker" {
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returnsMany
+            listOf(listOf(unresolvedRicoRow), listOf(resolvedRicoRow))
+        coEvery { institutionService.create(InstitutionCreation("RICO INVESTIMENTOS")) } returns
+            Institution(7, "RICO INVESTIMENTOS")
+        coEvery { tradeService.countByKey(any()) } returns 0
+
+        service.confirmTicker(importId = 1, rowId = 10, ticker = "xpto3") shouldBe resolvedRicoRow
+
+        coVerify(exactly = 1) {
+            brokerAssetAliasService.confirm(7, "ATIVO INEXISTENTE XPTO", "XPTO3")
+        }
+        coVerify(exactly = 1) {
+            repository.updateRowTicker(
+                importId = 1,
+                rowId = 10,
+                ticker = "XPTO3",
+                error = null,
+            )
+        }
+    }
+
+    "confirm should keep a parser error the description never caused" {
+        val flagged = unresolvedRicoRow.copy(error = "LISTADOV disagrees with D")
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returns listOf(flagged)
+        coEvery { institutionService.create(any()) } returns institution
+
+        service.confirmTicker(importId = 1, rowId = 10, ticker = "XPTO3")
+
+        coVerify(exactly = 1) {
+            repository.updateRowTicker(
+                importId = 1,
+                rowId = 10,
+                ticker = "XPTO3",
+                error = "LISTADOV disagrees with D",
+            )
+        }
+    }
+
+    "confirm should reject an import that already applied" {
+        coEvery { repository.fetchById(1) } returns appliedImport
+
+        shouldThrow<InvalidImportStateException> { service.confirmTicker(importId = 1, rowId = 10, ticker = "XPTO3") }
+
+        coVerify(exactly = 0) { repository.updateRowTicker(any(), any(), any(), any()) }
+    }
+
+    "confirm should return null when the import or the row does not exist" {
+        coEvery { repository.fetchById(1) } returns null
+        service.confirmTicker(importId = 1, rowId = 10, ticker = "XPTO3") shouldBe null
+
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returns listOf(unresolvedRicoRow)
+        service.confirmTicker(importId = 1, rowId = 99, ticker = "XPTO3") shouldBe null
+
+        coVerify(exactly = 0) { repository.updateRowTicker(any(), any(), any(), any()) }
+    }
+
+    "confirm should refuse a ticker that normalizes to nothing" {
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returns listOf(unresolvedRicoRow)
+
+        shouldThrow<InvalidImportRowTickerException> { service.confirmTicker(importId = 1, rowId = 10, ticker = "  ") }
+
+        coVerify(exactly = 0) { brokerAssetAliasService.confirm(any(), any(), any()) }
+    }
+
+    "confirm should refuse a ticker wider than the stored column" {
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returns listOf(unresolvedRicoRow)
+
+        shouldThrow<InvalidImportRowTickerException> {
+            service.confirmTicker(importId = 1, rowId = 10, ticker = "TOO-LONG-TICKER")
+        }
+
+        coVerify(exactly = 0) { brokerAssetAliasService.confirm(any(), any(), any()) }
+    }
+
+    "confirm should refuse a row a broker note never gave a description" {
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returns listOf(row)
+
+        shouldThrow<ImportRowNotConfirmableException> {
+            service.confirmTicker(importId = 1, rowId = 10, ticker = "XPTO3")
+        }
+
+        coVerify(exactly = 0) { brokerAssetAliasService.confirm(any(), any(), any()) }
+    }
+
+    "confirm should refuse a row whose description already resolved" {
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returns listOf(
+            unresolvedRicoRow.copy(ticker = "BCFF11", error = null),
+        )
+
+        shouldThrow<ImportRowNotConfirmableException> {
+            service.confirmTicker(importId = 1, rowId = 10, ticker = "XPTO3")
+        }
+
+        coVerify(exactly = 0) { brokerAssetAliasService.confirm(any(), any(), any()) }
+    }
+
+    "a confirmed alias wins over conflicting globals and resolves the next import" {
+        // Two globals that disagree make the description ambiguous, so the first note asks the owner.
+        val aliases = InMemoryBrokerAliases(
+            globalAlias("ATIVO INEXISTENTE XPTO", "AAAA3"),
+            globalAlias("ATIVO INEXISTENTE XPTO", "BBBB3"),
+        )
+        val brokerService = BrokerAssetAliasService(aliases)
+        val service = ImportService(
+            repository,
+            tradeService,
+            institutionService,
+            catalogService,
+            custodySnapshot,
+            brokerService,
+            transaction,
+        )
+        coEvery { repository.fetchByHash(HASH) } returns null
+        coEvery { repository.fetchByHash("second-file") } returns null
+        coEvery { repository.fetchById(1) } returns ricoImport
+        coEvery { repository.fetchRows(1) } returnsMany
+            listOf(listOf(unresolvedRicoRow), listOf(resolvedRicoRow))
+        coEvery { institutionService.create(InstitutionCreation("RICO INVESTIMENTOS")) } returns
+            Institution(7, "RICO INVESTIMENTOS")
+        coEvery { tradeService.countByKey(any()) } returns 0
+        val firstStaged = slot<ImportCreation>()
+        coEvery { repository.save(capture(firstStaged)) } returns ricoImport
+
+        service.stage(
+            ImportSource.RICO_NOTES,
+            "nota.pdf",
+            HASH,
+            listOf(ricoPayload("ATIVO INEXISTENTE XPTO")),
+            destination,
+        )
+        firstStaged.captured.rows.single().error shouldBe
+            "Description 'ATIVO INEXISTENTE XPTO' is ambiguous: AAAA3, BBBB3"
+
+        service.confirmTicker(importId = 1, rowId = 10, ticker = "XPTO3")
+
+        // The confirmation created the institution, so the next note resolves against its own alias,
+        // which wins over the two globals that disagreed.
+        coEvery { institutionService.fetchByName("RICO INVESTIMENTOS") } returns
+            Institution(7, "RICO INVESTIMENTOS")
+        val secondStaged = slot<ImportCreation>()
+        coEvery { repository.save(capture(secondStaged)) } returns ricoImport
+        service.stage(
+            ImportSource.RICO_NOTES,
+            "nota-2.pdf",
+            "second-file",
+            listOf(ricoPayload("ATIVO INEXISTENTE XPTO")),
+            destination,
+        )
+
+        secondStaged.captured.rows.single().let { stagedRow ->
+            stagedRow.ticker shouldBe "XPTO3"
+            stagedRow.error shouldBe null
+        }
+    }
+
     "fetchRows should not walk the trade ledger for a custody import" {
         coEvery { repository.fetchById(1) } returns
             reviewedImport.copy(destination = ImportDestination(ImportDestinationObject.POSITIONS))
@@ -581,6 +746,55 @@ private fun ricoPayload(rawDescription: String) = ImportRowPayload(
 )
 
 private val institution = Institution(id = 3, name = "XP INVESTIMENTOS")
+
+private val ricoImport = stagedImport.copy(source = ImportSource.RICO_NOTES)
+
+private val unresolvedRicoRow = ImportRow(
+    id = 10,
+    importId = 1,
+    date = LocalDate.parse("2019-05-03"),
+    side = TradeSide.BUY,
+    venue = "VISTA",
+    ticker = null,
+    quantity = BigDecimal("100"),
+    unitPrice = BigDecimal("100"),
+    institutionName = "RICO INVESTIMENTOS",
+    error = "Description 'ATIVO INEXISTENTE XPTO' did not resolve to a ticker",
+    rawDescription = "ATIVO INEXISTENTE XPTO",
+    noteNumber = "123456",
+)
+
+private val resolvedRicoRow = unresolvedRicoRow.copy(
+    ticker = "XPTO3",
+    error = null,
+    situation = ImportRowSituation.NEW,
+)
+
+private fun globalAlias(description: String, ticker: String) = BrokerAssetAlias(
+    id = 0,
+    institutionId = null,
+    normalizedDescription = description,
+    ticker = ticker,
+)
+
+private class InMemoryBrokerAliases(vararg aliases: BrokerAssetAlias) : IBrokerAssetAliasRepository {
+
+    private val stored = aliases.toMutableList()
+
+    override suspend fun fetchByDescription(normalizedDescription: String): List<BrokerAssetAlias> =
+        stored.filter { it.normalizedDescription == normalizedDescription }
+
+    override suspend fun save(
+        institutionId: Int?,
+        normalizedDescription: String,
+        ticker: String,
+    ): BrokerAssetAlias = BrokerAssetAlias(
+        id = stored.size + 1,
+        institutionId = institutionId,
+        normalizedDescription = normalizedDescription,
+        ticker = ticker,
+    ).also { stored.add(it) }
+}
 
 // Also exercises that the payload type is the staging input the parsers emit.
 private val payload = ImportRowPayload(

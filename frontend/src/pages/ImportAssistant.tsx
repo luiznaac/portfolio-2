@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   useActivateEdition,
   useApplyImport,
+  useConfirmImportRowTicker,
   useEditions,
   useImport,
   useImportEdition,
@@ -126,11 +127,66 @@ const SIDE_COLUMN: Column<ImportRow> = {
     <Badge tone={row.side === "BUY" ? "ok" : "warn"}>{formatTradeSide(row.side)}</Badge>
   ),
 };
-const TICKER_COLUMN: Column<ImportRow> = {
-  key: "ticker",
-  header: "Ticker",
-  render: (row) => <span className="font-mono font-medium">{row.ticker ?? "—"}</span>,
+type TickerConfirmation = {
+  pendingRowId: number | null;
+  onConfirm: (rowId: number, ticker: string) => void;
 };
+
+// A broker-note row whose description did not resolve (or named more than one paper) has no ticker
+// to apply, so the review asks the owner for it here — once per description, because confirming
+// writes the broker alias. A row the alias resolved keeps the plain ticker.
+function TickerCell({ row, pendingRowId, onConfirm }: { row: ImportRow } & TickerConfirmation) {
+  const [ticker, setTicker] = useState("");
+
+  if (row.raw_description === undefined || row.ticker !== undefined) {
+    return (
+      <span
+        data-testid={
+          row.raw_description === undefined ? undefined : `ticker-${row.raw_description}`
+        }
+        className="font-mono font-medium"
+      >
+        {row.ticker ?? "—"}
+      </span>
+    );
+  }
+
+  const pending = pendingRowId === row.id;
+  return (
+    <form
+      className="flex items-center gap-1.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (ticker.trim().length === 0) return;
+        onConfirm(row.id, ticker.trim());
+      }}
+    >
+      <input
+        aria-label={`Ticker para ${row.raw_description}`}
+        value={ticker}
+        onChange={(event) => setTicker(event.target.value)}
+        placeholder="Ticker"
+        className={`w-24 ${FIELD}`}
+      />
+      <Button
+        type="submit"
+        variant="ghost"
+        disabled={pending || ticker.trim().length === 0}
+        className="px-2 py-1 text-[11.5px]"
+      >
+        {pending ? "…" : "Confirmar"}
+      </Button>
+    </form>
+  );
+}
+
+function tickerColumn(confirmation: TickerConfirmation): Column<ImportRow> {
+  return {
+    key: "ticker",
+    header: "Ticker",
+    render: (row) => <TickerCell row={row} {...confirmation} />,
+  };
+}
 const QUANTITY_COLUMN: Column<ImportRow> = {
   key: "quantity",
   header: "Qtd",
@@ -160,12 +216,12 @@ const ERROR_COLUMN: Column<ImportRow> = {
 };
 
 // The note columns only appear for a broker-note import; a ticker layout keeps the original table.
-function rowColumns(brokerNote: boolean): Column<ImportRow>[] {
+function rowColumns(brokerNote: boolean, confirmation: TickerConfirmation): Column<ImportRow>[] {
   return [
     DATE_COLUMN,
     ...(brokerNote ? [NOTE_COLUMN, DESCRIPTION_COLUMN] : []),
     SIDE_COLUMN,
-    TICKER_COLUMN,
+    tickerColumn(confirmation),
     QUANTITY_COLUMN,
     PRICE_COLUMN,
     INSTITUTION_COLUMN,
@@ -203,6 +259,7 @@ export function ImportAssistant() {
   const stageImport = useStageImport();
   const reviewImport = useReviewImport();
   const applyImport = useApplyImport();
+  const confirmTicker = useConfirmImportRowTicker();
   const strategies = useStrategies(isEdition);
   const editions = useEditions(isEdition ? strategyId : null);
   const importEdition = useImportEdition();
@@ -265,6 +322,7 @@ export function ImportAssistant() {
     stageImport.error ??
     reviewImport.error ??
     applyImport.error ??
+    confirmTicker.error ??
     importEdition.error ??
     activateEdition.error;
 
@@ -315,6 +373,11 @@ export function ImportAssistant() {
     reviewImport.mutate(sessionId, {
       onSuccess: () => setStepOverride(4),
     });
+  }
+
+  function handleConfirmTicker(rowId: number, ticker: string) {
+    if (sessionId === null) return;
+    confirmTicker.mutate({ importId: sessionId, rowId, ticker });
   }
 
   function handleApply() {
@@ -442,6 +505,12 @@ export function ImportAssistant() {
                       rejected={rejected.length}
                       loading={rows.isLoading}
                       brokerNote={record.data.source === "RICO_NOTES"}
+                      confirmation={{
+                        pendingRowId: confirmTicker.isPending
+                          ? (confirmTicker.variables?.rowId ?? null)
+                          : null,
+                        onConfirm: handleConfirmTicker,
+                      }}
                     />
                   ))}
 
@@ -1233,12 +1302,14 @@ function StepRows({
   rejected,
   loading,
   brokerNote,
+  confirmation,
 }: {
   rows: ImportRow[];
   situations: ReturnType<typeof summarizeSituations>;
   rejected: number;
   loading: boolean;
   brokerNote: boolean;
+  confirmation: TickerConfirmation;
 }) {
   return (
     <Panel
@@ -1263,7 +1334,11 @@ function StepRows({
       ) : rows.length === 0 ? (
         <p className="text-[13.5px] text-ink-dim">Nenhuma linha no arquivo.</p>
       ) : (
-        <Table columns={rowColumns(brokerNote)} rows={rows} rowKey={(row) => row.id} />
+        <Table
+          columns={rowColumns(brokerNote, confirmation)}
+          rows={rows}
+          rowKey={(row) => row.id}
+        />
       )}
     </Panel>
   );

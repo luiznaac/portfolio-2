@@ -61,6 +61,7 @@ object MySqlContainerExtension : Extension, BeforeProjectListener, AfterProjectL
                                mysql -e "set FOREIGN_KEY_CHECKS=0; truncate table \`${'$'}table\`" $database;
                            fi
                         done
+                        mysql -e "delete from broker_asset_alias where institution_id is not null" $database;
                     """.trimIndent(),
                 ).exitCode shouldBe 0
             }
