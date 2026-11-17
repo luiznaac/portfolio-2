@@ -10,9 +10,11 @@ import dev.agner.portfolio.usecase.catalog.model.AssetClass
 import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSource
 import dev.agner.portfolio.usecase.institution.InstitutionService
 import dev.agner.portfolio.usecase.institution.model.InstitutionCreation
 import dev.agner.portfolio.usecase.listedasset.AttributionService
+import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.AttributionSliceCreation
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionAdd
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionApplied
@@ -21,15 +23,22 @@ import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionPreview
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionResult
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionSkip
 import dev.agner.portfolio.usecase.listedasset.model.LegacyAttributionSkipReason
+import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.strategy.StrategyService
 import dev.agner.portfolio.usecase.strategy.model.StrategyCreation
 import dev.agner.portfolio.usecase.strategy.model.StrategyKind
+import dev.agner.portfolio.usecase.tickeralias.model.TickerAlias
+import dev.agner.portfolio.usecase.tickeralias.repository.ITickerAliasRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.mockk.every
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
@@ -101,6 +110,68 @@ class AttributionTest : StringSpec({
         (drained["slices"] as List<*>).size shouldBe 1
     }
 
+    // A rename leaves slices stored under the retired codes. The single-ticker surface must see them
+    // as one book — the read sums them, the ceiling counts them, and a write lands on the canonical
+    // code without forking a second row for the same paper.
+    "a renamed paper's attribution slices are one book across the rename chain" {
+        val institution = getBean<InstitutionService>().create(InstitutionCreation("XP INVESTIMENTOS"))
+        val aliasRepository = getBean<ITickerAliasRepository>()
+        aliasRepository.save(rename("OLD3", "MID3"))
+        aliasRepository.save(rename("MID3", "NEW3"))
+        buy("OLD3", "100", institution.id)
+        val dividends = getBean<StrategyService>()
+            .create(StrategyCreation("Top Dividendos", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN))
+        val acoes = getBean<StrategyService>()
+            .create(StrategyCreation("Top Ações", AssetClass.ACOES, StrategyKind.REPORT_DRIVEN))
+        getBean<ICatalogRepository>().upsertAll(listOf(catalogEntry("NEW3", AssetClass.ACOES)))
+
+        // Slices written before the chain completed still sit under the retired codes.
+        val slices = getBean<IAttributionRepository>()
+        slices.save(Attribution("OLD3", dividends.id, BigDecimal("20")))
+        slices.save(Attribution("MID3", dividends.id, BigDecimal("10")))
+        slices.save(Attribution("NEW3", acoes.id, BigDecimal("5")))
+
+        val read = readAttribution("OLD3")
+        (read["ticker"] as String) shouldBe "NEW3"
+        (read["attributed_quantity"] as Number).toInt() shouldBe 35
+        (read["unattributed_quantity"] as Number).toInt() shouldBe 65
+        @Suppress("UNCHECKED_CAST")
+        val entries = read["slices"] as List<Map<String, Any>>
+        entries.size shouldBe 2
+        (entries.single { it["strategy_name"] == "Top Dividendos" }["quantity"] as Number).toInt() shouldBe 30
+
+        // The ceiling counts every stored slice of the paper, whichever code it carries.
+        val rejected = getBean<HttpClient>().post("${appBaseUrl()}/positions/OLD3/attribution") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("strategy_id" to acoes.id, "quantity" to BigDecimal("95")))
+        }
+        rejected.status shouldBe HttpStatusCode.BadRequest
+
+        // The write supersedes the old-code slices instead of forking a second row per strategy.
+        val written = attribute(dividends.id, "40", ticker = "OLD3")
+        (written["attributed_quantity"] as Number).toInt() shouldBe 45
+        slices.fetchBy("OLD3") shouldBe emptyList()
+        slices.fetchBy("MID3") shouldBe emptyList()
+        slices.fetchBy("NEW3").map { it.strategyId }.sorted() shouldBe listOf(dividends.id, acoes.id).sorted()
+
+        // A transfer addressed by an old code finds the source and leaves one destination slice.
+        val moved = transfer("OLD3", fromStrategyId = dividends.id, toStrategyId = acoes.id, quantity = "15")
+        (moved["attributed_quantity"] as Number).toInt() shouldBe 45
+        (moved["slices"] as List<*>).size shouldBe 2
+        slices.fetchBy("NEW3").associate { it.strategyId to it.quantity.toInt() } shouldBe
+            mapOf(dividends.id to 25, acoes.id to 20)
+
+        // A delete addressed by an old code removes the slice stored under any code.
+        val response = getBean<HttpClient>().delete(
+            "${appBaseUrl()}/positions/OLD3/attribution/${dividends.id}",
+        )
+        response.status shouldBe HttpStatusCode.OK
+        val after = response.body<Map<String, Any>>()
+        (after["attributed_quantity"] as Number).toInt() shouldBe 20
+        (after["slices"] as List<*>).size shouldBe 1
+        slices.fetchBy("NEW3").map { it.strategyId } shouldBe listOf(acoes.id)
+    }
+
     "the bulk legacy action previews, applies and re-runs idempotently" {
         val institution = getBean<InstitutionService>().create(InstitutionCreation("XP INVESTIMENTOS"))
         buy("ITUB4", "100", institution.id)
@@ -151,15 +222,19 @@ class AttributionTest : StringSpec({
     }
 })
 
-private suspend fun transfer(fromStrategyId: Int, toStrategyId: Int, quantity: String) =
-    postRequest<Map<String, Any>> {
-        path = "/positions/PETR4/attribution/transfer"
-        body = mapOf(
-            "from_strategy_id" to fromStrategyId,
-            "to_strategy_id" to toStrategyId,
-            "quantity" to BigDecimal(quantity),
-        )
-    }
+private suspend fun transfer(
+    ticker: String = "PETR4",
+    fromStrategyId: Int,
+    toStrategyId: Int,
+    quantity: String,
+) = postRequest<Map<String, Any>> {
+    path = "/positions/$ticker/attribution/transfer"
+    body = mapOf(
+        "from_strategy_id" to fromStrategyId,
+        "to_strategy_id" to toStrategyId,
+        "quantity" to BigDecimal(quantity),
+    )
+}
 
 private suspend fun buy(ticker: String, quantity: String, institutionId: Int) {
     postRequest<Map<String, Any>> {
@@ -237,10 +312,21 @@ private fun catalogEntry(ticker: String, assetClass: AssetClass) = CatalogEntry(
     lastSeen = LocalDate.parse("2026-10-14"),
 )
 
-private suspend fun attribute(strategyId: Int, quantity: String) = postRequest<Map<String, Any>> {
-    path = "/positions/PETR4/attribution"
+private suspend fun attribute(
+    strategyId: Int,
+    quantity: String,
+    ticker: String = "PETR4",
+) = postRequest<Map<String, Any>> {
+    path = "/positions/$ticker/attribution"
     body = mapOf("strategy_id" to strategyId, "quantity" to BigDecimal(quantity))
 }
+
+private fun rename(oldTicker: String, canonicalTicker: String) = TickerAlias(
+    oldTicker = oldTicker,
+    canonicalTicker = canonicalTicker,
+    effectiveDate = LocalDate.parse("2026-10-14"),
+    source = CorporateActionSource.B3_MOVEMENTS,
+)
 
 private suspend fun readAttribution(ticker: String = "PETR4") = getRequest<Map<String, Any>> {
     path = "/positions/$ticker/attribution"
