@@ -8,4 +8,12 @@ interface IBrokerAssetAliasRepository {
     // (institution_id null) fallback. The service decides which one wins; the repository stays a
     // plain read so the ambiguity rule has one home.
     suspend fun fetchByDescription(normalizedDescription: String): List<BrokerAssetAlias>
+
+    // The owner's confirmed answer: the institution's alias for the normalized description,
+    // replacing that institution's previous answer for it. A null institution is the global fallback.
+    suspend fun save(
+        institutionId: Int?,
+        normalizedDescription: String,
+        ticker: String,
+    ): BrokerAssetAlias
 }

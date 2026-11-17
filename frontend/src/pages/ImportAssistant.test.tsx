@@ -33,6 +33,7 @@ const state = vi.hoisted(() => ({
   editionInput: null as { strategyId: number; file: File } | null,
   importedEdition: null as EditionImport | null,
   activations: [] as { strategyId: number; activation: EditionActivation }[],
+  tickerConfirmation: null as { importId: number; rowId: number; ticker: string } | null,
 }));
 
 vi.mock("../api/queries.ts", () => ({
@@ -47,6 +48,14 @@ vi.mock("../api/queries.ts", () => ({
   useImport: () => ({ data: state.record ?? undefined, isLoading: false }),
   useImportRows: () => ({ data: state.rows, isLoading: false }),
   usePositions: () => ({ data: state.positions, isLoading: false }),
+  useConfirmImportRowTicker: () => ({
+    mutate: (input: { importId: number; rowId: number; ticker: string }) => {
+      state.tickerConfirmation = input;
+    },
+    isPending: false,
+    error: null,
+    variables: undefined,
+  }),
   useReviewImport: () => ({
     mutate: (_id: number, options?: { onSuccess?: (value: unknown) => void }) => {
       state.reviewCalls += 1;
@@ -216,6 +225,7 @@ beforeEach(() => {
   state.editionInput = null;
   state.importedEdition = null;
   state.activations = [];
+  state.tickerConfirmation = null;
 });
 
 afterEach(cleanup);
@@ -280,6 +290,59 @@ describe("the import assistant", () => {
     expect(screen.getByText("FII BCFF11 CI")).toBeDefined();
     expect(screen.getByText("BCFF11")).toBeDefined();
     expect(screen.getByText("123456")).toBeDefined();
+  });
+
+  it("asks for a ticker on an unresolved broker description and confirms it", async () => {
+    state.record = { ...importRecord("STAGED"), source: "RICO_NOTES" };
+    state.rows = [
+      {
+        ...row(1, "error"),
+        ticker: undefined,
+        raw_description: "ATIVO INEXISTENTE XPTO",
+        error: "Description 'ATIVO INEXISTENTE XPTO' did not resolve to a ticker",
+      },
+    ];
+    const user = userEvent.setup();
+    renderAssistant("/imports/assistant/7");
+
+    expect(screen.getByText("ATIVO INEXISTENTE XPTO")).toBeDefined();
+    expect(screen.getByText(/did not resolve to a ticker/)).toBeDefined();
+    const input = screen.getByLabelText("Ticker para ATIVO INEXISTENTE XPTO");
+    await user.type(input, "XPTO3");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(state.tickerConfirmation).toEqual({ importId: 7, rowId: 1, ticker: "XPTO3" });
+  });
+
+  it("shows an ambiguous description's candidates and asks for a ticker too", () => {
+    state.record = { ...importRecord("STAGED"), source: "RICO_NOTES" };
+    state.rows = [
+      {
+        ...row(1, "error"),
+        ticker: undefined,
+        raw_description: "ATIVO DUVIDOSO",
+        error: "Description 'ATIVO DUVIDOSO' is ambiguous: AAAA3, BBBB3",
+      },
+    ];
+    renderAssistant("/imports/assistant/7");
+
+    expect(screen.getByText(/is ambiguous: AAAA3, BBBB3/)).toBeDefined();
+    expect(screen.getByLabelText("Ticker para ATIVO DUVIDOSO")).toBeDefined();
+  });
+
+  it("does not ask for a ticker once the alias resolved the description", () => {
+    state.record = { ...importRecord("STAGED"), source: "RICO_NOTES" };
+    state.rows = [
+      {
+        ...row(1, "new"),
+        ticker: "BCFF11",
+        raw_description: "FII BCFF11 CI",
+        note_number: "123456",
+      },
+    ];
+    renderAssistant("/imports/assistant/7");
+
+    expect(screen.queryByLabelText("Ticker para FII BCFF11 CI")).toBeNull();
   });
 
   it("resumes a parked session at the material and applies onto the destination", async () => {

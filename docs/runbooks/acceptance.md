@@ -1359,3 +1359,32 @@ docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfo
 ```
 
 `GET /positions/OLD3/attribution` and `GET /positions/NEW3/attribution` both answer 200 with `ticker: "NEW3"`, `custody_quantity: 100`, `attributed_quantity: 35`, `unattributed_quantity: 65`, and two slices — Top Dividendos 30 and Top Ações 5. `POST /positions/OLD3/attribution` with `{"strategy_id":9002,"quantity":95}` answers 400: the ceiling counts Top Dividendos' 30 units stored under the retired codes, so only 70 are available. `POST /positions/OLD3/attribution` with `{"strategy_id":9001,"quantity":40}` answers 200 with `attributed_quantity: 45` and two slices (Top Dividendos 40, Top Ações 5); a read by `MID3` shows the same, so the write superseded the old-code rows instead of forking a second slice. `POST /positions/MID3/attribution/transfer` with `{"from_strategy_id":9001,"to_strategy_id":9002,"quantity":15}` answers 200 with `attributed_quantity: 45` and two slices (Top Dividendos 25, Top Ações 20). `DELETE /positions/NEW3/attribution/9001` answers 200 with `attributed_quantity: 20` and one slice (Top Ações 20). A read that reports an old-code slice as unattributed, a write that duplicates a slice, a ceiling that ignores the old-code units, or a delete that leaves the row behind is an automatic red; the evidence names the first failing intent.
+
+## Acceptance scenario — ticker rename with a conversion ratio and same-date ordering (issue [#452](https://github.com/luiznaac/portfolio-2/issues/452))
+
+**Scenario**: the run drives one paper renamed with a 2:1 conversion and, on the same ex-date, a 2:1 split keyed to the **new** code, over the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the HTTP intents. The seed holds 100 OLD3 units bought at R$10 and two parked events on 2026-10-20: the rename (9001, no target/ratio until the resolve supplies them) and the split (9002, keyed NEW3, no ratio until supplied). Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql -uroot portfolio <<'SQL'
+DELETE FROM cash_movement;
+DELETE FROM corporate_action;
+DELETE FROM ticker_alias;
+DELETE FROM trade;
+DELETE FROM position;
+DELETE FROM attribution;
+DELETE FROM institution;
+DELETE FROM ticker_catalog;
+INSERT INTO institution (name, created_at) VALUES ('XP', NOW());
+SET @inst := LAST_INSERT_ID();
+INSERT INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES
+  ('OLD3','OLD PAPER','02',NULL,'STOCK','ACOES','2026-10-01','2026-10-31',NOW());
+INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+  ('OLD3','2026-10-05','VISTA',100,10,@inst,NULL,'MANUAL',FALSE,1,NOW());
+REPLACE INTO position (ticker, quantity, average_price) VALUES ('OLD3',100,10);
+INSERT INTO corporate_action (id, ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES
+  (9001, 'OLD3', 'TICKER_CHANGE', '2026-10-20', NULL, NULL, NULL, NULL, 'B3_MOVEMENTS', '90001', 'Alteração de código de negociação', 1, NULL, 'NEEDS_REVIEW', NOW()),
+  (9002, 'NEW3', 'SPLIT',         '2026-10-20', NULL, NULL, NULL, NULL, 'B3_MOVEMENTS', '90002', 'Desdobramento', 1, NULL, 'NEEDS_REVIEW', NOW());
+SQL
+```
+
+Resolve the **split first** (the event is keyed to the new code, which has no alias yet) and the rename second: `POST /corporate-actions/9002/resolve` with `{"ratio":2}` answers 200, then `POST /corporate-actions/9001/resolve` with `{"ratio":2,"target_ticker":"NEW3"}` answers 200 with `status: "APPLIED"`. The single rename resolve writes the alias and converts the book together: `GET /positions/NEW3` reads one position of **400 units at R$2,50** (100 × 2 from the rename, then × 2 from the same-date split), `GET /positions` lists only NEW3 (the OLD3 projection is superseded), and `GET /corporate-actions` shows the rename applied with ratio 2 and target NEW3. The class-digit half of the ticket has no HTTP path and is pinned by the unit and integration suites (`CorporateActionServiceTest`, `PositionProjectionTest`).

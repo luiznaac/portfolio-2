@@ -23,8 +23,10 @@ object PositionCalculator {
     private const val AVERAGE_SCALE = 6
 
     // Trades and actions are replayed oldest first. On one date an action applies before a trade —
-    // an ex-date trade is already priced ex — and same-day actions follow their ordinal (then id)
-    // so a replay is deterministic. A trade's id breaks same-day ties in insertion order.
+    // an ex-date trade is already priced ex — a rename applies before any other same-day action (its
+    // identity move is what makes a quantity event keyed to either code land on one book), and
+    // same-day actions then follow their ordinal (then id) so a replay is deterministic. A trade's
+    // id breaks same-day ties in insertion order.
     fun replay(
         ticker: String,
         trades: List<Trade>,
@@ -47,7 +49,7 @@ object PositionCalculator {
     ): Position = replayBefore(
         ticker,
         entries(trades, corporateActions, gaps),
-        TimelineKey(action.exDate, ACTION_PRIORITY, action.ordinal, action.id),
+        TimelineKey.of(action),
     )
 
     // The position immediately before one trade — the fiscal basis a sale's gain is measured on.
@@ -62,7 +64,7 @@ object PositionCalculator {
     ): Position = replayBefore(
         ticker,
         entries(trades, corporateActions, gaps),
-        TimelineKey(trade.date, TRADE_PRIORITY, trade.ordinal, trade.id),
+        TimelineKey.of(trade),
     )
 
     private fun replayBefore(ticker: String, entries: List<LedgerEntry>, boundary: TimelineKey): Position =
@@ -107,11 +109,41 @@ object PositionCalculator {
     private data class TimelineKey(
         val date: kotlinx.datetime.LocalDate,
         val priority: Int,
+        val rank: Int,
         val ordinal: Int,
         val id: Int,
     ) : Comparable<TimelineKey> {
         override fun compareTo(other: TimelineKey): Int =
-            compareValuesBy(this, other, { it.date }, { it.priority }, { it.ordinal }, { it.id })
+            compareValuesBy(this, other, { it.date }, { it.priority }, { it.rank }, { it.ordinal }, { it.id })
+
+        // One factory per ledger entry kind: the same-typed ints (priority, rank, ordinal, id) are
+        // meaningless when named at a call site, and the boundary key a `positionBefore` builds must
+        // match its entry's key exactly.
+        companion object {
+            fun of(trade: Trade) = TimelineKey(
+                date = trade.date,
+                priority = TRADE_PRIORITY,
+                rank = NO_RANK,
+                ordinal = trade.ordinal,
+                id = trade.id,
+            )
+
+            fun of(action: CorporateAction) = TimelineKey(
+                date = action.exDate,
+                priority = ACTION_PRIORITY,
+                rank = action.kind.replayRank,
+                ordinal = action.ordinal,
+                id = action.id,
+            )
+
+            fun of(gap: Gap) = TimelineKey(
+                date = gap.date,
+                priority = GAP_PRIORITY,
+                rank = NO_RANK,
+                ordinal = 0,
+                id = gap.id,
+            )
+        }
     }
 
     private sealed class LedgerEntry {
@@ -119,18 +151,18 @@ object PositionCalculator {
         abstract fun apply(position: Position): Position
 
         data class TradeEntry(val trade: Trade) : LedgerEntry() {
-            override val key get() = TimelineKey(trade.date, TRADE_PRIORITY, trade.ordinal, trade.id)
+            override val key get() = TimelineKey.of(trade)
             override fun apply(position: Position) = apply(position, trade)
         }
 
         data class ActionEntry(val action: CorporateAction) : LedgerEntry() {
-            override val key get() = TimelineKey(action.exDate, ACTION_PRIORITY, action.ordinal, action.id)
+            override val key get() = TimelineKey.of(action)
             override fun apply(position: Position) =
                 if (action.isApplied) CorporateActionCalculator.apply(position, action) else position
         }
 
         data class GapEntry(val gap: Gap) : LedgerEntry() {
-            override val key get() = TimelineKey(gap.date, GAP_PRIORITY, 0, gap.id)
+            override val key get() = TimelineKey.of(gap)
             override fun apply(position: Position) = when (gap) {
                 is Gap.Buy -> buy(position, gap.quantity, gap.unitPrice)
                 is Gap.Sell -> sell(position, gap.quantity)
@@ -144,6 +176,9 @@ object PositionCalculator {
         }
     }
 
+    // Trades and gaps carry no event kind, so they rank below every action's own rank; the priority
+    // already separates them from actions, and the constant names that these entries have no kind.
+    private const val NO_RANK = 0
     private const val ACTION_PRIORITY = 0
     private const val GAP_PRIORITY = 1
     private const val TRADE_PRIORITY = 2

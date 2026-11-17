@@ -18,7 +18,11 @@ object CorporateActionCalculator {
     private const val SCALE = 6
 
     fun apply(position: Position, action: CorporateAction): Position = when (action.kind) {
-        CorporateActionKind.SPLIT -> split(position, action)
+        // A rename with a conversion ratio moves the same quantity and average-price arithmetic as a
+        // split; without a ratio it is only an identity move and leaves the position untouched.
+        CorporateActionKind.SPLIT,
+        CorporateActionKind.TICKER_CHANGE,
+        -> split(position, action)
         CorporateActionKind.REVERSE_SPLIT -> reverseSplit(position, action)
         CorporateActionKind.BONUS_SHARES -> bonusShares(position, action)
         CorporateActionKind.CAPITAL_RETURN -> capitalReturn(position, action)
@@ -29,7 +33,9 @@ object CorporateActionCalculator {
     // position so the attributed/unattributed split keeps its proportion; a reverse split floors each
     // slice, and the sum stays within the floored position.
     fun scaleQuantity(quantity: BigDecimal, action: CorporateAction): BigDecimal = when (action.kind) {
-        CorporateActionKind.SPLIT -> ratio(action)?.let { quantity.multiply(it) } ?: quantity
+        CorporateActionKind.SPLIT,
+        CorporateActionKind.TICKER_CHANGE,
+        -> ratio(action)?.let { quantity.multiply(it) } ?: quantity
         CorporateActionKind.BONUS_SHARES ->
             ratio(action)?.let { quantity.multiply(BigDecimal.ONE.add(it)) } ?: quantity
         CorporateActionKind.REVERSE_SPLIT ->

@@ -17,6 +17,7 @@ import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import dev.agner.portfolio.usecase.tickeralias.model.TickerAlias
 import dev.agner.portfolio.usecase.tickeralias.repository.ITickerAliasRepository
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 
 // The corporate-action engine. An imported event is either applied to the holder's position (the
 // quantity events and a capital return), paid as cash (amortization and a cash bonus), remapped in
@@ -50,8 +51,9 @@ class CorporateActionService(
         }
     }
 
-    // Applies a batch in the deterministic replay order — ex date, then the event's own ordinal.
-    // The log's natural key is the dedup: a re-export of a period already applied is a no-op.
+    // Applies a batch in the deterministic replay order — ex date, then a rename before any other
+    // event of its own date, then the event's own ordinal. The log's natural key is the dedup: a
+    // re-export of a period already applied is a no-op.
     suspend fun importEvents(creations: List<CorporateActionCreation>): List<CorporateAction> =
         transaction.execute {
             val existingRows = repository.fetchAll()
@@ -66,7 +68,7 @@ class CorporateActionService(
                 .map { it.normalized() }
                 .distinctBy { it.naturalKey() }
                 .filter { it.naturalKey() !in existing }
-                .sortedWith(compareBy({ it.exDate }, { it.ordinal }, { it.kind.name }))
+                .sortedWith(compareBy({ it.exDate }, { it.kind.replayRank }, { it.ordinal }, { it.kind.name }))
             fresh.map { apply(it) }
         }
 
@@ -123,6 +125,9 @@ class CorporateActionService(
         when {
             action.kind == CorporateActionKind.TICKER_CHANGE -> {
                 remapTicker(action)
+                // A rename carrying a conversion ratio moves the book exactly like a split, in the
+                // same event that writes the alias.
+                if (action.hasConversionRatio) scaleAttributions(action)
                 // The projection moves to the new code in the same event, so the read never shows
                 // two rows for one paper.
                 positionService.reproject(action.ticker)
@@ -173,14 +178,29 @@ class CorporateActionService(
         }
     }
 
+    // Every stored slice of the paper scales, not only the ones keyed to the event's own code: after
+    // a rename the slices may still sit under the old code, and a same-date quantity event can be
+    // keyed to the new one. The alias set is what names the paper's whole book.
     private suspend fun scaleAttributions(action: CorporateAction) {
-        attributions.fetchBy(action.ticker).forEach { slice ->
-            attributions.save(
-                slice.copy(quantity = CorporateActionCalculator.scaleQuantity(slice.quantity, action)),
-            )
-        }
+        aliases.aliasesOf(action.ticker)
+            .flatMap { attributions.fetchBy(it) }
+            .forEach { slice ->
+                attributions.save(
+                    slice.copy(quantity = CorporateActionCalculator.scaleQuantity(slice.quantity, action)),
+                )
+            }
     }
 
     private fun cashNature(action: CorporateAction): TaxNature =
         action.kind.cashTaxNature ?: TaxNature.OTHER
 }
+
+// A rename carrying a conversion ratio other than 1 scales the book exactly like a split at its
+// effective date. A plain rename (no ratio, or a ratio of 1) only moves the identity, so its slices
+// are not rewritten. A private extension rather than a model property, so the edge DTO keeps
+// serialising only the stored columns and `is_applied`.
+private val CorporateAction.hasConversionRatio: Boolean
+    get() = kind == CorporateActionKind.TICKER_CHANGE &&
+        ratio != null &&
+        ratio.signum() > 0 &&
+        ratio.compareTo(BigDecimal.ONE) != 0

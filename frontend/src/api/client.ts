@@ -31,6 +31,7 @@ import type {
   ImportApplyResult,
   ImportDestinationObject,
   ImportRow,
+  ImportRowTickerConfirmation,
   ImportSource,
   ImportSourceStatus,
   ImportStatus,
@@ -195,6 +196,19 @@ export const api = {
 
   getImportRows(importId: number): Promise<ImportRow[]> {
     return request(`/imports/${importId}/rows`);
+  },
+
+  // The review's answer for a broker description no alias covers: the ticker becomes the
+  // institution's alias and the row is answered with its new situation.
+  confirmImportRowTicker(
+    importId: number,
+    rowId: number,
+    confirmation: ImportRowTickerConfirmation,
+  ): Promise<ImportRow> {
+    return request(`/imports/${importId}/rows/${rowId}/ticker`, {
+      method: "POST",
+      body: JSON.stringify(confirmation),
+    });
   },
 
   reviewImport(importId: number): Promise<Import> {
