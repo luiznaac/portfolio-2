@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.import.model.Import
 import dev.agner.portfolio.usecase.import.model.ImportApplyResult
 import dev.agner.portfolio.usecase.import.model.ImportDestination
 import dev.agner.portfolio.usecase.import.model.ImportDestinationObject
+import dev.agner.portfolio.usecase.import.model.ImportRowTickerConfirmation
 import dev.agner.portfolio.usecase.import.model.ImportSource
 import dev.agner.portfolio.usecase.import.model.ImportStatus
 import dev.agner.portfolio.usecase.import.model.StagingResult
@@ -14,6 +15,7 @@ import io.ktor.http.ContentDisposition
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.receive
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
@@ -66,6 +68,20 @@ class ImportController(
                     null -> call.respond(HttpStatusCode.NotFound)
                     else -> call.respond(HttpStatusCode.OK, rows)
                 }
+            }
+
+            // The review's in-flow answer for a broker description no alias covers: the owner names
+            // the ticker, the alias is written for the row's institution and the row becomes
+            // applicable. The updated row is answered so the surface can show the new mapping.
+            post("/{import_id}/rows/{row_id}/ticker") {
+                val confirmation = call.receive<ImportRowTickerConfirmation>()
+                call.respondOr404(
+                    service.confirmTicker(
+                        call.requiredInt("import_id"),
+                        call.requiredInt("row_id"),
+                        confirmation.ticker,
+                    ),
+                )
             }
 
             post("/{import_id}/review") {

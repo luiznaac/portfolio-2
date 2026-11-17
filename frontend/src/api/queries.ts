@@ -665,6 +665,27 @@ export function useStageImport() {
   });
 }
 
+// The review's in-flow answer for a broker description no alias covers. The row read is what the
+// review renders, so confirming refreshes it beside the import log.
+export function useConfirmImportRowTicker() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      importId,
+      rowId,
+      ticker,
+    }: {
+      importId: number;
+      rowId: number;
+      ticker: string;
+    }) => api.confirmImportRowTicker(importId, rowId, { ticker }),
+    onSuccess: (_row, { importId }) => {
+      queryClient.invalidateQueries({ queryKey: ["imports", importId, "rows"] });
+      queryClient.invalidateQueries({ queryKey: ["imports"] });
+    },
+  });
+}
+
 export function useReviewImport() {
   const queryClient = useQueryClient();
   return useMutation({

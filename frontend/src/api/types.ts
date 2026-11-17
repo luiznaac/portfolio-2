@@ -176,6 +176,13 @@ export interface ImportRow {
   note_number?: string;
 }
 
+// The owner's answer for a broker description the review could not resolve
+// (POST /imports/{id}/rows/{row_id}/ticker). Confirming writes the institution's Broker Asset
+// Alias and updates the row, so the next note with the same description resolves silently.
+export interface ImportRowTickerConfirmation {
+  ticker: string;
+}
+
 export type TradeSource = "MANUAL" | "B3_IMPORT" | "OPENING";
 
 export interface Trade {

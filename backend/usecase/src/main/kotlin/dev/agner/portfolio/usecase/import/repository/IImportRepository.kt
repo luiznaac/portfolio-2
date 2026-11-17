@@ -28,4 +28,7 @@ interface IImportRepository {
 
     // The apply-time decision for each row, written in the same transaction as the ledger writes.
     suspend fun saveOutcomes(importId: Int, outcomes: Map<Int, ImportRowOutcome>)
+
+    // The review's confirmation: the row's ticker and the error it still carries.
+    suspend fun updateRowTicker(importId: Int, rowId: Int, ticker: String, error: String?)
 }
