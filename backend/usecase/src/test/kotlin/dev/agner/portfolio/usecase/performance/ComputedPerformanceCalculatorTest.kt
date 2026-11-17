@@ -55,24 +55,25 @@ class ComputedPerformanceCalculatorTest : StringSpec({
         ).shouldBeEmpty()
     }
 
-    "nets fees into the month's aportes and subtracts the income" {
-        val aportes = ComputedPerformanceCalculator.netAportes(
-            trades = listOf(
-                buy(id = 1, date = "2026-02-10", quantity = "10", unitPrice = "10", fee = "5"),
-                sell(id = 2, date = "2026-02-20", quantity = "5", unitPrice = "12", fee = "2"),
-            ),
-            incomes = listOf(income(date = "2026-02-15", net = "30")),
-            period = YearMonth.parse("2026-02"),
+    // Income is its own decomposition column, so the aportes stay external money: the return
+    // formula subtracts the income once, and folding it in here too would add it back.
+    "nets fees into the month's aportes and reports the income separately" {
+        val trades = listOf(
+            buy(id = 1, date = "2026-02-10", quantity = "10", unitPrice = "10", fee = "5"),
+            sell(id = 2, date = "2026-02-20", quantity = "5", unitPrice = "12", fee = "2"),
         )
+        val incomes = listOf(income(date = "2026-02-15", net = "30"))
 
-        aportes.compareTo(BigDecimal("17")) shouldBe 0
+        ComputedPerformanceCalculator.netAportes(trades, YearMonth.parse("2026-02"))
+            .compareTo(BigDecimal("47")) shouldBe 0
+        ComputedPerformanceCalculator.netIncome(incomes, YearMonth.parse("2026-02"))
+            .compareTo(BigDecimal("30")) shouldBe 0
     }
 
     "reads a sell-only month as a negative aporte" {
         val aportes = ComputedPerformanceCalculator.netAportes(
-            trades = listOf(sell(id = 1, date = "2026-02-20", quantity = "10", unitPrice = "10")),
-            incomes = emptyList(),
-            period = YearMonth.parse("2026-02"),
+            listOf(sell(id = 1, date = "2026-02-20", quantity = "10", unitPrice = "10")),
+            YearMonth.parse("2026-02"),
         )
 
         aportes.compareTo(BigDecimal("-100")) shouldBe 0
@@ -87,17 +88,11 @@ class ComputedPerformanceCalculatorTest : StringSpec({
             source = TradeSource.OPENING,
         )
 
-        ComputedPerformanceCalculator.netAportes(
-            trades = listOf(opening),
-            incomes = emptyList(),
-            period = YearMonth.parse("2026-02"),
-        ).compareTo(BigDecimal.ZERO) shouldBe 0
+        ComputedPerformanceCalculator.netAportes(listOf(opening), YearMonth.parse("2026-02"))
+            .compareTo(BigDecimal.ZERO) shouldBe 0
 
-        ComputedPerformanceCalculator.netAportes(
-            trades = emptyList(),
-            incomes = emptyList(),
-            period = YearMonth.parse("2026-02"),
-        ).compareTo(BigDecimal.ZERO) shouldBe 0
+        ComputedPerformanceCalculator.netAportes(emptyList(), YearMonth.parse("2026-02"))
+            .compareTo(BigDecimal.ZERO) shouldBe 0
     }
 
     "prices the held positions and groups them by effective asset class" {
