@@ -103,4 +103,20 @@ class ImportRepository(
             row.outcome = outcome
         }
     }
+
+    override suspend fun updateRowTicker(
+        importId: Int,
+        rowId: Int,
+        ticker: String,
+        error: String?,
+    ) {
+        transaction {
+            ImportRowEntity.findById(rowId)
+                ?.takeIf { it.owner.id.value == importId }
+                ?.apply {
+                    this.ticker = ticker
+                    this.error = error
+                }
+        }
+    }
 }

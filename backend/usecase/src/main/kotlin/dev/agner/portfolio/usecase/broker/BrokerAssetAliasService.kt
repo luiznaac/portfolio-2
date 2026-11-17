@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.broker
 
+import dev.agner.portfolio.usecase.broker.model.BrokerAssetAlias
 import dev.agner.portfolio.usecase.broker.model.BrokerDescriptionResolution
 import dev.agner.portfolio.usecase.broker.repository.IBrokerAssetAliasRepository
 import org.springframework.stereotype.Service
@@ -29,6 +30,16 @@ class BrokerAssetAliasService(
             .toSet()
         return global.resolution()
     }
+
+    // The owner's answer to a description the import review could not resolve. It lands as the
+    // institution's own alias — that broker's answer, which wins over the global fallback on the
+    // next note — and never as a second global that could make the description ambiguous. The
+    // caller has already normalized the description.
+    suspend fun confirm(
+        institutionId: Int?,
+        normalizedDescription: String,
+        ticker: String,
+    ): BrokerAssetAlias = repository.save(institutionId, normalizedDescription, ticker)
 }
 
 private fun Set<String>.resolution(): BrokerDescriptionResolution = when (size) {
