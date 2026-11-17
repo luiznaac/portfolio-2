@@ -64,8 +64,14 @@ export function Taxes() {
   const currentPeriod = monthKey(todayIso());
   const openPeriod = current.data?.month.period ?? null;
   const closedPeriods = (closed.data ?? []).map((month) => month.period);
+  const lastClosedPeriod = closedPeriods[0];
   const periods = range.data ? windowMonthKeys({ start: range.data.min, end: range.data.max }) : [];
-  const rail = useAnalysisWindow(periods, closed.data?.[0]?.period);
+  // The tax picker reads the server's period-range default — the ledger's latest trade month — but
+  // only while nothing is closed: a closed month stays the rail's default anchor. An imported
+  // historical ledger therefore opens on the month its last trade lands in instead of the newest
+  // month in the range, which a rolling window could never reach.
+  const preferredAnchor = lastClosedPeriod === undefined ? range.data?.default : undefined;
+  const rail = useAnalysisWindow(periods, lastClosedPeriod, preferredAnchor);
   const anchor = rail.anchor;
   const isOpenMonth = openPeriod !== null && anchor === openPeriod;
   const tax = useStockTax(anchor ?? "");
