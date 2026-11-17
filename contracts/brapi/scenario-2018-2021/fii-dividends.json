@@ -1,0 +1,20 @@
+{
+  "dividends": [
+    {
+      "symbol": "MXRF11",
+      "approvedOn": "2021-01-20T03:00:00.000Z",
+      "label": "RENDIMENTO",
+      "lastDatePrior": "2021-02-01T03:00:00.000Z",
+      "exDate": null,
+      "paymentDate": "2021-02-15T03:00:00.000Z",
+      "rate": 0.1,
+      "rawRate": 0.1,
+      "relatedTo": "Janeiro-2021",
+      "isinCode": "BRMXRFCTF008",
+      "remarks": "",
+      "verified": true
+    }
+  ],
+  "requestedAt": "2026-11-17T01:37:09.078Z",
+  "took": 8
+}

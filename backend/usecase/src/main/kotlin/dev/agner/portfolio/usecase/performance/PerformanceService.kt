@@ -224,7 +224,7 @@ class PerformanceService(
                     quotes.latestCloseOn(position.ticker, asOf)?.let { position.ticker to it }
                 }.toMap()
                 val monthValue = ComputedPerformanceCalculator.valueAt(positions, closes, assetClasses)
-                val netAportes = ComputedPerformanceCalculator.netAportes(ledger, incomeRows, period)
+                val netAportes = ComputedPerformanceCalculator.netAportes(ledger, period)
                 val benchmarks = returnsFor(observations, period).map { (benchmark, returnPercentage) ->
                     PeriodBenchmark(benchmark, returnPercentage)
                 }

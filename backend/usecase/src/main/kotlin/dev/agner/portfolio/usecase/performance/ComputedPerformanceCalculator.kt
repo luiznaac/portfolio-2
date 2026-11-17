@@ -15,8 +15,8 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.yearMonth
 import java.math.BigDecimal
 
-// The rules of the pre-planning era: the month window the ledger alone supports, the aportes a month
-// derives from its trades and income, and the month-end value of the as-of Position replay. Nothing
+// The rules of the pre-planning era: the month window the ledger alone supports, the external money
+// a month's trades bring in and take out, and the month-end value of the as-of Position replay. Nothing
 // here writes a Month, a close or a Snapshot — the era is a read over the live ledger.
 object ComputedPerformanceCalculator {
 
@@ -38,20 +38,17 @@ object ComputedPerformanceCalculator {
     }
 
     // A month's external money: buys cost money, sells return it and fees sit on the side that pays.
-    // Income already arrived inside the month's value but is not a contribution, so it is netted out
-    // of the flow. An Opening Trade is the adoption seed, not money that entered during the era.
-    fun netAportes(
-        trades: List<Trade>,
-        incomes: List<Income>,
-        period: YearMonth,
-    ): BigDecimal {
+    // Income is not a contribution, but it is its own decomposition column: the return formula nets
+    // it once, so folding it in here as well would add it straight back to the performance. An
+    // Opening Trade is the adoption seed, not money that entered during the era.
+    fun netAportes(trades: List<Trade>, period: YearMonth): BigDecimal {
         val inMonth = trades.filter { it.date.yearMonth == period && it.source != TradeSource.OPENING }
         val buyCost = inMonth.filterIsInstance<Trade.Buy>()
             .sumOf { it.quantity.multiply(it.unitPrice).add(it.fee ?: BigDecimal.ZERO) }
         val sellProceeds = inMonth.filterIsInstance<Trade.Sell>()
             .sumOf { it.quantity.multiply(it.unitPrice).subtract(it.fee ?: BigDecimal.ZERO) }
 
-        return buyCost.subtract(sellProceeds).subtract(netIncome(incomes, period)).defaultScale()
+        return buyCost.subtract(sellProceeds).defaultScale()
     }
 
     // The month's net income: it arrived inside the month's value but is not a contribution.

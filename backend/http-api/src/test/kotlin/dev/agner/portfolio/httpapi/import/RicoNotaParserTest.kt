@@ -1,5 +1,6 @@
 package dev.agner.portfolio.httpapi.import
 
+import dev.agner.portfolio.usecase.import.model.ImportRowPayload
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.plain
 import io.kotest.core.spec.style.DescribeSpec
@@ -25,18 +26,7 @@ class RicoNotaParserTest : DescribeSpec({
         }
 
         it("stages one row per trade row of every note, skipping the page with no trades") {
-            rows.map { row ->
-                RicoFixtureRow(
-                    note = row.noteNumber,
-                    date = row.date.toString(),
-                    side = row.side,
-                    venue = row.venue,
-                    rawDescription = row.rawDescription,
-                    quantity = row.quantity.plain(),
-                    unitPrice = row.unitPrice.plain(),
-                    hasError = row.error != null,
-                )
-            } shouldBe FIXTURE_ROWS
+            rowsOf(rows) shouldBe FIXTURE_ROWS
             rows.map { it.institutionName }.toSet() shouldBe setOf("RICO INVESTIMENTOS")
         }
 
@@ -64,7 +54,45 @@ class RicoNotaParserTest : DescribeSpec({
                 setOf("VISTA", "FRACIONARIO")
         }
     }
+
+    // The 2018–2021 history fixture carries the papers the rename, split,
+    // rights-sale and income legs need: a buy under the pre-rename code, two descriptions the alias
+    // seed does not know (confirmed in the import review), the rights row, a FII and a 2021 trade.
+    describe("the synthetic 2018-2021 Rico nota") {
+
+        val fixture = loadAcceptanceFixture("rico-nota-2018-2021.pdf")
+        val parser = RicoNotaParser()
+        val rows = parser.parse(fixture.name, fixture.bytes)
+
+        it("is claimed by its header and spans the 2018-2021 window") {
+            parser.shouldExecute(fixture.name, fixture.bytes) shouldBe true
+            rows.map { it.date.toString() }.toSet() shouldBe
+                setOf("2018-03-05", "2019-05-06", "2020-07-01", "2021-10-01")
+        }
+
+        it("stages one row per trade row, grouped by note") {
+            rowsOf(rows) shouldBe HISTORY_ROWS
+            rows.map { it.institutionName }.toSet() shouldBe setOf("RICO INVESTIMENTOS")
+        }
+
+        it("leaves every ticker for the alias lookup") {
+            rows.map { it.ticker } shouldBe List(HISTORY_ROWS.size) { null }
+        }
+    }
 })
+
+private fun rowsOf(rows: List<ImportRowPayload>) = rows.map { row ->
+    RicoFixtureRow(
+        note = row.noteNumber,
+        date = row.date.toString(),
+        side = row.side,
+        venue = row.venue,
+        rawDescription = row.rawDescription,
+        quantity = row.quantity.plain(),
+        unitPrice = row.unitPrice.plain(),
+        hasError = row.error != null,
+    )
+}
 
 private data class RicoFixtureRow(
     val note: String?,
@@ -157,6 +185,72 @@ private val FIXTURE_ROWS = listOf(
         quantity = "10",
         unitPrice = "20",
         hasError = true,
+    ),
+)
+
+// The history fixture's rows: three papers bought in 2018 (one under the code a later brapi rename
+// retires), the 2019 rights sale with no receipt, a 2020 FII buy and a 2021 trade that closes the
+// window. Two descriptions carry no seeded alias, so the import review has to resolve them.
+private val HISTORY_ROWS = listOf(
+    RicoFixtureRow(
+        note = "500001",
+        date = "2018-03-05",
+        side = TradeSide.BUY,
+        venue = "VISTA",
+        rawDescription = "PETROBRAS PN N2",
+        quantity = "100",
+        unitPrice = "20",
+        hasError = false,
+    ),
+    RicoFixtureRow(
+        note = "500001",
+        date = "2018-03-05",
+        side = TradeSide.BUY,
+        venue = "VISTA",
+        rawDescription = "VALE ON N1",
+        quantity = "50",
+        unitPrice = "30",
+        hasError = false,
+    ),
+    RicoFixtureRow(
+        note = "500001",
+        date = "2018-03-05",
+        side = TradeSide.BUY,
+        venue = "VISTA",
+        rawDescription = "BIDI11",
+        quantity = "100",
+        unitPrice = "10",
+        hasError = false,
+    ),
+    RicoFixtureRow(
+        note = "500002",
+        date = "2019-05-06",
+        side = TradeSide.SELL,
+        venue = "VISTA",
+        rawDescription = "FII RBR PROP DM 88,27",
+        quantity = "10",
+        unitPrice = "88.27",
+        hasError = false,
+    ),
+    RicoFixtureRow(
+        note = "500003",
+        date = "2020-07-01",
+        side = TradeSide.BUY,
+        venue = "VISTA",
+        rawDescription = "FII MXRF11",
+        quantity = "100",
+        unitPrice = "10",
+        hasError = false,
+    ),
+    RicoFixtureRow(
+        note = "500004",
+        date = "2021-10-01",
+        side = TradeSide.BUY,
+        venue = "VISTA",
+        rawDescription = "B3 ON",
+        quantity = "100",
+        unitPrice = "12",
+        hasError = false,
     ),
 )
 

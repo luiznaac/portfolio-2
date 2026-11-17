@@ -7,6 +7,10 @@ import java.io.File
 // module's test resources resolve one directory up.
 internal fun ricoNotaFixture(): ByteArray = docsFixture("rico-nota-2019.pdf")
 
+// The 2018–2021 synthetic broker note: four notes carrying the rename's old code, the rights sale, the FII
+// and the closing 2021 trade, with two descriptions the alias seed does not know.
+internal fun ricoHistoryFixture(): ByteArray = docsFixture("rico-nota-2018-2021.pdf")
+
 // A real text PDF that is not a Rico note: the HTTP import must reject it and stage nothing.
 internal fun nonRicoPdfFixture(): ByteArray = docsFixture("xp-relatorio-2026-10.pdf")
 

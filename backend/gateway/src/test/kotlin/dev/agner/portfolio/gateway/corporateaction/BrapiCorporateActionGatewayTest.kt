@@ -87,6 +87,48 @@ class BrapiCorporateActionGatewayTest : StringSpec({
         fetch.items.last().rawRate?.compareTo(BigDecimal("0.5")) shouldBe 0
     }
 
+    // The 2018–2021 paid-month history: the same three endpoint shapes over the ledger's window —
+    // the rename that retires a pre-2021 code, the in-window split and dividend, and the FII
+    // income payment. The end-to-end run stubs these exact bytes.
+    "reads the 2018-2021 scenario fixtures with the in-window events" {
+        val renamesGateway = gateway { _ ->
+            respond(fixture("brapi/scenario-2018-2021/ticker-renames.json"), HttpStatusCode.OK, jsonHeaders())
+        }
+        val renames = renamesGateway.fetchRenames(listOf("BIDI11"))
+        renames.items.single().let { rename ->
+            rename.oldSymbol shouldBe "BIDI11"
+            rename.canonicalSymbol shouldBe "INBR32"
+            rename.effectiveDate shouldBe LocalDate.parse("2022-06-23")
+            rename.conversionRatio?.compareTo(BigDecimal("1.1")) shouldBe 0
+        }
+
+        val stockGateway = gateway { _ ->
+            respond(fixture("brapi/scenario-2018-2021/stock-dividends.json"), HttpStatusCode.OK, jsonHeaders())
+        }
+        val stock = stockGateway.fetchStockEvents(listOf("PETR4", "VALE3"), WINDOW)
+        stock.items.stockDividends.map { it.symbol to it.label } shouldBe
+            listOf("PETR4" to "DESDOBRAMENTO", "VALE3" to "DESDOBRAMENTO")
+        stock.items.stockDividends.map { it.exDate } shouldBe
+            listOf(LocalDate.parse("2020-01-10"), LocalDate.parse("2020-02-10"))
+        stock.items.stockDividends.map { it.factor?.stripTrailingZeros()?.toPlainString() } shouldBe listOf("2", "3")
+        stock.items.cashDividends.single().let { dividend ->
+            dividend.label shouldBe "DIVIDENDO"
+            dividend.paymentDate shouldBe LocalDate.parse("2021-06-10")
+            dividend.rawRate?.compareTo(BigDecimal("0.5")) shouldBe 0
+        }
+
+        val fundsGateway = gateway { _ ->
+            respond(fixture("brapi/scenario-2018-2021/fii-dividends.json"), HttpStatusCode.OK, jsonHeaders())
+        }
+        val funds = fundsGateway.fetchFundEvents(listOf("MXRF11"), WINDOW)
+        funds.items.single().let { fundIncome ->
+            fundIncome.symbol shouldBe "MXRF11"
+            fundIncome.label shouldBe "RENDIMENTO"
+            fundIncome.paymentDate shouldBe LocalDate.parse("2021-02-15")
+            fundIncome.rawRate?.compareTo(BigDecimal("0.1")) shouldBe 0
+        }
+    }
+
     "a missing token fails the sync loudly without calling brapi" {
         val requests = mutableListOf<HttpRequestData>()
         val gateway = gateway(token = "") { request ->
