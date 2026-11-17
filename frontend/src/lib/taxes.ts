@@ -19,7 +19,18 @@ const REALIZED_KIND_LABELS: Record<RealizedKind, string> = {
   SWING: "Swing",
   DAY_TRADE: "Day trade",
   FII: "FIIs",
+  RIGHTS: "Direitos",
 };
+
+// The rights row is its own species: 15% under DARF 6015, outside the R$20k stock meter and the FII
+// bucket. The rate comes from the report, so the page never restates a number the engine owns.
+export function rightsRateHint(rate: number): string {
+  return `${rate}% · DARF 6015`;
+}
+
+export function rightsTaxNote(rate: number): string {
+  return `Direitos: ${rightsRateHint(rate)}, fora do teto de ações e do balde de FII`;
+}
 
 export function realizedKindLabel(kind: RealizedKind): string {
   return REALIZED_KIND_LABELS[kind];

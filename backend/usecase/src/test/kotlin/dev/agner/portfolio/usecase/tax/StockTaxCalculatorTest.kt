@@ -11,6 +11,7 @@ import dev.agner.portfolio.usecase.plain
 import dev.agner.portfolio.usecase.sell
 import dev.agner.portfolio.usecase.tax.model.CarrySeed
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
+import dev.agner.portfolio.usecase.tax.model.RightsTax
 import dev.agner.portfolio.usecase.tax.model.TickerLedger
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -563,6 +564,130 @@ class StockTaxCalculatorTest : StringSpec({
         report.dayTrades shouldBe emptyList()
     }
 
+    "a right received at zero cost realizes its whole sale value under 15% and DARF 6015" {
+        val report = reportOf(
+            rights(
+                buy(quantity = "100", unitPrice = "0"),
+                sell(id = 2, quantity = "100", unitPrice = "5"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        val row = report.realized.first { it.kind == RealizedKind.RIGHTS }
+
+        row.grossSales.plain() shouldBe "500"
+        row.gains.plain() shouldBe "500"
+        row.losses.plain() shouldBe "0"
+        row.result.plain() shouldBe "500"
+        RightsTax.RATE.plain() shouldBe "15"
+        report.rights.taxableGain.plain() shouldBe "500"
+        report.rights.tax.plain() shouldBe "75"
+        report.darfDueDate shouldBe TaxCalendar.darfDueDate(period)
+    }
+
+    "a rights gain taxes at 15% only after its own carry bucket" {
+        val report = reportOf(
+            rights(
+                buy(quantity = "100", unitPrice = "0"),
+                sell(id = 2, quantity = "100", unitPrice = "5"),
+            ),
+            carrySeed = CarrySeed.adopted(
+                openingBalances = mapOf(RealizedKind.RIGHTS to BigDecimal("300")),
+                through = YearMonth.parse("2026-09"),
+            ),
+        )
+
+        report.rights.taxableGain.plain() shouldBe "200"
+        report.rights.tax.plain() shouldBe "30"
+    }
+
+    "a rights loss leaves the rights DARF at zero and banks in its own bucket" {
+        val report = reportOf(
+            rights(
+                buy(quantity = "100", unitPrice = "5"),
+                sell(id = 2, quantity = "100", unitPrice = "3"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        report.rights.tax.plain() shouldBe "0"
+        report.rights.taxableGain.plain() shouldBe "0"
+        report.carry.first { it.kind == RealizedKind.RIGHTS }.closingBalance!!.plain() shouldBe "200"
+    }
+
+    "a right bought in the market is realized against its purchase price" {
+        val report = reportOf(
+            rights(
+                buy(quantity = "100", unitPrice = "3"),
+                sell(id = 2, quantity = "100", unitPrice = "5"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        report.realized.first { it.kind == RealizedKind.RIGHTS }.result.plain() shouldBe "200"
+    }
+
+    "rights sales stay outside the stock meter and the FII bucket" {
+        val report = reportOf(
+            rights(
+                buy(quantity = "3000", unitPrice = "0"),
+                sell(id = 2, quantity = "3000", unitPrice = "10"),
+            ),
+            fii(
+                buy(id = 3, date = "2026-10-01", quantity = "100", unitPrice = "100"),
+                sell(id = 4, date = "2026-10-06", quantity = "100", unitPrice = "110"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        report.meter.grossSales.plain() shouldBe "0"
+        report.meter.exceeded shouldBe false
+        report.realized.first { it.kind == RealizedKind.RIGHTS }.grossSales.plain() shouldBe "30000"
+        report.realized.first { it.kind == RealizedKind.FII }.grossSales.plain() shouldBe "11000"
+        report.realized.first { it.kind == RealizedKind.SWING }.grossSales.plain() shouldBe "0"
+    }
+
+    "a rights loss banks in its own bucket and never offsets another kind" {
+        val report = reportOf(
+            rights(
+                buy(quantity = "100", unitPrice = "5"),
+                sell(id = 2, quantity = "100", unitPrice = "3"),
+            ),
+            stock(
+                buy(id = 3, quantity = "2000", unitPrice = "10"),
+                sell(id = 4, quantity = "2000", unitPrice = "10.5"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        val carry = report.carry.associateBy { it.kind }
+
+        carry.getValue(RealizedKind.RIGHTS).let {
+            it.lossBanked!!.plain() shouldBe "200"
+            it.closingBalance!!.plain() shouldBe "200"
+        }
+        carry.getValue(RealizedKind.SWING).let {
+            it.openingBalance!!.plain() shouldBe "0"
+            it.lossApplied!!.plain() shouldBe "0"
+            it.closingBalance!!.plain() shouldBe "0"
+        }
+        report.meter.taxableGain.plain() shouldBe "1000"
+    }
+
+    "the report always carries a zero rights row and bucket beside the other three kinds" {
+        val report = reportOf(
+            stock(
+                buy(quantity = "100", unitPrice = "10"),
+                sell(id = 2, quantity = "100", unitPrice = "12"),
+            ),
+            carrySeed = CarrySeed.None,
+        )
+
+        report.realized.map { it.kind } shouldBe RealizedKind.entries
+        report.carry.map { it.kind } shouldBe RealizedKind.entries
+        report.realized.first { it.kind == RealizedKind.RIGHTS }.result.plain() shouldBe "0"
+    }
+
     "the adoption boundary excludes ledger months already in the seeded balance" {
         val report = reportOf(
             stock(
@@ -639,5 +764,11 @@ private fun stock(
 private fun fii(vararg trades: Trade) = TickerLedger(
     ticker = "HGLG11",
     assetKind = AssetKind.FII,
+    trades = trades.toList(),
+)
+
+private fun rights(vararg trades: Trade) = TickerLedger(
+    ticker = "RBRP12",
+    assetKind = AssetKind.RIGHT,
     trades = trades.toList(),
 )

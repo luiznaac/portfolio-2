@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.portfolio
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.commons.defaultScale
 import dev.agner.portfolio.usecase.commons.deficitAgainst
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
@@ -25,8 +26,9 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 // One listed holding crossing into the calculator: the ticker, the class the catalog gives it (null
-// when the catalog has not classified it), the units, and the newest close when the ticker has one.
-// `price = null` is an unknown valuation, never zero; `stale` marks an old-but-real close.
+// when the catalog has not classified it), the kind, the units, and the newest close when the ticker
+// has one. `price = null` is an unknown valuation, never zero; `stale` marks an old-but-real close.
+// A right is excluded from every rung: it is intentionally classless, not an unclassified stock.
 data class ListedHolding(
     val ticker: String,
     val assetClass: AssetClass?,
@@ -34,6 +36,7 @@ data class ListedHolding(
     val price: BigDecimal?,
     val quoteDate: LocalDate? = null,
     val stale: Boolean = false,
+    val assetKind: AssetKind? = null,
 ) {
     // Null means unknown (no close and a non-zero quantity); zero units are worth zero regardless.
     val value: BigDecimal? get() = valueOf(quantity, price)
@@ -99,10 +102,13 @@ object AllocationCalculator {
         strategyIds: Map<String, Int> = emptyMap(),
     ): Allocation {
         val chain = TargetChainCalculator.compute(capital, targets)
-        val listedByClass = listed
+        // A right is excluded from the tree at the one entry point every rung reads, so it can
+        // never surface as a class holding, an outside remainder or an unclassified row.
+        val book = listed.filterNot { it.assetKind == AssetKind.RIGHT }
+        val listedByClass = book
             .mapNotNull { holding -> holding.assetClass?.let { assetClass -> assetClass to holding } }
             .groupBy({ it.first }, { it.second })
-        val unclassified = unclassifiedAllocation(listed.filter { it.assetClass == null })
+        val unclassified = unclassifiedAllocation(book.filter { it.assetClass == null })
         val fixedIncomeBySubClass = fixedIncome.sumBy({ it.subClass }, { it.value })
 
         val classes = chain.classes.map { classChain ->
@@ -124,8 +130,8 @@ object AllocationCalculator {
             }
         }
 
-        val unpriced = heldTickers(listed) { it.value == null }
-        val negative = heldTickers(listed) { it.quantity.signum() < 0 }
+        val unpriced = heldTickers(book) { it.value == null }
+        val negative = heldTickers(book) { it.quantity.signum() < 0 }
 
         val actual = (classes.sumOf { it.actual } + unclassified.actual).defaultScale()
         val ideal = capital.defaultScale()

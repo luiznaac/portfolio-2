@@ -6,10 +6,12 @@ import dev.agner.portfolio.usecase.commons.percentOf
 import dev.agner.portfolio.usecase.listedasset.PositionCalculator
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
+import dev.agner.portfolio.usecase.tax.model.CarryBucket
 import dev.agner.portfolio.usecase.tax.model.CarrySeed
 import dev.agner.portfolio.usecase.tax.model.ExemptionMeter
 import dev.agner.portfolio.usecase.tax.model.RealizedKind
 import dev.agner.portfolio.usecase.tax.model.RealizedResult
+import dev.agner.portfolio.usecase.tax.model.RightsTax
 import dev.agner.portfolio.usecase.tax.model.StockTaxReport
 import dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedStatus
 import dev.agner.portfolio.usecase.tax.model.TaxUnclassifiedTicker
@@ -24,10 +26,10 @@ import java.math.BigDecimal
 // realized result per tax kind. Pure and side-effect free — the service only gathers each ticker's
 // ledger and the adoption seed, so the rules are unit-tested with fixtures instead of a database.
 //
-// The meter counts gross proceeds of STOCK sales only. Units, FIIs, BDRs, ETFs and day trades are
-// outside it (SC Cosit 145/2021), and so are an unclassified ticker's sales: the catalog has not
-// said it is a stock. Both import and manual sources are in the same ledger, so the meter sees
-// both.
+// The meter counts gross proceeds of STOCK sales only. Units, FIIs, BDRs, ETFs, rights and day
+// trades are outside it (SC Cosit 145/2021), and so are an unclassified ticker's sales: the catalog
+// has not said it is a stock. Both import and manual sources are in the same ledger, so the meter
+// sees both.
 object StockTaxCalculator {
 
     // Lei 11.033/2004 art. 3º, I: R$20k of gross stock sales in the calendar month keeps the
@@ -52,6 +54,8 @@ object StockTaxCalculator {
         val prior = months.filterKeys { it < period }.toSortedMap().values.toList()
         val carry = CarryRoller.roll(carrySeed, prior, current)
         val swingCarry = carry.first { it.kind == RealizedKind.SWING }
+        val rightsResult = current.results.first { it.kind == RealizedKind.RIGHTS }
+        val rightsCarry = carry.first { it.kind == RealizedKind.RIGHTS }
 
         return StockTaxReport(
             period = period,
@@ -72,7 +76,19 @@ object StockTaxCalculator {
                 .flatMap { DayTradeCalculator.warnings(it.ticker, it.trades, period) }
                 .sortedWith(compareBy({ it.date }, { it.ticker }, { it.institutionId })),
             unclassified = unclassifiedOf(asOf, replaysByTicker, period),
+            rights = rightsTaxOf(rightsResult, rightsCarry),
         )
+    }
+
+    // The rights row's own DARF 6015 line: 15% of the month's rights gain after its species-bound
+    // carry bucket. A rights loss banks and taxes nothing; cross-kind offset is out of scope.
+    private fun rightsTaxOf(result: RealizedResult, bucket: CarryBucket): RightsTax {
+        if (result.result.signum() <= 0) return RightsTax.zero()
+        val taxable = result.result
+            .subtract(bucket.lossApplied ?: BigDecimal.ZERO)
+            .max(BigDecimal.ZERO)
+            .defaultScale()
+        return RightsTax(RightsTax.RATE, taxable, taxable.percentOf(RightsTax.RATE))
     }
 
     // An uncatalogued ticker's sales are excluded from the meter, never guessed. It is flagged when
@@ -124,8 +140,8 @@ object StockTaxCalculator {
         )
     }
 
-    // Three rows always, in the enum's order, so a kind with no sale still reports a zero result
-    // instead of vanishing from the ledger the UI renders.
+    // One row per kind, always, in the enum's order, so a kind with no sale still reports a zero
+    // result instead of vanishing from the ledger the UI renders.
     private fun realizedOf(sales: List<Sale>): List<RealizedResult> =
         RealizedKind.entries.map { kind ->
             val ofKind = sales.filter { it.kind == kind }
@@ -155,6 +171,7 @@ object StockTaxCalculator {
     private fun salesOf(ledger: TickerLedger): List<Sale> = when (ledger.assetKind) {
         AssetKind.STOCK -> stockSales(ledger)
         AssetKind.FII -> fiiSales(ledger)
+        AssetKind.RIGHT -> rightsSales(ledger)
         else -> emptyList()
     }
 
@@ -179,6 +196,14 @@ object StockTaxCalculator {
         ledger.trades
             .filterIsInstance<Trade.Sell>()
             .mapNotNull { sale -> saleOf(ledger, sale, sale.quantity, RealizedKind.FII) }
+
+    // A right is its own 15% species under DARF 6015: every sale is RIGHTS, with no exemption meter
+    // and no day-trade split (the day-trade tax is out of scope for the whole app). Its zero-cost
+    // receipt or market purchase is already the ledger's basis, so the sale needs no special case.
+    private fun rightsSales(ledger: TickerLedger): List<Sale> =
+        ledger.trades
+            .filterIsInstance<Trade.Sell>()
+            .mapNotNull { sale -> saleOf(ledger, sale, sale.quantity, RealizedKind.RIGHTS) }
 
     private fun saleOf(ledger: TickerLedger, sale: Trade.Sell, quantity: BigDecimal, kind: RealizedKind): Sale? {
         if (quantity.signum() <= 0) return null

@@ -1,6 +1,7 @@
 package dev.agner.portfolio.httpapi.import
 
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
+import dev.agner.portfolio.usecase.catalog.model.rightsTicker
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSource
@@ -166,24 +167,42 @@ class B3MovementsParser : IMovementsParser {
     }
 
     private fun corporateAction(row: MovementRow): CorporateActionCreation {
+        val kind = kind(row)
+        // A subscription row with a factor carries the terms of a real rights allotment: the rights
+        // ticker is the new code it prints, or B3's `XXXX` + 2 derivation from the underlying. Any
+        // other kind keeps the row's own code and target.
+        val isAllotment = kind == CorporateActionKind.RIGHTS_ALLOTMENT
         val perShare = when {
             row.quantity != null && row.quantity.signum() > 0 && row.value != null ->
                 row.value.divide(row.quantity, PER_SHARE_SCALE, RoundingMode.HALF_UP)
             else -> row.unitPrice
         }
         return CorporateActionCreation(
-            ticker = row.ticker,
-            kind = kind(row.type),
+            ticker = if (isAllotment) {
+                row.targetTicker?.normalizedTicker() ?: row.ticker.rightsTicker()
+            } else {
+                row.ticker
+            },
+            kind = kind,
             exDate = row.date,
             approvalDate = row.approvalDate,
             ratio = row.factor,
-            declaredValuePerShare = perShare,
-            targetTicker = row.targetTicker,
+            declaredValuePerShare = if (isAllotment) null else perShare,
+            targetTicker = if (isAllotment) row.ticker else row.targetTicker,
             source = CorporateActionSource.B3_MOVEMENTS,
             processNumber = row.processNumber,
             rawType = row.type,
         )
     }
+
+    // A subscription row is a computable rights allotment only when it carries the issuance factor;
+    // without it there is nothing to compute, so it stays the review kind.
+    private fun kind(row: MovementRow): CorporateActionKind =
+        if (normalized(row.type) == "SUBSCRICAO" && row.factor != null) {
+            CorporateActionKind.RIGHTS_ALLOTMENT
+        } else {
+            kind(row.type)
+        }
 
     // The export's type vocabulary, accent- and case-insensitive. RF rows and unknown labels land
     // in OTHER so they queue for review; the raw label stays on the row for the reviewer.

@@ -413,7 +413,9 @@ export function resultsPanel(
     {
       key: "darf",
       label: tax === undefined ? "DARF" : `DARF de ${monthPeriodLabel(tax.period)}`,
-      value: tax === undefined ? "—" : formatCurrency(tax.meter.tax),
+      // The monthly bolsa DARF is the stock meter's tax plus the rights row's own 15% line: both are
+      // DARF 6015, and the rights row sits outside the meter but not outside the month's filing.
+      value: tax === undefined ? "—" : formatCurrency(tax.meter.tax + tax.rights.tax),
       hint: tax === undefined ? undefined : `vence ${formatIsoDate(tax.darf_due_date)}`,
       tone: "default",
     },

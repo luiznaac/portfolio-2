@@ -10,6 +10,12 @@ import java.math.BigDecimal
 // the issuer states the event and re-deriving a "new per old" fraction would make the stored number
 // disagree with the source. `ordinal` is the event's occurrence within its (ticker, kind, exDate)
 // tuple, so two same-day events of one kind stay distinct and replay in a deterministic order.
+//
+// `targetTicker` is the event's other code: the new code of a TICKER_CHANGE, or the underlying a
+// RIGHTS_ALLOTMENT was issued from. A rights allotment is keyed on the rights ticker it creates, so
+// its replay (and the allocation exclusion) sees it on the paper it belongs to; `grantedQuantity` is
+// the holder's computed grant — the underlying position at the ex-date times the factor — and is
+// what the position replay adds at zero cost.
 data class CorporateAction(
     val id: Int,
     val ticker: String,
@@ -25,6 +31,7 @@ data class CorporateAction(
     val ordinal: Int,
     val fileHash: String? = null,
     val status: CorporateActionStatus,
+    val grantedQuantity: BigDecimal? = null,
 ) {
     val isApplied: Boolean get() = status == CorporateActionStatus.APPLIED
 
@@ -58,6 +65,9 @@ data class CorporateActionCreation(
     val rawType: String? = null,
     val ordinal: Int = 1,
     val fileHash: String? = null,
+    // The holder's computed grant. The engine fills it when it settles a RIGHTS_ALLOTMENT, and the
+    // derived fallback carries the sold quantity directly. Null on every other kind.
+    val grantedQuantity: BigDecimal? = null,
 ) {
     fun normalized() = copy(
         ticker = ticker.normalizedTicker(),
@@ -69,13 +79,15 @@ data class CorporateActionCreation(
     // A quantity event without its ratio cannot be applied; parking it is the honest outcome.
     // A review kind is parked regardless of the columns the row did carry. A cash-only event with
     // no declared per-share value has no amount to pay, and a ticker change with no target code has
-    // nothing to remap — both wait for a human rather than guessing.
+    // nothing to remap — both wait for a human rather than guessing. A rights allotment needs both
+    // its underlying (target code) and its factor to compute the grant.
     fun needsReview(): Boolean =
         kind.requiresReview ||
             (kind.isQuantityEvent && !ratio.isPositive()) ||
             (kind == CorporateActionKind.BONUS_SHARES && !declaredValuePerShare.isPositive()) ||
             (kind.isCashOnly && !declaredValuePerShare.isPositive()) ||
-            (kind == CorporateActionKind.TICKER_CHANGE && targetTicker == null)
+            (kind == CorporateActionKind.TICKER_CHANGE && targetTicker == null) ||
+            (kind == CorporateActionKind.RIGHTS_ALLOTMENT && (targetTicker == null || !ratio.isPositive()))
 }
 
 // A factor or per-share amount must be a real positive number of the event's own direction; zero or

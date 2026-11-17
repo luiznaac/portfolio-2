@@ -4,6 +4,7 @@ import dev.agner.portfolio.usecase.bond.BondService
 import dev.agner.portfolio.usecase.bond.model.Bond
 import dev.agner.portfolio.usecase.bond.position.BondPositionService
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.effectiveAssetClass
 import dev.agner.portfolio.usecase.commons.mapAsync
 import dev.agner.portfolio.usecase.commons.today
@@ -75,12 +76,15 @@ class AllocationService(
         val manual = strategyList
             .filter { it.kind == StrategyKind.MANUAL }
             .map { ManualStrategyHolding(it.name, it.assetClass) }
+        // A right is intentionally classless and excluded from the planning tree, so a stored target
+        // that names one is dropped before the chain is built.
+        val rights = catalog.fetchRightsTickers()
 
         return AllocationCalculator.compute(
             period = current?.month?.period,
             capital = current?.month?.capital ?: BigDecimal.ZERO,
             floor = current?.month?.floor ?: BigDecimal.ZERO,
-            targets = current?.targets ?: EMPTY_TARGETS,
+            targets = (current?.targets ?: EMPTY_TARGETS).excludingTickers(rights),
             listed = listed,
             fixedIncome = fixedIncome,
             attributions = ledger,
@@ -91,16 +95,20 @@ class AllocationService(
 
     // A position is valued at the current quote; a ticker with no close stays unknown (null), never
     // zero. Its class is the catalog's effective class, so a manual classification outranks the
-    // BDI-derived one. A close older than five calendar days travels with its date and a stale flag.
+    // BDI-derived one, and its kind lets the calculator drop a right. A right needs no quote read:
+    // the tree excludes it, so an unpriced right is never a data-quality finding. A close older than
+    // five calendar days travels with its date and a stale flag.
     private suspend fun toListedHolding(position: Position): ListedHolding {
-        val quote = quotes.latestQuote(position.ticker)
+        val entry = catalog.fetchBy(position.ticker)
+        val quote = if (entry?.assetKind == AssetKind.RIGHT) null else quotes.latestQuote(position.ticker)
         return ListedHolding(
             ticker = position.ticker,
-            assetClass = catalog.fetchBy(position.ticker)?.effectiveAssetClass,
+            assetClass = entry?.effectiveAssetClass,
             quantity = position.quantity,
             price = quote?.close,
             quoteDate = quote?.date,
             stale = quote?.isStale(LocalDate.today(clock)) ?: false,
+            assetKind = entry?.assetKind,
         )
     }
 

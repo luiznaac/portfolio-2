@@ -19,6 +19,7 @@ import {
   corporateActionDetail,
   corporateActionKindLabel,
   corporateActionRows,
+  corporateActionSourceLabel,
   initialDraft,
   isManualReview,
   resolutionFields,
@@ -27,7 +28,6 @@ import {
   reviewQueue,
   reviewReason,
 } from "../lib/corporateActions.ts";
-import { importSourceLabel } from "../lib/imports.ts";
 import { movementsImportSummary } from "../lib/movements.ts";
 import { positionDetail } from "../lib/routes.ts";
 
@@ -160,7 +160,7 @@ function ReviewRow({ action }: { action: CorporateAction }) {
         </p>
       )}
       <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">
-        {[importSourceLabel(action.source), action.process_number ?? action.raw_type]
+        {[corporateActionSourceLabel(action.source), action.process_number ?? action.raw_type]
           .filter(Boolean)
           .join(" · ")}
       </p>

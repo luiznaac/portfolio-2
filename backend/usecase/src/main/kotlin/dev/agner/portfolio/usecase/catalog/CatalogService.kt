@@ -8,6 +8,8 @@ import dev.agner.portfolio.usecase.catalog.model.UNCATALOGED_BDI_TYPE
 import dev.agner.portfolio.usecase.catalog.model.canonicalEntryByTicker
 import dev.agner.portfolio.usecase.catalog.model.effectiveClassByTicker
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
+import dev.agner.portfolio.usecase.catalog.model.rightsTickers
+import dev.agner.portfolio.usecase.catalog.model.toAssetClass
 import dev.agner.portfolio.usecase.catalog.repository.ICatalogRepository
 import dev.agner.portfolio.usecase.commons.logger
 import dev.agner.portfolio.usecase.commons.today
@@ -35,14 +37,35 @@ class CatalogService(
 
     // Which of the given tickers the catalog has not classified yet. A missing row counts as
     // unclassified: without a class a ticker belongs to no class rung and waits for classification.
-    // The returned codes are canonical, the way every other read keys its book.
+    // A right is intentionally classless — it is excluded from the allocation tree, not queued for
+    // a class — so it is never reported here. The returned codes are canonical, the way every other
+    // read keys its book.
     suspend fun fetchUnclassified(tickers: Set<String>): Set<String> {
         val canonicalByTicker = aliases.canonicalAll(tickers)
-        val classByTicker = fetchAll().effectiveClassByTicker()
+        val entries = fetchAll()
+        val classByTicker = entries.effectiveClassByTicker()
+        val rights = entries.rightsTickers()
         return tickers
             .map { canonicalByTicker.getValue(it) }
-            .filter { classByTicker[it] == null }
+            .filter { classByTicker[it] == null && it !in rights }
             .toSet()
+    }
+
+    // Every right the catalog knows. The allocation tree, the order plan and the strategy targets
+    // all read this one set, so a right can never leak into a planned rung.
+    suspend fun fetchRightsTickers(): Set<String> = fetchAll().rightsTickers()
+
+    // Marks a ticker as a subscription right. A right is its own paper with no allocation class,
+    // so the import boundary and the allotment engine both come through here; an existing row keeps
+    // its identity (ISIN, first sighting) and only gains the kind.
+    suspend fun markRights(ticker: String) {
+        val canonical = aliases.canonical(ticker)
+        val existing = repository.fetchBy(canonical)
+        when {
+            existing == null -> upsertTicker(canonical, AssetKind.RIGHT)
+            existing.assetKind == AssetKind.RIGHT -> Unit
+            else -> repository.upsertAll(listOf(existing.copy(assetKind = AssetKind.RIGHT, assetClass = null)))
+        }
     }
 
     // Upsert the catalog from the latest published COTAHIST file's rows. Unknown BDI codes still
@@ -64,7 +87,7 @@ class CatalogService(
     // Auto-enter a ticker into the catalog (minimal entry) so imports never block on unknown tickers.
     // A retired code resolves to its successor first, so the placeholder never creates a second row
     // for a paper the catalog already knows under the canonical code.
-    suspend fun upsertTicker(ticker: String) {
+    suspend fun upsertTicker(ticker: String, assetKind: AssetKind = AssetKind.UNKNOWN) {
         val normalized = aliases.canonical(ticker)
         val existing = repository.fetchBy(normalized)
         if (existing == null) {
@@ -75,8 +98,8 @@ class CatalogService(
                         shortName = ticker,
                         bdiType = UNCATALOGED_BDI_TYPE,
                         isin = null,
-                        assetKind = AssetKind.UNKNOWN,
-                        assetClass = null,
+                        assetKind = assetKind,
+                        assetClass = assetKind.toAssetClass(),
                         firstSeen = LocalDate.today(clock),
                         lastSeen = LocalDate.today(clock),
                     ),

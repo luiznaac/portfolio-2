@@ -5,12 +5,18 @@ package dev.agner.portfolio.usecase.catalog.model
 // still enters the catalog, with a logged warning, so an unclassified instrument is never dropped.
 // UNIT has no BDI of its own: B3 lists units (SANB11, TAEE11) under BDI 02, same as stocks, so the
 // COTAHIST specification ("UNT…") is what tells them apart.
+//
+// RIGHT is a subscription right (direito de subscrição): its own paper with its own price and tax
+// book, received from an issuance at zero cost or bought in the market at the purchase price. It is
+// deliberately classless — excluded from the allocation tree and the strategy targets — and the
+// import/allotment boundary marks it, not the BDI mapping.
 enum class AssetKind {
     STOCK,
     UNIT,
     FII,
     BDR,
     ETF,
+    RIGHT,
     UNKNOWN,
     ;
 

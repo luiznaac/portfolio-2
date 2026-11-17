@@ -1,6 +1,7 @@
 package dev.agner.portfolio.usecase.portfolio
 
 import dev.agner.portfolio.usecase.catalog.model.AssetClass
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.classTarget
 import dev.agner.portfolio.usecase.fixedincome.model.FixedIncomeSubClass
 import dev.agner.portfolio.usecase.plain
@@ -437,6 +438,22 @@ class AllocationCalculatorTest : StringSpec({
         allocation.unpriced shouldBe listOf(HeldTicker("ZZZZ9", BigDecimal("10")))
     }
 
+    "a right is excluded from the tree instead of landing in the unclassified bucket" {
+        val allocation = compute(
+            capital = "100000",
+            targets = emptyTargets(),
+            listed = listOf(
+                listed("VALE3", AssetClass.ACOES, "100", "10"),
+                listed("RBRP12", null, "100", "5", assetKind = AssetKind.RIGHT),
+            ),
+            fixedIncome = emptyList(),
+        )
+
+        allocation.actual.plain() shouldBe "1000"
+        allocation.unclassified.tickers shouldBe emptyList()
+        allocation.unpriced shouldBe emptyList()
+    }
+
     "negative custody is valued and carried as its own data-quality row" {
         val allocation = compute(
             capital = "100000",
@@ -497,6 +514,7 @@ private fun listed(
     price: String?,
     quoteDate: kotlinx.datetime.LocalDate? = null,
     stale: Boolean = false,
+    assetKind: AssetKind? = null,
 ) = ListedHolding(
     ticker = ticker,
     assetClass = assetClass,
@@ -504,6 +522,7 @@ private fun listed(
     price = price?.let(::BigDecimal),
     quoteDate = quoteDate,
     stale = stale,
+    assetKind = assetKind,
 )
 
 private fun fixedIncome(subClass: FixedIncomeSubClass, value: String) =

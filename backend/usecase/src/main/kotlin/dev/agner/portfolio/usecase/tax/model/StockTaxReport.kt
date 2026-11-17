@@ -5,10 +5,11 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
 
 // One period's stock-sale tax read: the exemption meter, the fiscal average price of every held
-// ticker as of the period's end, the realized result per tax kind, and the carry state that result
-// rolls. Computed on read from the ledger, so it can never drift from the trades and corporate
-// actions it is derived from. `darfDueDate` is derived from the period (the last business day of the
-// following month), so the read cannot disagree with the DARF 6015 rule.
+// ticker as of the period's end, the realized result per tax kind, the carry state that result
+// rolls, and the rights row's own 15% DARF 6015 line. Computed on read from the ledger, so it can
+// never drift from the trades and corporate actions it is derived from. `darfDueDate` is derived
+// from the period (the last business day of the following month), so the read cannot disagree with
+// the DARF 6015 rule.
 //
 // The report never refuses inside the window: `pendingGaps` marks months whose missing-sale
 // proceeds are still unknown, and `unclassified` names the tickers whose sales were excluded rather
@@ -23,4 +24,7 @@ data class StockTaxReport(
     val pendingGaps: List<TaxPendingGap> = emptyList(),
     val unclassified: List<TaxUnclassifiedTicker> = emptyList(),
     val darfDueDate: LocalDate = TaxCalendar.darfDueDate(period),
+    // The rights row's own 15% DARF 6015 line. Defaulted so a snapshot frozen before this field
+    // still reads as a zero rights tax.
+    val rights: RightsTax = RightsTax.zero(),
 )

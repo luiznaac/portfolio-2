@@ -65,6 +65,37 @@ object PositionCalculator {
         TimelineKey(trade.date, TRADE_PRIORITY, trade.ordinal, trade.id),
     )
 
+    // The position immediately before a date — the entitlement basis of an event stated per
+    // underlying unit (a rights allotment). An ex-date trade is already ex, so only units held
+    // strictly before the date count.
+    fun positionBeforeDate(
+        ticker: String,
+        trades: List<Trade>,
+        corporateActions: List<CorporateAction>,
+        date: kotlinx.datetime.LocalDate,
+        gaps: List<Gap> = emptyList(),
+    ): Position = replayThrough(ticker, entries(trades, corporateActions, gaps), date, inclusive = false)
+
+    // The position as of a date, its own entries included — the units a same-day rights sale may
+    // draw on. A later-dated receipt must not cover it.
+    fun positionThroughDate(
+        ticker: String,
+        trades: List<Trade>,
+        corporateActions: List<CorporateAction>,
+        date: kotlinx.datetime.LocalDate,
+        gaps: List<Gap> = emptyList(),
+    ): Position = replayThrough(ticker, entries(trades, corporateActions, gaps), date, inclusive = true)
+
+    private fun replayThrough(
+        ticker: String,
+        entries: List<LedgerEntry>,
+        date: kotlinx.datetime.LocalDate,
+        inclusive: Boolean,
+    ): Position = entries
+        .filter { if (inclusive) it.key.date <= date else it.key.date < date }
+        .sortedBy { it.key }
+        .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
+
     private fun replayBefore(ticker: String, entries: List<LedgerEntry>, boundary: TimelineKey): Position =
         entries
             .filter { it.key < boundary }

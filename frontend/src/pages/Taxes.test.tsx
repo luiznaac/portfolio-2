@@ -93,6 +93,7 @@ function taxReport(overrides: Partial<StockTaxReport> = {}): StockTaxReport {
     pending_gaps: [],
     unclassified: [],
     darf_due_date: "2026-11-30",
+    rights: { rate: 15, taxable_gain: 0, tax: 0 },
     ...overrides,
   };
 }
@@ -237,6 +238,35 @@ describe("Análise · Impostos", () => {
     expect(screen.getByText(/PETR4 · 10\/10\/2026/)).toBeDefined();
     expect(screen.getByText("Sem classe")).toBeDefined();
     expect(screen.getByText(/VALE3 · 15\/10\/2026/)).toBeDefined();
+  });
+
+  it("renders the rights realized row and its own carry bucket", () => {
+    mock.reports["2026-10"] = taxReport({
+      realized: [
+        { kind: "SWING", gross_sales: 0, gains: 0, losses: 0, result: 0 },
+        { kind: "DAY_TRADE", gross_sales: 0, gains: 0, losses: 0, result: 0 },
+        { kind: "FII", gross_sales: 0, gains: 0, losses: 0, result: 0 },
+        { kind: "RIGHTS", gross_sales: 500, gains: 500, losses: 0, result: 500 },
+      ],
+      carry: [
+        {
+          kind: "RIGHTS",
+          available: true,
+          opening_balance: 0,
+          loss_banked: 0,
+          loss_applied: 0,
+          closing_balance: 0,
+        },
+      ],
+      rights: { rate: 15, taxable_gain: 500, tax: 75 },
+    });
+
+    renderTaxes();
+
+    expect(within(screen.getByTestId("tax-realized")).getByText("Direitos")).toBeDefined();
+    expect(within(screen.getByTestId("tax-carry")).getByText("Direitos")).toBeDefined();
+    expect(screen.getAllByText(/15% · DARF 6015/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("tax-rights-darf-kpi").textContent).toContain(formatCurrency(75));
   });
 
   it("reaches the harvest pass only on the open month", async () => {

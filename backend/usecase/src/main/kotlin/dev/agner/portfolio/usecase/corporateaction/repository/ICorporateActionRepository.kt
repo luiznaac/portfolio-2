@@ -35,6 +35,10 @@ interface ICorporateActionRepository {
         status: CorporateActionStatus,
     ): CorporateAction?
 
+    // Retires a superseded event — the derived rights allotment a real one replaces. False when no
+    // row has that id.
+    suspend fun delete(id: Int): Boolean
+
     // Persists a corporate-action cash movement into the shared `cash_movement` ledger, linked to
     // the event that produced it.
     suspend fun saveCashMovement(movement: CorporateCashMovement)

@@ -68,6 +68,44 @@ class BrokerAssetAliasServiceTest : StringSpec({
 
         service.resolve(null, "ATIVO DUVIDOSO") shouldBe BrokerDescriptionResolution.Resolved("AAAA3")
     }
+
+    "resolves a rights row to its own rights ticker, never the underlying FII" {
+        val service = BrokerAssetAliasService(InMemoryAliases(global(description = "FII RBR PROP", ticker = "RBRP11")))
+
+        service.resolve(null, "FII RBR PROP DM 90,00") shouldBe
+            BrokerDescriptionResolution.Resolved("RBRP12")
+    }
+
+    "an exact rights alias wins over the derived rights ticker" {
+        val service = BrokerAssetAliasService(
+            InMemoryAliases(
+                global(description = "FII RBR PROP", ticker = "RBRP11"),
+                global(description = "FII RBR PROP DM 88,27", ticker = "RBRP2"),
+            ),
+        )
+
+        service.resolve(null, "FII RBR PROP DM 88,27") shouldBe
+            BrokerDescriptionResolution.Resolved("RBRP2")
+    }
+
+    "an exact DM alias naming the underlying still resolves to the rights ticker" {
+        val service = BrokerAssetAliasService(
+            InMemoryAliases(
+                global(description = "FII RBR PROP", ticker = "RBRP11"),
+                global(description = "FII RBR PROP DM 88,27", ticker = "RBRP11"),
+            ),
+        )
+
+        service.resolve(null, "FII RBR PROP DM 88,27") shouldBe
+            BrokerDescriptionResolution.Resolved("RBRP12")
+    }
+
+    "an unresolved rights underlying stays unresolved instead of inventing a ticker" {
+        val service = BrokerAssetAliasService(InMemoryAliases())
+
+        service.resolve(null, "ATIVO DESCONHECIDO DM 1,00") shouldBe
+            BrokerDescriptionResolution.Unresolved
+    }
 })
 
 private class InMemoryAliases(vararg aliases: BrokerAssetAlias) : IBrokerAssetAliasRepository {

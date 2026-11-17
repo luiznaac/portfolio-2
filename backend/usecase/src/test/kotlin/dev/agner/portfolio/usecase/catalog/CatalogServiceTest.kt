@@ -82,6 +82,52 @@ class CatalogServiceTest : StringSpec({
         service.fetchUnclassified(setOf("PETR4", "XPTO3", "MISS3")) shouldBe setOf("XPTO3", "MISS3")
     }
 
+    "fetchUnclassified leaves an intentionally classless right out of the queue" {
+        coEvery { repository.fetchAll() } returns listOf(
+            catalogEntry(ticker = "RBRP12", isin = null, assetKind = AssetKind.RIGHT, assetClass = null),
+        )
+
+        service.fetchUnclassified(setOf("RBRP12")) shouldBe emptySet()
+    }
+
+    "fetchRightsTickers reports every right in the catalog" {
+        coEvery { repository.fetchAll() } returns listOf(
+            catalogEntry(ticker = "PETR4", isin = null, assetKind = AssetKind.STOCK, assetClass = AssetClass.ACOES),
+            catalogEntry(ticker = "RBRP12", isin = null, assetKind = AssetKind.RIGHT, assetClass = null),
+        )
+
+        service.fetchRightsTickers() shouldBe setOf("RBRP12")
+    }
+
+    "markRights upgrades an unknown placeholder to a right without losing its identity" {
+        coEvery { repository.fetchAll() } returns emptyList()
+        coEvery { repository.fetchBy("RBRP12") } returns
+            catalogEntry(ticker = "RBRP12", isin = "BRRBRPCTF001", assetKind = AssetKind.UNKNOWN, assetClass = null)
+        val captured = slot<List<CatalogEntry>>()
+        coEvery { repository.upsertAll(capture(captured)) } returns 1
+
+        service.markRights("rbrp12")
+
+        captured.captured.single().let {
+            it.ticker shouldBe "RBRP12"
+            it.isin shouldBe "BRRBRPCTF001"
+            it.assetKind shouldBe AssetKind.RIGHT
+            it.assetClass shouldBe null
+        }
+    }
+
+    "markRights enters a missing ticker as a right" {
+        coEvery { repository.fetchAll() } returns emptyList()
+        coEvery { repository.fetchBy("RBRP12") } returns null
+        val captured = slot<List<CatalogEntry>>()
+        coEvery { repository.upsertAll(capture(captured)) } returns 1
+
+        service.markRights("RBRP12")
+
+        captured.captured.single().assetKind shouldBe AssetKind.RIGHT
+        captured.captured.single().assetClass shouldBe null
+    }
+
     "fetchUnclassified counts a manually classified ticker as classified" {
         coEvery { repository.fetchAll() } returns listOf(
             catalogEntry(

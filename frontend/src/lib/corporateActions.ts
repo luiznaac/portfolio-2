@@ -5,9 +5,11 @@ import type {
   CorporateAction,
   CorporateActionKind,
   CorporateActionResolution,
+  CorporateActionSource,
   CorporateActionStatus,
 } from "../api/types.ts";
 import { formatCurrency, formatNumber } from "./format.ts";
+import { importSourceLabel } from "./imports.ts";
 
 const KIND_LABELS: Record<CorporateActionKind, string> = {
   SPLIT: "Desdobramento",
@@ -16,6 +18,7 @@ const KIND_LABELS: Record<CorporateActionKind, string> = {
   TICKER_CHANGE: "Troca de código",
   RIGHTS_ISSUE: "Subscrição",
   RIGHTS_ASSIGNMENT: "Cessão",
+  RIGHTS_ALLOTMENT: "Provisão de direitos",
   INCORPORATION: "Incorporação",
   MERGER: "Fusão",
   SPIN_OFF: "Cisão",
@@ -38,6 +41,12 @@ export function corporateActionStatusLabel(status: CorporateActionStatus): strin
   return STATUS_LABELS[status];
 }
 
+// The Movimentações label is the import source's own; only the engine's derived fallback needs a
+// name of its own.
+export function corporateActionSourceLabel(source: CorporateActionSource): string {
+  return source === "DERIVED" ? "Derivado" : importSourceLabel(source);
+}
+
 // The one-line explanation of what the event did: the factor for a quantity event, the cash per
 // share for a cash-only one, the new code for a remap, and the export's own label for a row that is
 // waiting for a human.
@@ -57,6 +66,15 @@ export function corporateActionDetail(action: CorporateAction): string {
         : "valor ausente";
     case "TICKER_CHANGE":
       return action.target_ticker ? `→ ${action.target_ticker}` : "código ausente";
+    case "RIGHTS_ALLOTMENT":
+      // The row's ticker is the rights paper. A real allotment names the underlying and factor; the
+      // derived fallback has neither, so it states the granted units it stood in for.
+      if (action.target_ticker) {
+        return `${action.target_ticker}${action.ratio ? ` ×${formatNumber(action.ratio)}` : ""}`;
+      }
+      return action.granted_quantity !== undefined
+        ? `+${formatNumber(action.granted_quantity)} un`
+        : "origem ausente";
     default:
       return action.raw_type ?? "—";
   }
@@ -89,7 +107,12 @@ export function corporateActionRows(actions: CorporateAction[]): CorporateAction
         ? "Tratado"
         : corporateActionStatusLabel(action.status),
     isReview: action.status === "NEEDS_REVIEW",
-    source: action.process_number ?? action.raw_type ?? "—",
+    // The derived allotment is the engine's own fallback, so the history names it instead of a
+    // provenance column the export never carried.
+    source:
+      action.source === "DERIVED"
+        ? corporateActionSourceLabel(action.source)
+        : (action.process_number ?? action.raw_type ?? "—"),
   }));
 }
 
@@ -132,6 +155,7 @@ const KIND_RULES: Record<CorporateActionKind, KindRule> = {
   CASH_BONUS: { manual: false, fields: ["declared_value_per_share"] },
   RIGHTS_ISSUE: { manual: true, fields: [] },
   RIGHTS_ASSIGNMENT: { manual: true, fields: [] },
+  RIGHTS_ALLOTMENT: { manual: false, fields: ["ratio", "target_ticker"] },
   INCORPORATION: { manual: true, fields: [] },
   MERGER: { manual: true, fields: [] },
   SPIN_OFF: { manual: true, fields: [] },

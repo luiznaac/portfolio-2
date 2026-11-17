@@ -15,6 +15,7 @@ import {
   meterProgress,
   realizedKindLabel,
   realizedRows,
+  rightsTaxNote,
   taxApuracoes,
   taxGrainNote,
   taxPeriodChip,
@@ -35,6 +36,7 @@ const realized: RealizedResult[] = [
   { kind: "SWING", gross_sales: 15000, gains: 800, losses: 300, result: 500 },
   { kind: "DAY_TRADE", gross_sales: 0, gains: 0, losses: 0, result: 0 },
   { kind: "FII", gross_sales: 0, gains: 0, losses: 100, result: -100 },
+  { kind: "RIGHTS", gross_sales: 0, gains: 0, losses: 0, result: 0 },
 ];
 
 const report: StockTaxReport = {
@@ -47,6 +49,7 @@ const report: StockTaxReport = {
   pending_gaps: [],
   unclassified: [],
   darf_due_date: "2026-11-30",
+  rights: { rate: 15, taxable_gain: 0, tax: 0 },
 };
 
 const proposal: HarvestProposal = {
@@ -67,6 +70,15 @@ describe("tax ledger labels", () => {
     expect(realizedKindLabel("SWING")).toBe("Swing");
     expect(realizedKindLabel("DAY_TRADE")).toBe("Day trade");
     expect(realizedKindLabel("FII")).toBe("FIIs");
+    expect(realizedKindLabel("RIGHTS")).toBe("Direitos");
+  });
+
+  it("states the rights DARF 6015 rule from the report's rate, outside the stock meter", () => {
+    const note = rightsTaxNote(15);
+
+    expect(note).toContain("15%");
+    expect(note).toContain("6015");
+    expect(note).toContain("fora do teto");
   });
 
   it("maps realized results to display rows in server order", () => {
@@ -88,6 +100,14 @@ describe("tax ledger labels", () => {
         result: 0,
       },
       { kind: "FII", kindLabel: "FIIs", grossSales: 0, gains: 0, losses: 100, result: -100 },
+      {
+        kind: "RIGHTS",
+        kindLabel: "Direitos",
+        grossSales: 0,
+        gains: 0,
+        losses: 0,
+        result: 0,
+      },
     ]);
   });
 });
@@ -171,6 +191,7 @@ describe("DARF deadline", () => {
       pending_gaps: [],
       unclassified: [],
       darf_due_date: "2026-11-30",
+      rights: { rate: 15, taxable_gain: 0, tax: 0 },
     };
 
     expect(darfDeadlineLabel(report)).toBe("30/11/2026");

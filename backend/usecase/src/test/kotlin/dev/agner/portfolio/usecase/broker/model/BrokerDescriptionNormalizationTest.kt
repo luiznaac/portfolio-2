@@ -39,6 +39,13 @@ class BrokerDescriptionNormalizationTest : StringSpec({
         "FII RBR PROP DM 88,27".normalizedBrokerDescription() shouldBe "FII RBR PROP DM 88,27"
     }
 
+    "recognizes a rights row by its DM price and exposes the underlying description" {
+        "FII RBR PROP DM 88,27".isRightsDescription() shouldBe true
+        "FII RBR PROP DM 88,27".withoutRightsPrice() shouldBe "FII RBR PROP"
+        "FII BCFF11 CI".isRightsDescription() shouldBe false
+        "FII BCFF11 CI".withoutRightsPrice() shouldBe null
+    }
+
     "does not strip a marker that is only a substring of a word" {
         "CIA ENERGETICA ON".normalizedBrokerDescription() shouldBe "CIA ENERGETICA ON"
     }

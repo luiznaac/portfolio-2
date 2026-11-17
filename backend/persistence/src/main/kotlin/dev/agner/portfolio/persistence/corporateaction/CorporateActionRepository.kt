@@ -73,6 +73,14 @@ class CorporateActionRepository(
         CorporateActionEntity.findById(id)?.apply { applyCreation(creation, status) }?.toModel()
     }
 
+    // Retires a superseded event — the derived rights allotment a real one replaces. The natural
+    // key is left free, so a later derived receipt for the same paper and date is a fresh row.
+    override suspend fun delete(id: Int): Boolean = transaction {
+        val entity = CorporateActionEntity.findById(id) ?: return@transaction false
+        entity.delete()
+        true
+    }
+
     // The stored shape of one event, shared by the insert and the in-place resolve: the template
     // columns plus the engine's (or the owner's) decision.
     private fun CorporateActionEntity.applyCreation(
@@ -86,6 +94,7 @@ class CorporateActionRepository(
         ratio = creation.ratio
         declaredValuePerShare = creation.declaredValuePerShare
         targetTicker = creation.targetTicker
+        grantedQuantity = creation.grantedQuantity
         sourceType = creation.source
         processNumber = creation.processNumber
         rawType = creation.rawType

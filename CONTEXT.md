@@ -199,9 +199,19 @@ _UI:_ —
 _Avoid_: Row, position, target (a Target is a chain percentage)
 
 **Listed Asset**:
-An instrument traded on B3 — Ação, unit, FII, BDR, ETF — held through a trade ledger.
+An instrument traded on B3 — Ação, unit, FII, BDR, ETF, subscription right — held through a trade ledger.
 _UI:_ "Ativo"
 _Avoid_: Security, stock, papel
+
+**Right**:
+A subscription right (direito de subscrição) — its own B3 paper under the underlying's code with the final digit `2` (`RBRP11` → `RBRP12`), with its own price and tax book. It is received from an issuance at zero cost or bought in the market at the purchase price, and is intentionally classless: excluded from the allocation tree and the strategy targets.
+_UI:_ "Direito"
+_Avoid_: Underlying (the FII or stock the right was issued from), option
+
+**Rights Allotment**:
+The corporate event that credits Rights from an underlying position: the holder's underlying units before the ex-date times the issuance factor. A sale with no receipt derives a zero-cost allotment of the sold quantity on the sale date (marked `DERIVED`), and a real allotment replaces it without doubling the Position.
+_UI:_ "Provisão de direitos"
+_Avoid_: Rights issue (the voluntary subscription event), bonus
 
 **Ticker**:
 The normalized B3 trading code that identifies a listed asset: uppercase, with the fractional-market `F` suffix stripped (`B3SA3F` resolves to `B3SA3`).
@@ -218,7 +228,7 @@ _UI:_ "Classe"
 _Avoid_: Caixa as a class (not modeled), category, tipo
 
 **Asset Kind**:
-The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`, plus `UNKNOWN` for a B3 BDI code the catalog does not classify yet. Drives tax treatment and UI presentation.
+The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`, `RIGHT`, plus `UNKNOWN` for a B3 BDI code the catalog does not classify yet. Drives tax treatment and UI presentation.
 _UI:_ "Tipo"
 _Avoid_: Asset class (different concept), mercado
 
@@ -243,7 +253,7 @@ _UI:_ "Isenção"
 _Avoid_: Limit (the value), exemption (the state)
 
 **Realized Result**:
-A month's net capital-gain result, per tax kind — swing STOCK, day trade and FII — as the sum of that kind's gains minus its losses, measured against Average Price at each sale.
+A month's net capital-gain result, per tax kind — swing STOCK, day trade, FII and Rights — as the sum of that kind's gains minus its losses, measured against Average Price at each sale. A Rights sale is 15% under DARF 6015, outside the Exemption Meter and the FII bucket, and banks its loss in its own Carry Bucket.
 _UI:_ "Ganho realizado"
 _Avoid_: Profit/loss (that is the market view), income
 

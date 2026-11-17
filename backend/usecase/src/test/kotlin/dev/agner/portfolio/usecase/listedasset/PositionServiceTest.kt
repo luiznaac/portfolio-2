@@ -26,8 +26,8 @@ class PositionServiceTest : StringSpec({
     val positions = mockk<IPositionRepository>(relaxed = true)
     val trades = mockk<ITradeRepository>(relaxed = true)
     val corporateActions = mockk<ICorporateActionRepository>(relaxed = true)
-    val service =
-        PositionService(positions, trades, corporateActions, mockk<IGapRepository>(relaxed = true), tickerAliases())
+    val gaps = mockk<IGapRepository>(relaxed = true)
+    val service = PositionService(positions, trades, corporateActions, gaps, tickerAliases())
 
     beforeTest { clearAllMocks() }
 
@@ -58,6 +58,23 @@ class PositionServiceTest : StringSpec({
         reprojected.map { it.ticker } shouldBe listOf("PETR4", "VALE3")
         reprojected.single { it.ticker == "PETR4" }.averagePrice.compareTo(BigDecimal("15")) shouldBe 0
         coVerify(exactly = 2) { positions.save(any()) }
+    }
+
+    "reprojectAll replays a paper whose only ledger entry is a corporate action" {
+        coEvery { trades.fetchAll() } returns emptyList()
+        coEvery { corporateActions.fetchApplied() } returns listOf(rightsAllotment())
+        coEvery { gaps.fetchAll() } returns emptyList()
+        val saved = slot<Position>()
+        coEvery { positions.save(capture(saved)) } returns Unit
+
+        val reprojected = service.reprojectAll()
+
+        reprojected.single().let {
+            it.ticker shouldBe "RBRP12"
+            it.quantity.compareTo(BigDecimal("100")) shouldBe 0
+            it.averagePrice.compareTo(BigDecimal.ZERO) shouldBe 0
+        }
+        saved.captured.ticker shouldBe "RBRP12"
     }
 
     "reproject folds in the ticker's applied corporate actions" {
@@ -124,6 +141,13 @@ class PositionServiceTest : StringSpec({
 private val storedPosition = Position("PETR4", BigDecimal("100"), BigDecimal("10"))
 
 private fun split() = corporateAction(CorporateActionKind.SPLIT, ratio = "2")
+
+private fun rightsAllotment() = corporateAction(
+    CorporateActionKind.RIGHTS_ALLOTMENT,
+    ticker = "RBRP12",
+    exDate = "2026-10-14",
+    grantedQuantity = "100",
+)
 
 private fun buy(
     id: Int = 1,

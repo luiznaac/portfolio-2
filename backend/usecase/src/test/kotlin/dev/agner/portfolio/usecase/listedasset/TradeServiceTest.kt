@@ -19,6 +19,7 @@ import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.datetime.LocalDate
@@ -29,7 +30,8 @@ class TradeServiceTest : StringSpec({
     val positionService = mockk<PositionService>(relaxed = true)
     val transaction = CountingTransaction()
     val gaps = mockk<GapService>(relaxed = true)
-    val service = TradeService(repository, positionService, gaps, tickerAliases(), transaction)
+    val rightsAllotments = mockk<RightsAllotmentService>(relaxed = true)
+    val service = TradeService(repository, positionService, gaps, tickerAliases(), rightsAllotments, transaction)
 
     beforeTest {
         clearAllMocks()
@@ -53,6 +55,7 @@ class TradeServiceTest : StringSpec({
             positionService,
             gaps,
             tickerAliases(rename("OLD3", "NEW3")),
+            rightsAllotments,
             transaction,
         )
         coEvery { repository.fetchByKey(any()) } returns emptyList()
@@ -71,6 +74,7 @@ class TradeServiceTest : StringSpec({
             positionService,
             gaps,
             tickerAliases(rename("OLD3", "NEW3")),
+            rightsAllotments,
             transaction,
         )
         coEvery { repository.fetchAll() } returns listOf(buy(id = 1, ticker = "OLD3"))
@@ -96,6 +100,27 @@ class TradeServiceTest : StringSpec({
         shouldThrow<DuplicateTradeException> { service.createManual(creation()) }
 
         coVerify(exactly = 0) { repository.save(any(), any(), any()) }
+    }
+
+    "a rights sale asks for a receipt before the sale is written" {
+        coEvery { repository.fetchByKey(any()) } returns emptyList()
+        coEvery { repository.save(any(), any(), any()) } returns savedManual
+
+        service.createManual(creation(ticker = "RBRP12", side = TradeSide.SELL, quantity = "10"))
+
+        coVerifyOrder {
+            rightsAllotments.ensureReceipt("RBRP12", any(), any())
+            repository.save(any(), TradeSource.MANUAL, 1)
+        }
+    }
+
+    "a buy never asks for a rights receipt" {
+        coEvery { repository.fetchByKey(any()) } returns emptyList()
+        coEvery { repository.save(any(), any(), any()) } returns savedManual
+
+        service.createManual(creation())
+
+        coVerify(exactly = 0) { rightsAllotments.ensureReceipt(any(), any(), any()) }
     }
 
     "createManual reprojects the position inside the transaction" {
@@ -240,12 +265,16 @@ private class CountingTransaction : ITransactionTemplate {
     }
 }
 
-private fun creation(ticker: String = "PETR4") = TradeCreation(
+private fun creation(
+    ticker: String = "PETR4",
+    side: TradeSide = TradeSide.BUY,
+    quantity: String = "100",
+) = TradeCreation(
     ticker = ticker,
-    side = TradeSide.BUY,
+    side = side,
     date = LocalDate.parse("2026-10-14"),
     venue = "VISTA",
-    quantity = BigDecimal("100"),
+    quantity = BigDecimal(quantity),
     unitPrice = BigDecimal("48.92"),
     institutionId = 1,
 )
