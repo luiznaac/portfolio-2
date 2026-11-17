@@ -89,17 +89,48 @@ class ImportService(
                 institutionId,
                 raw.normalizedBrokerDescription(),
             )
-            when (resolution) {
-                is BrokerDescriptionResolution.Resolved -> row.copy(ticker = resolution.ticker.normalizedTicker())
-                BrokerDescriptionResolution.Unresolved -> row.copy(
-                    error = row.error ?: "Description '$raw' did not resolve to a ticker",
-                )
-                is BrokerDescriptionResolution.Ambiguous -> row.copy(
-                    error = row.error
-                        ?: "Description '$raw' is ambiguous: ${resolution.tickers.sorted().joinToString(", ")}",
-                )
+            val resolvedTicker = when (resolution) {
+                is BrokerDescriptionResolution.Resolved -> resolution.ticker.normalizedTicker()
+                BrokerDescriptionResolution.Unresolved, is BrokerDescriptionResolution.Ambiguous ->
+                    row.ticker
             }
+            row.copy(ticker = resolvedTicker, error = row.error ?: descriptionError(raw, resolution))
         }
+    }
+
+    // The owner's answer for a description the review could not resolve. The alias lands on the
+    // row's institution (created on first sight), so the next note from that broker resolves
+    // silently, and the row becomes applicable. A parser error the row already carried stays: the
+    // confirmation answers the description, nothing else.
+    suspend fun confirmTicker(importId: Int, rowId: Int, ticker: String): ImportRow? {
+        val import = repository.fetchById(importId) ?: return null
+        requirePending(import)
+        val row = repository.fetchRows(importId).find { it.id == rowId } ?: return null
+        val rawDescription = row.rawDescription
+            ?.takeIf { row.ticker == null }
+            ?: throw ImportRowNotConfirmableException(rowId)
+        val normalizedTicker = ticker.normalizedTicker()
+        if (normalizedTicker.isBlank() || normalizedTicker.length > MAX_TICKER_LENGTH) {
+            throw InvalidImportRowTickerException(ticker)
+        }
+        val institution = institutionService.create(InstitutionCreation(row.institutionName))
+
+        // The alias and the row move together: a failed row update must not leave an alias the
+        // review never confirmed.
+        transaction.execute {
+            brokerAssetAliasService.confirm(
+                institutionId = institution.id,
+                normalizedDescription = rawDescription.normalizedBrokerDescription(),
+                ticker = normalizedTicker,
+            )
+            repository.updateRowTicker(
+                importId = importId,
+                rowId = rowId,
+                ticker = normalizedTicker,
+                error = if (row.descriptionErrorAnswered()) null else row.error,
+            )
+        }
+        return fetchRows(importId)?.find { it.id == rowId }
     }
 
     suspend fun fetchAll(status: ImportStatus? = null, source: ImportSource? = null) =
@@ -324,10 +355,36 @@ class ImportService(
     private fun ImportRow.requireTicker(): String =
         requireNotNull(ticker) { "Import row $id is error-free but has no ticker" }
 
+    // The error a description that did not resolve leaves on its row. A confirmation answers exactly
+    // that error; any other row-level problem stays, so the row is still flagged for the retry batch.
+    private fun ImportRow.descriptionErrorAnswered(): Boolean =
+        rawDescription != null &&
+            error?.startsWith("$DESCRIPTION_ERROR_PREFIX$rawDescription'") == true
+
+    private fun descriptionError(
+        raw: String,
+        resolution: BrokerDescriptionResolution,
+    ): String? = when (resolution) {
+        is BrokerDescriptionResolution.Resolved -> null
+        BrokerDescriptionResolution.Unresolved ->
+            "${DESCRIPTION_ERROR_PREFIX}$raw' did not resolve to a ticker"
+        is BrokerDescriptionResolution.Ambiguous ->
+            "${DESCRIPTION_ERROR_PREFIX}$raw' is ambiguous: " +
+                resolution.tickers.sorted().joinToString(", ")
+    }
+
     private fun Import.toAttempt() = ImportAttempt(id, fileName, status, createdAt)
 
     private fun requireStatus(import: Import, expected: ImportStatus) {
         if (import.status != expected) throw InvalidImportStateException(import.id, expected, import.status)
+    }
+
+    // A review edit is legal while the session still waits for its decision; an applied or failed
+    // record is history.
+    private fun requirePending(import: Import) {
+        if (!import.status.isPending) {
+            throw InvalidImportStateException(import.id, PENDING_STATUSES, import.status)
+        }
     }
 
     // Only the destinations whose own pipeline has landed can stage and apply; the typed destination
@@ -343,6 +400,16 @@ private val SUPPORTED_DESTINATIONS = setOf(
     ImportDestinationObject.TRADES,
     ImportDestinationObject.POSITIONS,
 )
+
+private val PENDING_STATUSES = setOf(ImportStatus.STAGED, ImportStatus.REVIEWED)
+
+// The width both the row's ticker and the Broker Asset Alias ticker store, so an answer that would
+// overflow the column is the caller's error rather than a database failure.
+private const val MAX_TICKER_LENGTH = 12
+
+// The prefix every description error the alias lookup leaves carries, so a confirmation can clear
+// exactly that error and leave a parser error in place.
+private const val DESCRIPTION_ERROR_PREFIX = "Description '"
 
 // The occurrence identity of one staged row within its file: the natural tuple, with the
 // institution kept as its normalized name because a staged row has no institution id until apply

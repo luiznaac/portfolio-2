@@ -22,6 +22,8 @@ import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.rename
 import dev.agner.portfolio.usecase.tickerAliases
 import dev.agner.portfolio.usecase.tickerAliasesRepository
+import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
+import dev.agner.portfolio.usecase.tickeralias.repository.ITickerAliasRepository
 import dev.agner.portfolio.usecase.toModel
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -50,6 +52,19 @@ class CorporateActionServiceTest : StringSpec({
         positionService,
         aliasRepository,
         tickerAliases(),
+        rightsAllotments,
+        transaction,
+    )
+
+    // A service over a fresh alias table, so a rename spec does not see the shared repository's
+    // edges from an earlier spec.
+    fun renamingService(aliases: ITickerAliasRepository) = CorporateActionService(
+        repository,
+        attributions,
+        catalog,
+        positionService,
+        aliases,
+        TickerAliasResolver(aliases),
         rightsAllotments,
         transaction,
     )
@@ -154,6 +169,90 @@ class CorporateActionServiceTest : StringSpec({
         aliasRepository.fetchAll().single().canonicalTicker shouldBe "VALE3"
         aliasRepository.fetchAll().single().corporateActionId shouldBe 7
         coVerify(exactly = 1) { positionService.reproject("PETR4") }
+    }
+
+    "a rename carrying a conversion ratio scales the attribution slices and stores the ratio on the alias" {
+        val freshAliases = tickerAliasesRepository()
+        val renaming = renamingService(freshAliases)
+        val creation = actionCreation(
+            CorporateActionKind.TICKER_CHANGE,
+            ticker = "OLD3",
+            targetTicker = "NEW3",
+            ratio = "2",
+        )
+        coEvery { repository.save(any(), CorporateActionStatus.APPLIED) } returns action(creation = creation)
+        coEvery { attributions.fetchBy("OLD3") } returns
+            listOf(Attribution("OLD3", strategyId = 1, quantity = BigDecimal("60")))
+        coEvery { attributions.fetchBy("NEW3") } returns emptyList()
+
+        renaming.importEvents(listOf(creation))
+
+        freshAliases.fetchAll().single().ratio?.compareTo(BigDecimal("2")) shouldBe 0
+        coVerify { attributions.save(Attribution("OLD3", 1, BigDecimal("120"))) }
+        coVerify { positionService.reproject("OLD3") }
+    }
+
+    "a same-date quantity event keyed to the new code scales the old code's attribution slices" {
+        val freshAliases = tickerAliasesRepository()
+        val renaming = renamingService(freshAliases)
+        val rename = actionCreation(
+            CorporateActionKind.TICKER_CHANGE,
+            ticker = "OLD3",
+            targetTicker = "NEW3",
+        )
+        val split = actionCreation(CorporateActionKind.SPLIT, ticker = "NEW3", ratio = "2")
+        coEvery { repository.save(any(), CorporateActionStatus.APPLIED) } answers {
+            action(creation = firstArg(), status = CorporateActionStatus.APPLIED)
+        }
+        coEvery { attributions.fetchBy("OLD3") } returns
+            listOf(Attribution("OLD3", strategyId = 1, quantity = BigDecimal("60")))
+        coEvery { attributions.fetchBy("NEW3") } returns emptyList()
+
+        // The split is listed first to prove the batch order, not the input order, decides: the
+        // rename has to land first so the split finds the old code's slices through the alias.
+        renaming.importEvents(listOf(split, rename))
+
+        coVerify { attributions.save(Attribution("OLD3", 1, BigDecimal("120"))) }
+    }
+
+    "a same-date quantity event keyed to the old code scales the same slices" {
+        val freshAliases = tickerAliasesRepository()
+        val renaming = renamingService(freshAliases)
+        val rename = actionCreation(
+            CorporateActionKind.TICKER_CHANGE,
+            ticker = "OLD3",
+            targetTicker = "NEW3",
+        )
+        val split = actionCreation(CorporateActionKind.SPLIT, ticker = "OLD3", ratio = "2")
+        coEvery { repository.save(any(), CorporateActionStatus.APPLIED) } answers {
+            action(creation = firstArg(), status = CorporateActionStatus.APPLIED)
+        }
+        coEvery { attributions.fetchBy("OLD3") } returns
+            listOf(Attribution("OLD3", strategyId = 1, quantity = BigDecimal("60")))
+        coEvery { attributions.fetchBy("NEW3") } returns emptyList()
+
+        renaming.importEvents(listOf(split, rename))
+
+        coVerify { attributions.save(Attribution("OLD3", 1, BigDecimal("120"))) }
+    }
+
+    "a rename applies even when the target changes the class digit" {
+        val freshAliases = tickerAliasesRepository()
+        val renaming = renamingService(freshAliases)
+        // BIDI11 and INBR32 share no root or class digit; brapi's old-to-canonical result is the
+        // authority, so the apply path must not gate a rename on the codes looking alike.
+        val creation = actionCreation(
+            CorporateActionKind.TICKER_CHANGE,
+            ticker = "BIDI11",
+            targetTicker = "INBR32",
+        )
+        coEvery { repository.save(any(), CorporateActionStatus.APPLIED) } returns action(creation = creation)
+
+        renaming.importEvents(listOf(creation))
+
+        coVerify { catalog.remapTicker("BIDI11", "INBR32") }
+        freshAliases.fetchAll().single().canonicalTicker shouldBe "INBR32"
+        coVerify { positionService.reproject("BIDI11") }
     }
 
     "fetchAll presents the canonical ticker and target of a rename chain" {

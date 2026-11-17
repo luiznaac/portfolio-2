@@ -8,10 +8,12 @@ import dev.agner.portfolio.integrationTest.config.appBaseUrl
 import dev.agner.portfolio.integrationTest.helpers.getBean
 import dev.agner.portfolio.integrationTest.helpers.nonRicoPdfFixture
 import dev.agner.portfolio.integrationTest.helpers.ricoNotaFixture
+import dev.agner.portfolio.usecase.broker.repository.IBrokerAssetAliasRepository
 import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.repository.ITradeRepository
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.ktor.client.HttpClient
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
@@ -20,9 +22,11 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.mockk.every
 import java.time.Instant
 
@@ -83,6 +87,44 @@ class RicoNoteImportTest : StringSpec({
         trades.single { it.ticker == "RBRP12" }.side shouldBe TradeSide.SELL
     }
 
+    "the owner confirms an unresolved description and its row then applies" {
+        val id = json(upload("nota-de-corretagem.pdf", ricoNotaFixture())).get("id").asInt()
+        val unresolved = rows(id).single {
+            it.get("raw_description").asText() == "ATIVO INEXISTENTE XPTO"
+        }
+        unresolved.get("ticker") shouldBe null
+
+        val confirmed = confirmTicker(
+            importId = id,
+            rowId = unresolved.get("id").asInt(),
+            ticker = "XPTO3",
+        )
+
+        confirmed.status shouldBe HttpStatusCode.OK
+        val confirmedRow = json(confirmed)
+        confirmedRow.get("ticker").asText() shouldBe "XPTO3"
+        confirmedRow.get("error") shouldBe null
+        confirmedRow.get("situation").asText() shouldBe "new"
+        rows(id).single { it.get("raw_description").asText() == "ATIVO INEXISTENTE XPTO" }
+            .get("ticker").asText() shouldBe "XPTO3"
+
+        // The answer is the broker's own alias, not a second global: the next note resolves through it.
+        val alias = getBean<IBrokerAssetAliasRepository>()
+            .fetchByDescription("ATIVO INEXISTENTE XPTO")
+            .single()
+        alias.ticker shouldBe "XPTO3"
+        alias.institutionId shouldNotBe null
+
+        review(id)
+        val applied = json(apply(id))
+        applied.get("applied").asInt() shouldBe 6
+        applied.get("rejected").asInt() shouldBe 2
+
+        val trade = getBean<ITradeRepository>().fetchAll().single { it.ticker == "XPTO3" }
+        trade.quantity.stripTrailingZeros().toPlainString() shouldBe "5"
+        trade.side shouldBe TradeSide.BUY
+    }
+
     "an unrecognised PDF is rejected with the canonical 4xx body and stages nothing" {
         val before = imports()
         val rejected = upload("relatorio.pdf", nonRicoPdfFixture(), source = "RICO_NOTES")
@@ -112,6 +154,12 @@ private suspend fun upload(
         ),
     )
 }
+
+private suspend fun confirmTicker(importId: Int, rowId: Int, ticker: String): HttpResponse =
+    getBean<HttpClient>().post("${appBaseUrl()}/imports/$importId/rows/$rowId/ticker") {
+        contentType(ContentType.Application.Json)
+        setBody(mapOf("ticker" to ticker))
+    }
 
 private suspend fun review(importId: Int) {
     getBean<HttpClient>().post("${appBaseUrl()}/imports/$importId/review").status shouldBe

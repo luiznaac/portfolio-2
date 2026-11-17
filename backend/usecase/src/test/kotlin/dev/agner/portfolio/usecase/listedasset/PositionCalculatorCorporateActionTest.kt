@@ -142,7 +142,7 @@ class PositionCalculatorCorporateActionTest : StringSpec({
         position.averagePrice.compareTo(BigDecimal("8.5")) shouldBe 0
     }
 
-    "a ticker change leaves the old ticker's replay untouched" {
+    "a ticker change without a ratio leaves the old ticker's replay untouched" {
         val position = PositionCalculator.replay(
             "PETR4",
             listOf(buy(id = 1, date = "2026-10-01", quantity = "100", unitPrice = "10")),
@@ -153,6 +153,48 @@ class PositionCalculatorCorporateActionTest : StringSpec({
         position.quantity.compareTo(BigDecimal("100")) shouldBe 0
         position.averagePrice.compareTo(BigDecimal("10")) shouldBe 0
     }
+
+    "a rename carrying a conversion ratio scales quantity and average price like a split" {
+        val position = PositionCalculator.replay(
+            "NEW3",
+            listOf(buy(id = 1, ticker = "OLD3", date = "2026-10-01", quantity = "100", unitPrice = "10")),
+            listOf(rename(id = 1, date = "2026-10-10", ratio = "2")),
+        )
+
+        position.quantity.compareTo(BigDecimal("200")) shouldBe 0
+        position.averagePrice.compareTo(BigDecimal("5")) shouldBe 0
+    }
+
+    "a same-date rename applies before a quantity event keyed to the new code" {
+        val position = PositionCalculator.replay(
+            "NEW3",
+            listOf(buy(id = 1, ticker = "OLD3", date = "2026-10-01", quantity = "100", unitPrice = "10")),
+            listOf(
+                // The bonus is keyed to the new code and the rename to the old one; both land on the
+                // one canonical book, rename first. The rename's higher id proves the kind rank, not
+                // the id, decides. Reversed, the declared value would buy fewer units and the
+                // average would differ (300 @ 3,666667 instead of 300 @ 4).
+                bonus(id = 1, ticker = "NEW3", date = "2026-10-10", ratio = "0.5", perShare = "1"),
+                rename(id = 2, date = "2026-10-10", ratio = "2"),
+            ),
+        )
+
+        position.quantity.compareTo(BigDecimal("300")) shouldBe 0
+        position.averagePrice.compareTo(BigDecimal("4")) shouldBe 0
+    }
+
+    "a same-date reverse split sees the post-rename quantity" {
+        val trades = listOf(buy(id = 1, ticker = "OLD3", date = "2026-10-01", quantity = "103", unitPrice = "10"))
+        val reverse = reverseSplit(id = 1, ticker = "NEW3", date = "2026-10-10", ratio = "4")
+        val actions = listOf(rename(id = 2, date = "2026-10-10", ratio = "2"), reverse)
+
+        val before = PositionCalculator.positionBefore("NEW3", trades, actions, reverse)
+
+        // Rename first: 103 becomes 206, so the grupamento floors to 51 and its fraction is 2 units
+        // at the converted average. Reversed, it would see 103, floor to 25 and pay 3 units at the
+        // old average — the same position, a different cash entitlement.
+        before.quantity.compareTo(BigDecimal("206")) shouldBe 0
+    }
 })
 
 private fun buy(
@@ -160,9 +202,10 @@ private fun buy(
     date: String,
     quantity: String,
     unitPrice: String,
+    ticker: String = "PETR4",
 ) = Trade.Buy(
     id = id,
-    ticker = "PETR4",
+    ticker = ticker,
     date = LocalDate.parse(date),
     venue = "VISTA",
     quantity = bd(quantity),
@@ -182,12 +225,16 @@ private fun action(
     perShare: String? = null,
     ordinal: Int = 1,
     status: CorporateActionStatus = CorporateActionStatus.APPLIED,
+    ticker: String = "PETR4",
+    targetTicker: String? = null,
 ) = corporateAction(
     kind,
     id = id,
+    ticker = ticker,
     exDate = date,
     ratio = ratio,
     declaredValuePerShare = perShare,
+    targetTicker = targetTicker,
     ordinal = ordinal,
     status = status,
 )
@@ -200,8 +247,42 @@ private fun split(
     status: CorporateActionStatus = CorporateActionStatus.APPLIED,
 ) = action(id, date, CorporateActionKind.SPLIT, ratio = ratio, ordinal = ordinal, status = status)
 
-private fun bonus(id: Int, date: String, ratio: String, ordinal: Int) =
-    action(id, date, CorporateActionKind.BONUS_SHARES, ratio = ratio, ordinal = ordinal)
+private fun bonus(
+    id: Int,
+    date: String,
+    ratio: String,
+    ordinal: Int = 1,
+    ticker: String = "PETR4",
+    perShare: String? = null,
+) =
+    action(
+        id = id,
+        date = date,
+        kind = CorporateActionKind.BONUS_SHARES,
+        ratio = ratio,
+        perShare = perShare,
+        ordinal = ordinal,
+        ticker = ticker,
+    )
+
+private fun rename(id: Int, date: String, ratio: String) =
+    action(
+        id = id,
+        date = date,
+        kind = CorporateActionKind.TICKER_CHANGE,
+        ratio = ratio,
+        ticker = "OLD3",
+        targetTicker = "NEW3",
+    )
+
+private fun reverseSplit(id: Int, date: String, ratio: String, ticker: String = "PETR4") =
+    action(
+        id = id,
+        date = date,
+        kind = CorporateActionKind.REVERSE_SPLIT,
+        ratio = ratio,
+        ticker = ticker,
+    )
 
 private fun cash(id: Int, date: String, kind: CorporateActionKind, perShare: String? = null) =
     action(id, date, kind, perShare = perShare)

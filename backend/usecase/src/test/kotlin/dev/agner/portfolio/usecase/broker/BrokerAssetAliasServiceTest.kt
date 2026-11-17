@@ -106,14 +106,68 @@ class BrokerAssetAliasServiceTest : StringSpec({
         service.resolve(null, "ATIVO DESCONHECIDO DM 1,00") shouldBe
             BrokerDescriptionResolution.Unresolved
     }
+
+    "confirm stores the owner's answer for the institution under the normalized description" {
+        val repository = InMemoryAliases()
+        val service = BrokerAssetAliasService(repository)
+
+        service.confirm(
+            institutionId = 7,
+            normalizedDescription = "ATIVO NOVO",
+            ticker = "NOVO3",
+        ) shouldBe BrokerAssetAlias(
+            id = 1,
+            institutionId = 7,
+            normalizedDescription = "ATIVO NOVO",
+            ticker = "NOVO3",
+        )
+
+        repository.fetchByDescription("ATIVO NOVO") shouldBe listOf(
+            BrokerAssetAlias(
+                id = 1,
+                institutionId = 7,
+                normalizedDescription = "ATIVO NOVO",
+                ticker = "NOVO3",
+            ),
+        )
+    }
+
+    "confirm replaces the institution's previous answer for the same description" {
+        val repository = InMemoryAliases(specific(institutionId = 7, description = "ATIVO NOVO", ticker = "OLD3"))
+        val service = BrokerAssetAliasService(repository)
+
+        service.confirm(institutionId = 7, normalizedDescription = "ATIVO NOVO", ticker = "NEW3")
+
+        repository.fetchByDescription("ATIVO NOVO").map { it.ticker } shouldBe listOf("NEW3")
+    }
 })
 
 private class InMemoryAliases(vararg aliases: BrokerAssetAlias) : IBrokerAssetAliasRepository {
 
-    private val stored = aliases.toList()
+    private val stored = aliases.toMutableList()
+    private var nextId = stored.size + 1
 
     override suspend fun fetchByDescription(normalizedDescription: String): List<BrokerAssetAlias> =
         stored.filter { it.normalizedDescription == normalizedDescription }
+
+    override suspend fun save(
+        institutionId: Int?,
+        normalizedDescription: String,
+        ticker: String,
+    ): BrokerAssetAlias {
+        val existing = stored.firstOrNull {
+            it.institutionId == institutionId && it.normalizedDescription == normalizedDescription
+        }
+        val saved = existing?.copy(ticker = ticker) ?: BrokerAssetAlias(
+            id = nextId++,
+            institutionId = institutionId,
+            normalizedDescription = normalizedDescription,
+            ticker = ticker,
+        )
+        stored.remove(existing)
+        stored.add(saved)
+        return saved
+    }
 }
 
 private fun global(description: String, ticker: String) =

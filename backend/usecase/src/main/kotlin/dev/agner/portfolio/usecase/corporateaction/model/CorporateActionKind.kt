@@ -32,6 +32,12 @@ enum class CorporateActionKind {
     val isQuantityEvent: Boolean
         get() = this == SPLIT || this == REVERSE_SPLIT || this == BONUS_SHARES
 
+    // A rename is an identity move, so it applies before any other event of its own date: a quantity
+    // event keyed to either the old or the new code then lands on the one canonical book. The import
+    // batch and the position replay both order by this rank before the ordinal.
+    val replayRank: Int
+        get() = if (this == TICKER_CHANGE) 0 else 1
+
     // Kinds that pay cash without changing the quantity.
     val isCashOnly: Boolean
         get() = this == CAPITAL_RETURN || this == AMORTIZATION || this == CASH_BONUS
