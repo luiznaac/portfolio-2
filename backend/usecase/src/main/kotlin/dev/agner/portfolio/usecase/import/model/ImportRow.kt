@@ -15,11 +15,15 @@ data class ImportRow(
     val date: LocalDate?,
     val side: TradeSide,
     val venue: String,
-    val ticker: String,
+    val ticker: String?,
     val quantity: BigDecimal,
     val unitPrice: BigDecimal,
     val institutionName: String,
     val error: String?,
     val situation: ImportRowSituation? = null,
     val outcome: ImportRowOutcome? = null,
+    // A broker note's raw asset description and the note it came from; null for a layout that
+    // prints a ticker. The review shows the description beside the ticker the alias resolved.
+    val rawDescription: String? = null,
+    val noteNumber: String? = null,
 )

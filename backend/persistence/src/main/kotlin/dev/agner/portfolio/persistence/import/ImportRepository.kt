@@ -51,6 +51,8 @@ class ImportRepository(
                 unitPrice = row.unitPrice
                 institutionName = row.institutionName
                 error = row.error
+                rawDescription = row.rawDescription
+                noteNumber = row.noteNumber
                 createdAt = LocalDateTime.now(clock)
             }
         }

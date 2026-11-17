@@ -1,6 +1,16 @@
 import type { ImportDestinationObject, ImportSource, ImportStatus } from "../api/types.ts";
 import { ROUTES } from "./routes.ts";
 
+// One recognised layout for a destination. Trades has two — the B3 workbook and the Rico broker
+// note PDF — so the assistant lets the owner pick the layout and stages the matching source. A
+// destination with one layout keeps its `source`/`parser`/`mapping` and omits `variants`.
+export interface ImportVariant {
+  source: ImportSource;
+  parser: string;
+  accept: string;
+  mapping: readonly { from: string; to: string }[];
+}
+
 // One destination as the assistant renders it: the console object the record lands on, the source
 // and parser the context pre-fills, the columns the recognised template maps, and the objects an
 // apply touches. `supported` is false until that destination's own variant of the assistant lands;
@@ -11,9 +21,13 @@ export interface DestinationMeta {
   route: string;
   source: ImportSource;
   parser: string;
+  // The file type the single-layout upload accepts; a destination with `variants` carries one per
+  // layout instead.
+  accept: string;
   supported: boolean;
   changes: readonly { object: string; what: string }[];
   mapping: readonly { from: string; to: string }[];
+  variants?: readonly ImportVariant[];
 }
 
 const TRADES_MAPPING = [
@@ -23,6 +37,17 @@ const TRADES_MAPPING = [
   { from: "Quantidade", to: "Quantidade" },
   { from: "Preço Unitário", to: "Preço" },
   { from: "Instituição", to: "Corretora" },
+];
+
+// The Rico broker note prints a description instead of a ticker; the parser keeps the raw
+// description and the alias lookup resolves it, which the review shows as description → ticker.
+const RICO_MAPPING = [
+  { from: "Data pregão", to: "Data do negócio" },
+  { from: "Mercado", to: "Vista / fracionário" },
+  { from: "Especificação do título", to: "Descrição → ticker" },
+  { from: "Quantidade", to: "Quantidade" },
+  { from: "Preço / Ajuste", to: "Preço" },
+  { from: "D/C", to: "Compra / venda" },
 ];
 
 const EDITION_MAPPING = [
@@ -45,12 +70,27 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     route: ROUTES.trades,
     source: "B3_TRADES",
     parser: "B3 — negociação (xlsx)",
+    accept: ".xlsx",
     supported: true,
     changes: [
       { object: "Ativos · Negócios", what: "as linhas válidas entram no livro de negócios" },
       { object: "Ativos · Posições", what: "a posição e o preço médio do ticker são recalculados" },
     ],
     mapping: TRADES_MAPPING,
+    variants: [
+      {
+        source: "B3_TRADES",
+        parser: "B3 — negociação (xlsx)",
+        accept: ".xlsx",
+        mapping: TRADES_MAPPING,
+      },
+      {
+        source: "RICO_NOTES",
+        parser: "Rico — nota de corretagem (pdf)",
+        accept: ".pdf",
+        mapping: RICO_MAPPING,
+      },
+    ],
   },
   POSITIONS: {
     object: "POSITIONS",
@@ -58,6 +98,7 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     route: ROUTES.positions,
     source: "B3_POSITION",
     parser: "B3 — posição em custódia (xlsx)",
+    accept: ".xlsx",
     supported: true,
     changes: [
       {
@@ -77,6 +118,7 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     route: ROUTES.income,
     source: "B3_MOVEMENTS",
     parser: "B3 — proventos (xlsx)",
+    accept: ".xlsx",
     supported: false,
     changes: [],
     mapping: [],
@@ -89,6 +131,7 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     // The backend's XP resolver reads the report PDF; the prototype's CSV wording is a re-export
     // narrative, not a second format this slice introduces.
     parser: "XP — relatório de carteira (pdf)",
+    accept: ".pdf",
     supported: true,
     changes: [
       {
@@ -105,6 +148,7 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
     route: ROUTES.corporateActions,
     source: "B3_MOVEMENTS",
     parser: "B3 — movimentação (xlsx)",
+    accept: ".xlsx",
     supported: false,
     changes: [],
     mapping: [],
@@ -112,6 +156,31 @@ export const DESTINATIONS: Record<ImportDestinationObject, DestinationMeta> = {
 };
 
 export const DEFAULT_DESTINATION = DESTINATIONS.TRADES;
+
+// The layouts a destination accepts, in the order the picker offers them. A single-layout
+// destination gets one entry built from its own source, so the upload path reads one shape.
+export function importVariants(destination: DestinationMeta): readonly ImportVariant[] {
+  return (
+    destination.variants ?? [
+      {
+        source: destination.source,
+        parser: destination.parser,
+        accept: destination.accept,
+        mapping: destination.mapping,
+      },
+    ]
+  );
+}
+
+// The layout a staged record (or the current pick) names; an unknown source falls back to the
+// destination's first layout rather than leaving the step without a mapping.
+export function variantFor(
+  destination: DestinationMeta,
+  source: ImportSource | null,
+): ImportVariant {
+  const variants = importVariants(destination);
+  return variants.find((variant) => variant.source === source) ?? variants[0];
+}
 
 // The URL context names a destination; an absent or unknown value is the global upload, which
 // defaults to the trades assistant rather than guessing.

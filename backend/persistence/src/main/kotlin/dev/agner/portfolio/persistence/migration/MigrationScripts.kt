@@ -5,6 +5,7 @@ import dev.agner.portfolio.persistence.bond.BondOrderPositionTable
 import dev.agner.portfolio.persistence.bond.BondOrderStatementTable
 import dev.agner.portfolio.persistence.bond.BondOrderTable
 import dev.agner.portfolio.persistence.bond.BondTable
+import dev.agner.portfolio.persistence.broker.BrokerAssetAliasTable
 import dev.agner.portfolio.persistence.catalog.CatalogTable
 import dev.agner.portfolio.persistence.checkingaccount.CheckingAccountTable
 import dev.agner.portfolio.persistence.configuration.DATABASE_NAME
@@ -57,6 +58,7 @@ val allTables: Array<Table> = arrayOf(
     CatalogTable,
     QuoteTable,
     InstitutionTable,
+    BrokerAssetAliasTable,
     TradeTable,
     PositionTable,
     AttributionTable,

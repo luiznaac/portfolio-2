@@ -12,7 +12,6 @@ import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.Locale
 
 // The B3 export ships the same negotiation data under two header vocabularies — the broker
@@ -89,14 +88,14 @@ class B3NegotiationParser : IImportParser {
             quantity == null -> "Invalid quantity '${readText(quantityCell, formatter)}'"
             unitPrice == null -> "Invalid unit price '${readText(unitPriceCell, formatter)}'"
             quantity.signum() <= 0 -> "Quantity must be positive"
-            else -> grossError(gross, quantity, unitPrice)
+            else -> grossMismatch(gross, quantity, unitPrice)
         }
 
         return ImportRowPayload(
             date = date,
             side = side ?: TradeSide.BUY,
             venue = venue,
-            ticker = ticker.normalizedTicker(),
+            ticker = ticker.normalizedTicker().takeIf { it.isNotEmpty() },
             quantity = quantity ?: BigDecimal.ZERO,
             unitPrice = unitPrice ?: BigDecimal.ZERO,
             institutionName = institutionName,
@@ -117,23 +116,7 @@ class B3NegotiationParser : IImportParser {
             else -> null
         }
 
-    // Gross is derived (quantity × price), never stored: a mismatch is a row-level error, so the
-    // file still stages and the row can be reviewed or dropped.
-    private fun grossError(gross: BigDecimal?, quantity: BigDecimal, unitPrice: BigDecimal): String? {
-        val gross = gross ?: return "Missing gross value"
-        val expected = quantity.multiply(unitPrice).setScale(GROSS_SCALE, RoundingMode.HALF_UP)
-        return if (gross.setScale(GROSS_SCALE, RoundingMode.HALF_UP).compareTo(expected) == 0) {
-            null
-        } else {
-            "Gross $gross does not match quantity x price ($expected)"
-        }
-    }
-
     private fun cell(row: Row, headers: ColumnIndex, column: Column): Cell? =
         column.aliases.firstNotNullOfOrNull { headers[it] }
             ?.let { row.getCell(it, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL) }
-
-    private companion object {
-        const val GROSS_SCALE = 2
-    }
 }

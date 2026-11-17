@@ -1,5 +1,8 @@
 package dev.agner.portfolio.usecase.import
 
+import dev.agner.portfolio.usecase.broker.BrokerAssetAliasService
+import dev.agner.portfolio.usecase.broker.model.BrokerDescriptionResolution
+import dev.agner.portfolio.usecase.broker.model.normalizedBrokerDescription
 import dev.agner.portfolio.usecase.catalog.CatalogService
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
@@ -39,6 +42,7 @@ class ImportService(
     private val institutionService: InstitutionService,
     private val catalogService: CatalogService,
     private val custodySnapshot: CustodySnapshotService,
+    private val brokerAssetAliasService: BrokerAssetAliasService,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -58,9 +62,42 @@ class ImportService(
         repository.fetchByHash(fileHash)?.let { return StagingResult(it, created = false) }
         requireSupported(destination)
         return StagingResult(
-            repository.save(ImportCreation(source, fileName, fileHash, rows, destination, original)),
+            repository.save(
+                ImportCreation(source, fileName, fileHash, resolveDescriptions(rows), destination, original),
+            ),
             created = true,
         )
+    }
+
+    // A broker note prints an asset description rather than a ticker. The parser keeps the raw
+    // description, and this boundary resolves it once through the Broker Asset Alias — against the
+    // row's institution (a read, because apply is what creates it) and the global fallback. A
+    // description no alias covers, or two that disagree, becomes a row-level error so the valid
+    // rows still apply and the description stays for the owner to confirm.
+    private suspend fun resolveDescriptions(rows: List<ImportRowPayload>): List<ImportRowPayload> {
+        val institutionIds = rows
+            .filter { it.rawDescription != null }
+            .associateBy({ it.institutionName.normalizedInstitutionName() }, { it.institutionName })
+            .mapValues { (_, name) -> institutionService.fetchByName(name)?.id }
+
+        return rows.map { row ->
+            val raw = row.rawDescription ?: return@map row
+            val institutionId = institutionIds[row.institutionName.normalizedInstitutionName()]
+            val resolution = brokerAssetAliasService.resolve(
+                institutionId,
+                raw.normalizedBrokerDescription(),
+            )
+            when (resolution) {
+                is BrokerDescriptionResolution.Resolved -> row.copy(ticker = resolution.ticker.normalizedTicker())
+                BrokerDescriptionResolution.Unresolved -> row.copy(
+                    error = row.error ?: "Description '$raw' did not resolve to a ticker",
+                )
+                is BrokerDescriptionResolution.Ambiguous -> row.copy(
+                    error = row.error
+                        ?: "Description '$raw' is ambiguous: ${resolution.tickers.sorted().joinToString(", ")}",
+                )
+            }
+        }
     }
 
     suspend fun fetchAll(status: ImportStatus? = null, source: ImportSource? = null) =
@@ -143,7 +180,7 @@ class ImportService(
         val rows = repository.fetchRows(import.id).withSituations()
         val errorFreeRows = rows.filter { it.error == null }
         // Auto-enter unknown tickers into the catalog before creating trades.
-        errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
+        errorFreeRows.map { it.requireTicker() }.distinct().forEach { ticker ->
             catalogService.upsertTicker(ticker)
         }
 
@@ -169,11 +206,11 @@ class ImportService(
     private suspend fun applyCustody(import: Import): ImportApplyResult = transaction.execute {
         val rows = repository.fetchRows(import.id)
         val errorFreeRows = rows.filter { it.error == null }
-        errorFreeRows.map { it.ticker }.distinct().forEach { ticker ->
+        errorFreeRows.map { it.requireTicker() }.distinct().forEach { ticker ->
             catalogService.upsertTicker(ticker)
         }
 
-        custodySnapshot.apply(errorFreeRows.map { CustodyPosition(it.ticker, it.quantity) })
+        custodySnapshot.apply(errorFreeRows.map { CustodyPosition(it.requireTicker(), it.quantity) })
 
         completeApply(
             import.id,
@@ -250,7 +287,7 @@ class ImportService(
         date = requireDate(),
         side = side,
         venue = venue,
-        ticker = ticker.normalizedTicker(),
+        ticker = requireTicker().normalizedTicker(),
         quantity = quantity,
         unitPrice = unitPrice,
         institutionName = institutionName.normalizedInstitutionName(),
@@ -260,7 +297,7 @@ class ImportService(
         institutionId?.let { toCreation(it).naturalKey() }
 
     private fun ImportRow.toCreation(institutionId: Int) = TradeCreation(
-        ticker = ticker,
+        ticker = requireTicker(),
         side = side,
         date = requireDate(),
         venue = venue,
@@ -273,6 +310,11 @@ class ImportService(
     // date; a stored row that breaks that invariant is a bug worth failing loudly on.
     private fun ImportRow.requireDate(): LocalDate =
         requireNotNull(date) { "Import row $id is error-free but has no date" }
+
+    // An error-free row has resolved its ticker (a broker note's through the alias, a ticker layout's
+    // at parse); a row that breaks that invariant is a bug worth failing loudly on.
+    private fun ImportRow.requireTicker(): String =
+        requireNotNull(ticker) { "Import row $id is error-free but has no ticker" }
 
     private fun Import.toAttempt() = ImportAttempt(id, fileName, status, createdAt)
 

@@ -28,7 +28,7 @@ class B3AcceptanceFixtureTest : DescribeSpec({
                 FixtureRow(
                     date = row.date.toString(),
                     side = row.side,
-                    ticker = row.ticker,
+                    ticker = requireNotNull(row.ticker),
                     quantity = row.quantity.plain(),
                     unitPrice = row.unitPrice.plain(),
                 )

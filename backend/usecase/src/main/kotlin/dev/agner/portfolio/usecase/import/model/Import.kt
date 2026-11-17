@@ -9,6 +9,7 @@ enum class ImportSource {
     B3_POSITION,
     B3_MOVEMENTS,
     XP_REPORT,
+    RICO_NOTES,
 }
 
 // The batch lifecycle: a file stages, is reviewed, then applies. FAILED is terminal for a file

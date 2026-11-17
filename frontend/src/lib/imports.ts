@@ -10,6 +10,7 @@ const SOURCE_LABELS = {
   B3_POSITION: "B3 · Custódia",
   B3_MOVEMENTS: "B3 · Movimentações",
   XP_REPORT: "XP · Relatório",
+  RICO_NOTES: "Rico · Nota de corretagem",
 } satisfies Record<ImportSource, string>;
 
 export const IMPORT_SOURCES = Object.keys(SOURCE_LABELS) as ImportSource[];
@@ -25,6 +26,7 @@ const SOURCE_DETAILS = {
   B3_POSITION: "Snapshot de posição em custódia",
   B3_MOVEMENTS: "Negócios, proventos e eventos",
   XP_REPORT: "Relatório mensal por estratégia",
+  RICO_NOTES: "Notas de corretagem por PDF",
 } satisfies Record<ImportSource, string>;
 
 export function importSourceDetail(source: ImportSource): string {

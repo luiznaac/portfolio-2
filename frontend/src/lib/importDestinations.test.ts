@@ -4,9 +4,11 @@ import {
   assistantPath,
   destinationRoute,
   editionAssistantPath,
+  importVariants,
   resolveDestination,
   sessionPath,
   sessionStep,
+  variantFor,
 } from "./importDestinations.ts";
 
 describe("import destinations", () => {
@@ -22,6 +24,25 @@ describe("import destinations", () => {
       "Ativos · Posições",
     ]);
     expect(trades.mapping.length).toBeGreaterThan(0);
+  });
+
+  it("offers the B3 workbook and the Rico PDF as trades variants, B3 first", () => {
+    const trades = DESTINATIONS.TRADES;
+    const variants = importVariants(trades);
+
+    expect(variants.map((variant) => variant.source)).toEqual(["B3_TRADES", "RICO_NOTES"]);
+    expect(variants.map((variant) => variant.accept)).toEqual([".xlsx", ".pdf"]);
+    expect(variantFor(trades, "RICO_NOTES")?.parser).toBe("Rico — nota de corretagem (pdf)");
+    expect(variantFor(trades, "RICO_NOTES")?.mapping.map((cell) => cell.to)).toContain(
+      "Descrição → ticker",
+    );
+    expect(variantFor(trades, "B3_TRADES")).toBe(variants[0]);
+  });
+
+  it("gives a destination without variants its own source as the single variant", () => {
+    expect(importVariants(DESTINATIONS.POSITIONS).map((variant) => variant.source)).toEqual([
+      "B3_POSITION",
+    ]);
   });
 
   it("falls back to the trades destination for an absent or unknown context", () => {

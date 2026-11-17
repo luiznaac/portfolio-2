@@ -17,6 +17,7 @@ import type {
   EditionImport,
   Import,
   ImportRow,
+  ImportSource,
   Strategy,
   TargetCurrency,
 } from "../api/types.ts";
@@ -34,10 +35,13 @@ import { formatCurrency, formatNumber, formatTradeSide, plural } from "../lib/fo
 import {
   DESTINATIONS,
   type DestinationMeta,
+  type ImportVariant,
   destinationRoute,
+  importVariants,
   resolveDestination,
   sessionPath,
   sessionStep,
+  variantFor,
 } from "../lib/importDestinations.ts";
 import {
   type CustodyDivergence,
@@ -98,39 +102,77 @@ function editionSessionReducer(
   }
 }
 
-const ROW_COLUMNS: Column<ImportRow>[] = [
-  { key: "date", header: "Data", render: (row) => row.date ?? "—" },
-  {
-    key: "side",
-    header: "Lado",
-    render: (row) => (
-      <Badge tone={row.side === "BUY" ? "ok" : "warn"}>{formatTradeSide(row.side)}</Badge>
-    ),
-  },
-  {
-    key: "ticker",
-    header: "Ticker",
-    render: (row) => <span className="font-mono font-medium">{row.ticker}</span>,
-  },
-  { key: "quantity", header: "Qtd", align: "right", render: (row) => formatNumber(row.quantity) },
-  {
-    key: "unit_price",
-    header: "Preço",
-    align: "right",
-    render: (row) => formatNumber(row.unit_price),
-  },
-  { key: "institution", header: "Instituição", render: (row) => row.institution_name },
-  {
-    key: "situation",
-    header: "Situação",
-    render: (row) => <SituationChip situation={row.situation} />,
-  },
-  {
-    key: "error",
-    header: "Observação",
-    render: (row) => <span className="text-tax">{row.error ?? ""}</span>,
-  },
-];
+const DATE_COLUMN: Column<ImportRow> = {
+  key: "date",
+  header: "Data",
+  render: (row) => row.date ?? "—",
+};
+const NOTE_COLUMN: Column<ImportRow> = {
+  key: "note",
+  header: "Nota",
+  render: (row) => <span className="font-mono">{row.note_number ?? "—"}</span>,
+};
+// A broker note prints a description instead of a ticker, so the review shows the raw description
+// beside the ticker the alias resolved — the mapping the owner is confirming.
+const DESCRIPTION_COLUMN: Column<ImportRow> = {
+  key: "description",
+  header: "Descrição",
+  render: (row) => row.raw_description ?? "—",
+};
+const SIDE_COLUMN: Column<ImportRow> = {
+  key: "side",
+  header: "Lado",
+  render: (row) => (
+    <Badge tone={row.side === "BUY" ? "ok" : "warn"}>{formatTradeSide(row.side)}</Badge>
+  ),
+};
+const TICKER_COLUMN: Column<ImportRow> = {
+  key: "ticker",
+  header: "Ticker",
+  render: (row) => <span className="font-mono font-medium">{row.ticker ?? "—"}</span>,
+};
+const QUANTITY_COLUMN: Column<ImportRow> = {
+  key: "quantity",
+  header: "Qtd",
+  align: "right",
+  render: (row) => formatNumber(row.quantity),
+};
+const PRICE_COLUMN: Column<ImportRow> = {
+  key: "unit_price",
+  header: "Preço",
+  align: "right",
+  render: (row) => formatNumber(row.unit_price),
+};
+const INSTITUTION_COLUMN: Column<ImportRow> = {
+  key: "institution",
+  header: "Instituição",
+  render: (row) => row.institution_name,
+};
+const SITUATION_COLUMN: Column<ImportRow> = {
+  key: "situation",
+  header: "Situação",
+  render: (row) => <SituationChip situation={row.situation} />,
+};
+const ERROR_COLUMN: Column<ImportRow> = {
+  key: "error",
+  header: "Observação",
+  render: (row) => <span className="text-tax">{row.error ?? ""}</span>,
+};
+
+// The note columns only appear for a broker-note import; a ticker layout keeps the original table.
+function rowColumns(brokerNote: boolean): Column<ImportRow>[] {
+  return [
+    DATE_COLUMN,
+    ...(brokerNote ? [NOTE_COLUMN, DESCRIPTION_COLUMN] : []),
+    SIDE_COLUMN,
+    TICKER_COLUMN,
+    QUANTITY_COLUMN,
+    PRICE_COLUMN,
+    INSTITUTION_COLUMN,
+    SITUATION_COLUMN,
+    ERROR_COLUMN,
+  ];
+}
 
 const FIELD = "rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px] text-ink";
 const CALLOUT =
@@ -167,6 +209,7 @@ export function ImportAssistant() {
   const activateEdition = useActivateEdition();
 
   const [file, setFile] = useState<File | null>(null);
+  const [sourceChoice, setSourceChoice] = useState<ImportSource | null>(null);
   const [stepOverride, setStepOverride] = useState<number | null>(null);
   const [editionSession, dispatchEdition] = useReducer(
     editionSessionReducer,
@@ -177,6 +220,10 @@ export function ImportAssistant() {
     record.data === undefined
       ? contextDestination
       : DESTINATIONS[record.data.destination.object_type];
+  // Trades offers two layouts (B3 workbook, Rico broker note); every other destination has one.
+  // The pick sets the source the record is staged under and the file type the input accepts.
+  const variants = importVariants(destination);
+  const variant = variantFor(destination, sourceChoice);
   const isCustody = destination.object === "POSITIONS";
   // The divergence list compares the staged snapshot against the stored projection, so the read is
   // enabled only for the custody variant.
@@ -239,7 +286,7 @@ export function ImportAssistant() {
     }
     if (!destination.supported) return;
     stageImport.mutate(
-      { source: destination.source, file, destination: destination.object },
+      { source: variant.source, file, destination: destination.object },
       {
         onSuccess: ({ import: stagedRecord, created }) => {
           // A fresh upload walks the full flow; a hash match resumes wherever the record already is.
@@ -248,6 +295,11 @@ export function ImportAssistant() {
         },
       },
     );
+  }
+
+  function handleVariant(source: ImportSource) {
+    setSourceChoice(source);
+    setFile(null);
   }
 
   function handleContinue() {
@@ -344,6 +396,9 @@ export function ImportAssistant() {
             ) : (
               <StepFile
                 destination={destination}
+                variants={variants}
+                variant={variant}
+                onVariant={handleVariant}
                 file={file}
                 onFile={setFile}
                 onStage={handleStage}
@@ -386,6 +441,7 @@ export function ImportAssistant() {
                       situations={situations}
                       rejected={rejected.length}
                       loading={rows.isLoading}
+                      brokerNote={record.data.source === "RICO_NOTES"}
                     />
                   ))}
 
@@ -896,12 +952,18 @@ function deltaText<T>(
 
 function StepFile({
   destination,
+  variants,
+  variant,
+  onVariant,
   file,
   onFile,
   onStage,
   pending,
 }: {
   destination: DestinationMeta;
+  variants: readonly ImportVariant[];
+  variant: ImportVariant;
+  onVariant: (source: ImportSource) => void;
   file: File | null;
   onFile: (file: File | null) => void;
   onStage: (event: FormEvent) => void;
@@ -925,9 +987,26 @@ function StepFile({
             <p className="text-ink">
               Destino definido pelo contexto: <b>{destination.label}</b>
             </p>
-            <p className="mt-1 text-ink-dim">Parser reconhecido: {destination.parser}</p>
+            <p className="mt-1 text-ink-dim">Parser reconhecido: {variant.parser}</p>
           </div>
-          <ReportFileInput accept=".xlsx" onFile={onFile} />
+          {variants.length > 1 && (
+            <label className="block text-[12.5px] text-ink-dim">
+              Formato
+              <select
+                aria-label="Formato"
+                value={variant.source}
+                onChange={(event) => onVariant(event.target.value as ImportSource)}
+                className={`mt-1 block w-full ${FIELD}`}
+              >
+                {variants.map((option) => (
+                  <option key={option.source} value={option.source}>
+                    {option.parser}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <ReportFileInput accept={variant.accept} onFile={onFile} />
           <p className={CALLOUT}>
             Nada é aplicado no upload: o arquivo é lido, tem o hash calculado e fica em revisão. A
             aplicação é uma decisão separada.
@@ -945,6 +1024,7 @@ function StepDestination({
   destination,
   record,
 }: { destination: DestinationMeta; record: Import }) {
+  const variant = variantFor(destination, record.source);
   return (
     <div className="space-y-4">
       <Panel
@@ -953,7 +1033,7 @@ function StepDestination({
       >
         <dl className="divide-y divide-line-soft text-[12.5px]">
           <Detail label="Destino" value={destination.label} />
-          <Detail label="Parser" value={destination.parser} />
+          <Detail label="Parser" value={variant.parser} />
           <Detail label="Aplicação" value="aplicar as linhas válidas" />
           <Detail
             label="Arquivo"
@@ -966,7 +1046,7 @@ function StepDestination({
         title="Mapeamento"
         action={<span className="text-[11.5px] text-ink-faint">template lembrado</span>}
       >
-        <MappingGrid mapping={destination.mapping} />
+        <MappingGrid mapping={variant.mapping} />
         <p className={`mt-3 ${CALLOUT}`}>
           O template reconhecido preenche as colunas, mas nada entra sem esta revisão.
         </p>
@@ -1152,11 +1232,13 @@ function StepRows({
   situations,
   rejected,
   loading,
+  brokerNote,
 }: {
   rows: ImportRow[];
   situations: ReturnType<typeof summarizeSituations>;
   rejected: number;
   loading: boolean;
+  brokerNote: boolean;
 }) {
   return (
     <Panel
@@ -1181,7 +1263,7 @@ function StepRows({
       ) : rows.length === 0 ? (
         <p className="text-[13.5px] text-ink-dim">Nenhuma linha no arquivo.</p>
       ) : (
-        <Table columns={ROW_COLUMNS} rows={rows} rowKey={(row) => row.id} />
+        <Table columns={rowColumns(brokerNote)} rows={rows} rowKey={(row) => row.id} />
       )}
     </Panel>
   );

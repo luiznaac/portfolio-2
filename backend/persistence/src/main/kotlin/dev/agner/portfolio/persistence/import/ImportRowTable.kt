@@ -19,13 +19,19 @@ object ImportRowTable : IntIdTable("import_row") {
     val date = date("date").nullable()
     val side = enumerationByName<TradeSide>("side", 4)
     val venue = varchar("venue", 20)
-    val ticker = varchar("ticker", 12)
+    val ticker = varchar("ticker", 12).nullable()
     val quantity = decimal("quantity", 18, 6)
     val unitPrice = decimal("unit_price", 18, 6)
     val institutionName = varchar("institution_name", 100)
 
     // Non-null marks a row-level problem; apply skips flagged rows.
     val error = varchar("error", 255).nullable()
+
+    // A broker note prints an asset description instead of a ticker; the raw description is kept
+    // for the review and the note number traces the trade back to its document. Null for a layout
+    // that prints a ticker.
+    val rawDescription = varchar("raw_description", 255).nullable()
+    val noteNumber = varchar("note_number", 40).nullable()
 
     // What apply decided for this row; null until the import is applied. A rejected row stays here
     // beside the applied ones, which is the retry batch the surface reports.
@@ -47,6 +53,8 @@ class ImportRowEntity(id: EntityID<Int>) : IntEntity(id) {
     var unitPrice by ImportRowTable.unitPrice
     var institutionName by ImportRowTable.institutionName
     var error by ImportRowTable.error
+    var rawDescription by ImportRowTable.rawDescription
+    var noteNumber by ImportRowTable.noteNumber
     var outcome by ImportRowTable.outcome
     var createdAt by ImportRowTable.createdAt
 
@@ -62,5 +70,7 @@ class ImportRowEntity(id: EntityID<Int>) : IntEntity(id) {
         institutionName = institutionName,
         error = error,
         outcome = outcome,
+        rawDescription = rawDescription,
+        noteNumber = noteNumber,
     )
 }
