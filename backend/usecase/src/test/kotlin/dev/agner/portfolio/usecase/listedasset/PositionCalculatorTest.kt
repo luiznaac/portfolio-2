@@ -7,12 +7,28 @@ import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.sell
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 class PositionCalculatorTest : StringSpec({
 
     "an empty ledger replays to an empty position" {
         PositionCalculator.replay("PETR4", emptyList()) shouldBe Position("PETR4", bd("0"), bd("0"))
+    }
+
+    "positionOn replays every entry dated on or before the day" {
+        val position = PositionCalculator.positionOn(
+            "PETR4",
+            listOf(
+                buy(date = "2026-10-01", quantity = "100", unitPrice = "10"),
+                sell(id = 2, date = "2026-10-10", quantity = "40", unitPrice = "12"),
+            ),
+            listOf(corporateAction(CorporateActionKind.SPLIT, exDate = "2026-10-05", ratio = "2")),
+            LocalDate.parse("2026-10-07"),
+        )
+
+        position.quantity.compareTo(bd("200")) shouldBe 0
+        position.averagePrice.compareTo(bd("5")) shouldBe 0
     }
 
     "a buy sets quantity and the average to its unit price" {

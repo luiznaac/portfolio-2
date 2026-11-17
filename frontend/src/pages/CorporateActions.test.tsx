@@ -4,13 +4,15 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CorporateAction, CorporateActionResolution } from "../api/types.ts";
+import type { BrapiSyncReport, CorporateAction, CorporateActionResolution } from "../api/types.ts";
 import { CorporateActions } from "./CorporateActions.tsx";
 
 const mock = vi.hoisted(() => ({
   actions: [] as CorporateAction[],
   resolutions: [] as { id: number; resolution: CorporateActionResolution }[],
   failWith: null as Error | null,
+  lastRun: null as BrapiSyncReport | null,
+  syncReport: null as BrapiSyncReport | null,
 }));
 
 // The client seam is mocked so the real query and mutation hooks run: the resolve writes into the
@@ -21,6 +23,8 @@ vi.mock("../api/client.ts", () => ({
     getCorporateActions: () => Promise.resolve(mock.actions.map((action) => ({ ...action }))),
     importMovements: () =>
       Promise.resolve({ trades: 0, incomes: 0, corporate_actions: [], reuploaded: false }),
+    syncCorporateActions: () => Promise.resolve(mock.syncReport),
+    getCorporateActionSync: () => Promise.resolve(mock.lastRun ?? undefined),
     resolveCorporateAction: (id: number, resolution: CorporateActionResolution) => {
       mock.resolutions.push({ id, resolution });
       if (mock.failWith !== null) return Promise.reject(mock.failWith);
@@ -63,6 +67,8 @@ function renderPage() {
 beforeEach(() => {
   mock.resolutions = [];
   mock.failWith = null;
+  mock.lastRun = null;
+  mock.syncReport = report();
   mock.actions = [
     action({ id: 1 }),
     action({
@@ -143,5 +149,64 @@ describe("Ações corporativas", () => {
     expect(
       (within(parked).getByRole("button", { name: "Aplicar" }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+});
+
+function report(overrides: Partial<BrapiSyncReport> = {}): BrapiSyncReport {
+  return {
+    id: 1,
+    started_at: "2026-11-17T12:00:00",
+    as_of: "2026-11-17",
+    window_from: "2018-03-05",
+    window_to: "2026-11-17",
+    ticker_count: 2,
+    fetched: 9,
+    applied: 5,
+    parked: 1,
+    income: 3,
+    failed_tickers: [],
+    ...overrides,
+  };
+}
+
+describe("Ações corporativas · brapi sync", () => {
+  it("runs the explicit sync and shows the run's report", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "Sincronizar brapi" }));
+
+    const panel = await screen.findByTestId("brapi-sync-report");
+    expect(panel.textContent).toContain("2018-03-05 → 2026-11-17 · 2 tickers");
+    expect(panel.textContent).toContain("9 lidos · 5 aplicados · 1 em revisão · 3 proventos");
+    expect(panel.textContent).toContain("Nenhuma falha");
+  });
+
+  it("keeps the last run's report on screen after a reload", async () => {
+    mock.lastRun = report({ failed_tickers: ["VALE3"] });
+    renderPage();
+
+    const panel = await screen.findByTestId("brapi-sync-report");
+    expect(panel.textContent).toContain("Falharam: VALE3");
+  });
+
+  it("badges a synced row with its BRAPI provenance", async () => {
+    mock.actions = [
+      action({ id: 1, source: "BRAPI", raw_type: "DESDOBRAMENTO" }),
+      action({
+        id: 2,
+        source: "BRAPI",
+        ex_date: undefined,
+        ratio: undefined,
+        status: "NEEDS_REVIEW",
+        is_applied: false,
+      }),
+    ];
+    renderPage();
+
+    const history = await screen.findByTestId("corporate-history-1");
+    expect(within(history).getByText("BRAPI")).toBeDefined();
+    const parked = screen.getByTestId("corporate-review-2");
+    expect(within(parked).getByText(/BRAPI/)).toBeDefined();
   });
 });

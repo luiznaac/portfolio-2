@@ -11,6 +11,9 @@ import java.math.BigDecimal
 // disagree with the source. `ordinal` is the event's occurrence within its (ticker, kind, exDate)
 // tuple, so two same-day events of one kind stay distinct and replay in a deterministic order.
 //
+// `exDate` is nullable only for a parked row: a brapi event that carries no ex-date waits for a
+// decision rather than guessing a date across a trade, and an applied row always has one.
+//
 // `targetTicker` is the event's other code: the new code of a TICKER_CHANGE, or the underlying a
 // RIGHTS_ALLOTMENT was issued from. A rights allotment is keyed on the rights ticker it creates, so
 // its replay (and the allocation exclusion) sees it on the paper it belongs to; `grantedQuantity` is
@@ -20,7 +23,7 @@ data class CorporateAction(
     val id: Int,
     val ticker: String,
     val kind: CorporateActionKind,
-    val exDate: LocalDate,
+    val exDate: LocalDate?,
     val approvalDate: LocalDate?,
     val ratio: BigDecimal?,
     val declaredValuePerShare: BigDecimal?,
@@ -46,7 +49,7 @@ data class CorporateAction(
 data class CorporateActionKey(
     val ticker: String,
     val kind: CorporateActionKind,
-    val exDate: LocalDate,
+    val exDate: LocalDate?,
     val ordinal: Int,
 )
 
@@ -55,7 +58,7 @@ data class CorporateActionKey(
 data class CorporateActionCreation(
     val ticker: String,
     val kind: CorporateActionKind,
-    val exDate: LocalDate,
+    val exDate: LocalDate?,
     val approvalDate: LocalDate? = null,
     val ratio: BigDecimal? = null,
     val declaredValuePerShare: BigDecimal? = null,
@@ -78,11 +81,13 @@ data class CorporateActionCreation(
 
     // A quantity event without its ratio cannot be applied; parking it is the honest outcome.
     // A review kind is parked regardless of the columns the row did carry. A cash-only event with
-    // no declared per-share value has no amount to pay, and a ticker change with no target code has
-    // nothing to remap — both wait for a human rather than guessing. A rights allotment needs both
-    // its underlying (target code) and its factor to compute the grant.
+    // no declared per-share value has no amount to pay, a ticker change with no target code has
+    // nothing to remap, an event with no ex-date has no day to land on, and a rights allotment needs
+    // both its underlying (target code) and its factor to compute the grant — all wait for a human
+    // rather than guessing.
     fun needsReview(): Boolean =
-        kind.requiresReview ||
+        exDate == null ||
+            kind.requiresReview ||
             (kind.isQuantityEvent && !ratio.isPositive()) ||
             (kind == CorporateActionKind.BONUS_SHARES && !declaredValuePerShare.isPositive()) ||
             (kind.isCashOnly && !declaredValuePerShare.isPositive()) ||

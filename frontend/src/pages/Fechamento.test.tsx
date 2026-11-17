@@ -288,6 +288,7 @@ describe("Fechamento", () => {
         net_amount: 100,
         tax_nature: "INCOME",
         provenance: "B3",
+        estimated: false,
         status: "ANNOUNCED",
       },
     ];

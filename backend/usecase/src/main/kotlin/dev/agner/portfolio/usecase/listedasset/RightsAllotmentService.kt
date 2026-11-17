@@ -54,7 +54,7 @@ class RightsAllotmentService(
             .filter {
                 it.kind == CorporateActionKind.RIGHTS_ALLOTMENT &&
                     it.source == CorporateActionSource.DERIVED &&
-                    it.exDate >= realExDate
+                    it.exDate?.let { date -> date >= realExDate } == true
             }
             .forEach { corporateActions.delete(it.id) }
     }

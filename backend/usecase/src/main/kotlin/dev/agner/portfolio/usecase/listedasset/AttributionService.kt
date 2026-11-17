@@ -27,6 +27,10 @@ import java.math.BigDecimal
 // Asset Class — the class-match rule that keeps the per-class sums and the shared-ticker split safe
 // — and an unclassified ticker cannot be attributed at all. Reads never write; the two mutations run
 // inside a transaction so the checks and the write see the same ledger.
+//
+// A renamed paper's slices can still sit under an old code, so every code in the alias chain is one
+// book: the reads span the alias set, the ceiling counts all of them, and a write lands on the
+// canonical code — an old-code slice is superseded, never left beside it as a second row.
 @Service
 class AttributionService(
     private val attributions: IAttributionRepository,
@@ -45,22 +49,27 @@ class AttributionService(
         val rows = attributions.fetchAll()
         val canonicalByTicker = aliases.canonicalAll(rows.map { it.ticker })
         return rows
-            .mapNotNull { row ->
-                names[row.strategyId]?.let { name ->
-                    canonicalByTicker.getValue(row.ticker) to AttributionSlice(row.strategyId, name, row.quantity)
-                }
-            }
-            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            .groupBy { canonicalByTicker.getValue(it.ticker) }
             // Two stored rows can collapse onto one canonical slice (a rename before the slices
             // were remapped); the ledger presents one slice per (ticker, strategy), summing them.
-            .mapValues { (_, slices) ->
-                slices
-                    .groupBy { it.strategyId }
-                    .map { (strategyId, group) ->
-                        AttributionSlice(strategyId, group.first().strategyName, group.sumOf { it.quantity })
-                    }
-            }
+            .mapValues { (_, group) -> collapse(group, names) }
     }
+
+    // One slice per strategy with the quantities summed: a strategy's slice can be split across the
+    // codes of a rename chain, and every read presents it as one entry.
+    private fun collapse(rows: List<Attribution>, names: Map<Int, String>): List<AttributionSlice> =
+        rows
+            .groupBy { it.strategyId }
+            .mapNotNull { (strategyId, group) ->
+                names[strategyId]?.let { name ->
+                    AttributionSlice(
+                        strategyId = strategyId,
+                        strategyName = name,
+                        quantity = group.sumOf { it.quantity },
+                    )
+                }
+            }
+            .sortedBy { it.strategyName }
 
     // The whole ledger keyed by (strategy name, ticker), the way the order engine's funding pass
     // consumes it. It is the same slice read flattened, so the two can never disagree.
@@ -69,7 +78,7 @@ class AttributionService(
     suspend fun fetchSummary(ticker: String): AttributionSummary? {
         val normalized = aliases.canonical(ticker)
         val position = positions.fetchBy(normalized) ?: return null
-        return summarize(normalized, position, attributions.fetchBy(normalized))
+        return summarize(normalized, position, storedSlices(normalized))
     }
 
     // Null means the ticker has no position or the strategy does not exist — the controller maps
@@ -102,9 +111,26 @@ class AttributionService(
             if (position == null) {
                 null
             } else {
-                attributions.delete(normalized, strategyId)
-                summarize(normalized, position, attributions.fetchBy(normalized))
+                val aliasSet = aliases.aliasesOf(normalized)
+                val remaining = aliasSet
+                    .flatMap { attributions.fetchBy(it) }
+                    .filterNot { it.strategyId == strategyId }
+                for (code in aliasSet) attributions.delete(code, strategyId)
+                summarize(normalized, position, remaining)
             }
+        }
+    }
+
+    // Every stored slice of the paper, whichever code in the rename chain it was written with — the
+    // one read the summary, the ceiling and the two mutations share.
+    private suspend fun storedSlices(normalized: String): List<Attribution> =
+        aliases.aliasesOf(normalized).flatMap { attributions.fetchBy(it) }
+
+    // A write lands on the canonical code, so the rows the paper still stores under a retired code
+    // are superseded rather than left beside it as a second slice for the same strategy.
+    private suspend fun deleteRetiredRows(rows: List<Attribution>, canonical: String, strategyIds: Set<Int>) {
+        for (row in rows.filter { it.strategyId in strategyIds && it.ticker != canonical }) {
+            attributions.delete(row.ticker, row.strategyId)
         }
     }
 
@@ -118,7 +144,7 @@ class AttributionService(
             null
         } else {
             requireClassMatch(normalized, strategy)
-            val existing = attributions.fetchBy(normalized)
+            val existing = storedSlices(normalized)
 
             // Replacing a strategy's slice counts only the other strategies against the ceiling;
             // the slice being replaced is the one this write overwrites.
@@ -131,6 +157,7 @@ class AttributionService(
                 )
             }
 
+            deleteRetiredRows(existing, normalized, setOf(strategy.id))
             attributions.save(Attribution(normalized, strategy.id, creation.quantity))
             summarize(
                 normalized,
@@ -153,21 +180,24 @@ class AttributionService(
             requireClassMatch(normalized, from) { InvalidTransferException(it) }
             requireClassMatch(normalized, to) { InvalidTransferException(it) }
 
-            val rows = attributions.fetchBy(normalized)
-            val source = rows.firstOrNull { it.strategyId == from.id }
-                ?: throw InvalidTransferException("$normalized has no slice for strategy ${from.name}")
-            if (source.quantity < creation.quantity) {
+            val rows = storedSlices(normalized)
+            val sourceQuantity = rows.filter { it.strategyId == from.id }.sumOf { it.quantity }
+            if (sourceQuantity < creation.quantity) {
                 throw InvalidTransferException(
-                    "$normalized strategy ${from.name} holds ${source.quantity}, but the transfer moves " +
+                    "$normalized strategy ${from.name} holds $sourceQuantity, but the transfer moves " +
                         creation.quantity,
                 )
             }
 
-            val remaining = source.quantity - creation.quantity
+            val remaining = sourceQuantity - creation.quantity
             val sourceRow = remaining.takeIf { it.signum() > 0 }?.let { Attribution(normalized, from.id, it) }
-            val destinationQuantity = (rows.firstOrNull { it.strategyId == to.id }?.quantity ?: BigDecimal.ZERO) +
+            val destinationQuantity = rows.filter { it.strategyId == to.id }.sumOf { it.quantity } +
                 creation.quantity
             val destinationRow = Attribution(normalized, to.id, destinationQuantity)
+
+            // Both strategies end with one slice, keyed on the canonical code: any old-code row
+            // they still hold is superseded by the rows written below.
+            deleteRetiredRows(rows, normalized, setOf(from.id, to.id))
 
             if (sourceRow == null) {
                 attributions.delete(normalized, from.id)
@@ -207,13 +237,7 @@ class AttributionService(
         rows: List<Attribution>,
     ): AttributionSummary {
         val names = strategies.fetchAll().associate { it.id to it.name }
-        val slices = rows
-            .mapNotNull { row ->
-                names[row.strategyId]?.let { name ->
-                    AttributionSlice(strategyId = row.strategyId, strategyName = name, quantity = row.quantity)
-                }
-            }
-            .sortedBy { it.strategyName }
+        val slices = collapse(rows, names)
         val attributed = rows.sumOf { it.quantity }
         return AttributionSummary(
             ticker = ticker,

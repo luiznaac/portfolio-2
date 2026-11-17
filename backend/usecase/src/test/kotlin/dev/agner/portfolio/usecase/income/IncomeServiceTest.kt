@@ -140,6 +140,22 @@ class IncomeServiceTest : StringSpec({
         saved.captured.map { it.ticker } shouldBe listOf("VALE3")
     }
 
+    "importEvents keeps a brapi movement's provenance and estimated marker" {
+        coEvery { repository.fetchAll() } returns emptyList()
+        val saved = slot<List<IncomeCreation>>()
+        coEvery { repository.saveAll(capture(saved)) } returns emptyList()
+
+        service.importEvents(
+            listOf(
+                creation(ticker = "PETR4", date = "2019-06-10", type = IncomeType.JCP)
+                    .copy(provenance = Provenance.BRAPI, estimated = true),
+            ),
+        )
+
+        saved.captured.single().provenance shouldBe Provenance.BRAPI
+        saved.captured.single().estimated shouldBe true
+    }
+
     "importEvents normalizes the tickers before storing" {
         coEvery { repository.fetchAll() } returns emptyList()
         val saved = slot<List<IncomeCreation>>()

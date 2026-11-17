@@ -22,6 +22,17 @@ object TelemetryAttributes {
 
     const val HEALTH_COMPONENT = "health.component"
 
+    // The brapi one-off sync's event attributes: a run's counts and a batch's refused tickers.
+    const val BRAPI_TICKER_COUNT = "brapi.ticker_count"
+    const val BRAPI_FETCHED = "brapi.fetched"
+    const val BRAPI_APPLIED = "brapi.applied"
+    const val BRAPI_PARKED = "brapi.parked"
+    const val BRAPI_INCOME = "brapi.income"
+    const val BRAPI_FAILED_COUNT = "brapi.failed_count"
+    const val BRAPI_ENDPOINT = "brapi.endpoint"
+    const val BRAPI_TICKERS = "brapi.tickers"
+    const val BRAPI_REASON = "brapi.reason"
+
     const val RESOURCE_NOT_FOUND = "resource_not_found"
     const val INVALID_ARGUMENT = "invalid_argument"
     const val DOMAIN_ERROR = "domain_error"

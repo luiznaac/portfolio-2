@@ -159,7 +159,7 @@ object StockTaxCalculator {
 
     private fun TickerLedger.asOf(lastDay: LocalDate) = copy(
         trades = trades.filter { it.date <= lastDay },
-        corporateActions = corporateActions.filter { it.exDate <= lastDay },
+        corporateActions = corporateActions.filter { it.exDate != null && it.exDate <= lastDay },
     )
 
     private fun replay(ledger: TickerLedger) = LedgerReplay(

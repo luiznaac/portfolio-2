@@ -10,6 +10,7 @@ import dev.agner.portfolio.usecase.corporateAction
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionCreation
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionResolution
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSource
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateCashMovement
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
@@ -461,6 +462,23 @@ class CorporateActionServiceTest : StringSpec({
         coVerify(exactly = 1) { positionService.reproject("PETR4") }
     }
 
+    "resolving a parked event with no ex-date applies the supplied date" {
+        coEvery { repository.fetchById(7) } returns
+            action(
+                creation = split(ratio = "2").copy(exDate = null),
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            )
+        coEvery { repository.update(7, any(), CorporateActionStatus.APPLIED) } returns
+            action(creation = split(ratio = "2"), status = CorporateActionStatus.APPLIED)
+        val resolved = slot<CorporateActionCreation>()
+
+        service.resolve(7, CorporateActionResolution(exDate = date, ratio = BigDecimal("2")))
+
+        coVerify { repository.update(7, capture(resolved), CorporateActionStatus.APPLIED) }
+        resolved.captured.exDate shouldBe date
+        coVerify(exactly = 1) { positionService.reproject("PETR4") }
+    }
+
     "resolving a parked cash event records its per-share movement" {
         coEvery { repository.fetchById(7) } returns
             action(
@@ -555,6 +573,156 @@ class CorporateActionServiceTest : StringSpec({
         shouldThrow<CorporateActionNotFoundException> {
             service.resolve(7, CorporateActionResolution())
         }
+    }
+
+    "a brapi event with no B3 counterpart is applied" {
+        val saved = slot<CorporateActionCreation>()
+        coEvery { repository.save(capture(saved), CorporateActionStatus.APPLIED) } answers {
+            action(creation = firstArg(), status = CorporateActionStatus.APPLIED)
+        }
+        val brapi = actionCreation(CorporateActionKind.SPLIT, ratio = "2", source = CorporateActionSource.BRAPI)
+
+        val result = service.applyBrapi(listOf(brapi))
+
+        result.applied shouldBe 1
+        result.parked shouldBe 0
+        saved.captured.source shouldBe CorporateActionSource.BRAPI
+        coVerify { attributions.fetchBy("PETR4") }
+    }
+
+    "B3 wins on the same natural key: an applied B3 row is never touched by brapi" {
+        coEvery { repository.fetchAll() } returns listOf(
+            corporateAction(CorporateActionKind.SPLIT, ratio = "3"),
+        )
+        val brapi = actionCreation(CorporateActionKind.SPLIT, ratio = "2", source = CorporateActionSource.BRAPI)
+
+        val result = service.applyBrapi(listOf(brapi))
+
+        result.applied shouldBe 0
+        result.parked shouldBe 0
+        coVerify(exactly = 0) { repository.save(any(), any()) }
+        coVerify(exactly = 0) { repository.update(any(), any(), any()) }
+    }
+
+    "brapi enriches a parked B3 event with the missing column and applies it" {
+        coEvery { repository.fetchAll() } returns listOf(
+            corporateAction(
+                CorporateActionKind.SPLIT,
+                id = 7,
+                ratio = null,
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            ),
+        )
+        val enriched = slot<CorporateActionCreation>()
+        coEvery { repository.update(7, capture(enriched), any()) } answers {
+            action(creation = secondArg(), status = CorporateActionStatus.APPLIED)
+        }
+        val brapi = actionCreation(CorporateActionKind.SPLIT, ratio = "2", source = CorporateActionSource.BRAPI)
+
+        val result = service.applyBrapi(listOf(brapi))
+
+        result.applied shouldBe 1
+        enriched.captured.ratio?.compareTo(BigDecimal("2")) shouldBe 0
+        enriched.captured.source shouldBe CorporateActionSource.B3_MOVEMENTS
+        coVerify { attributions.fetchBy("PETR4") }
+    }
+
+    "enrichment keeps the B3 value and fills only the columns the export lacked" {
+        coEvery { repository.fetchAll() } returns listOf(
+            corporateAction(
+                CorporateActionKind.BONUS_SHARES,
+                id = 7,
+                ratio = null,
+                declaredValuePerShare = "1.5",
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            ),
+        )
+        val enriched = slot<CorporateActionCreation>()
+        coEvery { repository.update(7, capture(enriched), any()) } answers {
+            action(creation = secondArg(), status = CorporateActionStatus.APPLIED)
+        }
+        val brapi = actionCreation(
+            CorporateActionKind.BONUS_SHARES,
+            ratio = "0.1",
+            declaredValuePerShare = "9.9",
+            source = CorporateActionSource.BRAPI,
+        )
+
+        service.applyBrapi(listOf(brapi))
+
+        enriched.captured.ratio?.compareTo(BigDecimal("0.1")) shouldBe 0
+        enriched.captured.declaredValuePerShare?.compareTo(BigDecimal("1.5")) shouldBe 0
+    }
+
+    "an event with no ex-date is parked instead of guessed" {
+        coEvery { repository.save(any(), CorporateActionStatus.NEEDS_REVIEW) } returns
+            action(
+                creation = actionCreation(CorporateActionKind.SPLIT, exDate = null, ratio = "2"),
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            )
+
+        val result = service.applyBrapi(
+            listOf(
+                actionCreation(
+                    CorporateActionKind.SPLIT,
+                    exDate = null,
+                    ratio = "2",
+                    source = CorporateActionSource.BRAPI,
+                ),
+            ),
+        )
+
+        result.parked shouldBe 1
+        result.applied shouldBe 0
+        coVerify { repository.save(any(), CorporateActionStatus.NEEDS_REVIEW) }
+        coVerify(exactly = 0) { positionService.reproject(any()) }
+    }
+
+    "a parked event with no ex-date is enriched when a later payload supplies the date" {
+        coEvery { repository.fetchAll() } returns listOf(
+            corporateAction(
+                CorporateActionKind.SPLIT,
+                id = 7,
+                exDate = null,
+                ratio = "2",
+                source = CorporateActionSource.BRAPI,
+                status = CorporateActionStatus.NEEDS_REVIEW,
+            ),
+        )
+        val enriched = slot<CorporateActionCreation>()
+        coEvery { repository.update(7, capture(enriched), any()) } answers {
+            action(creation = secondArg(), status = CorporateActionStatus.APPLIED)
+        }
+        val dated = actionCreation(
+            CorporateActionKind.SPLIT,
+            exDate = "2020-01-10",
+            ratio = "2",
+            source = CorporateActionSource.BRAPI,
+        )
+
+        val result = service.applyBrapi(listOf(dated))
+
+        result.applied shouldBe 1
+        enriched.captured.exDate shouldBe LocalDate.parse("2020-01-10")
+        coVerify(exactly = 0) { repository.save(any(), any()) }
+    }
+
+    "a re-run does not duplicate an already applied brapi event" {
+        coEvery { repository.fetchAll() } returns listOf(
+            corporateAction(
+                CorporateActionKind.SPLIT,
+                ratio = "2",
+                source = CorporateActionSource.BRAPI,
+            ),
+        )
+
+        val result = service.applyBrapi(
+            listOf(actionCreation(CorporateActionKind.SPLIT, ratio = "2", source = CorporateActionSource.BRAPI)),
+        )
+
+        result.applied shouldBe 0
+        result.parked shouldBe 0
+        coVerify(exactly = 0) { repository.save(any(), any()) }
     }
 })
 

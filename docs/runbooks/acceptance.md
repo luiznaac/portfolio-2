@@ -1335,6 +1335,31 @@ SQL
 
 A route that fails to render, a missing page head, or a head that disagrees with this table is an automatic red; the evidence names the first failing route. The unit-level equivalent is `frontend/src/App.test.tsx`, which derives the same path set from `App.tsx` with loading mocks.
 
+## Acceptance scenario — single-ticker attribution across a rename chain (issue [#459](https://github.com/luiznaac/portfolio-2/issues/459))
+
+**Scenario**: the run drives the single-ticker attribution surface (`GET/POST/DELETE /positions/{ticker}/attribution` and its `/transfer`) against a paper whose slices were written under three codes of one rename chain. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the intents; it resets the ledger and identity tables and seeds a chain `OLD3 → MID3 → NEW3`, a 100-unit position under the canonical `NEW3`, two Ações strategies, and three slices — Top Dividendos 20 under `OLD3` plus 10 under `MID3`, Top Ações 5 under `NEW3`. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM ticker_alias; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Top Ações','ACOES','REPORT_DRIVEN',NOW()); \
+      INSERT INTO ticker_alias (old_ticker, canonical_ticker, effective_date, \`source\`, ratio, corporate_action_id) VALUES \
+        ('OLD3','MID3','2026-10-01','B3_MOVEMENTS',NULL,NULL), \
+        ('MID3','NEW3','2026-10-02','B3_MOVEMENTS',NULL,NULL); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES ('NEW3',100,10); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('OLD3',9001,20), ('MID3',9001,10), ('NEW3',9002,5); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('NEW3','NEW3','02',NULL,'STOCK','ACOES','2026-10-01','2026-10-31',NOW());"
+```
+
+`GET /positions/OLD3/attribution` and `GET /positions/NEW3/attribution` both answer 200 with `ticker: "NEW3"`, `custody_quantity: 100`, `attributed_quantity: 35`, `unattributed_quantity: 65`, and two slices — Top Dividendos 30 and Top Ações 5. `POST /positions/OLD3/attribution` with `{"strategy_id":9002,"quantity":95}` answers 400: the ceiling counts Top Dividendos' 30 units stored under the retired codes, so only 70 are available. `POST /positions/OLD3/attribution` with `{"strategy_id":9001,"quantity":40}` answers 200 with `attributed_quantity: 45` and two slices (Top Dividendos 40, Top Ações 5); a read by `MID3` shows the same, so the write superseded the old-code rows instead of forking a second slice. `POST /positions/MID3/attribution/transfer` with `{"from_strategy_id":9001,"to_strategy_id":9002,"quantity":15}` answers 200 with `attributed_quantity: 45` and two slices (Top Dividendos 25, Top Ações 20). `DELETE /positions/NEW3/attribution/9001` answers 200 with `attributed_quantity: 20` and one slice (Top Ações 20). A read that reports an old-code slice as unattributed, a write that duplicates a slice, a ceiling that ignores the old-code units, or a delete that leaves the row behind is an automatic red; the evidence names the first failing intent.
+
 ## Acceptance scenario — ticker rename with a conversion ratio and same-date ordering (issue [#452](https://github.com/luiznaac/portfolio-2/issues/452))
 
 **Scenario**: the run drives one paper renamed with a 2:1 conversion and, on the same ex-date, a 2:1 split keyed to the **new** code, over the combined image. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the HTTP intents. The seed holds 100 OLD3 units bought at R$10 and two parked events on 2026-10-20: the rename (9001, no target/ratio until the resolve supplies them) and the split (9002, keyed NEW3, no ratio until supplied). Run it independently of the other seeds.
@@ -1363,3 +1388,30 @@ SQL
 ```
 
 Resolve the **split first** (the event is keyed to the new code, which has no alias yet) and the rename second: `POST /corporate-actions/9002/resolve` with `{"ratio":2}` answers 200, then `POST /corporate-actions/9001/resolve` with `{"ratio":2,"target_ticker":"NEW3"}` answers 200 with `status: "APPLIED"`. The single rename resolve writes the alias and converts the book together: `GET /positions/NEW3` reads one position of **400 units at R$2,50** (100 × 2 from the rename, then × 2 from the same-date split), `GET /positions` lists only NEW3 (the OLD3 projection is superseded), and `GET /corporate-actions` shows the rename applied with ratio 2 and target NEW3. The class-digit half of the ticket has no HTTP path and is pinned by the unit and integration suites (`CorporateActionServiceTest`, `PositionProjectionTest`).
+
+## Acceptance scenario — one-off brapi sync (issue [#454](https://github.com/luiznaac/portfolio-2/issues/454))
+
+**Scenario**: the run drives the explicit brapi sync's surface on the combined image. brapi itself is a third party and is not booted; the paid provider is stubbed by seeding the database a successful run leaves behind (the audit, one applied BRAPI event, one parked event with no ex-date, and two BRAPI incomes, one estimated). The ticket-scoped bootstrap runbook [`acceptance-brapi-sync.md`](acceptance-brapi-sync.md) carries this seed in its `app` ready probe; the block below is the same seed for a human-run session. Boot from `docker compose down -v` and apply it after the app is healthy and before the HTTP/Browser intents. Run it independently of the other seeds. The app has no `BRAPI_TOKEN` in this stack, so the sync POST fails loudly — which is the intended proof that the run is explicit and credential-gated, not a silent no-op.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM brapi_sync;
+DELETE FROM cash_movement;
+DELETE FROM corporate_action;
+DELETE FROM trade WHERE institution_id = 9001;
+DELETE FROM institution WHERE id = 9001;
+INSERT INTO brapi_sync (id, started_at, as_of, window_from, window_to, ticker_count, fetched_count, applied_count, parked_count, income_count, failed_tickers, raw_payload) VALUES
+  (9001, NOW(6), '2026-11-17', '2018-03-05', '2026-11-17', 2, 4, 1, 1, 2, '', '[]');
+INSERT INTO corporate_action (id, ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES
+  (9001, 'PETR4',  'SPLIT',       '2020-01-10', NULL, 2, NULL, NULL, 'BRAPI', NULL, 'DESDOBRAMENTO', 1, NULL, 'APPLIED',      NOW()),
+  (9002, 'MXRF11', 'AMORTIZATION', NULL,        NULL, NULL, 0.20, NULL, 'BRAPI', NULL, 'AMORTIZAÇÃO',   1, NULL, 'NEEDS_REVIEW', NOW());
+INSERT INTO cash_movement (id, ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, corporate_action_id, estimated, created_at) VALUES
+  (9001, 'PETR4',  '2026-12-15', 50.00, 0, 50.00, 'INCOME', 'BRAPI', 'ANNOUNCED', 'DIVIDEND',    NULL, TRUE,  NOW()),
+  (9002, 'MXRF11', '2026-12-20', 10.00, 0, 10.00, 'INCOME', 'BRAPI', 'ANNOUNCED', 'FUND_INCOME', NULL, FALSE, NOW());
+INSERT INTO institution (id, name, created_at) VALUES (9001, 'BRAPI ACCEPTANCE', NOW());
+INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+  ('PETR4', '2018-03-05', 'VISTA', 100, 20, 9001, NULL, 'MANUAL', FALSE, 1, NOW());
+SQL
+```
+
+`GET /corporate-actions/sync` answers 200 with `ticker_count: 2`, `applied: 1`, `parked: 1` and `income: 2`; `POST /corporate-actions/sync` answers **502** with the canonical error body and `error: "brapi-sync-unavailable"` (no token in this stack), proving the run is explicit and credential-gated. On `/imports/corporate` the **Sincronizar brapi** panel shows the seeded report (`2018-03-05 → 2026-11-17 · 2 tickers`, `4 lidos · 1 aplicados · 1 em revisão · 2 proventos`, `Nenhuma falha`), the history row PETR4 carries the **BRAPI** badge, and the review row MXRF11 shows the **BRAPI** badge with `—` where the ex-date would be. On `/analysis/income` the two BRAPI movements are listed and PETR4 carries the **estimado** chip while MXRF11 does not. A sync button that runs without a token, a missing report or badge, or a parked row that hides its missing date is an automatic red; the evidence names the first failing intent.

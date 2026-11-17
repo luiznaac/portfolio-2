@@ -1,11 +1,13 @@
 import { type ChangeEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  useCorporateActionSync,
   useCorporateActions,
   useImportMovements,
   useResolveCorporateAction,
+  useSyncCorporateActions,
 } from "../api/queries.ts";
-import type { CorporateAction } from "../api/types.ts";
+import type { BrapiSyncReport, CorporateAction } from "../api/types.ts";
 import { Button } from "../components/Button.tsx";
 import { Chip } from "../components/Chip.tsx";
 import { Field, Input } from "../components/Field.tsx";
@@ -27,6 +29,7 @@ import {
   resolutionReady,
   reviewQueue,
   reviewReason,
+  syncReportSummary,
 } from "../lib/corporateActions.ts";
 import { movementsImportSummary } from "../lib/movements.ts";
 import { positionDetail } from "../lib/routes.ts";
@@ -52,7 +55,10 @@ export function CorporateActions() {
 
   return (
     <section data-testid="corporate-actions">
-      <div className="mb-4">
+      <div className="mb-4 grid gap-4 md:grid-cols-2">
+        <div data-testid="corporate-actions-sync">
+          <SyncPanel />
+        </div>
         <Panel title="Importar movimentações">
           <div className="flex flex-wrap items-center gap-3">
             <input
@@ -130,6 +136,60 @@ export function CorporateActions() {
   );
 }
 
+// The explicit one-off brapi sync: the owner spends the paid quota, and the run's report stays on
+// screen with the window, the counts and any ticker the provider refused.
+function SyncPanel() {
+  const sync = useSyncCorporateActions();
+  const lastRun = useCorporateActionSync();
+  // A fresh run's report wins; before one, the stored audit keeps the last report on screen.
+  const report = sync.data ?? lastRun.data;
+  const summary = report ? syncReportSummary(report) : undefined;
+
+  return (
+    <Panel title="Sincronizar brapi">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" onClick={() => sync.mutate()} disabled={sync.isPending}>
+          {sync.isPending ? "Sincronizando…" : "Sincronizar brapi"}
+        </Button>
+        <p className="text-[12.5px] text-ink-dim">
+          Renomes, eventos e proventos de todos os tickers da carteira, desde o primeiro negócio.
+        </p>
+      </div>
+      {sync.error && (
+        <p data-testid="brapi-sync-error" className="mt-2 text-[12.5px] text-tax">
+          {sync.error.message}
+        </p>
+      )}
+      {summary && report && <SyncReport summary={summary} report={report} />}
+    </Panel>
+  );
+}
+
+function SyncReport({
+  summary,
+  report,
+}: {
+  summary: ReturnType<typeof syncReportSummary>;
+  report: BrapiSyncReport;
+}) {
+  return (
+    <div data-testid="brapi-sync-report" className="mt-3 space-y-1 border-t border-line-soft pt-3">
+      <p data-testid="brapi-sync-window" className="font-mono text-[11.5px] text-ink-dim">
+        {summary.windowLabel}
+      </p>
+      <p data-testid="brapi-sync-counts" className="text-[12.5px] text-ink">
+        {summary.countsLabel}
+      </p>
+      <p
+        data-testid="brapi-sync-failed"
+        className={`text-[12px] ${report.failed_tickers.length === 0 ? "text-ink-dim" : "text-tax"}`}
+      >
+        {summary.failedLabel}
+      </p>
+    </div>
+  );
+}
+
 // One parked event and the decision it needs. A computable kind shows the fields the export did not
 // carry; a manual kind shows the single acknowledgement, because no amount of data lets the engine
 // apply a rights issue or a merger ratio on its own.
@@ -146,7 +206,12 @@ function ReviewRow({ action }: { action: CorporateAction }) {
   return (
     <div data-testid={`corporate-review-${action.id}`} className="py-3 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-[11.5px] text-ink-faint">{action.ex_date}</span>
+        <span
+          data-testid={`corporate-review-date-${action.id}`}
+          className="font-mono text-[11.5px] text-ink-faint"
+        >
+          {action.ex_date ?? "—"}
+        </span>
         <span className="font-mono text-[13px] font-medium">{action.ticker}</span>
         <Chip tone="amber">{corporateActionKindLabel(action.kind)}</Chip>
         <span className="font-mono text-[12px] text-ink-dim">{corporateActionDetail(action)}</span>
@@ -159,7 +224,10 @@ function ReviewRow({ action }: { action: CorporateAction }) {
           </Link>
         </p>
       )}
-      <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">
+      <p
+        data-testid={`corporate-review-source-${action.id}`}
+        className="mt-0.5 font-mono text-[10.5px] text-ink-faint"
+      >
         {[corporateActionSourceLabel(action.source), action.process_number ?? action.raw_type]
           .filter(Boolean)
           .join(" · ")}
@@ -168,9 +236,9 @@ function ReviewRow({ action }: { action: CorporateAction }) {
         {fields.map((field) => (
           <Field key={field} label={RESOLUTION_FIELD_LABELS[field]}>
             <Input
-              type={field === "target_ticker" ? "text" : "number"}
-              step={field === "target_ticker" ? undefined : "any"}
-              min={field === "target_ticker" ? undefined : 0}
+              type={field === "target_ticker" ? "text" : field === "ex_date" ? "date" : "number"}
+              step={field === "target_ticker" || field === "ex_date" ? undefined : "any"}
+              min={field === "target_ticker" || field === "ex_date" ? undefined : 0}
               value={draft[field] ?? ""}
               onChange={(event) =>
                 setDraft((previous) => ({ ...previous, [field]: event.target.value }))
@@ -205,6 +273,11 @@ function HistoryRow({ row }: { row: CorporateActionRow }) {
       <span className="text-ink-dim">{row.kindLabel}</span>
       <span className="font-mono text-[11.5px] text-ink-dim">{row.detail}</span>
       <span className="font-mono text-[10.5px] text-ink-faint">{row.source}</span>
+      {row.isBrapi && (
+        <span data-testid={`corporate-source-${row.key}`}>
+          <Chip tone="neutral">BRAPI</Chip>
+        </span>
+      )}
       <span className="flex-1" />
       <Chip tone="green">{row.statusLabel}</Chip>
     </div>

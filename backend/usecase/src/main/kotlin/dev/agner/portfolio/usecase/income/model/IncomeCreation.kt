@@ -7,6 +7,7 @@ import java.math.BigDecimal
 // export's "Previsão de pagamento" — and drives the lifecycle. `netAmount` is the file's
 // "Valor líquido" exactly as given (already post-tax for listed-equity income, and equal to
 // gross for a FII rendimento); `retainedAmount` is the withholding derived as the difference.
+// `estimated` is set when the source gave only a split-adjusted per-share rate, not the amount paid.
 data class IncomeCreation(
     val ticker: String,
     val date: LocalDate,
@@ -15,6 +16,7 @@ data class IncomeCreation(
     val netAmount: BigDecimal,
     val taxNature: TaxNature = TaxNature.INCOME,
     val provenance: Provenance,
+    val estimated: Boolean = false,
 ) {
     val retainedAmount: BigDecimal get() = grossAmount - netAmount
 }

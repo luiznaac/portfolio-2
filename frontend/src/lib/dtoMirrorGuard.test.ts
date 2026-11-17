@@ -41,6 +41,8 @@ const BACKEND_TYPES: BackendTypeMap = {
   Attribution: "AttributionSummary",
   // The blocked-close 409 body is built by DomainExceptionHandling from its private `ApiError`.
   PendingTransfersError: "ApiError",
+  // The sync report's backend model is named for the domain concept; the mirror names the action.
+  BrapiSyncReport: "CorporateActionSync",
 };
 
 function kotlinFiles(directory: string): string[] {

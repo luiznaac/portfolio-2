@@ -6,7 +6,7 @@ gateways:
     host: 'http://localhost:${wiremock.port}'
   brapi:
     host: 'http://localhost:${wiremock.port}'
-    token: ''
+    token: 'dev-brapi-fixture-token'
   yahoo:
     host: 'http://localhost:${wiremock.port}'
   bacen:

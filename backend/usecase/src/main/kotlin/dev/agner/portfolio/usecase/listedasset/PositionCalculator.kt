@@ -6,6 +6,7 @@ import dev.agner.portfolio.usecase.listedasset.model.Gap
 import dev.agner.portfolio.usecase.listedasset.model.GapStatus
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.model.Trade
+import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -32,10 +33,21 @@ object PositionCalculator {
         trades: List<Trade>,
         corporateActions: List<CorporateAction> = emptyList(),
         gaps: List<Gap> = emptyList(),
-    ): Position =
-        entries(trades, corporateActions, gaps)
-            .sortedBy { it.key }
-            .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
+    ): Position = replayEntries(ticker, entries(trades, corporateActions, gaps))
+
+    // The position at the end of a date — the custody an income entitlement is paid on. It is the
+    // replay of every entry dated on or before the day, so a trade and an event of that same day
+    // are both folded in.
+    fun positionOn(
+        ticker: String,
+        trades: List<Trade>,
+        corporateActions: List<CorporateAction>,
+        date: LocalDate,
+        gaps: List<Gap> = emptyList(),
+    ): Position = replayEntries(
+        ticker,
+        entries(trades, corporateActions, gaps).filter { it.key.date <= date },
+    )
 
     // The holder's position immediately before one event — the quantity a cash entitlement is paid
     // on. It is the replay up to (exDate, action ordinal, action id): an event on a trade's own date
@@ -99,10 +111,10 @@ object PositionCalculator {
         .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
 
     private fun replayBefore(ticker: String, entries: List<LedgerEntry>, boundary: TimelineKey): Position =
-        entries
-            .filter { it.key < boundary }
-            .sortedBy { it.key }
-            .fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
+        replayEntries(ticker, entries.filter { it.key < boundary })
+
+    private fun replayEntries(ticker: String, entries: List<LedgerEntry>): Position =
+        entries.sortedBy { it.key }.fold(Position.empty(ticker)) { position, entry -> entry.apply(position) }
 
     private fun entries(
         trades: List<Trade>,
@@ -110,7 +122,9 @@ object PositionCalculator {
         gaps: List<Gap>,
     ): List<LedgerEntry> =
         trades.map { LedgerEntry.of(it) } +
-            corporateActions.map { LedgerEntry.of(it) } +
+            // Only an applied event moves the book, and an applied event always carries its
+            // ex-date; a parked row (which may lack one) contributes nothing to the replay.
+            corporateActions.filter { it.isApplied && it.exDate != null }.map { LedgerEntry.of(it) } +
             gaps.filter { it.status == GapStatus.OPEN }.map { LedgerEntry.of(it) }
 
     private fun apply(position: Position, trade: Trade): Position = when (trade) {
@@ -160,7 +174,7 @@ object PositionCalculator {
             )
 
             fun of(action: CorporateAction) = TimelineKey(
-                date = action.exDate,
+                date = requireNotNull(action.exDate) { "an applied action ${action.id} has no ex-date" },
                 priority = ACTION_PRIORITY,
                 rank = action.kind.replayRank,
                 ordinal = action.ordinal,

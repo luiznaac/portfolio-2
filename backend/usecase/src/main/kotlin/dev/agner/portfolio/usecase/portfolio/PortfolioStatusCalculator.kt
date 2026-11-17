@@ -201,7 +201,7 @@ object PortfolioStatusCalculator {
                 severity = AttentionSeverity.ACTION,
                 ref = StatusRef(StatusRefType.CORPORATE_ACTION, id = action.id, ticker = action.ticker),
                 params = buildMap {
-                    put("age_days", daysBetween(action.exDate, input.asOf))
+                    (action.exDate ?: action.approvalDate)?.let { put("age_days", daysBetween(it, input.asOf)) }
                     action.ratio?.let { put("ratio", it) }
                     action.declaredValuePerShare?.let { put("declared_value_per_share", it) }
                 },

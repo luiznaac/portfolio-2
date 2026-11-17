@@ -15,6 +15,7 @@ import {
   resolutionReady,
   reviewQueue,
   reviewReason,
+  syncReportSummary,
 } from "./corporateActions.ts";
 
 const split: CorporateAction = {
@@ -305,5 +306,79 @@ describe("resolutionPayload", () => {
 
   it("sends an empty body for a manual kind", () => {
     expect(resolutionPayload(reissue, {})).toEqual({});
+  });
+});
+
+describe("corporateActionSourceLabel", () => {
+  it("names the export and the paid feed", () => {
+    expect(corporateActionSourceLabel("B3_MOVEMENTS")).toBe("B3 · Movimentações");
+    expect(corporateActionSourceLabel("BRAPI")).toBe("BRAPI");
+  });
+});
+
+describe("syncReportSummary", () => {
+  it("states the window, the counts and the failures in the owner's words", () => {
+    const summary = syncReportSummary({
+      id: 1,
+      started_at: "2026-11-17T12:00:00",
+      as_of: "2026-11-17",
+      window_from: "2018-03-05",
+      window_to: "2026-11-17",
+      ticker_count: 2,
+      fetched: 9,
+      applied: 5,
+      parked: 1,
+      income: 3,
+      failed_tickers: [],
+    });
+
+    expect(summary.windowLabel).toBe("2018-03-05 → 2026-11-17 · 2 tickers");
+    expect(summary.countsLabel).toBe("9 lidos · 5 aplicados · 1 em revisão · 3 proventos");
+    expect(summary.failedLabel).toBe("Nenhuma falha");
+  });
+
+  it("names the tickers the provider refused", () => {
+    const summary = syncReportSummary({
+      id: 2,
+      started_at: "2026-11-17T12:00:00",
+      as_of: "2026-11-17",
+      window_from: "2020-01-02",
+      window_to: "2026-11-17",
+      ticker_count: 1,
+      fetched: 0,
+      applied: 0,
+      parked: 0,
+      income: 0,
+      failed_tickers: ["PETR4"],
+    });
+
+    expect(summary.windowLabel).toBe("2020-01-02 → 2026-11-17 · 1 ticker");
+    expect(summary.failedLabel).toBe("Falharam: PETR4");
+  });
+});
+
+describe("an event the source never dated", () => {
+  const undated: CorporateAction = {
+    ...split,
+    ex_date: undefined,
+    status: "NEEDS_REVIEW",
+    is_applied: false,
+  };
+
+  it("asks for the ex-date before the kind's own missing column", () => {
+    expect(resolutionFields(undated)).toEqual(["ex_date", "ratio"]);
+    expect(reviewReason(undated)).toContain("data ex");
+  });
+
+  it("keeps the decision disabled until the date is supplied", () => {
+    expect(resolutionReady(undated, { ratio: "2" })).toBe(false);
+    expect(resolutionReady(undated, { ex_date: "2026-10-20", ratio: "2" })).toBe(true);
+  });
+
+  it("sends the supplied date with the rest of the decision", () => {
+    expect(resolutionPayload(undated, { ex_date: "2026-10-20", ratio: "2" })).toEqual({
+      ex_date: "2026-10-20",
+      ratio: 2,
+    });
   });
 });

@@ -86,6 +86,20 @@ class PositionService(
         )
     }
 
+    // The custody at the end of a date — the quantity an income entitlement is paid on. It replays
+    // the paper's whole alias set, so a payment under the old code sees the book the rename moved.
+    suspend fun positionOn(ticker: String, date: LocalDate): Position {
+        val canonical = aliases.canonical(ticker)
+        val aliasSet = aliases.aliasesOf(canonical)
+        return PositionCalculator.positionOn(
+            canonical,
+            aliasSet.flatMap { trades.fetchAllBy(it) },
+            aliasSet.flatMap { corporateActions.fetchByTicker(it) },
+            date,
+            aliasSet.flatMap { gaps.fetchOpenBy(it) },
+        )
+    }
+
     // Replays every paper's whole ledger and actions, repairing drift across the whole book.
     suspend fun reprojectAll(): List<Position> {
         val ledger = trades.fetchAll()

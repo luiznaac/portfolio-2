@@ -189,6 +189,7 @@ function income(overrides: Partial<Income> = {}): Income {
     net_amount: 100,
     tax_nature: "INCOME",
     provenance: "B3",
+    estimated: false,
     status: "ANNOUNCED",
     ...overrides,
   };

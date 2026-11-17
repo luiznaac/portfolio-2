@@ -288,12 +288,12 @@ _UI:_ "Negócio"
 _Avoid_: Order (that is a suggested order), movimentação (the umbrella file word)
 
 **Corporate Action**:
-An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue, where the owner resolves it by supplying the data the export lacked (the factor, the per-share value, the new code) or, for a kind the engine never computes, acknowledges it as handled without a ledger effect.
+An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue, where the owner resolves it by supplying the data the export lacked (the factor, the per-share value, the new code) or, for a kind the engine never computes, acknowledges it as handled without a ledger effect. An event from brapi with no ex-date also waits there rather than the engine guessing a day across a trade.
 _UI:_ "Evento corporativo"
 _Avoid_: Provento (that is cash income), trade, movimentação (the umbrella file word)
 
 **Income**:
-Money a listed asset pays its holder — dividend, JCP, FII rendimento — fed automatically from exports, tracked through a lifecycle (announced, payable, received, reconciled) with gross, retained and net amounts.
+Money a listed asset pays its holder — dividend, JCP, FII rendimento — fed from exports and the one-off brapi sync, tracked through a lifecycle (announced, payable, received, reconciled) with gross, retained and net amounts. A brapi amount built from the split-adjusted rate rather than the amount actually paid is marked estimated.
 _UI:_ "Provento"
 _Avoid_: Yield (that is RF accrual), rendimento (ambiguous), dividend as umbrella
 
@@ -305,9 +305,14 @@ _UI:_ "Importação"
 _Avoid_: Upload, sync, parse (the act)
 
 **Provenance**:
-The origin of a record: B3 extract, XP report, Kinvo extrato, or manual entry.
+The origin of a record: B3 extract, the one-off brapi sync, XP report, Kinvo extrato, or manual entry.
 _UI:_ "Origem"
 _Avoid_: Source file, metadata
+
+**BRAPI Sync**:
+The explicit, owner-run one-off fetch of renames, stock and FII corporate actions and cash income from brapi over the ledger's whole window, persisting the parsed rows, the raw payload and an audit so the app works offline after the paid month. It is not an Import: there is no file and no staged review, B3 wins on the same natural key, and brapi only fills the years B3 never had.
+_UI:_ "Sincronizar brapi"
+_Avoid_: Import (no file, no staged rows), scheduler (it never runs on its own)
 
 ### Fixed income
 

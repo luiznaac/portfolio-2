@@ -18,6 +18,7 @@ import dev.agner.portfolio.usecase.strategy.model.StrategyKind
 import dev.agner.portfolio.usecase.strategy.model.StrategyTicker
 import dev.agner.portfolio.usecase.strategy.repository.IStrategyRepository
 import dev.agner.portfolio.usecase.tickerAliases
+import dev.agner.portfolio.usecase.tickeralias.model.TickerAlias
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
@@ -41,6 +42,15 @@ class AttributionServiceTest : StringSpec({
         coEvery { catalog.fetchBy(any()) } returns catalogEntry(AssetClass.ACOES)
         transaction.count = 0
     }
+
+    fun aliasedService(vararg renames: TickerAlias) = AttributionService(
+        attributions,
+        positions,
+        strategies,
+        catalog,
+        tickerAliases(*renames),
+        transaction,
+    )
 
     "fetchSummary normalizes the ticker and reports the slices with their remainder" {
         coEvery { positions.fetchBy("PETR4") } returns position(quantity = "100")
@@ -89,6 +99,218 @@ class AttributionServiceTest : StringSpec({
         coEvery { strategies.fetchAll() } returns strategyCatalog
 
         aliased.fetchSlicesByTicker().keys shouldBe setOf("NEW3")
+    }
+
+    // A renamed paper's slices stay stored under whatever code they were written with, so the
+    // single-ticker surface must treat every code in the chain as one book — one slice per strategy
+    // with the quantities summed, the ceiling counting all of them, and every write landing on the
+    // canonical code.
+
+    "fetchSummary addressed by an old code sums the paper's slices stored under every code" {
+        val aliased = aliasedService(rename("OLD3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 1, quantity = "20"),
+        )
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "30"),
+            attribution(ticker = "OLD3", strategyId = 2, quantity = "10"),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        val summary = aliased.fetchSummary("OLD3")!!
+
+        summary.ticker shouldBe "NEW3"
+        summary.slices.size shouldBe 2
+        summary.strategyQuantity("Top Dividendos").compareTo(BigDecimal("50")) shouldBe 0
+        summary.strategyQuantity("Top Ações").compareTo(BigDecimal("10")) shouldBe 0
+        summary.attributedQuantity.compareTo(BigDecimal("60")) shouldBe 0
+        summary.unattributedQuantity.compareTo(BigDecimal("40")) shouldBe 0
+    }
+
+    "fetchSummary answers the canonical code and an old code alike" {
+        val aliased = aliasedService(rename("OLD3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "60"),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        val byOld = aliased.fetchSummary("OLD3")!!
+        val byNew = aliased.fetchSummary("NEW3")!!
+
+        byOld shouldBe byNew
+        byNew.attributedQuantity.compareTo(BigDecimal("60")) shouldBe 0
+    }
+
+    "fetchSummary follows a rename chain and sums every code's slice" {
+        val aliased = aliasedService(rename("OLD3", "MID3"), rename("MID3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "10"),
+        )
+        coEvery { attributions.fetchBy("MID3") } returns listOf(
+            attribution(ticker = "MID3", strategyId = 1, quantity = "5"),
+        )
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 1, quantity = "15"),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        val summary = aliased.fetchSummary("OLD3")!!
+
+        summary.slices.size shouldBe 1
+        summary.strategyQuantity("Top Dividendos").compareTo(BigDecimal("30")) shouldBe 0
+        summary.unattributedQuantity.compareTo(BigDecimal("70")) shouldBe 0
+    }
+
+    "setSlice counts the paper's slices stored under every code against the ceiling" {
+        val aliased = aliasedService(rename("OLD3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { strategies.fetchById(3) } returns strategyCatalog.single { it.id == 3 }
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "60"),
+        )
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 2, quantity = "20"),
+        )
+
+        val error = runCatching {
+            aliased.setSlice("OLD3", AttributionSliceCreation(strategyId = 3, quantity = BigDecimal("30")))
+        }.exceptionOrNull()
+
+        (error is InvalidAttributionException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
+
+    "setSlice persists under the canonical code and supersedes the old-code slice" {
+        val aliased = aliasedService(rename("OLD3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "60"),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        val summary = aliased.setSlice(
+            "OLD3",
+            AttributionSliceCreation(strategyId = 1, quantity = BigDecimal("70")),
+        )!!
+
+        coVerify(exactly = 1) { attributions.save(Attribution("NEW3", 1, BigDecimal("70"))) }
+        coVerify(exactly = 1) { attributions.delete("OLD3", 1) }
+        summary.slices.single().quantity.compareTo(BigDecimal("70")) shouldBe 0
+        summary.attributedQuantity.compareTo(BigDecimal("70")) shouldBe 0
+    }
+
+    "setSlice counts a rename chain's slices against the ceiling" {
+        val aliased = aliasedService(rename("OLD3", "MID3"), rename("MID3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { strategies.fetchById(3) } returns strategyCatalog.single { it.id == 3 }
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "40"),
+        )
+        coEvery { attributions.fetchBy("MID3") } returns listOf(
+            attribution(ticker = "MID3", strategyId = 2, quantity = "30"),
+        )
+
+        val error = runCatching {
+            aliased.setSlice("NEW3", AttributionSliceCreation(strategyId = 3, quantity = BigDecimal("40")))
+        }.exceptionOrNull()
+
+        (error is InvalidAttributionException) shouldBe true
+        coVerify(exactly = 0) { attributions.save(any()) }
+    }
+
+    "transfer finds a source slice stored under an old code and leaves one destination slice per strategy" {
+        val aliased = aliasedService(rename("OLD3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "60"),
+        )
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 2, quantity = "10"),
+        )
+
+        val summary = aliased.transfer(
+            "OLD3",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("20")),
+        )!!
+
+        coVerify(exactly = 1) { attributions.delete("OLD3", 1) }
+        coVerify(exactly = 1) { attributions.save(Attribution("NEW3", 1, BigDecimal("40"))) }
+        coVerify(exactly = 1) { attributions.save(Attribution("NEW3", 2, BigDecimal("30"))) }
+        summary.slices.size shouldBe 2
+        summary.attributedQuantity.compareTo(BigDecimal("70")) shouldBe 0
+    }
+
+    "transfer follows a rename chain and consolidates the destination under the canonical code" {
+        val aliased = aliasedService(rename("OLD3", "MID3"), rename("MID3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { strategies.fetchById(1) } returns strategyCatalog.single { it.id == 1 }
+        coEvery { strategies.fetchById(2) } returns strategyCatalog.single { it.id == 2 }
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "10"),
+        )
+        coEvery { attributions.fetchBy("MID3") } returns listOf(
+            attribution(ticker = "MID3", strategyId = 1, quantity = "30"),
+        )
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 2, quantity = "5"),
+        )
+
+        val summary = aliased.transfer(
+            "OLD3",
+            AttributionTransferCreation(fromStrategyId = 1, toStrategyId = 2, quantity = BigDecimal("20")),
+        )!!
+
+        coVerify(exactly = 1) { attributions.delete("OLD3", 1) }
+        coVerify(exactly = 1) { attributions.delete("MID3", 1) }
+        coVerify(exactly = 1) { attributions.save(Attribution("NEW3", 1, BigDecimal("20"))) }
+        coVerify(exactly = 1) { attributions.save(Attribution("NEW3", 2, BigDecimal("25"))) }
+        summary.slices.size shouldBe 2
+        summary.attributedQuantity.compareTo(BigDecimal("45")) shouldBe 0
+    }
+
+    "removeSlice addressed by an old code removes the slice stored under every code" {
+        val aliased = aliasedService(rename("OLD3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { attributions.fetchBy("OLD3") } returns listOf(
+            attribution(ticker = "OLD3", strategyId = 1, quantity = "60"),
+        )
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 2, quantity = "10"),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        val summary = aliased.removeSlice("OLD3", strategyId = 1)!!
+
+        coVerify(exactly = 1) { attributions.delete("OLD3", 1) }
+        coVerify(exactly = 1) { attributions.delete("NEW3", 1) }
+        summary.attributedQuantity.compareTo(BigDecimal("10")) shouldBe 0
+    }
+
+    "removeSlice follows a rename chain and removes the slice stored under any code" {
+        val aliased = aliasedService(rename("OLD3", "MID3"), rename("MID3", "NEW3"))
+        coEvery { positions.fetchBy("NEW3") } returns position(ticker = "NEW3", quantity = "100")
+        coEvery { attributions.fetchBy("MID3") } returns listOf(
+            attribution(ticker = "MID3", strategyId = 1, quantity = "30"),
+        )
+        coEvery { attributions.fetchBy("NEW3") } returns listOf(
+            attribution(ticker = "NEW3", strategyId = 2, quantity = "10"),
+        )
+        coEvery { strategies.fetchAll() } returns strategyCatalog
+
+        val summary = aliased.removeSlice("NEW3", strategyId = 1)!!
+
+        coVerify(exactly = 1) { attributions.delete("OLD3", 1) }
+        coVerify(exactly = 1) { attributions.delete("MID3", 1) }
+        coVerify(exactly = 1) { attributions.delete("NEW3", 1) }
+        summary.attributedQuantity.compareTo(BigDecimal("10")) shouldBe 0
     }
 
     "fetchSummary is null when the ticker has no position" {
@@ -417,11 +639,11 @@ private val strategyCatalog = listOf(
     Strategy(id = 3, name = "Legado", assetClass = AssetClass.ACOES, kind = StrategyKind.MANUAL),
 )
 
-private fun position(quantity: String) =
-    Position(ticker = "PETR4", quantity = BigDecimal(quantity), averagePrice = BigDecimal("10"))
+private fun position(quantity: String, ticker: String = "PETR4") =
+    Position(ticker = ticker, quantity = BigDecimal(quantity), averagePrice = BigDecimal("10"))
 
-private fun attribution(strategyId: Int, quantity: String) =
-    Attribution(ticker = "PETR4", strategyId = strategyId, quantity = BigDecimal(quantity))
+private fun attribution(ticker: String = "PETR4", strategyId: Int, quantity: String) =
+    Attribution(ticker = ticker, strategyId = strategyId, quantity = BigDecimal(quantity))
 
 private class AttributionTransaction : ITransactionTemplate {
     var count = 0

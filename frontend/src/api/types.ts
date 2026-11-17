@@ -999,7 +999,7 @@ export interface EditionActivation {
 export type IncomeType = "DIVIDEND" | "JCP" | "FUND_INCOME";
 export type IncomeStatus = "ANNOUNCED" | "PAYABLE" | "RECEIVED" | "RECONCILED";
 export type TaxNature = "INCOME" | "COST_REDUCTION" | "RETURN_OF_CAPITAL" | "OTHER";
-export type Provenance = "B3" | "XP" | "KINVO" | "MANUAL";
+export type Provenance = "B3" | "BRAPI" | "XP" | "KINVO" | "MANUAL";
 
 export interface Income {
   id: number;
@@ -1012,6 +1012,8 @@ export interface Income {
   tax_nature: TaxNature;
   provenance: Provenance;
   status: IncomeStatus;
+  // True when the amount came from brapi's split-adjusted `rate` rather than the paid `rawRate`.
+  estimated: boolean;
 }
 
 /** The additive GET /income filters: an absent field is no narrowing. */
@@ -1041,15 +1043,16 @@ export type CorporateActionKind =
   | "CASH_BONUS"
   | "OTHER";
 export type CorporateActionStatus = "APPLIED" | "NEEDS_REVIEW";
-// DERIVED is the engine's own zero-cost rights allotment, derived from a sale with no receipt; a
-// real allotment retires it.
-export type CorporateActionSource = "B3_MOVEMENTS" | "DERIVED";
+// BRAPI is the paid one-off sync; DERIVED is the engine's own zero-cost rights allotment, derived
+// from a sale with no receipt, which a real allotment retires.
+export type CorporateActionSource = "B3_MOVEMENTS" | "BRAPI" | "DERIVED";
 
 export interface CorporateAction {
   id: number;
   ticker: string;
   kind: CorporateActionKind;
-  ex_date: string;
+  // Absent only on a parked brapi event that carried no ex-date; an applied event always has one.
+  ex_date?: string;
   approval_date?: string;
   ratio?: number;
   declared_value_per_share?: number;
@@ -1070,9 +1073,27 @@ export interface CorporateAction {
 // field left out keeps the stored value, and an empty body acknowledges a kind the engine cannot
 // compute on its own — either way the event joins the applied history.
 export interface CorporateActionResolution {
+  // The ex-date a brapi event lacked; a dated event keeps its stored date.
+  ex_date?: string;
   ratio?: number;
   declared_value_per_share?: number;
   target_ticker?: string;
+}
+
+// The POST /corporate-actions/sync report: what the one-off brapi run fetched, applied, parked and
+// failed, with the window it covered. The raw payload stays in the backend audit.
+export interface BrapiSyncReport {
+  id: number;
+  started_at: string;
+  as_of: string;
+  window_from: string;
+  window_to: string;
+  ticker_count: number;
+  fetched: number;
+  applied: number;
+  parked: number;
+  income: number;
+  failed_tickers: string[];
 }
 
 // The POST /corporate-actions/import response: how many rows each destination absorbed and the

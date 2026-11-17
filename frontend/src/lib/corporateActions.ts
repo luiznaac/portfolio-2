@@ -2,6 +2,7 @@
 // renderer: the pt-BR labels, the one-line detail and the review split are computed and tested here.
 
 import type {
+  BrapiSyncReport,
   CorporateAction,
   CorporateActionKind,
   CorporateActionResolution,
@@ -9,7 +10,6 @@ import type {
   CorporateActionStatus,
 } from "../api/types.ts";
 import { formatCurrency, formatNumber } from "./format.ts";
-import { importSourceLabel } from "./imports.ts";
 
 const KIND_LABELS: Record<CorporateActionKind, string> = {
   SPLIT: "Desdobramento",
@@ -33,18 +33,25 @@ const STATUS_LABELS: Record<CorporateActionStatus, string> = {
   NEEDS_REVIEW: "Revisar",
 };
 
+// Where an event came from: the B3 Movimentações export, the one-off brapi sync, or the engine's
+// own derived rights allotment. The page shows the BRAPI badge on a synced row so the paid feed's
+// provenance is visible beside the export's, and names the derived fallback in the history.
+const SOURCE_LABELS: Record<CorporateActionSource, string> = {
+  B3_MOVEMENTS: "B3 · Movimentações",
+  BRAPI: "BRAPI",
+  DERIVED: "Derivado",
+};
+
+export function corporateActionSourceLabel(source: CorporateActionSource): string {
+  return SOURCE_LABELS[source];
+}
+
 export function corporateActionKindLabel(kind: CorporateActionKind): string {
   return KIND_LABELS[kind];
 }
 
 export function corporateActionStatusLabel(status: CorporateActionStatus): string {
   return STATUS_LABELS[status];
-}
-
-// The Movimentações label is the import source's own; only the engine's derived fallback needs a
-// name of its own.
-export function corporateActionSourceLabel(source: CorporateActionSource): string {
-  return source === "DERIVED" ? "Derivado" : importSourceLabel(source);
 }
 
 // The one-line explanation of what the event did: the factor for a quantity event, the cash per
@@ -90,12 +97,14 @@ export interface CorporateActionRow {
   statusLabel: string;
   isReview: boolean;
   source: string;
+  sourceLabel: string;
+  isBrapi: boolean;
 }
 
 export function corporateActionRows(actions: CorporateAction[]): CorporateActionRow[] {
   return actions.map((action) => ({
     key: action.id,
-    date: action.ex_date,
+    date: action.ex_date ?? "—",
     ticker: action.ticker,
     kindLabel: corporateActionKindLabel(action.kind),
     detail: corporateActionDetail(action),
@@ -113,6 +122,8 @@ export function corporateActionRows(actions: CorporateAction[]): CorporateAction
       action.source === "DERIVED"
         ? corporateActionSourceLabel(action.source)
         : (action.process_number ?? action.raw_type ?? "—"),
+    sourceLabel: corporateActionSourceLabel(action.source),
+    isBrapi: action.source === "BRAPI",
   }));
 }
 
@@ -129,9 +140,10 @@ export function appliedHistory(actions: CorporateAction[]): CorporateAction[] {
 
 // The template fields the resolve form offers for a parked event. A manual kind offers none — its
 // decision is the acknowledgement itself.
-export type ResolutionField = "ratio" | "declared_value_per_share" | "target_ticker";
+export type ResolutionField = "ex_date" | "ratio" | "declared_value_per_share" | "target_ticker";
 
 export const RESOLUTION_FIELD_LABELS: Record<ResolutionField, string> = {
+  ex_date: "Data ex",
   ratio: "Fator",
   declared_value_per_share: "Valor por ação",
   target_ticker: "Novo código",
@@ -166,8 +178,11 @@ export function isManualReview(action: CorporateAction): boolean {
   return KIND_RULES[action.kind].manual;
 }
 
+// An event the source never dated cannot be applied until the owner supplies the day, so the form
+// asks for it before the kind's own missing columns.
 export function resolutionFields(action: CorporateAction): ResolutionField[] {
-  return KIND_RULES[action.kind].fields;
+  const fields = KIND_RULES[action.kind].fields;
+  return action.ex_date === undefined ? ["ex_date", ...fields] : fields;
 }
 
 // A parked column is unusable when absent or non-positive (the engine's own test is "positive").
@@ -186,6 +201,9 @@ export function reviewReason(action: CorporateAction): string {
   const rule = KIND_RULES[action.kind];
   if (rule.manual) {
     return `Sem efeito automático: o motor não aplica ${corporateActionKindLabel(action.kind)} sozinho.`;
+  }
+  if (action.ex_date === undefined) {
+    return "O evento não trouxe a data ex; informe-a para aplicar.";
   }
   if (action.kind === "TICKER_CHANGE") {
     return action.target_ticker
@@ -225,9 +243,31 @@ function parseAmount(raw: string | undefined): number {
 export function resolutionReady(action: CorporateAction, draft: ResolutionDraft): boolean {
   return resolutionFields(action).every((field) => {
     if (field === "target_ticker") return (draft[field] ?? "").trim().length > 0;
+    if (field === "ex_date") return /^\d{4}-\d{2}-\d{2}$/.test((draft[field] ?? "").trim());
     const amount = parseAmount(draft[field]);
     return Number.isFinite(amount) && amount > 0;
   });
+}
+
+// The sync report in the owner's words: the window it covered, what it did, and the tickers the
+// provider refused. A run with no failure says so rather than hiding the empty list.
+export interface SyncReportSummary {
+  windowLabel: string;
+  countsLabel: string;
+  failedLabel: string;
+}
+
+export function syncReportSummary(report: BrapiSyncReport): SyncReportSummary {
+  return {
+    windowLabel: `${report.window_from} → ${report.window_to} · ${report.ticker_count} ${
+      report.ticker_count === 1 ? "ticker" : "tickers"
+    }`,
+    countsLabel: `${report.fetched} lidos · ${report.applied} aplicados · ${report.parked} em revisão · ${report.income} proventos`,
+    failedLabel:
+      report.failed_tickers.length === 0
+        ? "Nenhuma falha"
+        : `Falharam: ${report.failed_tickers.join(", ")}`,
+  };
 }
 
 export function resolutionPayload(
@@ -236,6 +276,11 @@ export function resolutionPayload(
 ): CorporateActionResolution {
   const resolution: CorporateActionResolution = {};
   for (const field of resolutionFields(action)) {
+    if (field === "ex_date") {
+      const date = (draft.ex_date ?? "").trim();
+      if (date !== "") resolution.ex_date = date;
+      continue;
+    }
     if (field === "target_ticker") {
       const ticker = (draft.target_ticker ?? "").trim();
       if (ticker !== "") resolution.target_ticker = ticker.toUpperCase();
