@@ -1334,3 +1334,28 @@ SQL
 | `/health` | Health |
 
 A route that fails to render, a missing page head, or a head that disagrees with this table is an automatic red; the evidence names the first failing route. The unit-level equivalent is `frontend/src/App.test.tsx`, which derives the same path set from `App.tsx` with loading mocks.
+
+## Acceptance scenario — single-ticker attribution across a rename chain (issue [#459](https://github.com/luiznaac/portfolio-2/issues/459))
+
+**Scenario**: the run drives the single-ticker attribution surface (`GET/POST/DELETE /positions/{ticker}/attribution` and its `/transfer`) against a paper whose slices were written under three codes of one rename chain. Boot from `docker compose down -v` and apply this seed after the app is healthy and before the intents; it resets the ledger and identity tables and seeds a chain `OLD3 → MID3 → NEW3`, a 100-unit position under the canonical `NEW3`, two Ações strategies, and three slices — Top Dividendos 20 under `OLD3` plus 10 under `MID3`, Top Ações 5 under `NEW3`. Run it independently of the other seeds.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio \
+  -e "DELETE FROM ticker_alias; DELETE FROM transfer_proposal; DELETE FROM suggested_order; \
+      DELETE FROM edition_entry; DELETE FROM edition; DELETE FROM attribution; DELETE FROM trade; \
+      DELETE FROM target; DELETE FROM month; DELETE FROM position; DELETE FROM quote; \
+      DELETE FROM ticker_catalog; DELETE FROM strategy; DELETE FROM institution; \
+      INSERT INTO strategy (id, name, asset_class, kind, created_at) VALUES \
+        (9001,'Top Dividendos','ACOES','REPORT_DRIVEN',NOW()), \
+        (9002,'Top Ações','ACOES','REPORT_DRIVEN',NOW()); \
+      INSERT INTO ticker_alias (old_ticker, canonical_ticker, effective_date, \`source\`, ratio, corporate_action_id) VALUES \
+        ('OLD3','MID3','2026-10-01','B3_MOVEMENTS',NULL,NULL), \
+        ('MID3','NEW3','2026-10-02','B3_MOVEMENTS',NULL,NULL); \
+      REPLACE INTO position (ticker, quantity, average_price) VALUES ('NEW3',100,10); \
+      INSERT INTO attribution (ticker, strategy_id, quantity) VALUES \
+        ('OLD3',9001,20), ('MID3',9001,10), ('NEW3',9002,5); \
+      REPLACE INTO ticker_catalog (ticker, short_name, bdi_type, isin, asset_kind, asset_class, first_seen, last_seen, created_at) VALUES \
+        ('NEW3','NEW3','02',NULL,'STOCK','ACOES','2026-10-01','2026-10-31',NOW());"
+```
+
+`GET /positions/OLD3/attribution` and `GET /positions/NEW3/attribution` both answer 200 with `ticker: "NEW3"`, `custody_quantity: 100`, `attributed_quantity: 35`, `unattributed_quantity: 65`, and two slices — Top Dividendos 30 and Top Ações 5. `POST /positions/OLD3/attribution` with `{"strategy_id":9002,"quantity":95}` answers 400: the ceiling counts Top Dividendos' 30 units stored under the retired codes, so only 70 are available. `POST /positions/OLD3/attribution` with `{"strategy_id":9001,"quantity":40}` answers 200 with `attributed_quantity: 45` and two slices (Top Dividendos 40, Top Ações 5); a read by `MID3` shows the same, so the write superseded the old-code rows instead of forking a second slice. `POST /positions/MID3/attribution/transfer` with `{"from_strategy_id":9001,"to_strategy_id":9002,"quantity":15}` answers 200 with `attributed_quantity: 45` and two slices (Top Dividendos 25, Top Ações 20). `DELETE /positions/NEW3/attribution/9001` answers 200 with `attributed_quantity: 20` and one slice (Top Ações 20). A read that reports an old-code slice as unattributed, a write that duplicates a slice, a ceiling that ignores the old-code units, or a delete that leaves the row behind is an automatic red; the evidence names the first failing intent.
