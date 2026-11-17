@@ -128,8 +128,8 @@ Changing a table: edit the `Table` object, then `./gradlew :persistence:generate
 | `gateways.chameidor.token` | `CHAMEIDOR_TOKEN` | required — portfolio's Bearer token in chameidor's external_systems registry (dev fixture: `dev-portfolio-fixture-token`) |
 | `gateways.cotahist.host` | fixed | `https://bvmf.bmfbovespa.com.br` — B3 COTAHIST daily file (ticker catalog + EOD quotes) |
 | `gateways.sgs.host` | fixed (overridable) | `https://api.bcb.gov.br` — BCB SGS benchmark series for the rate indexes (CDI 12, IPCA 433); `application-test.yaml` points it at WireMock |
-| `gateways.brapi.host` | fixed (overridable) | `https://brapi.dev` — IBOV history; the free plan clamps to three months, so the store falls through to Yahoo |
-| `gateways.brapi.token` | `BRAPI_TOKEN` | optional — a paid token lifts brapi's three-month clamp; absence is the free tier, not a boot failure |
+| `gateways.brapi.host` | fixed (overridable) | `https://brapi.dev` — IBOV history and the one-off corporate-action/income sync; the free plan clamps history to three months, so the benchmark store falls through to Yahoo |
+| `gateways.brapi.token` | `BRAPI_TOKEN` | optional for boot — a paid token lifts brapi's three-month clamp and is required by `POST /corporate-actions/sync`, which fails loudly (502) when it is absent or rejected |
 | `gateways.yahoo.host` | fixed (overridable) | `https://query1.finance.yahoo.com` — IBOV fallback (`^BVSP`) for the years brapi cannot serve |
 | `app-own-host` | fixed | `localhost:8110` — the host portfolio-2 tells chameidor to call back when registering a scheduled job |
 | `telemetry.service-name` | `OTEL_SERVICE_NAME` | defaults to `portfolio`; the `service.name` resource attribute and the custom meter scope |

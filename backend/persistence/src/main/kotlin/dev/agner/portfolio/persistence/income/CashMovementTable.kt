@@ -37,6 +37,10 @@ object CashMovementTable : IntIdTable("cash_movement") {
     // an auctioned fraction); null on income.
     val corporateActionId = integer("corporate_action_id").nullable()
 
+    // True when the amount came from a split-adjusted per-share rate (brapi's `rate`) rather than
+    // the amount actually paid (`rawRate`), so the page can mark it as an estimate.
+    val estimated = bool("estimated").default(false)
+
     val createdAt = datetime("created_at")
 
     // Income is per ticker, whole Position, so the natural key identifies a payment: dedup and the
@@ -59,6 +63,7 @@ class CashMovementEntity(id: EntityID<Int>) : IntEntity(id) {
     var status by CashMovementTable.status
     var incomeType by CashMovementTable.incomeType
     var corporateActionId by CashMovementTable.corporateActionId
+    var estimated by CashMovementTable.estimated
     var createdAt by CashMovementTable.createdAt
 
     fun toModel() = Income(
@@ -72,5 +77,6 @@ class CashMovementEntity(id: EntityID<Int>) : IntEntity(id) {
         taxNature = taxNature,
         provenance = provenance,
         status = status,
+        estimated = estimated,
     )
 }

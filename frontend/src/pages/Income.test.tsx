@@ -51,6 +51,7 @@ function income(overrides: Partial<IncomeRecord>): IncomeRecord {
     net_amount: 10,
     tax_nature: "INCOME",
     provenance: "B3",
+    estimated: false,
     status: "RECEIVED",
     ...overrides,
   };

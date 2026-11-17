@@ -5,7 +5,9 @@ import java.math.BigDecimal
 
 // One cash movement as stored and read back: the amounts the file gave plus the Proventos lifecycle
 // stage. `status` is derived on read from the payable date and any stored reconciled mark
-// (IncomeLifecycle), never written by a GET; `retainedAmount` is gross minus net.
+// (IncomeLifecycle), never written by a GET; `retainedAmount` is gross minus net. `estimated` marks
+// a movement whose per-share amount came from brapi's split-adjusted `rate` rather than the actual
+// `rawRate`, so the page can say the amount is an estimate.
 data class Income(
     val id: Int,
     val ticker: String,
@@ -17,4 +19,5 @@ data class Income(
     val taxNature: TaxNature,
     val provenance: Provenance,
     val status: IncomeStatus,
+    val estimated: Boolean = false,
 )

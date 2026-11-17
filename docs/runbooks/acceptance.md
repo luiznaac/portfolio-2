@@ -1363,3 +1363,30 @@ SQL
 ```
 
 Resolve the **split first** (the event is keyed to the new code, which has no alias yet) and the rename second: `POST /corporate-actions/9002/resolve` with `{"ratio":2}` answers 200, then `POST /corporate-actions/9001/resolve` with `{"ratio":2,"target_ticker":"NEW3"}` answers 200 with `status: "APPLIED"`. The single rename resolve writes the alias and converts the book together: `GET /positions/NEW3` reads one position of **400 units at R$2,50** (100 × 2 from the rename, then × 2 from the same-date split), `GET /positions` lists only NEW3 (the OLD3 projection is superseded), and `GET /corporate-actions` shows the rename applied with ratio 2 and target NEW3. The class-digit half of the ticket has no HTTP path and is pinned by the unit and integration suites (`CorporateActionServiceTest`, `PositionProjectionTest`).
+
+## Acceptance scenario — one-off brapi sync (issue [#454](https://github.com/luiznaac/portfolio-2/issues/454))
+
+**Scenario**: the run drives the explicit brapi sync's surface on the combined image. brapi itself is a third party and is not booted; the paid provider is stubbed by seeding the database a successful run leaves behind (the audit, one applied BRAPI event, one parked event with no ex-date, and two BRAPI incomes, one estimated). The ticket-scoped bootstrap runbook [`acceptance-brapi-sync.md`](acceptance-brapi-sync.md) carries this seed in its `app` ready probe; the block below is the same seed for a human-run session. Boot from `docker compose down -v` and apply it after the app is healthy and before the HTTP/Browser intents. Run it independently of the other seeds. The app has no `BRAPI_TOKEN` in this stack, so the sync POST fails loudly — which is the intended proof that the run is explicit and credential-gated, not a silent no-op.
+
+```bash
+docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot portfolio <<'SQL'
+DELETE FROM brapi_sync;
+DELETE FROM cash_movement;
+DELETE FROM corporate_action;
+DELETE FROM trade WHERE institution_id = 9001;
+DELETE FROM institution WHERE id = 9001;
+INSERT INTO brapi_sync (id, started_at, as_of, window_from, window_to, ticker_count, fetched_count, applied_count, parked_count, income_count, failed_tickers, raw_payload) VALUES
+  (9001, NOW(6), '2026-11-17', '2018-03-05', '2026-11-17', 2, 4, 1, 1, 2, '', '[]');
+INSERT INTO corporate_action (id, ticker, kind, ex_date, approval_date, ratio, declared_value_per_share, target_ticker, source, process_number, raw_type, ordinal, file_hash, status, created_at) VALUES
+  (9001, 'PETR4',  'SPLIT',       '2020-01-10', NULL, 2, NULL, NULL, 'BRAPI', NULL, 'DESDOBRAMENTO', 1, NULL, 'APPLIED',      NOW()),
+  (9002, 'MXRF11', 'AMORTIZATION', NULL,        NULL, NULL, 0.20, NULL, 'BRAPI', NULL, 'AMORTIZAÇÃO',   1, NULL, 'NEEDS_REVIEW', NOW());
+INSERT INTO cash_movement (id, ticker, `date`, gross_amount, retained_amount, net_amount, tax_nature, provenance, status, income_type, corporate_action_id, estimated, created_at) VALUES
+  (9001, 'PETR4',  '2026-12-15', 50.00, 0, 50.00, 'INCOME', 'BRAPI', 'ANNOUNCED', 'DIVIDEND',    NULL, TRUE,  NOW()),
+  (9002, 'MXRF11', '2026-12-20', 10.00, 0, 10.00, 'INCOME', 'BRAPI', 'ANNOUNCED', 'FUND_INCOME', NULL, FALSE, NOW());
+INSERT INTO institution (id, name, created_at) VALUES (9001, 'BRAPI ACCEPTANCE', NOW());
+INSERT INTO trade (ticker, date, venue, quantity, unit_price, institution_id, fee, source, confirmed_by_b3, ordinal, created_at) VALUES
+  ('PETR4', '2018-03-05', 'VISTA', 100, 20, 9001, NULL, 'MANUAL', FALSE, 1, NOW());
+SQL
+```
+
+`GET /corporate-actions/sync` answers 200 with `ticker_count: 2`, `applied: 1`, `parked: 1` and `income: 2`; `POST /corporate-actions/sync` answers **502** with the canonical error body and `error: "brapi-sync-unavailable"` (no token in this stack), proving the run is explicit and credential-gated. On `/imports/corporate` the **Sincronizar brapi** panel shows the seeded report (`2018-03-05 → 2026-11-17 · 2 tickers`, `4 lidos · 1 aplicados · 1 em revisão · 2 proventos`, `Nenhuma falha`), the history row PETR4 carries the **BRAPI** badge, and the review row MXRF11 shows the **BRAPI** badge with `—` where the ex-date would be. On `/analysis/income` the two BRAPI movements are listed and PETR4 carries the **estimado** chip while MXRF11 does not. A sync button that runs without a token, a missing report or badge, or a parked row that hides its missing date is an automatic red; the evidence names the first failing intent.

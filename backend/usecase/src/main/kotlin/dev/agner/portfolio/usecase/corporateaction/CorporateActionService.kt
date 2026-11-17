@@ -68,7 +68,7 @@ class CorporateActionService(
                 .map { it.normalized() }
                 .distinctBy { it.naturalKey() }
                 .filter { it.naturalKey() !in existing }
-                .sortedWith(compareBy({ it.exDate }, { it.kind.replayRank }, { it.ordinal }, { it.kind.name }))
+                .sortedWith(REPLAY_ORDER)
             fresh.map { apply(it) }
         }
 
@@ -105,18 +105,70 @@ class CorporateActionService(
             settle(resolved)
         }
 
-    private suspend fun apply(creation: CorporateActionCreation): CorporateAction {
-        val status = when {
-            creation.needsReview() -> CorporateActionStatus.NEEDS_REVIEW
-            // A remap with no source entry would be silently applied and change nothing; queue it
-            // so the missing catalog row is visible instead.
-            creation.kind == CorporateActionKind.TICKER_CHANGE && catalog.fetchBy(creation.ticker) == null ->
-                CorporateActionStatus.NEEDS_REVIEW
-            else -> CorporateActionStatus.APPLIED
+    // The brapi one-off sync's write path. Unlike an import, an event whose natural key is already
+    // in the log is not simply skipped: a B3 row wins on the values it carries, while brapi fills
+    // the columns the export lacked and the engine then settles the event it could not apply
+    // before. A row that is already applied (from either source) is a no-op, so a re-run never
+    // duplicates an event or applies it twice.
+    suspend fun applyBrapi(creations: List<CorporateActionCreation>): BrapiApplyResult =
+        transaction.execute {
+            val existing = repository.fetchAll().associateBy { it.naturalKey() }
+            var applied = 0
+            var parked = 0
+            val fresh = mutableListOf<CorporateActionCreation>()
+            for (creation in creations.map { it.normalized() }.distinctBy { it.naturalKey() }) {
+                val current = existing[creation.naturalKey()] ?: orphanOf(creation, existing.values)
+                when {
+                    current == null -> fresh += creation
+                    current.isApplied -> Unit
+                    else -> {
+                        val merged = current.enrichedWith(creation)
+                        val status = statusFor(merged)
+                        val updated = repository.update(current.id, merged, status)
+                            ?: throw CorporateActionNotFoundException(current.id)
+                        if (status == CorporateActionStatus.APPLIED) {
+                            settle(updated)
+                            applied++
+                        } else {
+                            parked++
+                        }
+                    }
+                }
+            }
+            for (creation in fresh.sortedWith(REPLAY_ORDER)) {
+                val action = apply(creation)
+                if (action.isApplied) applied++ else parked++
+            }
+            BrapiApplyResult(applied = applied, parked = parked)
         }
+
+    // A parked row with no ex-date is the same event a later payload now dates: match it instead of
+    // inserting a second row, but only when exactly one candidate exists — two undated rows of one
+    // kind are ambiguous and the sync must not guess which one the date belongs to.
+    private fun orphanOf(
+        creation: CorporateActionCreation,
+        existing: Collection<CorporateAction>,
+    ): CorporateAction? {
+        if (creation.exDate == null) return null
+        return existing
+            .filter { !it.isApplied && it.exDate == null && it.ticker == creation.ticker && it.kind == creation.kind }
+            .singleOrNull()
+    }
+
+    private suspend fun apply(creation: CorporateActionCreation): CorporateAction {
+        val status = statusFor(creation)
         val action = repository.save(creation, status)
         if (status == CorporateActionStatus.NEEDS_REVIEW) return action
         return settle(action)
+    }
+
+    private suspend fun statusFor(creation: CorporateActionCreation): CorporateActionStatus = when {
+        creation.needsReview() -> CorporateActionStatus.NEEDS_REVIEW
+        // A remap with no source entry would be silently applied and change nothing; queue it so
+        // the missing catalog row is visible instead.
+        creation.kind == CorporateActionKind.TICKER_CHANGE && catalog.fetchBy(creation.ticker) == null ->
+            CorporateActionStatus.NEEDS_REVIEW
+        else -> CorporateActionStatus.APPLIED
     }
 
     // The ledger effects of an applied event, shared by the import and the human resolve: the remap
@@ -147,12 +199,14 @@ class CorporateActionService(
     // cash-only event pays its declared per-share value. Both use the position before the replay so
     // the amount is the holder's actual entitlement, not a post-event guess.
     private suspend fun recordCash(action: CorporateAction) {
+        // Only an applied event pays cash, and an applied event always carries its ex-date.
+        val exDate = action.exDate ?: return
         val position = positionService.positionBefore(action)
         val amount = CorporateActionCalculator.cashAmount(position, action) ?: return
         repository.saveCashMovement(
             CorporateCashMovement(
                 ticker = action.ticker,
-                date = action.exDate,
+                date = exDate,
                 amount = amount,
                 taxNature = cashNature(action),
                 corporateActionId = action.id,
@@ -163,19 +217,19 @@ class CorporateActionService(
     // The catalog remap and the alias edge are one atomic event: the resolver can never see the new
     // code in the catalog without the chain that points the old code at it.
     private suspend fun remapTicker(action: CorporateAction) {
-        action.targetTicker?.let { target ->
-            catalog.remapTicker(action.ticker, target)
-            tickerAliases.save(
-                TickerAlias(
-                    oldTicker = action.ticker.normalizedTicker(),
-                    canonicalTicker = target.normalizedTicker(),
-                    effectiveDate = action.exDate,
-                    source = action.source,
-                    ratio = action.ratio,
-                    corporateActionId = action.id,
-                ),
-            )
-        }
+        val target = action.targetTicker ?: return
+        val exDate = action.exDate ?: return
+        catalog.remapTicker(action.ticker, target)
+        tickerAliases.save(
+            TickerAlias(
+                oldTicker = action.ticker.normalizedTicker(),
+                canonicalTicker = target.normalizedTicker(),
+                effectiveDate = exDate,
+                source = action.source,
+                ratio = action.ratio,
+                corporateActionId = action.id,
+            ),
+        )
     }
 
     // Every stored slice of the paper scales, not only the ones keyed to the event's own code: after
@@ -204,3 +258,38 @@ private val CorporateAction.hasConversionRatio: Boolean
         ratio != null &&
         ratio.signum() > 0 &&
         ratio.compareTo(BigDecimal.ONE) != 0
+
+// The deterministic replay order the import and the brapi sync share: ex date, then a rename before
+// any other event of its own date, then the event's own ordinal.
+private val REPLAY_ORDER = compareBy<CorporateActionCreation>(
+    { it.exDate },
+    { it.kind.replayRank },
+    { it.ordinal },
+    { it.kind.name },
+)
+
+// What one brapi apply did: the events the engine settled and the ones still waiting for a human.
+data class BrapiApplyResult(
+    val applied: Int,
+    val parked: Int,
+)
+
+// The parked row enriched by a brapi event: the stored value wins where it has one (B3 is
+// authoritative), and the incoming event only fills a missing or unusable column. The source, the
+// identity and the provenance columns stay the row's own.
+private fun CorporateAction.enrichedWith(creation: CorporateActionCreation) = CorporateActionCreation(
+    ticker = ticker,
+    kind = kind,
+    exDate = exDate ?: creation.exDate,
+    approvalDate = approvalDate ?: creation.approvalDate,
+    ratio = ratio.positiveOrNull() ?: creation.ratio,
+    declaredValuePerShare = declaredValuePerShare.positiveOrNull() ?: creation.declaredValuePerShare,
+    targetTicker = targetTicker ?: creation.targetTicker,
+    source = source,
+    processNumber = processNumber,
+    rawType = rawType ?: creation.rawType,
+    ordinal = ordinal,
+    fileHash = fileHash,
+)
+
+private fun BigDecimal?.positiveOrNull(): BigDecimal? = this?.takeIf { it.signum() > 0 }

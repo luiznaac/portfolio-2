@@ -41,6 +41,8 @@ export interface IncomeRow {
   gross: number;
   retained: number;
   net: number;
+  // A brapi movement built from the split-adjusted rate rather than the amount actually paid.
+  estimated: boolean;
 }
 
 export function incomeRows(incomes: Income[]): IncomeRow[] {
@@ -54,6 +56,7 @@ export function incomeRows(incomes: Income[]): IncomeRow[] {
     gross: income.gross_amount,
     retained: income.retained_amount,
     net: income.net_amount,
+    estimated: income.estimated,
   }));
 }
 

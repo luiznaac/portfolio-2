@@ -110,6 +110,7 @@ class CorporateActionRepository(
                 status = IncomeStatus.RECONCILED
                 incomeType = null
                 corporateActionId = movement.corporateActionId
+                estimated = false
                 createdAt = LocalDateTime.now(clock)
             }
         }

@@ -1,0 +1,20 @@
+{
+  "results": [
+    {
+      "oldSymbol": "INBR31",
+      "newSymbol": "INBR32",
+      "canonicalSymbol": "INBR32",
+      "effectiveDate": "2024-01-29"
+    },
+    {
+      "oldSymbol": "BIDI11",
+      "newSymbol": "INBR32",
+      "canonicalSymbol": "INBR32",
+      "effectiveDate": "2022-06-23",
+      "conversionRatio": 1.1
+    }
+  ],
+  "count": 2,
+  "requestedAt": "2026-11-17T01:37:09.078Z",
+  "took": 0
+}

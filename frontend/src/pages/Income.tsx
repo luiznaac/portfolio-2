@@ -49,7 +49,20 @@ const LEDGER_COLUMNS: Column<IncomeLedgerRow>[] = [
       </span>
     ),
   },
-  { key: "type", header: "Tipo", render: (row) => row.typeLabel },
+  {
+    key: "type",
+    header: "Tipo",
+    render: (row) => (
+      <span className="flex items-center gap-2">
+        {row.typeLabel}
+        {row.estimated && (
+          <Chip tone="amber" testId={`income-estimated-${row.key}`}>
+            estimado
+          </Chip>
+        )}
+      </span>
+    ),
+  },
   {
     key: "date",
     header: "Data",

@@ -222,7 +222,7 @@ class MonthlyCloseService(
         val start = from.endDate()
         val end = to.endDate()
         return corporateActions.fetchApplied()
-            .filter { it.kind.isQuantityEvent && it.exDate > start && it.exDate <= end }
+            .filter { it.kind.isQuantityEvent && it.exDate != null && it.exDate > start && it.exDate <= end }
             .sortedWith(compareBy({ it.exDate }, { it.ordinal }))
             .groupBy { it.ticker }
     }

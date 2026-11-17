@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import dev.agner.portfolio.httpapi.import.MovementsParserResolver
 import dev.agner.portfolio.usecase.corporateaction.CorporateActionNotFoundException
 import dev.agner.portfolio.usecase.corporateaction.CorporateActionService
+import dev.agner.portfolio.usecase.corporateaction.CorporateActionSyncService
 import dev.agner.portfolio.usecase.corporateaction.InvalidCorporateActionResolutionException
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateAction
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionKind
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionResolution
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSource
 import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionStatus
+import dev.agner.portfolio.usecase.corporateaction.model.CorporateActionSync
 import dev.agner.portfolio.usecase.import.MovementsImportService
 import dev.agner.portfolio.usecase.import.UnsupportedImportFileException
 import dev.agner.portfolio.usecase.import.model.MovementsImportResult
@@ -53,6 +55,60 @@ class CorporateActionControllerTest : DescribeSpec({
                 body.size() shouldBe 2
                 body.get(0).get("kind").asText() shouldBe "SPLIT"
                 body.get(1).get("status").asText() shouldBe "NEEDS_REVIEW"
+            }
+        }
+    }
+
+    describe("reading the last brapi sync") {
+
+        it("returns 200 with the latest report") {
+            val sync = mockk<CorporateActionSyncService>()
+            coEvery { sync.latest() } returns syncReport
+
+            testApplication {
+                application { installRoutes(CorporateActionController(mockk(), mockk(), mockk(), sync)) }
+
+                val response = client.get("/corporate-actions/sync")
+
+                response.status shouldBe HttpStatusCode.OK
+                ObjectMapper().readTree(response.bodyAsText()).get("ticker_count").asInt() shouldBe 2
+            }
+        }
+
+        it("returns 204 when no sync has run") {
+            val sync = mockk<CorporateActionSyncService>()
+            coEvery { sync.latest() } returns null
+
+            testApplication {
+                application { installRoutes(CorporateActionController(mockk(), mockk(), mockk(), sync)) }
+
+                client.get("/corporate-actions/sync").status shouldBe HttpStatusCode.NoContent
+            }
+        }
+    }
+
+    describe("running the brapi sync") {
+
+        it("returns 200 with the report naming what the run did") {
+            val service = mockk<CorporateActionService>()
+            val sync = mockk<CorporateActionSyncService>()
+            coEvery { sync.sync() } returns syncReport
+
+            testApplication {
+                application { installRoutes(CorporateActionController(service, mockk(), mockk(), sync)) }
+
+                val response = client.post("/corporate-actions/sync")
+
+                response.status shouldBe HttpStatusCode.OK
+                val body = ObjectMapper().readTree(response.bodyAsText())
+                body.get("ticker_count").asInt() shouldBe 2
+                body.get("fetched").asInt() shouldBe 9
+                body.get("applied").asInt() shouldBe 5
+                body.get("parked").asInt() shouldBe 1
+                body.get("income").asInt() shouldBe 3
+                body.get("failed_tickers").size() shouldBe 0
+                body.get("window_from").asText() shouldBe "2018-03-05"
+                body.get("as_of").asText() shouldBe "2026-11-17"
             }
         }
     }
@@ -162,7 +218,8 @@ private fun controller(
     service: CorporateActionService,
     movements: MovementsImportService = mockk(),
     parser: MovementsParserResolver = mockk(),
-) = CorporateActionController(service, movements, parser)
+    sync: CorporateActionSyncService = mockk(),
+) = CorporateActionController(service, movements, parser, sync)
 
 private fun upload(fileName: String = "movimentacao.xlsx") = MultiPartFormDataContent(
     formData {
@@ -172,6 +229,20 @@ private fun upload(fileName: String = "movimentacao.xlsx") = MultiPartFormDataCo
             Headers.build { append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"") },
         )
     },
+)
+
+private val syncReport = CorporateActionSync(
+    id = 1,
+    startedAt = kotlinx.datetime.LocalDateTime.parse("2026-11-17T12:00:00"),
+    asOf = LocalDate.parse("2026-11-17"),
+    windowFrom = LocalDate.parse("2018-03-05"),
+    windowTo = LocalDate.parse("2026-11-17"),
+    tickerCount = 2,
+    fetched = 9,
+    applied = 5,
+    parked = 1,
+    income = 3,
+    failedTickers = emptyList(),
 )
 
 private val action = CorporateAction(

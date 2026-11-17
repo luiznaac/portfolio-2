@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.corporateaction.model
 
+import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 // The owner's decision on a parked event: the template data the B3 export did not carry. A kind the
@@ -7,6 +8,8 @@ import java.math.BigDecimal
 // rights issue, a merger) is recorded as handled with no ledger effect. An absent field keeps the
 // stored value, so a re-submitted form never erases what the export already brought.
 data class CorporateActionResolution(
+    // The ex-date a source event lacked; a dated event keeps its stored day.
+    val exDate: LocalDate? = null,
     val ratio: BigDecimal? = null,
     val declaredValuePerShare: BigDecimal? = null,
     val targetTicker: String? = null,
@@ -14,7 +17,7 @@ data class CorporateActionResolution(
     fun mergedWith(action: CorporateAction): CorporateActionCreation = CorporateActionCreation(
         ticker = action.ticker,
         kind = action.kind,
-        exDate = action.exDate,
+        exDate = exDate ?: action.exDate,
         approvalDate = action.approvalDate,
         ratio = ratio ?: action.ratio,
         declaredValuePerShare = declaredValuePerShare ?: action.declaredValuePerShare,
