@@ -287,6 +287,27 @@ class OrderPlanServiceTest : StringSpec({
         }
     }
 
+    "keeps a held right and a right-named target out of the plan instead of blocking on its class" {
+        coEvery { months.fetchCurrent() } returns currentMonth.copy(
+            targets = currentMonth.targets.copy(
+                tickers = currentMonth.targets.tickers + tickerTarget("Top", "RBRP12", "10"),
+            ),
+        )
+        coEvery { positions.fetchAll() } returns listOf(
+            Position("VALE3", BigDecimal("10"), BigDecimal("8")),
+            Position("RBRP12", BigDecimal("100"), BigDecimal("5")),
+        )
+        coEvery { catalog.fetchRightsTickers() } returns setOf("RBRP12")
+        coEvery { quotes.latestClose("VALE3") } returns BigDecimal("12")
+        coEvery { quotes.latestClose("ITUB4") } returns BigDecimal("20")
+
+        val plan = service.computePlan(OrderPlanPhase.CANDIDATES)!!
+
+        plan.candidates.map { it.ticker }.toSet() shouldBe setOf("ITUB4", "VALE3")
+        coVerify(exactly = 0) { quotes.latestClose("RBRP12") }
+        coVerify(exactly = 0) { catalog.fetchUnclassified(match { "RBRP12" in it }) }
+    }
+
     "keeps a ticker named only by a Strategy the chain does not carry outside" {
         coEvery { months.fetchCurrent() } returns currentMonth.copy(
             targets = currentMonth.targets.copy(

@@ -18,6 +18,7 @@ enum class CorporateActionKind {
     TICKER_CHANGE,
     RIGHTS_ISSUE,
     RIGHTS_ASSIGNMENT,
+    RIGHTS_ALLOTMENT,
     INCORPORATION,
     MERGER,
     SPIN_OFF,
@@ -43,7 +44,8 @@ enum class CorporateActionKind {
 
     // Kinds the engine refuses to apply on its own. A rights issue and a rights assignment are
     // voluntary and priced by the holder; incorporation/merger/spin-off carry an assembly-fixed
-    // exchange ratio that is not in the export; OTHER is an unclassified row.
+    // exchange ratio that is not in the export; OTHER is an unclassified row. A rights allotment is
+    // computable once its terms are present, so it is applied (see CorporateActionCreation.needsReview).
     val requiresReview: Boolean
         get() = this == RIGHTS_ISSUE || this == RIGHTS_ASSIGNMENT || this == INCORPORATION ||
             this == MERGER || this == SPIN_OFF || this == OTHER

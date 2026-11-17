@@ -18,6 +18,7 @@ const KIND_LABELS: Record<CorporateActionKind, string> = {
   TICKER_CHANGE: "Troca de código",
   RIGHTS_ISSUE: "Subscrição",
   RIGHTS_ASSIGNMENT: "Cessão",
+  RIGHTS_ALLOTMENT: "Provisão de direitos",
   INCORPORATION: "Incorporação",
   MERGER: "Fusão",
   SPIN_OFF: "Cisão",
@@ -32,11 +33,13 @@ const STATUS_LABELS: Record<CorporateActionStatus, string> = {
   NEEDS_REVIEW: "Revisar",
 };
 
-// Where an event came from: the B3 Movimentações export, or the one-off brapi sync. The page shows
-// the BRAPI badge on a synced row so the paid feed's provenance is visible beside the export's.
+// Where an event came from: the B3 Movimentações export, the one-off brapi sync, or the engine's
+// own derived rights allotment. The page shows the BRAPI badge on a synced row so the paid feed's
+// provenance is visible beside the export's, and names the derived fallback in the history.
 const SOURCE_LABELS: Record<CorporateActionSource, string> = {
   B3_MOVEMENTS: "B3 · Movimentações",
   BRAPI: "BRAPI",
+  DERIVED: "Derivado",
 };
 
 export function corporateActionSourceLabel(source: CorporateActionSource): string {
@@ -70,6 +73,15 @@ export function corporateActionDetail(action: CorporateAction): string {
         : "valor ausente";
     case "TICKER_CHANGE":
       return action.target_ticker ? `→ ${action.target_ticker}` : "código ausente";
+    case "RIGHTS_ALLOTMENT":
+      // The row's ticker is the rights paper. A real allotment names the underlying and factor; the
+      // derived fallback has neither, so it states the granted units it stood in for.
+      if (action.target_ticker) {
+        return `${action.target_ticker}${action.ratio ? ` ×${formatNumber(action.ratio)}` : ""}`;
+      }
+      return action.granted_quantity !== undefined
+        ? `+${formatNumber(action.granted_quantity)} un`
+        : "origem ausente";
     default:
       return action.raw_type ?? "—";
   }
@@ -104,7 +116,12 @@ export function corporateActionRows(actions: CorporateAction[]): CorporateAction
         ? "Tratado"
         : corporateActionStatusLabel(action.status),
     isReview: action.status === "NEEDS_REVIEW",
-    source: action.process_number ?? action.raw_type ?? "—",
+    // The derived allotment is the engine's own fallback, so the history names it instead of a
+    // provenance column the export never carried.
+    source:
+      action.source === "DERIVED"
+        ? corporateActionSourceLabel(action.source)
+        : (action.process_number ?? action.raw_type ?? "—"),
     sourceLabel: corporateActionSourceLabel(action.source),
     isBrapi: action.source === "BRAPI",
   }));
@@ -150,6 +167,7 @@ const KIND_RULES: Record<CorporateActionKind, KindRule> = {
   CASH_BONUS: { manual: false, fields: ["declared_value_per_share"] },
   RIGHTS_ISSUE: { manual: true, fields: [] },
   RIGHTS_ASSIGNMENT: { manual: true, fields: [] },
+  RIGHTS_ALLOTMENT: { manual: false, fields: ["ratio", "target_ticker"] },
   INCORPORATION: { manual: true, fields: [] },
   MERGER: { manual: true, fields: [] },
   SPIN_OFF: { manual: true, fields: [] },

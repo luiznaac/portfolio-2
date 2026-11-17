@@ -46,8 +46,13 @@ class OrderPlanService(
     // Null when no month is open — the edge maps that to the 404 the current-month reads promise.
     suspend fun computePlan(phase: OrderPlanPhase): OrderPlan? {
         val current = months.fetchCurrent() ?: return null
-        val targets = canonicalized(current.targets.normalized())
-        val positionByTicker = positions.fetchAll().associate { it.ticker to it.quantity }
+        // A right is intentionally classless and excluded from the planning tree: it can neither
+        // create an order nor block the plan as an unclassified holding.
+        val rights = catalog.fetchRightsTickers()
+        val targets = canonicalized(current.targets.normalized()).excludingTickers(rights)
+        val positionByTicker = positions.fetchAll()
+            .filterNot { it.ticker in rights }
+            .associate { it.ticker to it.quantity }
         val ledger = attributions.fetchLedger()
         val manualNames = strategies.fetchManualNames()
         // The report-membership half comes from the chain leaves, exactly as the order calculator

@@ -119,6 +119,7 @@ function tax(overrides: Partial<StockTaxReport> = {}): StockTaxReport {
     pending_gaps: [],
     unclassified: [],
     darf_due_date: "2026-11-30",
+    rights: { rate: 15, taxable_gain: 0, tax: 0 },
     ...overrides,
   };
 }
@@ -287,6 +288,13 @@ describe("resultsPanel", () => {
     expect(byKey.darf?.value).toBe("R$ 255,00");
     expect(byKey.darf?.hint).toBe("vence 30/11/2026");
     expect(byKey.xirr?.value).toBe("+4,10%");
+  });
+
+  it("adds the rights row's DARF to the month's bolsa aggregate", () => {
+    const panel = resultsPanel(series(), tax({ rights: { rate: 15, taxable_gain: 500, tax: 75 } }));
+
+    const darf = panel.rows.find((row) => row.key === "darf");
+    expect(darf?.value).toBe("R$ 330,00");
   });
 
   it("is empty before the first close", () => {

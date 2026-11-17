@@ -43,6 +43,8 @@ import {
   meterProgress,
   realizedKindLabel,
   realizedRows,
+  rightsRateHint,
+  rightsTaxNote,
   taxApuracoes,
   taxGrainNote,
   taxPeriodChip,
@@ -151,6 +153,7 @@ export function Taxes() {
                 <p className="text-[13px] text-muted">Sem vendas neste mês.</p>
               )}
             </div>
+            <p className="pt-2 text-[11.5px] text-faint">{rightsTaxNote(report.rights.rate)}</p>
           </Panel>
           <CarryPanel carry={report.carry} />
           <p data-testid="tax-grain-caption" className="text-[11.5px] text-faint">
@@ -214,7 +217,7 @@ function TaxStrip({ report }: { report: StockTaxReport }) {
   const { meter } = report;
 
   return (
-    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-7">
       <Kpi
         testId="tax-gross-sales-kpi"
         label="Vendas de ações"
@@ -252,6 +255,13 @@ function TaxStrip({ report }: { report: StockTaxReport }) {
         label="FII"
         value={carryAmount(carryClosing(report, "FII"))}
         hint="prejuízo acumulado"
+      />
+      <Kpi
+        testId="tax-rights-darf-kpi"
+        label="DARF direitos"
+        value={formatCurrency(report.rights.tax)}
+        hint={rightsRateHint(report.rights.rate)}
+        tone="attention"
       />
     </div>
   );

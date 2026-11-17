@@ -91,6 +91,21 @@ class ClassificationQueueServiceTest : StringSpec({
         aliased.fetchQueue().single().ticker shouldBe "NEW3"
     }
 
+    "leaves a held right out of the queue: it is intentionally classless" {
+        coEvery { positions.fetchAll() } returns listOf(position("RBRP12", "100"))
+        coEvery { catalog.fetchAll() } returns listOf(
+            catalogEntry(
+                ticker = "RBRP12",
+                shortName = "RBRP12",
+                bdiType = "??",
+                assetKind = AssetKind.RIGHT,
+                assetClass = null,
+            ),
+        )
+
+        service.fetchQueue().shouldBeEmpty()
+    }
+
     "counts an override-only ticker as classified and skips a ticker the book does not hold" {
         coEvery { positions.fetchAll() } returns listOf(
             position("OVR3", "4"),

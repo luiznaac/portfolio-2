@@ -47,13 +47,32 @@ const reissue: CorporateAction = {
   status: "NEEDS_REVIEW",
 };
 
+const allotment: CorporateAction = {
+  ...split,
+  id: 4,
+  ticker: "RBRP12",
+  kind: "RIGHTS_ALLOTMENT",
+  ratio: 0.05,
+  target_ticker: "RBRP11",
+  granted_quantity: 10,
+  source: "DERIVED",
+};
+
 describe("corporateActionKindLabel", () => {
   it("renders each kind in pt-BR", () => {
     expect(corporateActionKindLabel("SPLIT")).toBe("Desdobramento");
     expect(corporateActionKindLabel("REVERSE_SPLIT")).toBe("Grupamento");
     expect(corporateActionKindLabel("BONUS_SHARES")).toBe("Bonificação em ações");
     expect(corporateActionKindLabel("TICKER_CHANGE")).toBe("Troca de código");
+    expect(corporateActionKindLabel("RIGHTS_ALLOTMENT")).toBe("Provisão de direitos");
     expect(corporateActionKindLabel("OTHER")).toBe("Outro");
+  });
+});
+
+describe("corporateActionSourceLabel", () => {
+  it("names the export and the engine's derived fallback", () => {
+    expect(corporateActionSourceLabel("B3_MOVEMENTS")).toBe("B3 · Movimentações");
+    expect(corporateActionSourceLabel("DERIVED")).toBe("Derivado");
   });
 });
 
@@ -87,6 +106,21 @@ describe("corporateActionDetail", () => {
     );
   });
 
+  it("explains a rights allotment with its underlying and factor", () => {
+    expect(corporateActionDetail(allotment)).toBe("RBRP11 ×0,05");
+  });
+
+  it("explains a derived allotment with the units it stood in for", () => {
+    expect(
+      corporateActionDetail({
+        ...allotment,
+        source: "DERIVED",
+        target_ticker: undefined,
+        ratio: undefined,
+      }),
+    ).toBe("+10 un");
+  });
+
   it("falls back to the export label and then to a dash", () => {
     expect(corporateActionDetail(reissue)).toBe("Subscrição");
     expect(corporateActionDetail({ ...reissue, raw_type: undefined })).toBe("—");
@@ -116,6 +150,13 @@ describe("corporateActionRows", () => {
     expect(rows[0].statusLabel).toBe("Tratado");
   });
 
+  it("marks a derived allotment instead of showing an empty provenance", () => {
+    const rows = corporateActionRows([{ ...allotment, raw_type: undefined }]);
+
+    expect(rows[0].source).toBe("Derivado");
+    expect(rows[0].kindLabel).toBe("Provisão de direitos");
+  });
+
   it("is empty when there is no log", () => {
     expect(corporateActionRows([])).toEqual([]);
   });
@@ -138,6 +179,7 @@ describe("isManualReview", () => {
     expect(isManualReview(reissue)).toBe(true);
     expect(isManualReview({ ...split, kind: "MERGER" })).toBe(true);
     expect(isManualReview(split)).toBe(false);
+    expect(isManualReview(allotment)).toBe(false);
   });
 });
 
@@ -152,6 +194,7 @@ describe("resolutionFields", () => {
       "declared_value_per_share",
     ]);
     expect(resolutionFields({ ...split, kind: "TICKER_CHANGE" })).toEqual(["target_ticker"]);
+    expect(resolutionFields(allotment)).toEqual(["ratio", "target_ticker"]);
   });
 
   it("offers no data for a manual review kind", () => {

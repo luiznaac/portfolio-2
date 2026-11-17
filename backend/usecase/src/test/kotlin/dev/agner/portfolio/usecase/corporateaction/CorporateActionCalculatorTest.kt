@@ -115,6 +115,32 @@ class CorporateActionCalculatorTest : StringSpec({
         CorporateActionCalculator.apply(before, action(CorporateActionKind.RIGHTS_ISSUE)) shouldBe before
     }
 
+    "a rights allotment grants its quantity at zero cost" {
+        val position = CorporateActionCalculator.apply(
+            position(quantity = "0", average = "0"),
+            allotment(granted = "100"),
+        )
+
+        position.quantity.compareTo(bd("100")) shouldBe 0
+        position.averagePrice.compareTo(bd("0")) shouldBe 0
+    }
+
+    "a rights allotment dilutes the average of a right already bought in the market" {
+        val position = CorporateActionCalculator.apply(
+            position(quantity = "100", average = "5"),
+            allotment(granted = "100"),
+        )
+
+        position.quantity.compareTo(bd("200")) shouldBe 0
+        position.averagePrice.compareTo(bd("2.5")) shouldBe 0
+    }
+
+    "a rights allotment with no granted quantity leaves the position untouched" {
+        val before = position(quantity = "100", average = "5")
+
+        CorporateActionCalculator.apply(before, allotment(granted = null)) shouldBe before
+    }
+
     "attribution slices scale by the event factor, with the grupamento floored" {
         CorporateActionCalculator.scaleQuantity(bd("30"), split("2")).compareTo(bd("60")) shouldBe 0
         CorporateActionCalculator.scaleQuantity(bd("30"), bonus(ratio = "0.1", declaredValue = null))
@@ -132,7 +158,17 @@ private fun action(
     ratio: String? = null,
     declaredValue: String? = null,
     targetTicker: String? = null,
-) = corporateAction(kind, ratio = ratio, declaredValuePerShare = declaredValue, targetTicker = targetTicker)
+    grantedQuantity: String? = null,
+) = corporateAction(
+    kind,
+    ratio = ratio,
+    declaredValuePerShare = declaredValue,
+    targetTicker = targetTicker,
+    grantedQuantity = grantedQuantity,
+)
+
+private fun allotment(granted: String?) =
+    action(CorporateActionKind.RIGHTS_ALLOTMENT, grantedQuantity = granted)
 
 private fun split(ratio: String) = action(CorporateActionKind.SPLIT, ratio = ratio)
 

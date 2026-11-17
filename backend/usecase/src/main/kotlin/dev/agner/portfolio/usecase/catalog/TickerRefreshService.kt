@@ -37,13 +37,17 @@ class TickerRefreshService(
 ) {
 
     suspend fun refresh(): TickerRefreshResult {
+        // A right is intentionally classless and outside the planning tree; it has no COTAHIST close
+        // to fetch, so it is not a quote failure or an unclassified holding either.
+        val rights = catalogService.fetchRightsTickers()
         val heldTickers = positions.fetchAll()
-            .filter { it.quantity.signum() > 0 }
+            .filter { it.quantity.signum() > 0 && it.ticker !in rights }
             .mapToSet { it.ticker }
         val ledger = trades.fetchAll()
         // The annual files are stored for every code the ledger has traded the paper under, so a
         // rename does not lose the old code's monthly closes.
         val ledgerTickers = ledger.map { it.ticker }
+            .filter { it !in rights }
             .distinct()
             .flatMap { aliases.aliasesOf(it) }
             .toSet()

@@ -8,6 +8,7 @@ import dev.agner.portfolio.usecase.listedasset.model.TradeKey
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerCursor
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerFilter
 import dev.agner.portfolio.usecase.listedasset.model.TradeLedgerPage
+import dev.agner.portfolio.usecase.listedasset.model.TradeSide
 import dev.agner.portfolio.usecase.listedasset.model.TradeSource
 import dev.agner.portfolio.usecase.listedasset.model.TradeTickerFilter
 import dev.agner.portfolio.usecase.listedasset.model.withCanonicalTicker
@@ -21,6 +22,7 @@ class TradeService(
     private val positionService: PositionService,
     private val gaps: GapService,
     private val aliases: TickerAliasResolver,
+    private val rightsAllotments: RightsAllotmentService,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -39,6 +41,11 @@ class TradeService(
             val existing = aliases.aliasesOf(canonical)
                 .flatMap { repository.fetchByKey(key.withTicker(it)) }
             if (existing.any { it.source == TradeSource.B3_IMPORT }) throw DuplicateTradeException(key)
+            // A rights sale with no receipt gets its zero-cost allotment before the sale is written,
+            // so the replay sees the receipt first and the position never goes negative.
+            if (normalized.side == TradeSide.SELL) {
+                rightsAllotments.ensureReceipt(canonical, normalized.date, normalized.quantity)
+            }
             val trade = repository.save(normalized, TradeSource.MANUAL, existing.size + 1)
             positionService.reproject(trade.ticker)
             gaps.reconcile(trade.ticker)
@@ -65,6 +72,9 @@ class TradeService(
 
         val newOccurrences = creations.drop(existing.size)
         for ((index, creation) in newOccurrences.withIndex()) {
+            if (creation.side == TradeSide.SELL) {
+                rightsAllotments.ensureReceipt(creation.ticker, creation.date, creation.quantity)
+            }
             repository.save(normalized(creation), TradeSource.B3_IMPORT, existing.size + index + 1)
         }
         if (newOccurrences.isNotEmpty()) {

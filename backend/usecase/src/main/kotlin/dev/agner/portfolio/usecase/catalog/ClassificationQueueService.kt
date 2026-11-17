@@ -1,5 +1,6 @@
 package dev.agner.portfolio.usecase.catalog
 
+import dev.agner.portfolio.usecase.catalog.model.AssetKind
 import dev.agner.portfolio.usecase.catalog.model.CatalogEntry
 import dev.agner.portfolio.usecase.catalog.model.ClassificationQueueItem
 import dev.agner.portfolio.usecase.catalog.model.UNCATALOGED_BDI_TYPE
@@ -29,6 +30,8 @@ class ClassificationQueueService(
         val entries = rawEntries.canonicalEntryByTicker(entryCanonical)
         return positions.fetchAll()
             .filter { it.quantity.signum() > 0 }
+            // A right is intentionally classless, not waiting for a class.
+            .filter { entries[it.ticker]?.assetKind != AssetKind.RIGHT }
             .filter { entries[it.ticker]?.effectiveAssetClass == null }
             .groupBy { it.ticker }
             .map { (ticker, rows) ->

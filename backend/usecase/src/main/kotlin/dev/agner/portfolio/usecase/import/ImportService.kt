@@ -2,8 +2,10 @@ package dev.agner.portfolio.usecase.import
 
 import dev.agner.portfolio.usecase.broker.BrokerAssetAliasService
 import dev.agner.portfolio.usecase.broker.model.BrokerDescriptionResolution
+import dev.agner.portfolio.usecase.broker.model.isRightsDescription
 import dev.agner.portfolio.usecase.broker.model.normalizedBrokerDescription
 import dev.agner.portfolio.usecase.catalog.CatalogService
+import dev.agner.portfolio.usecase.catalog.model.isRightsTicker
 import dev.agner.portfolio.usecase.catalog.model.normalizedTicker
 import dev.agner.portfolio.usecase.configuration.ITransactionTemplate
 import dev.agner.portfolio.usecase.import.model.Import
@@ -210,9 +212,15 @@ class ImportService(
     private suspend fun applyTrades(import: Import): ImportApplyResult = transaction.execute {
         val rows = repository.fetchRows(import.id).withSituations()
         val errorFreeRows = rows.filter { it.error == null }
-        // Auto-enter unknown tickers into the catalog before creating trades.
+        // Auto-enter unknown tickers into the catalog before creating trades. A broker note's
+        // rights row is marked as a right, not as an unclassified stock, so the tax and planning
+        // reads know what the paper is.
+        val rightsTickers = errorFreeRows
+            .filter { it.rawDescription?.isRightsDescription() == true && it.requireTicker().isRightsTicker() }
+            .map { it.requireTicker() }
+            .toSet()
         errorFreeRows.map { it.requireTicker() }.distinct().forEach { ticker ->
-            catalogService.upsertTicker(ticker)
+            if (ticker in rightsTickers) catalogService.markRights(ticker) else catalogService.upsertTicker(ticker)
         }
 
         // Each institution is created/fetched once from its group's own normalized key — the

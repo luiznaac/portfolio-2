@@ -57,6 +57,21 @@ class PositionService(
         return position
     }
 
+    // The holder's position immediately before a date — the entitlement basis of an event stated
+    // per underlying unit, such as a rights allotment. Same-day trades are excluded: an ex-date
+    // trade is already ex the event.
+    suspend fun positionBefore(ticker: String, date: LocalDate): Position {
+        val canonical = aliases.canonical(ticker)
+        val aliasSet = aliases.aliasesOf(canonical)
+        return PositionCalculator.positionBeforeDate(
+            canonical,
+            aliasSet.flatMap { trades.fetchAllBy(it) },
+            aliasSet.flatMap { corporateActions.fetchByTicker(it) },
+            date,
+            aliasSet.flatMap { gaps.fetchOpenBy(it) },
+        )
+    }
+
     // The holder's position immediately before one corporate action — the basis its cash
     // entitlement is computed on, independent of any trade imported after the event's ex-date.
     suspend fun positionBefore(action: CorporateAction): Position {
@@ -95,16 +110,17 @@ class PositionService(
         )
         val actions = appliedActions.groupBy { canonicalByTicker.getValue(it.ticker) }
         val gapsByCanonical = openGaps.groupBy { canonicalByTicker.getValue(it.ticker) }
-        val reprojected = ledger
-            .groupBy { canonicalByTicker.getValue(it.ticker) }
-            .map { (canonical, rows) ->
-                PositionCalculator.replay(
-                    canonical,
-                    rows,
-                    actions[canonical].orEmpty(),
-                    gapsByCanonical[canonical].orEmpty(),
-                )
-            }
+        val rowsByCanonical = ledger.groupBy { canonicalByTicker.getValue(it.ticker) }
+        // A paper whose only ledger entry is a corporate action — a rights allotment with no trade —
+        // still needs its projection replayed, so the paper set is the union of every source.
+        val reprojected = canonicalByTicker.values.distinct().map { canonical ->
+            PositionCalculator.replay(
+                canonical,
+                rowsByCanonical[canonical].orEmpty(),
+                actions[canonical].orEmpty(),
+                gapsByCanonical[canonical].orEmpty(),
+            )
+        }
         for (position in reprojected) positions.save(position)
 
         // Remove projections still keyed on a superseded code, so the read never sees two rows for

@@ -53,4 +53,10 @@ data class Targets(
     fun normalized(): Targets = copy(
         tickers = tickers.map { it.copy(ticker = it.ticker.normalizedTicker()) },
     )
+
+    // A right is intentionally classless and excluded from the planning tree, so a stored target
+    // that names one is dropped before the chain is built — it can neither create an order nor
+    // appear as a leaf.
+    fun excludingTickers(excluded: Set<String>): Targets =
+        if (excluded.isEmpty()) this else copy(tickers = tickers.filterNot { it.ticker in excluded })
 }

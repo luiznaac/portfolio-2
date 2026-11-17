@@ -165,6 +165,7 @@ vi.mock("../api/queries.ts", () => {
     pending_gaps: [],
     unclassified: [],
     darf_due_date: "2026-11-30",
+    rights: { rate: 15, taxable_gain: 0, tax: 0 },
   };
 
   const query = (data: unknown) => ({ isLoading: false, isError: false, data });

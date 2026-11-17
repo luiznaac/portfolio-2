@@ -86,6 +86,23 @@ class TickerRefreshServiceTest : StringSpec({
         verify(exactly = 1) { source.fetchYear(2026) }
     }
 
+    "keeps a held right out of the quote-failure and unclassified reports" {
+        coEvery { source.fetchTradingDay() } returns emptyList()
+        coEvery { trades.fetchAll() } returns emptyList()
+        coEvery { positions.fetchAll() } returns listOf(position("RBRP12", "10"))
+        coEvery { catalogService.fetchRightsTickers() } returns setOf("RBRP12")
+        coEvery { catalogService.fetchAll() } returns listOf(
+            catalogEntry(ticker = "RBRP12", assetKind = AssetKind.RIGHT, assetClass = null),
+        )
+        coEvery { quoteService.latestClose("RBRP12") } returns null
+
+        val result = service.refresh()
+
+        result.failed shouldBe emptyList()
+        result.unclassified shouldBe emptyList()
+        coVerify(exactly = 0) { quoteService.latestClose("RBRP12") }
+    }
+
     "stores monthly closes for every code the ledger's paper has traded under" {
         val aliased = TickerRefreshService(
             catalogService,

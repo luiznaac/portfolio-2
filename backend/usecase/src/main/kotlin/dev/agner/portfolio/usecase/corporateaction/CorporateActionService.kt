@@ -12,12 +12,14 @@ import dev.agner.portfolio.usecase.corporateaction.model.CorporateCashMovement
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.income.model.TaxNature
 import dev.agner.portfolio.usecase.listedasset.PositionService
+import dev.agner.portfolio.usecase.listedasset.RightsAllotmentService
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
 import dev.agner.portfolio.usecase.tickeralias.TickerAliasResolver
 import dev.agner.portfolio.usecase.tickeralias.model.TickerAlias
 import dev.agner.portfolio.usecase.tickeralias.repository.ITickerAliasRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 // The corporate-action engine. An imported event is either applied to the holder's position (the
 // quantity events and a capital return), paid as cash (amortization and a cash bonus), remapped in
@@ -33,6 +35,7 @@ class CorporateActionService(
     private val positionService: PositionService,
     private val tickerAliases: ITickerAliasRepository,
     private val aliases: TickerAliasResolver,
+    private val rightsAllotments: RightsAllotmentService,
     private val transaction: ITransactionTemplate,
 ) {
 
@@ -99,9 +102,10 @@ class CorporateActionService(
                     "ticker ${creation.ticker} is absent from the catalog",
                 )
             }
-            val resolved = repository.update(id, creation, CorporateActionStatus.APPLIED)
+            val settled = creation.withComputedGrant()
+            val resolved = repository.update(id, settled, CorporateActionStatus.APPLIED)
                 ?: throw CorporateActionNotFoundException(id)
-            if (creation.kind.requiresReview) return@execute resolved
+            if (settled.kind.requiresReview) return@execute resolved
             settle(resolved)
         }
 
@@ -157,9 +161,25 @@ class CorporateActionService(
 
     private suspend fun apply(creation: CorporateActionCreation): CorporateAction {
         val status = statusFor(creation)
-        val action = repository.save(creation, status)
+        val action = repository.save(
+            if (status == CorporateActionStatus.APPLIED) creation.withComputedGrant() else creation,
+            status,
+        )
         if (status == CorporateActionStatus.NEEDS_REVIEW) return action
         return settle(action)
+    }
+
+    // A rights allotment's grant is the holder's underlying units before the ex-date times the
+    // issuance factor; the engine computes it once, when the event settles, and stores it so the
+    // position replay needs no cross-ticker read. Every other kind is stored as imported.
+    private suspend fun CorporateActionCreation.withComputedGrant(): CorporateActionCreation {
+        if (kind != CorporateActionKind.RIGHTS_ALLOTMENT) return this
+        val underlying = targetTicker ?: return this
+        val factor = ratio ?: return this
+        val date = exDate ?: return this
+        val held = positionService.positionBefore(underlying, date).quantity
+        val granted = held.multiply(factor).setScale(0, RoundingMode.FLOOR)
+        return copy(grantedQuantity = granted.takeIf { it.signum() > 0 })
     }
 
     private suspend fun statusFor(creation: CorporateActionCreation): CorporateActionStatus = when {
@@ -185,6 +205,14 @@ class CorporateActionService(
                 positionService.reproject(action.ticker)
             }
             action.kind.isQuantityEvent -> scaleAttributions(action)
+            action.kind == CorporateActionKind.RIGHTS_ALLOTMENT -> {
+                // The rights paper is now real: mark it, retire the derived guess a sale without a
+                // receipt may have created, and replay the rights position from the stored grant.
+                // An applied event always has its ex-date (a null one parks in needsReview).
+                catalog.markRights(action.ticker)
+                action.exDate?.let { rightsAllotments.replaceDerived(action.ticker, it) }
+                positionService.reproject(action.ticker)
+            }
         }
         // Cash is read off the position before the replay: a grupamento's fraction belongs to the
         // pre-event quantity, and a capital return's per-share amount to the unchanged quantity.

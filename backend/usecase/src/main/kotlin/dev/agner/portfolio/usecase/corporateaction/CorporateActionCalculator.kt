@@ -26,6 +26,7 @@ object CorporateActionCalculator {
         CorporateActionKind.REVERSE_SPLIT -> reverseSplit(position, action)
         CorporateActionKind.BONUS_SHARES -> bonusShares(position, action)
         CorporateActionKind.CAPITAL_RETURN -> capitalReturn(position, action)
+        CorporateActionKind.RIGHTS_ALLOTMENT -> rightsAllotment(position, action)
         else -> position
     }
 
@@ -80,6 +81,21 @@ object CorporateActionCalculator {
         return position.copy(
             quantity = newQuantity,
             averagePrice = priorCost.add(grantedCost).divide(newQuantity, SCALE, RoundingMode.HALF_UP),
+        )
+    }
+
+    // A subscription right received in the issuance costs nothing: the grant adds its units and
+    // dilutes the average, exactly as a zero-price buy would. A right bought in the market keeps
+    // its purchase price as the basis until an issuance dilutes it.
+    private fun rightsAllotment(position: Position, action: CorporateAction): Position {
+        val granted = action.grantedQuantity ?: return position
+        if (granted.signum() <= 0) return position
+        val newQuantity = position.quantity.add(granted)
+        if (newQuantity.signum() <= 0) return position.copy(quantity = newQuantity, averagePrice = BigDecimal.ZERO)
+        val priorCost = position.quantity.multiply(position.averagePrice)
+        return position.copy(
+            quantity = newQuantity,
+            averagePrice = priorCost.divide(newQuantity, SCALE, RoundingMode.HALF_UP),
         )
     }
 

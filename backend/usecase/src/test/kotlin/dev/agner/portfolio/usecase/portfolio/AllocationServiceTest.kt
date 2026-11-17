@@ -218,6 +218,36 @@ class AllocationServiceTest : StringSpec({
         allocation.unpriced.single().quantity.plain() shouldBe "100"
     }
 
+    "excludes a held right and a right-named strategy target from the tree" {
+        coEvery { months.fetchCurrent() } returns currentMonth.copy(
+            targets = currentMonth.targets.copy(
+                tickers = currentMonth.targets.tickers + TickerTarget("Top Dividendos", "RBRP12", BigDecimal("10")),
+            ),
+        )
+        coEvery { positions.fetchAll() } returns listOf(
+            Position("VALE3", BigDecimal("100"), BigDecimal("10")),
+            Position("RBRP12", BigDecimal("100"), BigDecimal("5")),
+        )
+        coEvery { catalog.fetchBy("VALE3") } returns catalogEntry
+        coEvery { catalog.fetchBy("RBRP12") } returns rightsEntry
+        coEvery { catalog.fetchRightsTickers() } returns setOf("RBRP12")
+        coEvery { quotes.latestQuote("VALE3") } returns quote("2026-10-13", "10")
+        coEvery { bonds.fetchAll() } returns emptySet()
+        coEvery { strategies.fetchAll() } returns emptyList()
+        coEvery { attributions.fetchAll() } returns emptyList()
+
+        val allocation = service.fetchCurrent()!!
+
+        allocation.actual.plain() shouldBe "1000"
+        allocation.unclassified.tickers shouldBe emptyList()
+        allocation.classes
+            .single { it.assetClass == AssetClass.ACOES }
+            .strategies
+            .single()
+            .tickers
+            .map { it.ticker } shouldBe listOf("VALE3")
+    }
+
     "marks a close older than five days as stale and keeps its date" {
         val fixedClock = Clock.fixed(Instant.parse("2026-10-14T10:00:00Z"), ZoneOffset.UTC)
         val staleService = AllocationService(
@@ -282,6 +312,17 @@ private val catalogEntry = CatalogEntry(
     isin = null,
     assetKind = AssetKind.STOCK,
     assetClass = AssetClass.ACOES,
+    firstSeen = LocalDate.parse("2026-01-01"),
+    lastSeen = LocalDate.parse("2026-09-10"),
+)
+
+private val rightsEntry = CatalogEntry(
+    ticker = "RBRP12",
+    shortName = "RBRP12",
+    bdiType = "??",
+    isin = null,
+    assetKind = AssetKind.RIGHT,
+    assetClass = null,
     firstSeen = LocalDate.parse("2026-01-01"),
     lastSeen = LocalDate.parse("2026-09-10"),
 )

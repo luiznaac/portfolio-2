@@ -118,6 +118,44 @@ class B3MovementsParserTest : DescribeSpec({
                 requireNotNull(action.declaredValuePerShare).compareTo(BigDecimal("1.5")) shouldBe 0
             }
 
+            it("routes a subscription row carrying its factor to a rights allotment on the rights ticker") {
+                val routing = parser.parse(
+                    "movimentacao.xlsx",
+                    workbook(
+                        listOf(
+                            movementRow("Subscrição", ticker = "RBRP11", factor = 0.05, newTicker = "RBRP12"),
+                        ),
+                    ),
+                )
+
+                val action = routing.corporateActions.single()
+                action.kind shouldBe CorporateActionKind.RIGHTS_ALLOTMENT
+                action.ticker shouldBe "RBRP12"
+                action.targetTicker shouldBe "RBRP11"
+                requireNotNull(action.ratio).compareTo(BigDecimal("0.05")) shouldBe 0
+            }
+
+            it("derives the rights code from the underlying when the subscription row carries none") {
+                val routing = parser.parse(
+                    "movimentacao.xlsx",
+                    workbook(listOf(movementRow("Subscrição", ticker = "RBRP11", factor = 0.05))),
+                )
+
+                val action = routing.corporateActions.single()
+                action.kind shouldBe CorporateActionKind.RIGHTS_ALLOTMENT
+                action.ticker shouldBe "RBRP12"
+                action.targetTicker shouldBe "RBRP11"
+            }
+
+            it("keeps a subscription row without a factor in the review kind") {
+                val routing = parser.parse(
+                    "movimentacao.xlsx",
+                    workbook(listOf(movementRow("Subscrição", ticker = "RBRP11"))),
+                )
+
+                routing.corporateActions.single().kind shouldBe CorporateActionKind.RIGHTS_ISSUE
+            }
+
             it("routes a voluntary or merger event to the review kinds") {
                 val routing = parser.parse(
                     "movimentacao.xlsx",
@@ -209,6 +247,7 @@ private fun movementRow(
     quantity: Number? = null,
     unitPrice: Number? = null,
     factor: Number? = null,
+    newTicker: String? = null,
 ): List<Any?> = listOf(
     LocalDate.parse("2026-10-20"),
     type,
@@ -219,7 +258,7 @@ private fun movementRow(
     gross,
     "Mercado à Vista",
     factor,
-    null,
+    newTicker,
     null,
     null,
 )

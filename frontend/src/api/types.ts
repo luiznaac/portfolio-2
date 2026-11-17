@@ -7,7 +7,7 @@ export interface HealthCheckResult {
   timestamp: string;
 }
 
-export type AssetKind = "STOCK" | "UNIT" | "FII" | "BDR" | "ETF" | "UNKNOWN";
+export type AssetKind = "STOCK" | "UNIT" | "FII" | "BDR" | "ETF" | "RIGHT" | "UNKNOWN";
 export type AssetClass = "ACOES" | "FIIS" | "RENDA_FIXA";
 
 export interface CatalogEntry {
@@ -582,9 +582,10 @@ export interface TickerAveragePrice {
   average_price: number;
 }
 
-// The three tax species a listed-asset sale realizes into. A STOCK sale is SWING unless a
-// same-day same-institution buy offsets it (DAY_TRADE); an FII sale is always FII.
-export type RealizedKind = "SWING" | "DAY_TRADE" | "FII";
+// The four tax species a listed-asset sale realizes into. A STOCK sale is SWING unless a
+// same-day same-institution buy offsets it (DAY_TRADE); an FII sale is always FII; a RIGHT sale is
+// its own 15% bucket under DARF 6015, outside the stock meter and the FII bucket.
+export type RealizedKind = "SWING" | "DAY_TRADE" | "FII" | "RIGHTS";
 
 // One kind's realized month result: gains and losses are positive magnitudes, `result` is
 // gains − losses.
@@ -634,6 +635,13 @@ export interface DayTradeWarning {
   quantity: number;
 }
 
+// The rights row's own 15% DARF 6015 line, after its species-bound carry bucket.
+export interface RightsTax {
+  rate: number;
+  taxable_gain: number;
+  tax: number;
+}
+
 export interface StockTaxReport {
   period: string;
   meter: ExemptionMeter;
@@ -645,6 +653,7 @@ export interface StockTaxReport {
   unclassified: TaxUnclassifiedTicker[];
   /** The DARF 6015 deadline: the last business day of the following month. */
   darf_due_date: string;
+  rights: RightsTax;
 }
 
 // The harvest pass (GET /tax/harvest). A pair sells a losing STOCK position on `sell.date` and
@@ -1025,6 +1034,7 @@ export type CorporateActionKind =
   | "TICKER_CHANGE"
   | "RIGHTS_ISSUE"
   | "RIGHTS_ASSIGNMENT"
+  | "RIGHTS_ALLOTMENT"
   | "INCORPORATION"
   | "MERGER"
   | "SPIN_OFF"
@@ -1033,7 +1043,9 @@ export type CorporateActionKind =
   | "CASH_BONUS"
   | "OTHER";
 export type CorporateActionStatus = "APPLIED" | "NEEDS_REVIEW";
-export type CorporateActionSource = "B3_MOVEMENTS" | "BRAPI";
+// BRAPI is the paid one-off sync; DERIVED is the engine's own zero-cost rights allotment, derived
+// from a sale with no receipt, which a real allotment retires.
+export type CorporateActionSource = "B3_MOVEMENTS" | "BRAPI" | "DERIVED";
 
 export interface CorporateAction {
   id: number;
@@ -1045,6 +1057,8 @@ export interface CorporateAction {
   ratio?: number;
   declared_value_per_share?: number;
   target_ticker?: string;
+  // The holder's computed grant of a RIGHTS_ALLOTMENT; absent on every other kind.
+  granted_quantity?: number;
   source: CorporateActionSource;
   process_number?: string;
   raw_type?: string;

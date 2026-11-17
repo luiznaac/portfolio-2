@@ -27,5 +27,6 @@ data class CorporateActionResolution(
         rawType = action.rawType,
         ordinal = action.ordinal,
         fileHash = action.fileHash,
+        grantedQuantity = action.grantedQuantity,
     ).normalized()
 }

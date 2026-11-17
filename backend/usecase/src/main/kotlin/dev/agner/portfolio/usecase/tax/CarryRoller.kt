@@ -9,11 +9,11 @@ import dev.agner.portfolio.usecase.tax.model.RealizedResult
 import kotlinx.datetime.YearMonth
 import java.math.BigDecimal
 
-// Rolls realized month results into the three species-bound loss buckets. A loss banks even in an
+// Rolls realized month results into the four species-bound loss buckets. A loss banks even in an
 // exempt month (Lei 11.033/2004 art. 64); a gain consumes the bucket only when that kind is taxable
-// that month. A seeded bucket skips ledger months up to and including its adoption close, because
-// its opening balance already represents those results. Pure, so a month can be replayed without a
-// repository.
+// that month. A rights loss stays in its own bucket — cross-kind offset is out of scope. A seeded
+// bucket skips ledger months up to and including its adoption close, because its opening balance
+// already represents those results. Pure, so a month can be replayed without a repository.
 internal object CarryRoller {
 
     fun roll(
@@ -81,8 +81,8 @@ internal object CarryRoller {
             else -> Movement(banked = BigDecimal.ZERO, applied = BigDecimal.ZERO)
         }
 
-    // Swing STOCK is taxable only when the month crossed the R$20k meter; day trade and FII have no
-    // exemption, so a two-way branch is the whole rule.
+    // Swing STOCK is taxable only when the month crossed the R$20k meter; day trade, FII and rights
+    // have no exemption, so a two-way branch is the whole rule.
     private fun isTaxable(kind: RealizedKind, swingExceeded: Boolean): Boolean =
         if (kind == RealizedKind.SWING) swingExceeded else true
 

@@ -16,6 +16,7 @@ import dev.agner.portfolio.usecase.corporateaction.model.CorporateCashMovement
 import dev.agner.portfolio.usecase.corporateaction.repository.ICorporateActionRepository
 import dev.agner.portfolio.usecase.income.model.TaxNature
 import dev.agner.portfolio.usecase.listedasset.PositionService
+import dev.agner.portfolio.usecase.listedasset.RightsAllotmentService
 import dev.agner.portfolio.usecase.listedasset.model.Attribution
 import dev.agner.portfolio.usecase.listedasset.model.Position
 import dev.agner.portfolio.usecase.listedasset.repository.IAttributionRepository
@@ -42,6 +43,7 @@ class CorporateActionServiceTest : StringSpec({
     val attributions = mockk<IAttributionRepository>(relaxed = true)
     val catalog = mockk<CatalogService>(relaxed = true)
     val positionService = mockk<PositionService>(relaxed = true)
+    val rightsAllotments = mockk<RightsAllotmentService>(relaxed = true)
     val transaction = InlineTransaction()
     val aliasRepository = tickerAliasesRepository()
     val service = CorporateActionService(
@@ -51,6 +53,7 @@ class CorporateActionServiceTest : StringSpec({
         positionService,
         aliasRepository,
         tickerAliases(),
+        rightsAllotments,
         transaction,
     )
 
@@ -63,6 +66,7 @@ class CorporateActionServiceTest : StringSpec({
         positionService,
         aliases,
         TickerAliasResolver(aliases),
+        rightsAllotments,
         transaction,
     )
 
@@ -267,6 +271,7 @@ class CorporateActionServiceTest : StringSpec({
             positionService,
             aliasRepository,
             tickerAliases(rename("OLD3", "MID3"), rename("MID3", "NEW3")),
+            rightsAllotments,
             transaction,
         )
 
@@ -391,6 +396,52 @@ class CorporateActionServiceTest : StringSpec({
         service.importEvents(listOf(split(ratio = "2").copy(ticker = "petr4f")))
 
         saved.captured.ticker shouldBe "PETR4"
+    }
+
+    "a rights allotment grants the underlying position's factor and retires the derived receipt" {
+        coEvery { positionService.positionBefore("RBRP11", date) } returns
+            Position("RBRP11", BigDecimal("100"), BigDecimal("10"))
+        val saved = slot<CorporateActionCreation>()
+        coEvery { repository.save(capture(saved), CorporateActionStatus.APPLIED) } answers {
+            saved.captured.toModel(status = CorporateActionStatus.APPLIED)
+        }
+
+        service.importEvents(listOf(allotment(ratio = "0.1")))
+
+        saved.captured.let {
+            it.ticker shouldBe "RBRP12"
+            it.targetTicker shouldBe "RBRP11"
+            it.grantedQuantity!!.compareTo(BigDecimal("10")) shouldBe 0
+        }
+        coVerify { catalog.markRights("RBRP12") }
+        coVerify { rightsAllotments.replaceDerived("RBRP12", date) }
+        coVerify(exactly = 1) { positionService.reproject("RBRP12") }
+        coVerify(exactly = 0) { repository.saveCashMovement(any()) }
+    }
+
+    "a rights allotment with no factor is parked for review" {
+        service.importEvents(listOf(allotment(ratio = null)))
+
+        coVerify { repository.save(any(), CorporateActionStatus.NEEDS_REVIEW) }
+        coVerify(exactly = 0) { rightsAllotments.replaceDerived(any(), any()) }
+        coVerify(exactly = 0) { positionService.reproject(any()) }
+    }
+
+    "resolving a parked rights allotment computes the grant from the supplied factor" {
+        coEvery { repository.fetchById(7) } returns
+            action(creation = allotment(ratio = null), status = CorporateActionStatus.NEEDS_REVIEW)
+        coEvery { positionService.positionBefore("RBRP11", date) } returns
+            Position("RBRP11", BigDecimal("100"), BigDecimal("10"))
+        val saved = slot<CorporateActionCreation>()
+        coEvery { repository.update(7, capture(saved), CorporateActionStatus.APPLIED) } answers {
+            saved.captured.toModel(status = CorporateActionStatus.APPLIED)
+        }
+
+        service.resolve(7, CorporateActionResolution(ratio = BigDecimal("0.1")))
+
+        saved.captured.grantedQuantity!!.compareTo(BigDecimal("10")) shouldBe 0
+        coVerify { rightsAllotments.replaceDerived("RBRP12", date) }
+        coVerify(exactly = 1) { positionService.reproject("RBRP12") }
     }
 
     "resolving a parked quantity event applies the supplied factor and its ledger effects" {
@@ -684,6 +735,15 @@ private fun group(ratio: String) = actionCreation(CorporateActionKind.REVERSE_SP
 
 private fun cash(kind: CorporateActionKind, perShare: String) =
     actionCreation(kind, declaredValuePerShare = perShare)
+
+// The real allotment is keyed on the rights ticker it creates; `target_ticker` carries the
+// underlying whose position and factor determine the grant.
+private fun allotment(ratio: String?) = actionCreation(
+    CorporateActionKind.RIGHTS_ALLOTMENT,
+    ticker = "RBRP12",
+    targetTicker = "RBRP11",
+    ratio = ratio,
+)
 
 private fun review(kind: CorporateActionKind) = actionCreation(kind)
 

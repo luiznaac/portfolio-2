@@ -30,6 +30,10 @@ object CorporateActionTable : IntIdTable("corporate_action") {
     val declaredValuePerShare = decimal("declared_value_per_share", 18, 8).nullable()
     val targetTicker = varchar("target_ticker", 12).nullable()
 
+    // The holder's computed grant of a RIGHTS_ALLOTMENT (underlying units before the ex-date times
+    // the factor). Null on every other kind.
+    val grantedQuantity = decimal("granted_quantity", 18, 6).nullable()
+
     // `source` is taken by ColumnSet, so the property differs from the column name (as in TradeTable).
     val sourceType = enumerationByName<CorporateActionSource>("source", 20)
     val processNumber = varchar("process_number", 40).nullable()
@@ -53,6 +57,7 @@ class CorporateActionEntity(id: EntityID<Int>) : IntEntity(id) {
     var ratio by CorporateActionTable.ratio
     var declaredValuePerShare by CorporateActionTable.declaredValuePerShare
     var targetTicker by CorporateActionTable.targetTicker
+    var grantedQuantity by CorporateActionTable.grantedQuantity
     var sourceType by CorporateActionTable.sourceType
     var processNumber by CorporateActionTable.processNumber
     var rawType by CorporateActionTable.rawType
@@ -76,5 +81,6 @@ class CorporateActionEntity(id: EntityID<Int>) : IntEntity(id) {
         ordinal = ordinal,
         fileHash = fileHash,
         status = status,
+        grantedQuantity = grantedQuantity,
     )
 }

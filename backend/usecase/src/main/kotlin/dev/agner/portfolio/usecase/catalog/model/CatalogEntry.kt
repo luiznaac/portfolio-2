@@ -33,6 +33,11 @@ val CatalogEntry.effectiveAssetClass: AssetClass? get() = assetClassOverride ?: 
 fun Iterable<CatalogEntry>.effectiveClassByTicker(): Map<String, AssetClass?> =
     associate { it.ticker to it.effectiveAssetClass }
 
+// The catalog's subscription rights. They are intentionally classless, so every planning read
+// (allocation tree, order plan, strategy targets) excludes this one set rather than re-deriving it.
+fun Iterable<CatalogEntry>.rightsTickers(): Set<String> =
+    filter { it.assetKind == AssetKind.RIGHT }.map { it.ticker }.toSet()
+
 // One entry per canonical paper: the row carrying the canonical code wins, otherwise the latest
 // sighting stands in for it. A rename leaves two rows in the catalog; every read that collapses them
 // goes through here so they cannot disagree about which one represents the paper.

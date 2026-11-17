@@ -340,6 +340,19 @@ class ImportServiceTest : StringSpec({
         coVerify(exactly = 0) { catalogService.upsertTicker("MGLU3") }
     }
 
+    "apply should mark a broker note's rights row as a right in the catalog" {
+        coEvery { repository.fetchById(1) } returns reviewedImport
+        coEvery { repository.fetchRows(1) } returns
+            listOf(row.copy(id = 12, ticker = "RBRP12", rawDescription = "FII RBR PROP DM 88,27"))
+        coEvery { institutionService.create(any()) } returns institution
+        coEvery { repository.updateStatus(1, ImportStatus.APPLIED) } returns appliedImport
+
+        service.apply(1)
+
+        coVerify(exactly = 1) { catalogService.markRights("RBRP12") }
+        coVerify(exactly = 0) { catalogService.upsertTicker("RBRP12") }
+    }
+
     "apply should reject an import that is not reviewed" {
         coEvery { repository.fetchById(1) } returns stagedImport
 

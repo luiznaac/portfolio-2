@@ -9,9 +9,11 @@ enum class AssetClass {
 }
 
 // A listed asset's allocation class. BDRs and ETFs allocate alongside stocks (Ações BR); an
-// unclassified kind has no class yet, so the caller keeps the null rather than guessing.
+// unclassified kind has no class yet, so the caller keeps the null rather than guessing. A right is
+// intentionally classless: it is excluded from the allocation tree and the strategy targets, so a
+// null here is the rule, not a missing classification.
 fun AssetKind.toAssetClass(): AssetClass? = when (this) {
     AssetKind.STOCK, AssetKind.UNIT, AssetKind.ETF, AssetKind.BDR -> AssetClass.ACOES
     AssetKind.FII -> AssetClass.FIIS
-    AssetKind.UNKNOWN -> null
+    AssetKind.RIGHT, AssetKind.UNKNOWN -> null
 }
