@@ -63,9 +63,10 @@ export interface AnalysisWindow {
 
 // Resolves the shared state against the periods the active tab actually carries. The last closed
 // month is the default anchor; the computed history has no close, so the newest series month stands
-// in. `preferredAnchor` is a page-level request (a deep link's target month) that applies only until
-// the owner first moves the rail, when the shared state takes over. A preset/anchor pair whose
-// anchor fell outside the data is clamped at render, never trusted.
+// in. `preferredAnchor` is a page-level request — a deep link's target month, or a page's own
+// default derived from a server read — that applies only until the owner first moves the rail, when
+// the shared state takes over. A preset/anchor pair whose anchor fell outside the data is clamped at
+// render, never trusted.
 export function useAnalysisWindow(
   periods: string[],
   lastClosedPeriod?: string,

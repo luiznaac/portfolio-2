@@ -170,6 +170,29 @@ describe("Análise · Impostos", () => {
     expect(apuracaoRows()).toHaveLength(2);
   });
 
+  it("opens on the ledger's latest trade month while no month is closed", () => {
+    mock.range = { min: "2019-05", max: "2026-11", default: "2019-05" };
+    mock.closed = [];
+    mock.current = null;
+
+    renderTaxes();
+
+    expect(recorded.taxPeriods.at(-1)).toBe("2019-05");
+    expect(screen.getByText("Apuração de mai/2019")).toBeDefined();
+    expect(document.getElementById("tax-apuracao-2019-05")).not.toBeNull();
+  });
+
+  it("keeps the last closed month as the anchor when one is closed", () => {
+    mock.range = { min: "2019-05", max: "2026-11", default: "2019-05" };
+    mock.closed = [month("2026-10", "CLOSED")];
+    mock.current = null;
+
+    renderTaxes();
+
+    expect(recorded.taxPeriods.at(-1)).toBe("2026-10");
+    expect(screen.getByText("Apuração de out/2026")).toBeDefined();
+  });
+
   it("selects the apuração from the window list and re-reads the anchored month", async () => {
     const user = userEvent.setup();
     renderTaxes();
