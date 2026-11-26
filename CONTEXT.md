@@ -207,15 +207,35 @@ _Avoid_: Security, stock, papel
 The normalized B3 trading code that identifies a listed asset: uppercase, with the fractional-market `F` suffix stripped (`B3SA3F` resolves to `B3SA3`).
 _Avoid_: Código de Negociação (the raw import column), symbol
 
+**Canonical Ticker**:
+The current ticker of a listed asset after every known rename: the one code the Position, tax, performance and quote reads use. A Ticker Alias resolves an old code to it.
+_UI:_ the current ticker
+_Avoid_: Current ticker as a separate object, symbol
+
+**Ticker Alias**:
+One applied rename edge — old ticker, canonical ticker, effective date, source and optional conversion ratio. Every listed-asset read resolves through the alias chain; a ratio other than 1 also changes quantity and Average Price.
+_UI:_ "Troca de código"
+_Avoid_: Ticker change (that is the Corporate Action), mapping
+
 **Asset Class**:
 The allocation bucket a holding rolls up to: `ACOES`, `FIIS`, `RENDA_FIXA`.
 _UI:_ "Classe"
 _Avoid_: Caixa as a class (not modeled), category, tipo
 
 **Asset Kind**:
-The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`, plus `UNKNOWN` for a B3 BDI code the catalog does not classify yet. Drives tax treatment and UI presentation.
+The instrument type of a listed asset: `STOCK`, `UNIT`, `FII`, `BDR`, `ETF`, `RIGHT`, plus `UNKNOWN` for a B3 BDI code the catalog does not classify yet. Drives tax treatment and UI presentation.
 _UI:_ "Tipo"
 _Avoid_: Asset class (different concept), mercado
+
+**Rights Asset**:
+A negotiable subscription right detached from its underlying listed asset, such as a FII direito de preferência. It is a listed asset with its own ticker, a zero cost when received in the issuance, and no Asset Class: it stays out of the allocation tree.
+_UI:_ "Direito"
+_Avoid_: FII cota (the underlying), option, subscription (the act)
+
+**Rights Allotment**:
+A Corporate Action that creates a Rights Asset position on its ex-date: underlying ticker, rights ticker, factor and zero cost. A rights sale with no receipt derives a replaceable `DERIVED` allotment, so the sale never opens a negative position.
+_UI:_ "Bonificação de direitos"
+_Avoid_: Bonus shares (that is the underlying's share event), trade
 
 **Effective Class**:
 The class every planning and attribution read uses for a Ticker: the owner's manual classification when one exists, otherwise the BDI-derived class. A catalog refresh never clears the manual call; reverting hands the ticker back to the BDI class.
@@ -238,9 +258,14 @@ _UI:_ "Isenção"
 _Avoid_: Limit (the value), exemption (the state)
 
 **Realized Result**:
-A month's net capital-gain result, per tax kind — swing STOCK, day trade and FII — as the sum of that kind's gains minus its losses, measured against Average Price at each sale.
+A month's net capital-gain result, per tax kind — swing STOCK, day trade, FII and RIGHT — as the sum of that kind's gains minus its losses, measured against Average Price at each sale.
 _UI:_ "Ganho realizado"
 _Avoid_: Profit/loss (that is the market view), income
+
+**Rights Result**:
+The month's net gain on sales of Rights Assets, taxed at 15% under DARF 6015; it joins the monthly bolsa aggregate but stays outside the R$20k stock meter and the FII bucket.
+_UI:_ "Direitos"
+_Avoid_: FII result (the right is not a quota), stock result
 
 **Carry Bucket**:
 A per-kind stock of banked losses that only offsets future gains of the same kind: swing STOCK (unbounded in time), day trade, and FII (same species only); its opening balance is seeded once at adoption.
@@ -268,12 +293,12 @@ _UI:_ "Não atribuído"
 _Avoid_: Residual (that is the Uninvested Balance), orphan
 
 **Trade**:
-A buy or a sell of a listed asset: side, quantity, price, date, institution and the raw B3 code.
+A buy or a sell of a listed asset: side, quantity, price, date, institution and the raw imported code or broker description.
 _UI:_ "Negócio"
 _Avoid_: Order (that is a suggested order), movimentação (the umbrella file word)
 
 **Corporate Action**:
-An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue, where the owner resolves it by supplying the data the export lacked (the factor, the per-share value, the new code) or, for a kind the engine never computes, acknowledges it as handled without a ledger effect.
+An event that changes a listed asset's quantity or cost basis without a trade — desdobramento, grupamento, bonificação, a ticker change, a rights allotment, a cash return — imported holder-neutral and applied by the engine; a voluntary or unclassified event waits in the review queue, where the owner resolves it by supplying the data the export lacked (the factor, the per-share value, the new code) or, for a kind the engine never computes, acknowledges it as handled without a ledger effect.
 _UI:_ "Evento corporativo"
 _Avoid_: Provento (that is cash income), trade, movimentação (the umbrella file word)
 
@@ -289,8 +314,23 @@ A first-class artifact of bringing external data in: source, file, hash, status 
 _UI:_ "Importação"
 _Avoid_: Upload, sync, parse (the act)
 
+**Broker Note**:
+A broker's nota de corretagem PDF listing one day's trades, not a B3 export. The Rico layout prints asset descriptions rather than tickers.
+_UI:_ "Nota de corretagem"
+_Avoid_: B3 extract, statement (the umbrella word)
+
+**Broker Asset Alias**:
+A persisted mapping from one broker's asset description, scoped to its Institution with a global fallback, to a Ticker. An unresolved or ambiguous description stages as a row-level error and asks for confirmation in the import review.
+_UI:_ "Descrição do ativo"
+_Avoid_: Ticker Alias (that is old code → canonical), hardcoded map
+
+**brapi Sync**:
+The explicit one-off fetch of renames, corporate actions and cash income from brapi for the ledger's tickers, persisted with its raw payload and sync audit so the app needs no live brapi dependency afterwards.
+_UI:_ "Buscar na brapi"
+_Avoid_: Sync (generic), import (that stages a file), live feed
+
 **Provenance**:
-The origin of a record: B3 extract, XP report, Kinvo extrato, or manual entry.
+The origin of a record: B3 extract, broker note, XP report, brapi sync, Kinvo extrato, manual entry, or a derived rights allotment.
 _UI:_ "Origem"
 _Avoid_: Source file, metadata
 
